@@ -137,4 +137,78 @@ export default function SomosProTracking() {
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
               {pedidos.map(p => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee', alignItems: 'center' }}>
-                  <span>{p.factura
+                  <span>{p.factura} ({p.destino})</span>
+                  <Btn variant="secondary" onClick={() => agregarPedidoAGuia(p)}><Plus size={14}/></Btn>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="2. Resumen de Carga" action={<Btn onClick={imprimirGuiaDespacho}><Printer size={18}/> Imprimir Guía</Btn>}>
+            <div style={{ minHeight: '300px' }}>
+              <p>Vehículo: <b>{guiaActual.placa || "No seleccionado"}</b></p>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr style={{textAlign:'left'}}><th>Factura</th><th>Cajas</th><th>Eliminar</th></tr></thead>
+                <tbody>
+                  {guiaActual.pedidosSeleccionados.map(p => (
+                    <tr key={p.id}>
+                      <td>{p.factura}</td>
+                      <td>{p.cajas}</td>
+                      <td><button onClick={() => setGuiaActual({...guiaActual, pedidosSeleccionados: guiaActual.pedidosSeleccionados.filter(x => x.id !== p.id)})} style={{color:'red', border:'none', background:'none', cursor:'pointer'}}><X size={14}/></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ marginTop: '20px', borderTop: '2px solid #eee', paddingTop: '10px', textAlign: 'right' }}>
+                <strong>Total Cajas: {guiaActual.pedidosSeleccionados.reduce((acc, p) => acc + Number(p.cajas), 0)}</strong>
+              </div>
+            </div>
+          </Card>
+        </div>
+      );
+      
+      case "pedidos": return (
+        <Card title="Gestión de Pedidos" action={<Btn onClick={() => {
+          const id = prompt("N° Pedido:");
+          const fac = prompt("N° Factura:");
+          const caj = prompt("Cajas:");
+          const des = prompt("Ciudad:");
+          const dir = prompt("Dirección:");
+          if(id && fac && caj) setPedidos([...pedidos, {id, factura: fac, cajas: caj, destino: des, direccion: dir, estado: 'Pendiente'}]);
+        }}>+ Nuevo</Btn>}>
+           <table style={{ width: "100%" }}>
+            <thead><tr style={{ textAlign: "left" }}><th>Factura</th><th>Ciudad</th><th>Dirección</th><th>Cajas</th></tr></thead>
+            <tbody>
+              {pedidos.map(p => (
+                <tr key={p.id}><td>{p.factura}</td><td>{p.destino}</td><td>{p.direccion}</td><td>{p.cajas}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      );
+
+      default: return <h2>Módulo de Dashboard</h2>;
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh", background: "#f8fafc" }}>
+      <aside style={{ width: "260px", background: P[950], color: "white", padding: "25px", display: "flex", flexDirection: "column" }}>
+        <h2 style={{ color: P[400], marginBottom: "30px" }}>PRO_Tracking</h2>
+        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+          <Btn onClick={() => setTab("dashboard")} variant={tab === "dashboard" ? "primary" : "secondary"}>Dashboard</Btn>
+          <Btn onClick={() => setTab("pedidos")} variant={tab === "pedidos" ? "primary" : "secondary"}>Pedidos</Btn>
+          <Btn onClick={() => setTab("generador_guia")} variant={tab === "generador_guia" ? "primary" : "secondary"}><FileStack size={18}/> Generador Guías</Btn>
+        </nav>
+      </aside>
+
+      <main style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
+        <header style={{ marginBottom: "30px", display: "flex", justifyContent: "space-between" }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{tab.replace('_', ' ').toUpperCase()}</h1>
+          <strong>{user.nombre}</strong>
+        </header>
+        {renderContent()}
+      </main>
+    </div>
+  );
+}
