@@ -1,0 +1,24 @@
+{
+  "name": "Somos PRO Tracking",
+  "short_name": "PRO Tracking",
+  "description": "Sistema de Gestión de Transporte — Somos PRO",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#4c1d95",
+  "theme_color": "#4c1d95",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
