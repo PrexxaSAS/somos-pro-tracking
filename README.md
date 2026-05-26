@@ -47,6 +47,9 @@ El trabajo debe hacerse gradualmente:
 - Todos los roles deben validarse antes de salida a produccion.
 - La foto sera obligatoria para marcar una entrega: minimo 1 foto, maximo 3 como funciona actualmente.
 - El cliente interno podra ver datos basicos del conductor, estado, ciudad, guia y fechas.
+- Admin puede crear usuarios de cualquier rol.
+- Empresa transportista solo puede crear conductores asociados a su propia empresa.
+- Operador, conductor y cliente interno no pueden crear usuarios.
 
 ## Arquitectura Actual
 
@@ -61,6 +64,9 @@ Archivos principales:
 - `docs/staging_schema.sql`: crea estructura de tablas en Supabase staging.
 - `docs/staging_seed.sql`: carga datos ficticios minimos para validar staging.
 - `docs/staging_validation.sql`: verifica conteos y datos base de staging antes de probar la app.
+- `docs/auth_migration_step1.sql`: prepara `usuarios.auth_user_id` para migracion gradual a Supabase Auth.
+- `docs/auth_migration_step2_link.sql`: vincula perfiles `usuarios` con usuarios creados en Supabase Auth.
+- `docs/auth_migration_notes.md`: notas y reglas de negocio para la migracion de autenticacion.
 
 Tablas principales en Supabase:
 
@@ -127,7 +133,8 @@ Checklist de configuracion:
 - [x] Configurar variables de entorno locales en `.env`.
 - [ ] Configurar variables de entorno de staging en Vercel.
 - [x] Confirmar datos base de staging con `docs/staging_validation.sql`.
-- [ ] Confirmar que la app local apunta a staging, no a produccion.
+- [x] Confirmar que Vercel Preview apunta a staging, no a produccion.
+- [x] Validar login en Vercel Preview con usuarios ficticios de staging.
 - [ ] Confirmar que el preview de Vercel apunta a staging, no a produccion.
 - [ ] Validar login y navegacion basica con cada rol.
 - [ ] Validar que una entrega no pueda cerrarse sin foto.
@@ -149,6 +156,8 @@ Archivos relacionados:
 - `.env.example`: plantilla de variables necesarias.
 - `.gitignore`: evita subir archivos `.env` reales al repositorio.
 - `src/supabase.js`: lee la URL y anon key desde variables de entorno.
+
+Nota: para la version actual de `@supabase/supabase-js`, usar la `anon public key` tipo JWT del proyecto Supabase. Si se usa una key nueva con prefijo `sb_publishable_` y la API responde `401 Unauthorized`, cambiarla por la anon key JWT o actualizar y validar la libreria Supabase.
 
 ### 3. Autenticacion Gradual
 
@@ -310,3 +319,10 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego dato ficticio para `transportadoras` aunque la app actual usa principalmente `transportistas`.
 - Se agrego SQL de validacion para revisar conteos, roles y estados de pedidos en staging.
 - Se valido staging: tablas base con datos, 5 roles creados, conductor vinculado y pedidos en 5 estados.
+- Se corrigio carga inicial para no sembrar datos si Supabase responde error; ahora muestra el error real y evita bucle infinito.
+- Se documento que staging debe usar anon public key compatible si aparece `401 Unauthorized`.
+- Se valido login en Vercel Preview con usuarios ficticios del entorno de prueba.
+- Se definio regla de creacion de usuarios por rol.
+- Se agrego primer SQL de migracion gradual a Supabase Auth sin cambiar aun el login.
+- Se agrego SQL para vincular perfiles de staging con usuarios de Supabase Auth.
+- Se actualizo login para autenticar con Supabase Auth usando usuario visible y email tecnico interno.

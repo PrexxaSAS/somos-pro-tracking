@@ -4039,17 +4039,30 @@ function Login({ onLogin, usuarios }) {
     e.preventDefault();
     setErr("");
     setCargando(true);
-    // Buscar en la lista de usuarios ya cargada desde Supabase
-    const found = usuarios.find(x => x.user === u.trim() && x.pass === p);
-    if (found) { setCargando(false); onLogin(found); }
-    else { setCargando(false); setErr("Usuario o contraseña incorrectos."); }
+    const username = u.trim().toLowerCase();
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: `${username}@somospro.local`,
+        password: p,
+      });
+      if (error) throw error;
+      const found = usuarios.find(x => x.auth_user_id === data.user.id);
+      if (!found) throw new Error("Usuario autenticado sin perfil asignado.");
+      setCargando(false);
+      onLogin(found);
+    } catch (authError) {
+      const found = usuarios.find(x => x.user === username && x.pass === p && !x.auth_user_id);
+      if (found) { setCargando(false); onLogin(found); return; }
+      setCargando(false);
+      setErr("Usuario o contrasena incorrectos.");
+    }
   };
   const [cargando, setCargando] = useState(false);
 
   const demos = [
-    { l: "👑 Admin",        u: "admin",   p: "1039456779" },
+    { l: "👑 Admin",        u: "admin",   p: "admin123" },
     { l: "⚙️ Operador",     u: "operador",p: "op123" },
-    { l: "🏢 Transportista",u: "veloz",   p: "trans123" },
+    { l: "🏢 Transportista",u: "transprueba", p: "trans123" },
     { l: "🚗 Conductor",    u: "driver1", p: "cond123" },
     { l: "📦 Cliente",      u: "cliente", p: "cli123" },
   ];
@@ -4117,10 +4130,10 @@ export default function SomosProTracking() {
     setCargando(true);
     try {
       const [
-        { data: usu },  { data: tra },  { data: con },
-        { data: ped },  { data: ciu },  { data: paq },
-        { data: dev },  { data: rec },  { data: pqrsd },
-        { data: prom },
+        usuRes, traRes, conRes,
+        pedRes, ciuRes, paqRes,
+        devRes, recRes, pqrsRes,
+        promRes,
       ] = await Promise.all([
         supabase.from('usuarios').select('*').order('created_at'),
         supabase.from('transportistas').select('*').order('created_at'),
@@ -4133,9 +4146,23 @@ export default function SomosProTracking() {
         supabase.from('pqrs').select('*').order('created_at', { ascending: false }),
         supabase.from('promesas_servicio').select('*'),
       ]);
+      const results = [usuRes, traRes, conRes, pedRes, ciuRes, paqRes, devRes, recRes, pqrsRes, promRes];
+      const failed = results.find(r => r.error);
+      if (failed) throw failed.error;
+
+      const { data: usu } = usuRes;
+      const { data: tra } = traRes;
+      const { data: con } = conRes;
+      const { data: ped } = pedRes;
+      const { data: ciu } = ciuRes;
+      const { data: paq } = paqRes;
+      const { data: dev } = devRes;
+      const { data: rec } = recRes;
+      const { data: pqrsd } = pqrsRes;
+      const { data: prom } = promRes;
 
       // Si no hay usuarios en Supabase, cargar los iniciales de demo
-      if (!usu || usu.length === 0) {
+      if (usu.length === 0) {
         await sembrarDatosIniciales();
         await cargarTodo();
         return;
@@ -4177,7 +4204,7 @@ export default function SomosProTracking() {
       } catch(e) { console.error('facturas load error:', e); setFacturas([]); }
     } catch (e) {
       console.error('Error cargando datos:', e);
-      showToast('Sin conexión a la base de datos. Verifica tu internet y recarga.', 'error');
+      showToast('No se pudo cargar Supabase: '+(e.message || 'verifica variables y permisos.'), 'error');
     }
     setCargando(false);
   };
@@ -4229,6 +4256,12 @@ export default function SomosProTracking() {
     setUser(userWithConductorId);
     const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas" };
     setTab(def[u.rol] || "dashboard");
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setTab("");
   };
 
   useEffect(() => {
@@ -4367,7 +4400,7 @@ export default function SomosProTracking() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#f7f5ff" }}>
-      <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={() => setUser(null)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
+      <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={handleLogout} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
       <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box" }}>
         {renderContent()}
       </main>
@@ -4510,4 +4543,5 @@ function Usuarios({ usuarios, showToast, recargar }) {
     </div>
   );
 }
+
 
