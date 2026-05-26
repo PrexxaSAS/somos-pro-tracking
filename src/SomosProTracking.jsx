@@ -1898,9 +1898,11 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   const guardarEdicionConductor = async () => {
     if (!formEdit.nombre.trim()||!formEdit.placa.trim()) { showToast("Nombre y placa son obligatorios","error"); return; }
     setGuardando(true);
+    const nitProveedor = esMia ? (modEdit.nit_proveedor||miNit) : formEdit.nit_proveedor.trim();
+    const empresaProveedor = esMia ? (modEdit.empresa||user.empresa||user.nombre) : formEdit.empresa.trim();
     const { error: cErr } = await supabase.from('conductores').update({
       nombre:formEdit.nombre.trim(), cedula:formEdit.cedula.trim(), placa:formEdit.placa.trim(),
-      celular:formEdit.celular.trim(), nit_proveedor:formEdit.nit_proveedor.trim(), empresa:formEdit.empresa.trim(),
+      celular:formEdit.celular.trim(), nit_proveedor:nitProveedor, empresa:empresaProveedor,
     }).eq('id', modEdit.id);
     if (cErr) { showToast("Error actualizando conductor: "+cErr.message,"error"); setGuardando(false); return; }
     if (modEdit.usuario_id) {
@@ -2048,9 +2050,18 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="Placa *" value={formEdit.placa} onChange={v=>setFormEdit(p=>({...p,placa:v}))} required placeholder="ABC-123"/>
-              <Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v=>setFormEdit(p=>({...p,nit_proveedor:v}))} placeholder="900123456-1"/>
+              {!esMia&&<Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v=>setFormEdit(p=>({...p,nit_proveedor:v}))} placeholder="900123456-1"/>}
             </div>
-            <Field label="Empresa" value={formEdit.empresa} onChange={v=>setFormEdit(p=>({...p,empresa:v}))} placeholder="Transportes XYZ"/>
+            {esMia?(
+              <div style={{background:P[50],border:`1px solid ${P[200]}`,borderRadius:10,padding:12,fontSize:12,color:P[800]}}>
+                <div style={{fontWeight:800,marginBottom:4}}>Pertenencia del conductor</div>
+                <div>NIT proveedor: <strong>{formEdit.nit_proveedor||miNit}</strong></div>
+                <div>Empresa: <strong>{formEdit.empresa||user.empresa||user.nombre}</strong></div>
+                <div style={{color:"#64748b",marginTop:6}}>Estos datos solo pueden ser modificados por un administrador.</div>
+              </div>
+            ):(
+              <Field label="Empresa" value={formEdit.empresa} onChange={v=>setFormEdit(p=>({...p,empresa:v}))} placeholder="Transportes XYZ"/>
+            )}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="secondary" onClick={()=>setModEdit(null)}>Cancelar</Btn>
               <Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando?"Guardando...":"💾 Guardar"}</Btn>

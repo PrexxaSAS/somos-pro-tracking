@@ -27,6 +27,7 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 - Puede ver sus conductores.
 - Puede crear solo conductores asociados a su propia empresa.
 - Puede editar datos basicos de sus conductores asociados.
+- No puede cambiar el NIT proveedor ni la empresa propietaria del conductor.
 - Puede ver usuarios de tipo conductor asociados a su NIT.
 - No puede crear usuarios de otros roles.
 - No debe ver informacion de otras empresas transportistas.

@@ -344,3 +344,5 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego primer SQL de politicas RLS finales para admin y operador.
 - Se agrego SQL de politicas RLS para que transportista vea su empresa y conductores propios.
 - Se agrego SQL para que transportista pueda editar conductores propios.
+- Se ajusto edicion de conductor para que transportista no cambie NIT proveedor ni empresa propietaria.
+- Se cambio el modal de edicion de conductor: para transportista, NIT y empresa aparecen como informacion no editable.
