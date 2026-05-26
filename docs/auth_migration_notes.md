@@ -79,6 +79,9 @@ Usuarios:
 
 Despues ejecutar `docs/auth_migration_step2_link.sql`.
 
+Si el login autentica pero no encuentra perfil, ejecutar `docs/auth_migration_validate_links.sql`.
+El estado esperado para todos los usuarios es `ok`.
+
 ## Paso 3
 
 Actualizar la app para que el formulario siga pidiendo `Usuario`, pero autentique con Supabase Auth usando email tecnico:

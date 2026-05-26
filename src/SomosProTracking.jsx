@@ -4050,14 +4050,15 @@ function Login({ onLogin }) {
         .from('usuarios')
         .select('*')
         .eq('auth_user_id', data.user.id)
-        .single();
+        .maybeSingle();
       if (profileError) throw profileError;
-      if (!found) throw new Error("Usuario autenticado sin perfil asignado.");
+      if (!found) throw new Error("Usuario autenticado sin perfil asignado. Ejecuta nuevamente el script de vinculacion Auth.");
       setCargando(false);
       onLogin(found);
     } catch (authError) {
+      console.error("Error de login:", authError);
       setCargando(false);
-      setErr("Usuario o contrasena incorrectos.");
+      setErr(authError.message || "Usuario o contrasena incorrectos.");
     }
   };
   const [cargando, setCargando] = useState(false);

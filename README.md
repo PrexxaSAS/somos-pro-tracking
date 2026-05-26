@@ -66,6 +66,7 @@ Archivos principales:
 - `docs/staging_validation.sql`: verifica conteos y datos base de staging antes de probar la app.
 - `docs/auth_migration_step1.sql`: prepara `usuarios.auth_user_id` para migracion gradual a Supabase Auth.
 - `docs/auth_migration_step2_link.sql`: vincula perfiles `usuarios` con usuarios creados en Supabase Auth.
+- `docs/auth_migration_validate_links.sql`: valida vinculacion entre `usuarios` y `auth.users`.
 - `docs/auth_migration_notes.md`: notas y reglas de negocio para la migracion de autenticacion.
 
 Tablas principales en Supabase:
@@ -327,3 +328,4 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego SQL para vincular perfiles de staging con usuarios de Supabase Auth.
 - Se actualizo login para autenticar con Supabase Auth usando usuario visible y email tecnico interno.
 - Se elimino el auto-sembrado desde el cliente cuando no hay usuarios visibles, para evitar bucles y errores 403 en staging/RLS.
+- Se agrego SQL para validar vinculacion de perfiles con Supabase Auth.
