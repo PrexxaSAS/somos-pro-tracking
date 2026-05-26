@@ -87,6 +87,6 @@ Actualizar la app para que el formulario siga pidiendo `Usuario`, pero autentiqu
 usuario@somospro.local
 ```
 
-La app debe buscar el perfil en `public.usuarios` por `auth_user_id` y usar ese perfil para rol, nombre, empresa y conductor.
+La app debe buscar el perfil en `public.usuarios` por `auth_user_id` despues de autenticarse y usar ese perfil para rol, nombre, empresa y conductor.
 
-Durante la transicion queda permitido un fallback solo para perfiles que aun no tengan `auth_user_id`. En staging todos los usuarios ficticios ya deben entrar por Auth.
+El cliente no debe sembrar datos automaticamente si no ve usuarios. Si no hay usuarios visibles, debe mostrar error para evitar bucles e inserciones desde navegador.

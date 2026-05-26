@@ -326,3 +326,4 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego primer SQL de migracion gradual a Supabase Auth sin cambiar aun el login.
 - Se agrego SQL para vincular perfiles de staging con usuarios de Supabase Auth.
 - Se actualizo login para autenticar con Supabase Auth usando usuario visible y email tecnico interno.
+- Se elimino el auto-sembrado desde el cliente cuando no hay usuarios visibles, para evitar bucles y errores 403 en staging/RLS.

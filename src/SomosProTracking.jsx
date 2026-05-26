@@ -4030,7 +4030,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
 }
 
 
-function Login({ onLogin, usuarios }) {
+function Login({ onLogin }) {
   const [u,   setU]   = useState("");
   const [p,   setP]   = useState("");
   const [err, setErr] = useState("");
@@ -4046,13 +4046,16 @@ function Login({ onLogin, usuarios }) {
         password: p,
       });
       if (error) throw error;
-      const found = usuarios.find(x => x.auth_user_id === data.user.id);
+      const { data: found, error: profileError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('auth_user_id', data.user.id)
+        .single();
+      if (profileError) throw profileError;
       if (!found) throw new Error("Usuario autenticado sin perfil asignado.");
       setCargando(false);
       onLogin(found);
     } catch (authError) {
-      const found = usuarios.find(x => x.user === username && x.pass === p && !x.auth_user_id);
-      if (found) { setCargando(false); onLogin(found); return; }
       setCargando(false);
       setErr("Usuario o contrasena incorrectos.");
     }
@@ -4161,10 +4164,10 @@ export default function SomosProTracking() {
       const { data: pqrsd } = pqrsRes;
       const { data: prom } = promRes;
 
-      // Si no hay usuarios en Supabase, cargar los iniciales de demo
+      // Si no hay usuarios en Supabase, detener carga. No sembrar datos desde el cliente.
       if (usu.length === 0) {
-        await sembrarDatosIniciales();
-        await cargarTodo();
+        showToast('No hay usuarios visibles en Supabase. Verifica datos, Auth o politicas RLS.', 'error');
+        setCargando(false);
         return;
       }
 
@@ -4256,6 +4259,7 @@ export default function SomosProTracking() {
     setUser(userWithConductorId);
     const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas" };
     setTab(def[u.rol] || "dashboard");
+    await cargarTodo();
   };
 
   const handleLogout = async () => {
@@ -4279,7 +4283,7 @@ export default function SomosProTracking() {
     </div>
   );
 
-  if (!user) return <Login onLogin={handleLogin} usuarios={usuarios} />;
+  if (!user) return <Login onLogin={handleLogin} />;
 
   const props = { pedidos, setPedidos, conductores, setConductores, usuarios, setUsuarios, showToast, user };
 
