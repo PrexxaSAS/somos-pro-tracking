@@ -1898,14 +1898,16 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   const guardarEdicionConductor = async () => {
     if (!formEdit.nombre.trim()||!formEdit.placa.trim()) { showToast("Nombre y placa son obligatorios","error"); return; }
     setGuardando(true);
-    await supabase.from('conductores').update({
+    const { error: cErr } = await supabase.from('conductores').update({
       nombre:formEdit.nombre.trim(), cedula:formEdit.cedula.trim(), placa:formEdit.placa.trim(),
       celular:formEdit.celular.trim(), nit_proveedor:formEdit.nit_proveedor.trim(), empresa:formEdit.empresa.trim(),
     }).eq('id', modEdit.id);
+    if (cErr) { showToast("Error actualizando conductor: "+cErr.message,"error"); setGuardando(false); return; }
     if (modEdit.usuario_id) {
-      await supabase.from('usuarios').update({nombre:formEdit.nombre.trim(),placa:formEdit.placa.trim(),celular:formEdit.celular.trim()}).eq('id',modEdit.usuario_id);
+      const { error: uErr } = await supabase.from('usuarios').update({nombre:formEdit.nombre.trim(),placa:formEdit.placa.trim(),celular:formEdit.celular.trim()}).eq('id',modEdit.usuario_id);
+      if (uErr) { showToast("Conductor actualizado, pero fallo usuario: "+uErr.message,"warning"); setGuardando(false); return; }
     }
-    setModEdit(null); showToast("✓ Conductor actualizado","success");
+    setModEdit(null); showToast("Conductor actualizado","success");
     if(recargar) await recargar(); else if(window._recargar) await window._recargar(); setGuardando(false);
   };
 

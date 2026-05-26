@@ -82,6 +82,10 @@ Despues ejecutar `docs/auth_migration_step2_link.sql`.
 Si el login autentica pero no encuentra perfil, ejecutar `docs/auth_migration_validate_links.sql`.
 El estado esperado para todos los usuarios es `ok`.
 
+Si los vinculos salen `ok` pero la app muestra "Usuario autenticado sin perfil asignado", ejecutar `docs/auth_migration_step3_profile_policy.sql`. Ese caso normalmente indica que RLS esta ocultando el perfil en `public.usuarios`.
+
+Si despues de activar RLS ya no se ven registros, ejecutar `docs/auth_migration_step4_staging_read_policies.sql`. Ese script agrega politicas temporales de lectura para staging mientras se define la matriz final por rol.
+
 ## Paso 3
 
 Actualizar la app para que el formulario siga pidiendo `Usuario`, pero autentique con Supabase Auth usando email tecnico:

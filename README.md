@@ -50,6 +50,9 @@ El trabajo debe hacerse gradualmente:
 - Admin puede crear usuarios de cualquier rol.
 - Empresa transportista solo puede crear conductores asociados a su propia empresa.
 - Operador, conductor y cliente interno no pueden crear usuarios.
+- Operador puede ver pedidos, conductores, transportistas, devoluciones, recogidas y PQRS.
+- Operador no puede modificar conductores, pedidos ni recogidas.
+- Operador si puede gestionar devoluciones y PQRS.
 
 ## Arquitectura Actual
 
@@ -67,7 +70,13 @@ Archivos principales:
 - `docs/auth_migration_step1.sql`: prepara `usuarios.auth_user_id` para migracion gradual a Supabase Auth.
 - `docs/auth_migration_step2_link.sql`: vincula perfiles `usuarios` con usuarios creados en Supabase Auth.
 - `docs/auth_migration_validate_links.sql`: valida vinculacion entre `usuarios` y `auth.users`.
+- `docs/auth_migration_step3_profile_policy.sql`: agrega politica RLS minima para leer perfil propio.
+- `docs/auth_migration_step4_staging_read_policies.sql`: agrega politicas temporales de lectura para staging con Auth.
 - `docs/auth_migration_notes.md`: notas y reglas de negocio para la migracion de autenticacion.
+- `docs/rls_matrix.md`: matriz objetivo de permisos RLS por rol.
+- `docs/rls_step1_admin_operador.sql`: primeras politicas finales para admin y operador.
+- `docs/rls_step2_transportista.sql`: politicas RLS para empresa transportista y sus conductores.
+- `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
 
 Tablas principales en Supabase:
 
@@ -329,3 +338,9 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se actualizo login para autenticar con Supabase Auth usando usuario visible y email tecnico interno.
 - Se elimino el auto-sembrado desde el cliente cuando no hay usuarios visibles, para evitar bucles y errores 403 en staging/RLS.
 - Se agrego SQL para validar vinculacion de perfiles con Supabase Auth.
+- Se agrego politica RLS minima para que cada usuario autenticado lea su propio perfil.
+- Se agrego politica temporal de lectura para staging mientras se define RLS final por rol.
+- Se documento matriz RLS inicial: operador ve operacion, pero solo gestiona devoluciones y PQRS.
+- Se agrego primer SQL de politicas RLS finales para admin y operador.
+- Se agrego SQL de politicas RLS para que transportista vea su empresa y conductores propios.
+- Se agrego SQL para que transportista pueda editar conductores propios.
