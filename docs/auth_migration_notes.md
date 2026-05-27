@@ -97,3 +97,20 @@ usuario@somospro.local
 La app debe buscar el perfil en `public.usuarios` por `auth_user_id` despues de autenticarse y usar ese perfil para rol, nombre, empresa y conductor.
 
 El cliente no debe sembrar datos automaticamente si no ve usuarios. Si no hay usuarios visibles, debe mostrar error para evitar bucles e inserciones desde navegador.
+
+## Creacion De Nuevos Conductores Durante La Migracion
+
+El formulario de transportista crea el perfil en `public.usuarios` y el registro en `public.conductores`, pero todavia no crea automaticamente el usuario en Supabase Auth.
+
+Mientras se implementa el flujo definitivo, despues de inscribir un conductor nuevo se debe:
+
+1. Crear el usuario en Authentication > Users con email tecnico:
+
+```txt
+usuario_visible@somospro.local
+```
+
+2. Usar la misma contrasena digitada en el formulario.
+3. Ejecutar `docs/auth_migration_step2_link.sql` para vincular `auth.users.id` con `public.usuarios.auth_user_id`.
+
+El flujo definitivo debe crear el usuario Auth desde una Edge Function o servicio seguro con service role. No se debe exponer la service role key en frontend.

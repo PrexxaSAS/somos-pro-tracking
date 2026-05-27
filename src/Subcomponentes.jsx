@@ -98,7 +98,6 @@ export function Field({ label, value, onChange, type = "text", placeholder = "",
 export function Modal({ title, children, onClose, wide = false }) {
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: "fixed", inset: 0, background: "#00000088",
         zIndex: 1000, display: "flex", alignItems: "center",

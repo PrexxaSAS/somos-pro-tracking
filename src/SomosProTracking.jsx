@@ -2027,6 +2027,9 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             <Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/>
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
               <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
+              <p style={{fontSize:12,color:"#64748b",margin:"-4px 0 10px"}}>
+                Durante la migracion a Supabase Auth, este acceso debe quedar vinculado a Auth antes de poder iniciar sesion.
+              </p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez"/>
                 <Field label="Contraseña *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="••••••••"/>

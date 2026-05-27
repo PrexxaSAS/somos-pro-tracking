@@ -346,3 +346,5 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego SQL para que transportista pueda editar conductores propios.
 - Se ajusto edicion de conductor para que transportista no cambie NIT proveedor ni empresa propietaria.
 - Se cambio el modal de edicion de conductor: para transportista, NIT y empresa aparecen como informacion no editable.
+- Se quito cierre de modales al hacer click/arrastre en el fondo para evitar cierres accidentales al seleccionar texto.
+- Se documento que nuevos conductores requieren crear/vincular usuario Supabase Auth mientras termina la migracion.
