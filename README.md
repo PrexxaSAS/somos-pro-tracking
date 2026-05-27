@@ -76,6 +76,7 @@ Archivos principales:
 - `docs/rls_matrix.md`: matriz objetivo de permisos RLS por rol.
 - `docs/rls_step1_admin_operador.sql`: primeras politicas finales para admin y operador.
 - `docs/rls_step1b_operador_insert_pedidos.sql`: permite al operador registrar pedidos nuevos sin editar existentes.
+- `docs/rls_step1c_operador_update_pedidos_basico.sql`: permite al operador editar datos basicos y marcar entrega.
 - `docs/rls_step2_transportista.sql`: politicas RLS para empresa transportista y sus conductores.
 - `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
 - `docs/rls_step3_conductor.sql`: politicas RLS para pedidos asignados al conductor.
@@ -359,3 +360,4 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se valido en staging que conductor ve pedidos asignados despues de aplicar RLS y fix de UUID.
 - Se agrego ajuste RLS para que operador pueda registrar pedidos nuevos sin editar pedidos existentes.
 - Se ajusto modal de pedidos para que operador vea detalle en modo lectura y no intente editar pedidos existentes.
+- Se ajusto operador para editar datos basicos de pedido, marcar entrega y ver boton Guardar Cambios.

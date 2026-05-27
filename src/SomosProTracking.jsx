@@ -233,7 +233,7 @@ function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   );
 }
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit }) {
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false }) {
   const [condId,     setCondId]     = useState(pedido.conductor_id||"") ;
   const [direccion,  setDireccion]  = useState(pedido.direccion||"");
   const [cajas,      setCajas]      = useState(String(pedido.cajas||""));
@@ -260,12 +260,16 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
     if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
     if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
     const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
-    const cambios = {
+    const cambiosBase = {
       direccion: direccion.trim()||pedido.direccion,
       cajas: parseInt(cajas)||pedido.cajas,
       factura: facturaEdit.trim()||pedido.factura,
       ciudad_codigo: ciudadEdit||pedido.ciudad_codigo,
       ciudad_nombre: ciudad?.name||pedido.ciudad_nombre||"",
+      fecha_estimada: fechaEdit||pedido.fecha_estimada||null,
+    };
+    const cambios = canBasicEdit && !canEdit ? cambiosBase : {
+      ...cambiosBase,
       conductor_id: c?.id||null,
       placa: c?.placa||null,
       nit_proveedor: c?.nit_proveedor||null,
@@ -477,7 +481,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
           <div style={{display:"flex",gap:10}}>
             <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-            {canEdit&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
+            {(canEdit||canBasicEdit)&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
           </div>
         </div>
       </div>
@@ -1639,7 +1643,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         </Modal>
       )}
 
-      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"}/>}
+      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"}/>}
       {modGuia&&<GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={()=>setModGuia(null)}/>}
       {modCSV&&<ModalCSVPedidos onClose={()=>setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV}/>}
       {modGuias&&<ModalCSVGuias onClose={()=>setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar}/>}
