@@ -38,6 +38,7 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 - Puede ver solo pedidos asignados.
 - Puede registrar entrega con soporte fotografico obligatorio.
 - No puede ver ni modificar pedidos de otros conductores.
+- Puede leer catalogos necesarios para su pantalla, como ciudades.
 
 ### Cliente Interno
 

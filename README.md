@@ -77,6 +77,7 @@ Archivos principales:
 - `docs/rls_step1_admin_operador.sql`: primeras politicas finales para admin y operador.
 - `docs/rls_step2_transportista.sql`: politicas RLS para empresa transportista y sus conductores.
 - `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
+- `docs/rls_step3_conductor.sql`: politicas RLS para pedidos asignados al conductor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
 - `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
@@ -351,3 +352,6 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se quito cierre de modales al hacer click/arrastre en el fondo para evitar cierres accidentales al seleccionar texto.
 - Se agrego Edge Function `create-system-user` para crear conductores con Supabase Auth de forma segura.
 - Se actualizo inscripcion de conductor para invocar la Edge Function.
+- Se valido en staging que transportista puede inscribir conductor y crear acceso Auth mediante `create-system-user`.
+- Se corrigio asignacion de pedido a conductores UUID al crear pedido.
+- Se agrego SQL RLS para que conductor vea y actualice solo pedidos asignados.

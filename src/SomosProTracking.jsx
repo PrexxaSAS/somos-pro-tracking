@@ -1433,7 +1433,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     }
     const ciudad = (ciudades||[]).find(c => c.code === form.ciudad_codigo);
     const ciudadOrigen = (ciudades||[]).find(c => c.code === form.ciudad_origen_codigo);
-    const cond   = conductores.find(c => c.id === parseInt(form.conductor_id));
+    const cond   = conductores.find(c => String(c.id) === String(form.conductor_id));
     const esPaq  = form.tipo === "paqueteria";
     const guia_interna = !esPaq ? generarGuia(pedidos) : null;
     const nuevo = {
