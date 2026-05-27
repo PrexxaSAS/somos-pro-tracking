@@ -13,8 +13,9 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 ### Operador
 
 - Puede ver pedidos, conductores, transportistas, devoluciones, recogidas y PQRS.
+- Puede registrar pedidos nuevos.
 - No puede modificar conductores.
-- No puede modificar pedidos.
+- No puede modificar ni eliminar pedidos existentes.
 - No puede modificar recogidas.
 - Si puede gestionar devoluciones.
 - Si puede gestionar PQRS.
