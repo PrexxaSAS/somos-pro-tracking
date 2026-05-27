@@ -1871,25 +1871,28 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   };
 
   const inscribirConductor = async () => {
-    if (!formC.nombre.trim()||!formC.placa.trim()||!formC.cedula.trim()) { showToast("Nombre, cédula y placa son obligatorios","error"); return; }
-    if (!formC.user_login.trim()||!formC.pass_login.trim()) { showToast("Usuario y contraseña son obligatorios","error"); return; }
+    if (!formC.nombre.trim()||!formC.placa.trim()||!formC.cedula.trim()) { showToast("Nombre, cedula y placa son obligatorios","error"); return; }
+    if (!formC.user_login.trim()||!formC.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios","error"); return; }
     const emp = modCond;
     setGuardando(true);
     try {
-      const { data: uData, error: uErr } = await supabase.from('usuarios').insert({
-        nombre:formC.nombre.trim(), user:formC.user_login.trim(), pass:formC.pass_login.trim(),
-        rol:'conductor', cedula:formC.cedula.trim(), placa:formC.placa.trim(),
-        celular:formC.celular.trim(), nit_proveedor:emp.nit, empresa:emp.nombre,
-      }).select().single();
-      if (uErr) { showToast("Error usuario: "+uErr.message,"error"); setGuardando(false); return; }
-      const { error: cErr } = await supabase.from('conductores').insert({
-        nombre:formC.nombre.trim(), cedula:formC.cedula.trim(), placa:formC.placa.trim(),
-        celular:formC.celular.trim(), nit_proveedor:emp.nit, empresa:emp.nombre,
-        usuario_id:uData.id,
+      const { data, error } = await supabase.functions.invoke('create-system-user', {
+        body: {
+          type: 'conductor',
+          nombre: formC.nombre.trim(),
+          cedula: formC.cedula.trim(),
+          placa: formC.placa.trim(),
+          celular: formC.celular.trim(),
+          user_login: formC.user_login.trim(),
+          pass_login: formC.pass_login.trim(),
+          nit_proveedor: emp.nit,
+          empresa: emp.nombre,
+        },
       });
-      if (cErr) { showToast("Error conductor: "+cErr.message,"error"); setGuardando(false); return; }
+      if (error) { showToast("Error creando acceso: "+error.message,"error"); setGuardando(false); return; }
+      if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
       setModCond(null); setFormC({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});
-      showToast(`✓ Conductor inscrito en ${emp.nombre}`,"success");
+      showToast(`Conductor inscrito en ${emp.nombre}`,"success");
       if(recargar) await recargar(); else if(window._recargar) await window._recargar();
     } catch(e) { showToast("Error: "+e.message,"error"); }
     setGuardando(false);
@@ -2026,9 +2029,9 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             </div>
             <Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/>
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
-              <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
+              <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso del conductor</p>
               <p style={{fontSize:12,color:"#64748b",margin:"-4px 0 10px"}}>
-                Durante la migracion a Supabase Auth, este acceso debe quedar vinculado a Auth antes de poder iniciar sesion.
+                Este usuario permite ingresar al modulo de conductor para consultar pedidos, reportar ubicacion y registrar entregas.
               </p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez"/>

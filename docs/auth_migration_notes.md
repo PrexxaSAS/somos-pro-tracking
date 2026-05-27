@@ -98,19 +98,24 @@ La app debe buscar el perfil en `public.usuarios` por `auth_user_id` despues de 
 
 El cliente no debe sembrar datos automaticamente si no ve usuarios. Si no hay usuarios visibles, debe mostrar error para evitar bucles e inserciones desde navegador.
 
-## Creacion De Nuevos Conductores Durante La Migracion
+## Creacion De Nuevos Conductores
 
-El formulario de transportista crea el perfil en `public.usuarios` y el registro en `public.conductores`, pero todavia no crea automaticamente el usuario en Supabase Auth.
+El formulario de transportista invoca la Edge Function `create-system-user`.
 
-Mientras se implementa el flujo definitivo, despues de inscribir un conductor nuevo se debe:
+La funcion:
 
-1. Crear el usuario en Authentication > Users con email tecnico:
+- Valida la sesion del usuario que llama.
+- Permite a admin crear usuarios.
+- Permite a transportista crear solo conductores de su propia empresa.
+- Crea el usuario en Supabase Auth con email tecnico.
+- Crea el perfil en `public.usuarios`.
+- Crea el registro en `public.conductores`.
+- Vincula `usuarios.conductor_id`.
+
+El email tecnico se forma asi:
 
 ```txt
-usuario_visible@somospro.local
+usuario@somospro.local
 ```
 
-2. Usar la misma contrasena digitada en el formulario.
-3. Ejecutar `docs/auth_migration_step2_link.sql` para vincular `auth.users.id` con `public.usuarios.auth_user_id`.
-
-El flujo definitivo debe crear el usuario Auth desde una Edge Function o servicio seguro con service role. No se debe exponer la service role key en frontend.
+Ver `docs/edge_functions.md`.

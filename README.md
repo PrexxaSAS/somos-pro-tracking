@@ -77,6 +77,8 @@ Archivos principales:
 - `docs/rls_step1_admin_operador.sql`: primeras politicas finales para admin y operador.
 - `docs/rls_step2_transportista.sql`: politicas RLS para empresa transportista y sus conductores.
 - `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
+- `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
+- `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
 Tablas principales en Supabase:
 
@@ -347,4 +349,5 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto edicion de conductor para que transportista no cambie NIT proveedor ni empresa propietaria.
 - Se cambio el modal de edicion de conductor: para transportista, NIT y empresa aparecen como informacion no editable.
 - Se quito cierre de modales al hacer click/arrastre en el fondo para evitar cierres accidentales al seleccionar texto.
-- Se documento que nuevos conductores requieren crear/vincular usuario Supabase Auth mientras termina la migracion.
+- Se agrego Edge Function `create-system-user` para crear conductores con Supabase Auth de forma segura.
+- Se actualizo inscripcion de conductor para invocar la Edge Function.
