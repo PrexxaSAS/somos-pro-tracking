@@ -81,6 +81,7 @@ Archivos principales:
 - `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
 - `docs/rls_step3_conductor.sql`: politicas RLS para pedidos asignados al conductor.
 - `docs/rls_step4_cliente.sql`: politicas RLS para cliente interno, sus solicitudes y bloqueo de facturas proveedor.
+- `docs/recogidas_paqueteria_migration.sql`: agrega campos de paqueteria a devoluciones y recogidas.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
 - `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
@@ -369,3 +370,5 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se quito Facturas Proveedor del menu de cliente y se agrego al menu de operador.
 - Se agrego proteccion de interfaz para que el modulo Facturas Proveedor solo renderice para admin u operador.
 - Se agrego `docs/rls_step4_cliente.sql` para aplicar en staging las politicas del rol cliente y bloquear facturas por RLS.
+- Se agrego migracion para soportar `paqueteria` y `guia_paqueteria` en devoluciones y recogidas, coherente con la interfaz actual.
+- Se ajusto apertura de documentos/soportes guardados en base64 para convertirlos a Blob antes de abrirlos, evitando ventanas en blanco al ver documentos.

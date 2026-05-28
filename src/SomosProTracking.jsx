@@ -38,6 +38,32 @@ function fileToBase64(file){
   return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
 }
 
+function abrirArchivoGuardado(data, nombre = "documento") {
+  if (!data) return;
+  try {
+    const dataUrl = String(data).startsWith("data:")
+      ? String(data)
+      : `data:application/octet-stream;base64,${data}`;
+    const [meta, base64] = dataUrl.split(",");
+    const mime = meta.match(/data:(.*?);base64/)?.[1] || "application/octet-stream";
+    const bin = atob(base64 || "");
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombre || "documento";
+      a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    console.error("No se pudo abrir el archivo guardado:", error);
+    window.open(String(data), "_blank", "noopener,noreferrer");
+  }
+}
+
 // Compress image to max 800px wide, quality 0.75 — keeps size under ~200KB
 function comprimirImagen(file, maxW=800, quality=0.75) {
   return new Promise((res) => {
@@ -3288,7 +3314,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
                 {d.fecha_real&&<div style={{fontSize:12,color:"#059669",marginTop:2}}>✅ Completado: {d.fecha_real}</div>}
                 {d.soporte_data&&(
                   <Btn size="sm" variant="success" style={{marginTop:8}}
-                    onClick={()=>window.open(d.soporte_data?.startsWith("data:")?d.soporte_data:"data:application/octet-stream;base64,"+d.soporte_data,"_blank")}>
+                    onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
                     📎 Ver Soporte
                   </Btn>
                 )}
@@ -3396,7 +3422,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
           </div>
           {dev.soporte_data&&(
             <Btn size="sm" variant="success" style={{marginTop:10}}
-              onClick={()=>window.open(dev.soporte_data?.startsWith("data:")?dev.soporte_data:"data:application/octet-stream;base64,"+dev.soporte_data,"_blank")}>
+              onClick={()=>abrirArchivoGuardado(dev.soporte_data, dev.soporte_nombre || `soporte-${dev.guia}`)}>
               📎 Ver Soporte
             </Btn>
           )}
@@ -3542,7 +3568,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
                 {r.fecha_real&&<div style={{fontSize:12,color:"#059669",marginTop:2}}>✅ Completado: {r.fecha_real}</div>}
                 {r.doc_data&&(
                   <Btn size="sm" variant="success" style={{marginTop:8}}
-                    onClick={()=>window.open(r.doc_data?.startsWith("data:")?r.doc_data:"data:application/octet-stream;base64,"+r.doc_data,"_blank")}>
+                    onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
                     📎 Ver Documento
                   </Btn>
                 )}
@@ -3632,7 +3658,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
         </div>
         {rec.doc_data&&(
           <Btn size="sm" variant="success" style={{marginTop:10}}
-            onClick={()=>window.open(rec.doc_data?.startsWith("data:")?rec.doc_data:"data:application/octet-stream;base64,"+rec.doc_data,"_blank")}>
+            onClick={()=>abrirArchivoGuardado(rec.doc_data, rec.doc_nombre || `documento-${rec.guia}`)}>
             📎 Ver Documento
           </Btn>
         )}
