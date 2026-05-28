@@ -269,6 +269,10 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
       ciudad_nombre: ciudad?.name||pedido.ciudad_nombre||"",
       fecha_estimada: fechaEdit||pedido.fecha_estimada||null,
     };
+    if (canBasicEdit && ["entregado","novedad"].includes(pedido.estado)) {
+      cambiosBase.estado = novedad ? "novedad" : "entregado";
+      cambiosBase.novedad = novedad;
+    }
     const cambios = canBasicEdit && !canEdit ? cambiosBase : {
       ...cambiosBase,
       conductor_id: c?.id||null,
