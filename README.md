@@ -371,4 +371,4 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego proteccion de interfaz para que el modulo Facturas Proveedor solo renderice para admin u operador.
 - Se agrego `docs/rls_step4_cliente.sql` para aplicar en staging las politicas del rol cliente y bloquear facturas por RLS.
 - Se agrego migracion para soportar `paqueteria` y `guia_paqueteria` en devoluciones y recogidas, coherente con la interfaz actual.
-- Se ajusto apertura de documentos/soportes guardados en base64 para convertirlos a Blob antes de abrirlos, evitando ventanas en blanco al ver documentos.
+- Se ajusto apertura de documentos/soportes guardados en base64 para convertirlos a Blob antes de abrirlos, evitando ventanas en blanco y sin forzar descarga automatica.
