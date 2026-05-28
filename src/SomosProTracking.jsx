@@ -3256,7 +3256,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
 
   const esCliente = user.rol==="cliente";
   const filtradas = devoluciones.filter(d=>{
-    if (esCliente && d.solicitado_por !== (user.nombre||user.user)) return false;
+    if (esCliente && ![user.nombre, user.user].includes(d.solicitado_por)) return false;
     const q=busq.toLowerCase();
     return !busq||d.guia.toLowerCase().includes(q)||d.factura.toLowerCase().includes(q)||d.pedido_ref.toLowerCase().includes(q);
   });
@@ -3508,7 +3508,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
 
   const esCliente = user.rol==="cliente";
   const filtradas = recogidas.filter(r=>{
-    if (esCliente && r.solicitado_por !== (user.nombre||user.user)) return false;
+    if (esCliente && ![user.nombre, user.user].includes(r.solicitado_por)) return false;
     const q=busq.toLowerCase();
     return !busq||r.guia.toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
   });
@@ -3741,14 +3741,15 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     if (recargar) await recargar();
   };
 
+  const esCliente = user.rol==="cliente";
+  const esOperador = user.rol==="admin"||user.rol==="operador";
   const filt = pqrs.filter(p=>{
+    if (esCliente && ![user.nombre, user.user].includes(p.solicitado_por)) return false;
     const q=busq.toLowerCase();
     const okB=!busq||p.id.toLowerCase().includes(q)||p.factura.toLowerCase().includes(q)||p.pedido_ref.toLowerCase().includes(q)||p.motivo.toLowerCase().includes(q);
     const okE=filtroEst==="todos"||p.estado===filtroEst;
     return okB&&okE;
   });
-  const esCliente = user.rol==="cliente";
-  const esOperador = user.rol==="admin"||user.rol==="operador";
 
   return (
     <div>
@@ -3868,10 +3869,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
 function SidebarApp({ user, activeTab, setActiveTab, onLogout, collapsed, setCollapsed, pqrs = [] }) {
   const MENUS = {
     admin:        [["dashboard","📊","Dashboard"],["pedidos","📦","Pedidos"],["rastreo","🗺️","Rastreo GPS"],["conductores","🚗","Conductores"],["transportistas","🏢","Transportistas"],["resumen","📋","Resumen Transportador"],["devoluciones","↩️","Devoluciones"],["recogidas","🔄","Recogidas"],["pqrs","📋","PQRS"],["ciudades","🏙️","Ciudades / DANE"],["paqueterias","📦","Paqueterías"],["promesas","📅","Promesas de Servicio"],["facturas","🧾","Facturas Proveedor"],["usuarios","👥","Usuarios"]],
-    operador:     [["dashboard","📊","Dashboard"],["pedidos","📦","Pedidos"],["rastreo","🗺️","Rastreo GPS"],["conductores","🚗","Conductores"],["resumen","📋","Resumen Transportador"],["devoluciones","↩️","Devoluciones"],["recogidas","🔄","Recogidas"],["pqrs","📋","PQRS"],["promesas","📅","Promesas de Servicio"]],
+    operador:     [["dashboard","📊","Dashboard"],["pedidos","📦","Pedidos"],["rastreo","🗺️","Rastreo GPS"],["conductores","🚗","Conductores"],["resumen","📋","Resumen Transportador"],["devoluciones","↩️","Devoluciones"],["recogidas","🔄","Recogidas"],["pqrs","📋","PQRS"],["promesas","📅","Promesas de Servicio"],["facturas","🧾","Facturas Proveedor"]],
     transportista:[["mi_empresa","🏢","Mi Empresa"]],
     conductor:    [["mis_pedidos","📦","Mis Pedidos"],["mi_ubicacion","📍","Mi Ubicación GPS"]],
-    cliente:      [["consultas","🔍","Estado Pedidos"],["devoluciones","↩️","Mis Devoluciones"],["recogidas","🔄","Mis Recogidas"],["pqrs","📋","PQRS"],["facturas","🧾","Facturas Proveedor"]],
+    cliente:      [["consultas","🔍","Estado Pedidos"],["devoluciones","↩️","Mis Devoluciones"],["recogidas","🔄","Mis Recogidas"],["pqrs","📋","PQRS"]],
   };
   const items = MENUS[user.rol] || [];
   const w = collapsed ? 64 : 210;
@@ -4420,7 +4421,9 @@ export default function SomosProTracking() {
       case "conductores":    return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={cargarTodo}/>;
       case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={cargarTodo}/>;
       case "resumen":        return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
-      case "facturas":       return <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={cargarTodo}/>;
+      case "facturas":       return user.rol==="admin"||user.rol==="operador"
+        ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={cargarTodo}/>
+        : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
       case "promesas":       return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
       case "ciudades":       return <Ciudades ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
       case "paqueterias":    return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={cargarTodo}/>;

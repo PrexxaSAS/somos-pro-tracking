@@ -80,6 +80,7 @@ Archivos principales:
 - `docs/rls_step2_transportista.sql`: politicas RLS para empresa transportista y sus conductores.
 - `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
 - `docs/rls_step3_conductor.sql`: politicas RLS para pedidos asignados al conductor.
+- `docs/rls_step4_cliente.sql`: politicas RLS para cliente interno, sus solicitudes y bloqueo de facturas proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
 - `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
@@ -364,3 +365,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto entrega con novedad para capturar explicitamente la novedad al abrir carga de fotos y persistirla en todos los caminos de guardado.
 - Se permitio que operador corrija novedad de un pedido ya entregado usando Guardar Cambios.
 - Se ajusto flujo de novedad: antes de fotos es solo intencion de entrega; despues de entregado con soporte se puede corregir con Guardar Cambios.
+- Se definio alcance del cliente interno: ve todos los pedidos solo lectura; gestiona sus propias devoluciones, recogidas y PQRS; no accede a Facturas Proveedor.
+- Se quito Facturas Proveedor del menu de cliente y se agrego al menu de operador.
+- Se agrego proteccion de interfaz para que el modulo Facturas Proveedor solo renderice para admin u operador.
+- Se agrego `docs/rls_step4_cliente.sql` para aplicar en staging las politicas del rol cliente y bloquear facturas por RLS.

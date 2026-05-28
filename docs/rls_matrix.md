@@ -45,8 +45,14 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 
 ### Cliente Interno
 
-- Puede consultar pedidos.
+- Puede consultar absolutamente todos los pedidos desde Estado Pedidos.
+- Sobre pedidos tiene acceso solo lectura: no puede crear, editar, marcar entrega ni eliminar.
 - Puede ver estado, ciudad, guia, fechas y datos basicos del conductor.
+- Puede crear, ver y modificar sus propias devoluciones.
+- Puede crear, ver y modificar sus propias recogidas.
+- Puede crear, ver y modificar sus propias PQRS.
+- No puede ver Facturas Proveedor ni sus guias asociadas.
+- Facturas Proveedor queda limitado a admin y operador.
 - No debe ver datos sensibles no aprobados.
 
 ## Pendiente De Detalle
