@@ -249,6 +249,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const [verMapa,    setVerMapa]    = useState(false);
   const [verGuia,    setVerGuia]    = useState(false);
   const [verCamara,  setVerCamara]  = useState(false);
+  const [novedadEntrega, setNovedadEntrega] = useState(pedido.novedad||false);
 
   const cond   = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
   const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
@@ -295,7 +296,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const subirFotos = async (fotos) => {
     const hoy = new Date().toISOString().split("T")[0];
     const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
-    const estadoFinal = novedad ? "novedad" : "entregado";
+    const conNovedad = Boolean(novedadEntrega);
+    const estadoFinal = conNovedad ? "novedad" : "entregado";
     const nuevosSoportes = [...(pedido.soportes||[]),...nombres];
     const nuevosSoportesData = [...(pedido.soportes_data||[]),...fotos];
     const cambios = {
@@ -303,14 +305,14 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
       soportes_data: nuevosSoportesData,
       estado: estadoFinal,
       fecha_real: hoy,
-      novedad,
+      novedad: conNovedad,
     };
     setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
     try {
       const { error: sErr } = await supabase.from('pedidos').update(cambios).eq('id', pedido.id);
       if (sErr) {
         await supabase.from('pedidos').update({
-          estado: estadoFinal, fecha_real: hoy, novedad, soportes: cambios.soportes
+          estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes
         }).eq('id', pedido.id);
         showToast("⚠️ Estado guardado. Fotos muy pesadas — usa imágenes más pequeñas", "warning");
       } else {
@@ -453,7 +455,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {(pedido.soportes||[]).length<3&&(
-              <Btn variant="success" onClick={()=>setVerCamara(true)}>
+          <Btn variant="success" onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}>
                 Cargar Fotos (max 3) y Marcar Entregado
               </Btn>
             )}
