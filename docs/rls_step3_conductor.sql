@@ -5,8 +5,10 @@
 -- Reglas:
 -- - Conductor puede ver su propio perfil de conductor.
 -- - Conductor puede ver solo pedidos asignados a su conductor_id.
+-- - Conductor puede ver solo devoluciones y recogidas asignadas a su conductor_id.
 -- - Conductor puede actualizar solo pedidos asignados a su conductor_id
 --   para registrar entrega/novedad/soportes.
+-- - Conductor NO puede modificar devoluciones ni recogidas.
 -- - Conductor puede leer catalogos necesarios para pantalla.
 
 create or replace function public.current_conductor_id()
@@ -33,6 +35,8 @@ $$;
 drop policy if exists "conductores_select_self_conductor" on public.conductores;
 drop policy if exists "pedidos_select_assigned_conductor" on public.pedidos;
 drop policy if exists "pedidos_update_assigned_conductor" on public.pedidos;
+drop policy if exists "devoluciones_select_assigned_conductor" on public.devoluciones;
+drop policy if exists "recogidas_select_assigned_conductor" on public.recogidas;
 drop policy if exists "ciudades_select_conductor" on public.ciudades;
 drop policy if exists "transportistas_select_conductor" on public.transportistas;
 
@@ -67,6 +71,24 @@ with check (
   and conductor_id = public.current_conductor_id()
 );
 
+create policy "devoluciones_select_assigned_conductor"
+on public.devoluciones
+for select
+to authenticated
+using (
+  public.is_conductor()
+  and conductor_id = public.current_conductor_id()
+);
+
+create policy "recogidas_select_assigned_conductor"
+on public.recogidas
+for select
+to authenticated
+using (
+  public.is_conductor()
+  and conductor_id = public.current_conductor_id()
+);
+
 create policy "ciudades_select_conductor"
 on public.ciudades
 for select
@@ -88,5 +110,5 @@ select
   with_check
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('conductores', 'pedidos', 'ciudades', 'transportistas')
+  and tablename in ('conductores', 'pedidos', 'devoluciones', 'recogidas', 'ciudades', 'transportistas')
 order by tablename, policyname;
