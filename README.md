@@ -363,3 +363,4 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto operador para editar datos basicos de pedido, marcar entrega y ver boton Guardar Cambios.
 - Se ajusto entrega con novedad para capturar explicitamente la novedad al abrir carga de fotos y persistirla en todos los caminos de guardado.
 - Se permitio que operador corrija novedad de un pedido ya entregado usando Guardar Cambios.
+- Se ajusto flujo de novedad: antes de fotos es solo intencion de entrega; despues de entregado con soporte se puede corregir con Guardar Cambios.

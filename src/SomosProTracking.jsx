@@ -253,6 +253,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
 
   const cond   = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
   const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
+  const tieneSoportes = ((pedido.soportes_data||[]).length > 0) || ((pedido.soportes||[]).length > 0);
+  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
 
   const guardar = async () => {
     const c = conductores.find(c=>String(c.id)===String(condId));
@@ -269,7 +271,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
       ciudad_nombre: ciudad?.name||pedido.ciudad_nombre||"",
       fecha_estimada: fechaEdit||pedido.fecha_estimada||null,
     };
-    if (canBasicEdit && ["entregado","novedad"].includes(pedido.estado)) {
+    if (canBasicEdit && pedidoCerrado && tieneSoportes) {
       cambiosBase.estado = novedad ? "novedad" : "entregado";
       cambiosBase.novedad = novedad;
     }
@@ -432,9 +434,11 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
             {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>v</span>}
           </div>
           <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>
-            Marcar como Entregado con Novedad
+            {pedidoCerrado&&tieneSoportes ? "Entrega con Novedad" : "Entregar con Novedad al cargar soporte"}
           </span>
-          {novedad&&<span style={{fontSize:11,color:"#dc2626",marginLeft:4}}>Al subir soporte el estado sera Con Novedad</span>}
+          {novedad&&<span style={{fontSize:11,color:"#dc2626",marginLeft:4}}>
+            {pedidoCerrado&&tieneSoportes ? "Guardar Cambios actualizara la novedad." : "La novedad se aplicara al cargar fotos y marcar entregado."}
+          </span>}
         </div>
 
         <div>
