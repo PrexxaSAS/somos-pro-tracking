@@ -18,9 +18,11 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 - Puede marcar entrega con soporte fotografico y novedad si aplica.
 - No puede modificar conductores.
 - No puede reasignar conductor, cambiar tipo de transporte ni eliminar pedidos existentes.
-- No puede modificar recogidas.
+- Puede gestionar recogidas para asignacion/cierre operativo.
 - Si puede gestionar devoluciones.
 - Si puede gestionar PQRS.
+- Puede crear, editar y eliminar Facturas Proveedor.
+- Puede gestionar guias asociadas a Facturas Proveedor.
 - No puede crear usuarios.
 - No debe modificar configuracion sensible.
 
@@ -28,7 +30,8 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 
 - Puede ver su empresa.
 - Puede ver sus conductores.
-- Puede crear solo conductores asociados a su propia empresa.
+- Puede crear solo conductores asociados a su propia empresa mediante Edge Function `create-system-user`.
+- No puede insertar usuarios o conductores directamente desde el cliente.
 - Puede editar datos basicos de sus conductores asociados.
 - No puede cambiar el NIT proveedor ni la empresa propietaria del conductor.
 - Puede ver usuarios de tipo conductor asociados a su NIT.

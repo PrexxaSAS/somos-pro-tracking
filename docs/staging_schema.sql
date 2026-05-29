@@ -168,7 +168,7 @@ create table if not exists public.facturas_proveedor (
 
 create table if not exists public.factura_guias (
   id uuid primary key default gen_random_uuid(),
-  factura_id uuid references public.facturas_proveedor(id),
+  factura_id uuid references public.facturas_proveedor(id) on delete cascade,
   pedido_id text references public.pedidos(id),
   created_at timestamptz default now()
 );

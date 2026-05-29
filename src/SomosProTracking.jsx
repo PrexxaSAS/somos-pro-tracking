@@ -2671,6 +2671,8 @@ function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recar
   // ── Eliminar factura ───────────────────────────────────────────────────────
   const eliminar = async (id, num) => {
     if (!window.confirm(`¿Eliminar factura ${num}? Se eliminarán también las guías relacionadas.`)) return;
+    const { error: guiasError } = await supabase.from('factura_guias').delete().eq('factura_id', id);
+    if (guiasError) { showToast("Error eliminando guÃ­as: " + guiasError.message, "error"); return; }
     const { error } = await supabase.from('facturas_proveedor').delete().eq('id', id);
     if (error) { showToast("Error: " + error.message, "error"); return; }
     showToast("Factura eliminada", "info");

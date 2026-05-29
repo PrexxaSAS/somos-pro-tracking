@@ -51,8 +51,9 @@ El trabajo debe hacerse gradualmente:
 - Empresa transportista solo puede crear conductores asociados a su propia empresa.
 - Operador, conductor y cliente interno no pueden crear usuarios.
 - Operador puede ver pedidos, conductores, transportistas, devoluciones, recogidas y PQRS.
-- Operador no puede modificar conductores, pedidos ni recogidas.
-- Operador si puede gestionar devoluciones y PQRS.
+- Operador puede registrar pedidos, editar datos basicos de pedidos y marcar entregas.
+- Operador no puede modificar conductores ni reasignar conductor en pedidos existentes.
+- Operador si puede gestionar devoluciones, recogidas, PQRS y facturas proveedor.
 
 ## Arquitectura Actual
 
@@ -81,7 +82,10 @@ Archivos principales:
 - `docs/rls_step2b_transportista_update_driver.sql`: permite a transportista editar conductores propios.
 - `docs/rls_step3_conductor.sql`: politicas RLS para pedidos asignados al conductor.
 - `docs/rls_step4_cliente.sql`: politicas RLS para cliente interno, sus solicitudes y bloqueo de facturas proveedor.
+- `docs/rls_step5_write_lockdown.sql`: cierre de politicas de escritura por rol antes de produccion.
+- `docs/rls_step6_column_guards.sql`: triggers para bloquear cambios de columnas sensibles por rol.
 - `docs/recogidas_paqueteria_migration.sql`: agrega campos de paqueteria a devoluciones y recogidas.
+- `docs/factura_guias_cascade_migration.sql`: ajusta FK para borrar guias asociadas al eliminar una factura proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
 - `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
@@ -377,3 +381,9 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto cliente interno para editar sus devoluciones y recogidas solo si siguen sin conductor asignado y en estado `sin_asignar`.
 - Se ajusto cliente interno para editar sus PQRS solo mientras estan `abierta`, antes de gestion.
 - Se reforzo RLS de cliente para bloquear actualizaciones de devoluciones/recogidas ya asignadas y PQRS ya gestionadas.
+- Se agrego `docs/rls_step5_write_lockdown.sql` para cerrar escrituras directas no deseadas por rol.
+- Se definio que transportista no debe insertar usuarios/conductores directamente; la creacion de conductor queda por Edge Function `create-system-user`.
+- Se corrigio alcance de Facturas Proveedor: operador puede crear, editar/eliminar y gestionar guias asociadas.
+- Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
+- Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.
+- Se ajusto eliminacion de Facturas Proveedor para borrar primero guias asociadas desde la app y se agrego migracion `ON DELETE CASCADE` en `factura_guias`.
