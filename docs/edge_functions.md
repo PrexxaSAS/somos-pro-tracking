@@ -16,6 +16,7 @@ Soporta creacion de usuarios autenticables:
 
 - Valida la sesion del usuario que llama.
 - Admin puede crear usuarios de cualquier rol mediante `type: "system_user"`.
+- Admin puede editar usuarios mediante `type: "update_system_user"`, incluyendo usuario/login y contrasena de Supabase Auth.
 - Transportista puede crear solo conductores de su propia empresa.
 - Crea usuario en Supabase Auth.
 - Crea perfil en `public.usuarios`.

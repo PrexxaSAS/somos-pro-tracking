@@ -4724,10 +4724,42 @@ function Usuarios({ usuarios, showToast, recargar }) {
   const guardarEdicion = async () => {
     if (!form.nombre.trim()||!form.user.trim()) { showToast("Nombre y usuario son obligatorios","error"); return; }
     if (usuarios.find(u=>u.user===form.user.trim()&&u.id!==modEditar.id)) { showToast("Ese usuario ya existe","error"); return; }
+    if (form.rol==="conductor" && (!form.cedula.trim()||!form.placa.trim()||!form.nit_proveedor.trim())) {
+      showToast("Cedula, placa y NIT proveedor son obligatorios para conductor","error");
+      return;
+    }
+    if (form.rol==="transportista" && !form.nit.trim()) {
+      showToast("NIT es obligatorio para transportista","error");
+      return;
+    }
     setGuardando(true);
-    const passNueva = form.pass.trim()||modEditar.pass;
-    const { error } = await supabase.from('usuarios').update({...form,pass:passNueva}).eq('id',modEditar.id);
-    if (error) { showToast("Error: "+error.message,"error"); setGuardando(false); return; }
+    const { data, error } = await supabase.functions.invoke('create-system-user', {
+      body: {
+        type: "update_system_user",
+        user_id: modEditar.id,
+        nombre: form.nombre.trim(),
+        rol: form.rol,
+        user_login: form.user.trim(),
+        pass_login: form.pass.trim(),
+        nit: form.nit.trim(),
+        empresa: form.empresa.trim(),
+        cedula: form.cedula.trim(),
+        placa: form.placa.trim(),
+        celular: form.celular.trim(),
+        nit_proveedor: form.nit_proveedor.trim(),
+      },
+    });
+    if (error) {
+      let detalle = error.message;
+      try {
+        const body = await error.context?.json?.();
+        if (body?.error) detalle = body.error;
+      } catch {}
+      showToast("Error actualizando usuario: "+detalle,"error");
+      setGuardando(false);
+      return;
+    }
+    if (data?.error) { showToast("Error actualizando usuario: "+data.error,"error"); setGuardando(false); return; }
     setModEditar(null);
     showToast(form.pass.trim()?"✓ Usuario y contraseña actualizados":"✓ Usuario actualizado","success");
     if(recargar) await recargar(); setGuardando(false);
