@@ -290,6 +290,10 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
 
   const guardar = async () => {
+    if (pedidoCerrado) {
+      showToast("No se puede modificar un pedido que ya fue entregado","error");
+      return;
+    }
     const c = conductores.find(c=>String(c.id)===String(condId));
     let nuevoEstado = pedido.estado;
     if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
@@ -333,6 +337,10 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
 
 
   const subirFotos = async (fotos) => {
+    if (pedidoCerrado) {
+      showToast("No se puede modificar un pedido que ya fue entregado","error");
+      return;
+    }
     const hoy = new Date().toISOString().split("T")[0];
     const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
     const conNovedad = Boolean(novedadEntrega);
@@ -390,6 +398,11 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           {pedido.novedad&&<span style={{fontSize:12,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
           <span style={{fontSize:11,color:"#94a3b8"}}>(automatico)</span>
         </div>
+        {pedidoCerrado&&(
+          <div style={{background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:12,color:"#475569",fontSize:13,fontWeight:700}}>
+            Pedido cerrado: no se permiten modificaciones despues de la entrega.
+          </div>
+        )}
 
         {pedido.tipo==="paqueteria"&&(
           <div style={{background:"#ecfeff",borderRadius:10,padding:14,border:"1px solid #67e8f9"}}>
@@ -495,7 +508,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
             <p style={{color:"#94a3b8",fontSize:13,margin:"0 0 10px"}}>Sin soportes fotograficos.</p>
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {(pedido.soportes||[]).length<3&&(
+            {!pedidoCerrado&&(pedido.soportes||[]).length<3&&(
           <Btn variant="success" onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}>
                 Cargar Fotos (max 3) y Marcar Entregado
               </Btn>
@@ -524,7 +537,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
           <div style={{display:"flex",gap:10}}>
             <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-            {(canEdit||canBasicEdit)&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
+            {(canEdit||canBasicEdit)&&!pedidoCerrado&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
           </div>
         </div>
       </div>
@@ -2419,6 +2432,11 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
   const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
 
   const marcarEntregado = async (pedido, fotos, conNovedad) => {
+    if (["entregado","novedad"].includes(pedido.estado)) {
+      showToast("No se puede modificar un pedido que ya fue entregado", "error");
+      setModFotos(null);
+      return;
+    }
     const hoy = new Date().toISOString().split("T")[0];
     const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
     const estadoFinal = conNovedad ? "novedad" : "entregado";
