@@ -266,7 +266,7 @@ function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   );
 }
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false }) {
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canDeliver = false }) {
   const [condId,     setCondId]     = useState(pedido.conductor_id||"") ;
   const [direccion,  setDireccion]  = useState(pedido.direccion||"");
   const [cajas,      setCajas]      = useState(String(pedido.cajas||""));
@@ -288,10 +288,12 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
   const tieneSoportes = ((pedido.soportes_data||[]).length > 0) || ((pedido.soportes||[]).length > 0);
   const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
+  const pedidoEnTransito = pedido.estado === "en_transito";
+  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
 
   const guardar = async () => {
-    if (pedidoCerrado) {
-      showToast("No se puede modificar un pedido que ya fue entregado","error");
+    if (pedidoBloqueadoEdicion) {
+      showToast(pedidoCerrado ? "No se puede modificar un pedido que ya fue entregado" : "No se puede editar un pedido en transito","error");
       return;
     }
     const c = conductores.find(c=>String(c.id)===String(condId));
@@ -339,6 +341,10 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const subirFotos = async (fotos) => {
     if (pedidoCerrado) {
       showToast("No se puede modificar un pedido que ya fue entregado","error");
+      return;
+    }
+    if (pedidoEnTransito && !canDeliver) {
+      showToast("Solo el conductor puede registrar la entrega de un pedido en transito","error");
       return;
     }
     const hoy = new Date().toISOString().split("T")[0];
@@ -401,6 +407,11 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
         {pedidoCerrado&&(
           <div style={{background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:12,color:"#475569",fontSize:13,fontWeight:700}}>
             Pedido cerrado: no se permiten modificaciones despues de la entrega.
+          </div>
+        )}
+        {!pedidoCerrado&&pedidoEnTransito&&!canDeliver&&(
+          <div style={{background:"#fff7ed",border:"1px solid #fdba74",borderRadius:10,padding:12,color:"#9a3412",fontSize:13,fontWeight:700}}>
+            Pedido en transito: solo el conductor asignado puede registrar soporte de entrega y novedad.
           </div>
         )}
 
@@ -508,7 +519,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
             <p style={{color:"#94a3b8",fontSize:13,margin:"0 0 10px"}}>Sin soportes fotograficos.</p>
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {!pedidoCerrado&&(pedido.soportes||[]).length<3&&(
+            {!pedidoCerrado&&(!pedidoEnTransito||canDeliver)&&(pedido.soportes||[]).length<3&&(
           <Btn variant="success" onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}>
                 Cargar Fotos (max 3) y Marcar Entregado
               </Btn>
@@ -537,7 +548,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
           <div style={{display:"flex",gap:10}}>
             <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-            {(canEdit||canBasicEdit)&&!pedidoCerrado&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
+            {(canEdit||canBasicEdit)&&!pedidoBloqueadoEdicion&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
           </div>
         </div>
       </div>
@@ -2604,7 +2615,7 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
 
       {/* Modal detalle (solo lectura) */}
       {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
-        onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false}/>}
+        onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
 
       {/* Modal cargar soportes de entrega */}
       {modFotos&&(
