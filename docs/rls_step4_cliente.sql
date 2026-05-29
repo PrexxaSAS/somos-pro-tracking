@@ -4,9 +4,12 @@
 --
 -- Reglas validadas:
 -- - Cliente puede ver todos los pedidos en Estado Pedidos, solo lectura.
--- - Cliente puede crear, ver y modificar sus propias devoluciones.
--- - Cliente puede crear, ver y modificar sus propias recogidas.
--- - Cliente puede crear, ver y modificar sus propias PQRS.
+-- - Cliente puede crear y ver sus propias devoluciones.
+-- - Cliente puede modificar sus propias devoluciones solo si no tienen conductor asignado.
+-- - Cliente puede crear y ver sus propias recogidas.
+-- - Cliente puede modificar sus propias recogidas solo si no tienen conductor asignado.
+-- - Cliente puede crear y ver sus propias PQRS.
+-- - Cliente puede modificar sus propias PQRS solo si aun estan abiertas, sin gestion.
 -- - Cliente NO puede acceder a facturas de proveedor ni a sus guias asociadas.
 -- - Facturas proveedor quedan disponibles solo para admin y operador.
 
@@ -117,6 +120,10 @@ to authenticated
 with check (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and conductor_id is null
+  and placa is null
+  and nit_proveedor is null
+  and estado = 'sin_asignar'
 );
 
 create policy "devoluciones_cliente_update_own"
@@ -126,10 +133,16 @@ to authenticated
 using (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and conductor_id is null
+  and estado = 'sin_asignar'
 )
 with check (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and conductor_id is null
+  and placa is null
+  and nit_proveedor is null
+  and estado = 'sin_asignar'
 );
 
 drop policy if exists "recogidas_cliente_select_own" on public.recogidas;
@@ -152,6 +165,10 @@ to authenticated
 with check (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and conductor_id is null
+  and placa is null
+  and nit_proveedor is null
+  and estado = 'sin_asignar'
 );
 
 create policy "recogidas_cliente_update_own"
@@ -161,10 +178,16 @@ to authenticated
 using (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and conductor_id is null
+  and estado = 'sin_asignar'
 )
 with check (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and conductor_id is null
+  and placa is null
+  and nit_proveedor is null
+  and estado = 'sin_asignar'
 );
 
 drop policy if exists "pqrs_cliente_select_own" on public.pqrs;
@@ -187,6 +210,10 @@ to authenticated
 with check (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and estado = 'abierta'
+  and coalesce(respuesta, '') = ''
+  and coalesce(gestionado_por, '') = ''
+  and fecha_gestion is null
 );
 
 create policy "pqrs_cliente_update_own"
@@ -196,10 +223,15 @@ to authenticated
 using (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and estado = 'abierta'
 )
 with check (
   public.is_cliente()
   and solicitado_por in (public.current_user_nombre(), public.current_username())
+  and estado = 'abierta'
+  and coalesce(respuesta, '') = ''
+  and coalesce(gestionado_por, '') = ''
+  and fecha_gestion is null
 );
 
 -- Cierre explicito de facturas: no existe ninguna politica para cliente.

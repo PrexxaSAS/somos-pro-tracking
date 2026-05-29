@@ -53,6 +53,8 @@ Esta matriz define el objetivo de permisos para Supabase RLS. Primero se valida 
 - Puede crear, ver y modificar sus propias devoluciones.
 - Puede crear, ver y modificar sus propias recogidas.
 - Puede crear, ver y modificar sus propias PQRS.
+- Puede editar devoluciones y recogidas propias solo mientras no tengan conductor asignado y sigan en `sin_asignar`.
+- Puede editar PQRS propias solo mientras sigan en estado `abierta`, antes de gestion.
 - No puede ver Facturas Proveedor ni sus guias asociadas.
 - Facturas Proveedor queda limitado a admin y operador.
 - No debe ver datos sensibles no aprobados.

@@ -374,3 +374,6 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto apertura de documentos/soportes guardados en base64 para convertirlos a Blob antes de abrirlos, evitando ventanas en blanco y sin forzar descarga automatica.
 - Se agrego visibilidad de devoluciones y recogidas asignadas en la pantalla del conductor, solo lectura.
 - Se actualizo RLS de conductor para permitir SELECT sobre devoluciones y recogidas asignadas, sin permisos de modificacion.
+- Se ajusto cliente interno para editar sus devoluciones y recogidas solo si siguen sin conductor asignado y en estado `sin_asignar`.
+- Se ajusto cliente interno para editar sus PQRS solo mientras estan `abierta`, antes de gestion.
+- Se reforzo RLS de cliente para bloquear actualizaciones de devoluciones/recogidas ya asignadas y PQRS ya gestionadas.

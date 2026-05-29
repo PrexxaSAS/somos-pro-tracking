@@ -3269,6 +3269,7 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
 
 function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, showToast, user, recargar }) {
   const [modNueva, setModNueva] = useState(false);
+  const [modEditar,setModEditar]= useState(null);
   const [modDet,   setModDet]   = useState(null);
   const [busq,     setBusq]     = useState("");
   const fileRef = useRef(null);
@@ -3281,6 +3282,30 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
   };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
+  const esCliente = user.rol==="cliente";
+
+  const abrirEditarCliente = (dev) => {
+    setModEditar(dev);
+    setForm({
+      ...vacio,
+      factura: dev.factura||"",
+      pedido_ref: dev.pedido_ref||"",
+      unidades: dev.unidades||"",
+      volumen_m3: dev.volumen_m3||"",
+      peso_kg: dev.peso_kg||"",
+      dir_recogida: dev.dir_recogida||"",
+      ciudad_codigo: dev.ciudad_codigo||"",
+      motivo: dev.motivo||"",
+      soporte_data: dev.soporte_data||null,
+      soporte_nombre: dev.soporte_nombre||"",
+    });
+  };
+
+  const cerrarFormulario = () => {
+    setModNueva(false);
+    setModEditar(null);
+    setForm(vacio);
+  };
 
   const cargarDoc = async (files) => {
     const file = files[0];
@@ -3296,7 +3321,27 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     }
     const guia = generarGuiaDV(devoluciones);
     const ciudad = (ciudades||[]).find(c=>c.code===form.ciudad_codigo);
-    const cond = form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    if (modEditar) {
+      const cambios = {
+        factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
+        unidades: parseInt(form.unidades)||0,
+        volumen_m3: parseFloat(form.volumen_m3)||0,
+        peso_kg: parseFloat(form.peso_kg)||0,
+        dir_recogida: form.dir_recogida.trim(),
+        ciudad_codigo: form.ciudad_codigo,
+        ciudad_nombre: ciudad?.name||"",
+        motivo: form.motivo.trim(),
+        soporte_data: form.soporte_data,
+        soporte_nombre: form.soporte_nombre,
+      };
+      const { error } = await supabase.from('devoluciones').update(cambios).eq('id', modEditar.id);
+      if (error) { showToast("Error: "+error.message,"error"); return; }
+      cerrarFormulario();
+      showToast("✓ Devolución actualizada","success");
+      if (recargar) await recargar();
+      return;
+    }
     const nueva = {
       id: guia, guia,
       factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
@@ -3343,7 +3388,6 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     if (recargar) await recargar();
   };
 
-  const esCliente = user.rol==="cliente";
   const filtradas = devoluciones.filter(d=>{
     if (esCliente && ![user.nombre, user.user].includes(d.solicitado_por)) return false;
     const q=busq.toLowerCase();
@@ -3382,17 +3426,20 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
                   </Btn>
                 )}
               </div>
+              {esCliente && !d.conductor_id && d.estado==="sin_asignar" && (
+                <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(d)}>Editar</Btn>
+              )}
               {!esCliente&&<Btn size="sm" variant="secondary" onClick={()=>setModDet(d)}>Gestionar</Btn>}
             </div>
           </Card>
         ))}
       </div>
-      {modNueva&&(
-        <Modal title="Nueva Solicitud de Devolución" onClose={()=>{setModNueva(false);setForm(vacio);}} wide>
+      {(modNueva||modEditar)&&(
+        <Modal title={modEditar ? "Editar Solicitud de Devolución" : "Nueva Solicitud de Devolución"} onClose={cerrarFormulario} wide>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{background:"#fef2f2",borderRadius:10,padding:10,fontSize:12,color:"#dc2626",fontWeight:600}}>
+            {!modEditar&&<div style={{background:"#fef2f2",borderRadius:10,padding:10,fontSize:12,color:"#dc2626",fontWeight:600}}>
               Se generará automáticamente una Guía (DV-{new Date().getFullYear()}-XXXX).
-            </div>
+            </div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="N° Factura *" value={form.factura} onChange={f("factura")} placeholder="FAC-2200"/>
               <Field label="N° Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
@@ -3406,15 +3453,16 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
             <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
               options={[{value:"",label:"— Seleccione —"},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} — ${c.code}`}))]}/>
             <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolución..."/>
-            <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
+            {!esCliente && !modEditar && <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
               options={[{value:"conductor",label:"🚗 Conductor Propio"},{value:"empresa_transporte",label:"🏢 Empresa Transportista"},{value:"mensajeria",label:"📨 Mensajería"},{value:"paqueteria",label:"📦 Paquetería Tercero"}]}/>
-            {(form.tipo_envio||"conductor")==="paqueteria"&&(
+            }
+            {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <Field label="Empresa Paquetería" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega, TCC..."/>
                 <Field label="N° Guía" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
               </div>
             )}
-            {((form.tipo_envio||"conductor")!=="paqueteria")&&(
+            {!esCliente && !modEditar && ((form.tipo_envio||"conductor")!=="paqueteria")&&(
               <Field label="Conductor (opcional)" value={form.conductor_id}
                 onChange={v=>{
                   f("conductor_id")(v);
@@ -3435,8 +3483,8 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
             </div>
             <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-              <Btn onClick={crear}>💾 Registrar Devolución</Btn>
+              <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+              <Btn onClick={crear}>{modEditar ? "💾 Guardar Cambios" : "💾 Registrar Devolución"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3519,6 +3567,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
 
 function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, showToast, user, recargar }) {
   const [modNueva, setModNueva] = useState(false);
+  const [modEditar,setModEditar]= useState(null);
   const [modDet,   setModDet]   = useState(null);
   const [busq,     setBusq]     = useState("");
   const fileRef = useRef(null);
@@ -3531,6 +3580,30 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
   };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
+  const esCliente = user.rol==="cliente";
+
+  const abrirEditarCliente = (rec) => {
+    setModEditar(rec);
+    setForm({
+      ...vacio,
+      dir_recogida: rec.dir_recogida||"",
+      ciudad_recogida_cod: rec.ciudad_recogida_cod||"",
+      dir_entrega: rec.dir_entrega||"",
+      ciudad_entrega_cod: rec.ciudad_entrega_cod||"",
+      unidades: rec.unidades||"",
+      volumen_m3: rec.volumen_m3||"",
+      peso_kg: rec.peso_kg||"",
+      observaciones: rec.observaciones||"",
+      doc_data: rec.doc_data||null,
+      doc_nombre: rec.doc_nombre||"",
+    });
+  };
+
+  const cerrarFormulario = () => {
+    setModNueva(false);
+    setModEditar(null);
+    setForm(vacio);
+  };
 
   const cargarDoc = async (files) => {
     const file = files[0]; if (!file) return;
@@ -3546,7 +3619,29 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     const guia = generarGuiaRC(recogidas);
     const crec = (ciudades||[]).find(c=>c.code===form.ciudad_recogida_cod);
     const cent = (ciudades||[]).find(c=>c.code===form.ciudad_entrega_cod);
-    const cond = form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    if (modEditar) {
+      const cambios = {
+        dir_recogida: form.dir_recogida.trim(),
+        ciudad_recogida_cod: form.ciudad_recogida_cod,
+        ciudad_recogida_nombre: crec?.name||"",
+        dir_entrega: form.dir_entrega.trim(),
+        ciudad_entrega_cod: form.ciudad_entrega_cod,
+        ciudad_entrega_nombre: cent?.name||"",
+        unidades: parseInt(form.unidades)||0,
+        volumen_m3: parseFloat(form.volumen_m3)||0,
+        peso_kg: parseFloat(form.peso_kg)||0,
+        observaciones: form.observaciones.trim(),
+        doc_data: form.doc_data,
+        doc_nombre: form.doc_nombre,
+      };
+      const { error } = await supabase.from('recogidas').update(cambios).eq('id', modEditar.id);
+      if (error) { showToast("Error: "+error.message,"error"); return; }
+      cerrarFormulario();
+      showToast("✓ Recogida actualizada","success");
+      if (recargar) await recargar();
+      return;
+    }
     const nueva = {
       id: guia, guia,
       dir_recogida: form.dir_recogida.trim(),
@@ -3595,7 +3690,6 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     if (recargar) await recargar();
   };
 
-  const esCliente = user.rol==="cliente";
   const filtradas = recogidas.filter(r=>{
     if (esCliente && ![user.nombre, user.user].includes(r.solicitado_por)) return false;
     const q=busq.toLowerCase();
@@ -3636,13 +3730,16 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
                   </Btn>
                 )}
               </div>
+              {esCliente && !r.conductor_id && r.estado==="sin_asignar" && (
+                <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(r)}>Editar</Btn>
+              )}
               {!esCliente&&<Btn size="sm" variant="secondary" onClick={()=>setModDet(r)}>Gestionar</Btn>}
             </div>
           </Card>
         ))}
       </div>
-      {modNueva&&(
-        <Modal title="Nueva Solicitud de Recogida" onClose={()=>{setModNueva(false);setForm(vacio);}} wide>
+      {(modNueva||modEditar)&&(
+        <Modal title={modEditar ? "Editar Solicitud de Recogida" : "Nueva Solicitud de Recogida"} onClose={cerrarFormulario} wide>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="Dirección de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
@@ -3660,14 +3757,15 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
               <Field label="Peso kg *" value={form.peso_kg} onChange={f("peso_kg")} type="number" placeholder="10"/>
             </div>
             <Field label="Observaciones" value={form.observaciones} onChange={f("observaciones")} as="textarea" placeholder="Instrucciones especiales..."/>
-            <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
+            {!esCliente && !modEditar && <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
               options={[{value:"conductor",label:"🚗 Conductor Propio"},{value:"empresa_transporte",label:"🏢 Empresa Transportista"},{value:"mensajeria",label:"📨 Mensajería"},{value:"paqueteria",label:"📦 Paquetería Tercero"}]}/>
-            {(form.tipo_envio||"conductor")==="paqueteria"?(
+            }
+            {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"?(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <Field label="Empresa Paquetería" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega..."/>
                 <Field label="N° Guía" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
               </div>
-            ):(
+            ):(!esCliente && !modEditar &&
               <Field label="Conductor (opcional)" value={form.conductor_id} onChange={f("conductor_id")} as="select"
                 options={[{value:"",label:"— Sin asignar —"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
             )}
@@ -3677,8 +3775,8 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
             </div>
             <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-              <Btn onClick={crear}>💾 Registrar Recogida</Btn>
+              <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+              <Btn onClick={crear}>{modEditar ? "💾 Guardar Cambios" : "💾 Registrar Recogida"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3782,6 +3880,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     rechazada:  { label:"Rechazada",  color:"#64748b", bg:"#f1f5f9" },
   };
   const [modNueva,   setModNueva]   = useState(false);
+  const [modEditar,  setModEditar]  = useState(null);
   const [modGestion, setModGestion] = useState(null);
   const [busq,       setBusq]       = useState("");
   const [filtroEst,  setFiltroEst]  = useState("todos");
@@ -3790,9 +3889,39 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
 
+  const abrirEditarCliente = (p) => {
+    setModEditar(p);
+    setForm({
+      factura: p.factura||"",
+      pedido_ref: p.pedido_ref||"",
+      motivo: p.motivo||"",
+      descripcion: p.descripcion||"",
+    });
+  };
+
+  const cerrarFormulario = () => {
+    setModNueva(false);
+    setModEditar(null);
+    setForm(vacio);
+  };
+
   const crear = async () => {
     if (!form.factura.trim()||!form.pedido_ref.trim()||!form.motivo||!form.descripcion.trim()) {
       showToast("Todos los campos son obligatorios","error"); return;
+    }
+    if (modEditar) {
+      const cambios = {
+        factura: form.factura.trim(),
+        pedido_ref: form.pedido_ref.trim(),
+        motivo: form.motivo,
+        descripcion: form.descripcion.trim(),
+      };
+      const { error } = await supabase.from('pqrs').update(cambios).eq('id', modEditar.id);
+      if (error) { showToast("Error: "+error.message,"error"); return; }
+      cerrarFormulario();
+      showToast("✓ PQRS actualizada","success");
+      if (recargar) await recargar();
+      return;
     }
     const year = new Date().getFullYear();
     const usados = pqrs.map(p=>p.id).filter(id=>id.startsWith(`PQRS-${year}-`)).map(id=>parseInt(id.split("-")[2])||0);
@@ -3895,6 +4024,9 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
                   )}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:130}}>
+                  {esCliente&&p.estado==="abierta"&&(
+                    <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(p)}>Editar</Btn>
+                  )}
                   {esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&(
                     <Btn size="sm" onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");}}>✏️ Gestionar</Btn>
                   )}
@@ -3910,12 +4042,12 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
           );
         })}
       </div>
-      {modNueva&&(
-        <Modal title="Nueva PQRS" onClose={()=>{setModNueva(false);setForm(vacio);}}>
+      {(modNueva||modEditar)&&(
+        <Modal title={modEditar ? "Editar PQRS" : "Nueva PQRS"} onClose={cerrarFormulario}>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{background:"#fffbeb",borderRadius:10,padding:10,fontSize:12,color:"#92400e",fontWeight:600}}>
+            {!modEditar&&<div style={{background:"#fffbeb",borderRadius:10,padding:10,fontSize:12,color:"#92400e",fontWeight:600}}>
               Se generará automáticamente un número de caso PQRS-{new Date().getFullYear()}-XXXX.
-            </div>
+            </div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="N° Factura *"     value={form.factura}    onChange={f("factura")}    placeholder="FAC-2200"/>
               <Field label="N° Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
@@ -3925,8 +4057,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
             <Field label="Descripción detallada *" value={form.descripcion} onChange={f("descripcion")} as="textarea"
               placeholder="Describe con detalle la situación, fecha del evento, personas involucradas..."/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-              <Btn onClick={crear}>💾 Radicar PQRS</Btn>
+              <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+              <Btn onClick={crear}>{modEditar ? "💾 Guardar Cambios" : "💾 Radicar PQRS"}</Btn>
             </div>
           </div>
         </Modal>
