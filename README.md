@@ -385,6 +385,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego `docs/rls_step5_write_lockdown.sql` para cerrar escrituras directas no deseadas por rol.
 - Se definio que transportista no debe insertar usuarios/conductores directamente; la creacion de conductor queda por Edge Function `create-system-user`.
 - Se amplio `create-system-user` para que admin pueda crear usuarios autenticables de cualquier rol y para que la pantalla de Usuarios del Sistema invoque esa funcion.
+- Se ajusto eliminacion de usuarios para pasar por `create-system-user`, borrar Auth/perfil y conservar entidades operativas como conductores o transportistas.
 - Se corrigio alcance de Facturas Proveedor: operador puede crear, editar/eliminar y gestionar guias asociadas.
 - Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
 - Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.

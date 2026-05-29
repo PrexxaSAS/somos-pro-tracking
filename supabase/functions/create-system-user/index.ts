@@ -46,8 +46,50 @@ Deno.serve(async (req) => {
   if (callerError || !caller) return json({ error: "Perfil del solicitante no encontrado." }, 403);
 
   const payload = await req.json().catch(() => null);
-  if (!payload || !["conductor", "system_user"].includes(payload.type)) {
+  if (!payload || !["conductor", "system_user", "delete_system_user"].includes(payload.type)) {
     return json({ error: "Tipo de usuario no soportado." }, 400);
+  }
+
+  if (payload.type === "delete_system_user") {
+    if (caller.rol !== "admin") return json({ error: "Solo admin puede eliminar usuarios." }, 403);
+
+    const userId = clean(payload.user_id);
+    if (!userId) return json({ error: "ID de usuario requerido." }, 400);
+
+    const { data: target, error: targetError } = await adminClient
+      .from("usuarios")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (targetError || !target) return json({ error: "Usuario no encontrado." }, 404);
+    if (target.user === "admin") return json({ error: "No se puede eliminar el admin principal." }, 400);
+    if (target.auth_user_id === sessionData.user.id) return json({ error: "No puedes eliminar tu propio usuario en sesion." }, 400);
+
+    const { error: conductoresError } = await adminClient
+      .from("conductores")
+      .update({ usuario_id: null })
+      .eq("usuario_id", target.id);
+    if (conductoresError) return json({ error: conductoresError.message }, 400);
+
+    const { error: transportistasError } = await adminClient
+      .from("transportistas")
+      .update({ usuario_id: null })
+      .eq("usuario_id", target.id);
+    if (transportistasError) return json({ error: transportistasError.message }, 400);
+
+    const { error: usuarioError } = await adminClient
+      .from("usuarios")
+      .delete()
+      .eq("id", target.id);
+    if (usuarioError) return json({ error: usuarioError.message }, 400);
+
+    if (target.auth_user_id) {
+      const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(target.auth_user_id);
+      if (authDeleteError) return json({ error: authDeleteError.message }, 400);
+    }
+
+    return json({ deleted: true });
   }
 
   const nombre = clean(payload.nombre);

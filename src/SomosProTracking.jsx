@@ -4736,7 +4736,14 @@ function Usuarios({ usuarios, showToast, recargar }) {
   const eliminar = async (uid, uname) => {
     if (uname==="admin") { showToast("No se puede eliminar el admin principal","error"); return; }
     if (!window.confirm("¿Eliminar este usuario?")) return;
-    await supabase.from('usuarios').delete().eq('id', uid);
+    const { data, error } = await supabase.functions.invoke('create-system-user', {
+      body: {
+        type: "delete_system_user",
+        user_id: uid,
+      },
+    });
+    if (error) { showToast("Error eliminando usuario: "+error.message,"error"); return; }
+    if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); return; }
     showToast("Usuario eliminado","info");
     if (recargar) await recargar();
   };

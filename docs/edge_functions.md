@@ -21,6 +21,8 @@ Soporta creacion de usuarios autenticables:
 - Crea perfil en `public.usuarios`.
 - Si el rol es `conductor`, crea registro en `public.conductores` y vincula `usuarios.conductor_id`.
 - Si el rol es `transportista`, crea o actualiza el registro base en `public.transportistas`.
+- Admin puede eliminar accesos mediante `type: "delete_system_user"`.
+- Al eliminar un acceso, se borra `public.usuarios` y el usuario Auth; si tenia conductor o transportista asociado, se conserva la entidad operativa y se limpia `usuario_id`.
 
 ## Variables Requeridas
 
@@ -53,3 +55,4 @@ Despues de desplegar:
 5. Si es conductor, confirmar en `public.conductores` que existe el conductor.
 6. Probar login como ese usuario.
 7. Repetir con transportista para inscribir un conductor propio.
+8. Desde admin, eliminar un usuario de prueba y confirmar que desaparece de Usuarios del Sistema y de Authentication > Users.
