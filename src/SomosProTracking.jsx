@@ -4673,7 +4673,7 @@ export default function SomosProTracking() {
   );
 }
 function Usuarios({ usuarios, showToast, recargar }) {
-  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",placa:"",nit_proveedor:"",celular:""};
+  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
   const [modal,     setModal]     = useState(false);
   const [modEditar, setModEditar] = useState(null);
   const [form,      setForm]      = useState(vacio);
@@ -4683,16 +4683,39 @@ function Usuarios({ usuarios, showToast, recargar }) {
 
   const abrirNuevo  = () => { setForm(vacio); setModal(true); };
   const abrirEditar = (u) => {
-    setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||""});
+    setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",cedula:u.cedula||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||""});
     setModEditar(u);
   };
 
   const crearUsuario = async () => {
     if (!form.nombre.trim()||!form.user.trim()||!form.pass.trim()) { showToast("Nombre, usuario y contraseña son obligatorios","error"); return; }
     if (usuarios.find(u=>u.user===form.user.trim())) { showToast("Ese usuario ya existe","error"); return; }
+    if (form.rol==="conductor" && (!form.cedula.trim()||!form.placa.trim()||!form.nit_proveedor.trim())) {
+      showToast("Cedula, placa y NIT proveedor son obligatorios para conductor","error");
+      return;
+    }
+    if (form.rol==="transportista" && !form.nit.trim()) {
+      showToast("NIT es obligatorio para transportista","error");
+      return;
+    }
     setGuardando(true);
-    const { error } = await supabase.from('usuarios').insert({...form});
-    if (error) { showToast("Error: "+error.message,"error"); setGuardando(false); return; }
+    const { data, error } = await supabase.functions.invoke('create-system-user', {
+      body: {
+        type: "system_user",
+        nombre: form.nombre.trim(),
+        rol: form.rol,
+        user_login: form.user.trim(),
+        pass_login: form.pass.trim(),
+        nit: form.nit.trim(),
+        empresa: form.empresa.trim(),
+        cedula: form.cedula.trim(),
+        placa: form.placa.trim(),
+        celular: form.celular.trim(),
+        nit_proveedor: form.nit_proveedor.trim(),
+      },
+    });
+    if (error) { showToast("Error creando acceso: "+error.message,"error"); setGuardando(false); return; }
+    if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
     setModal(false); setForm(vacio);
     showToast("✓ Usuario creado","success");
     if(recargar) await recargar(); setGuardando(false);
@@ -4728,10 +4751,14 @@ function Usuarios({ usuarios, showToast, recargar }) {
     if (form.rol==="conductor") return (
       <>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Field label="Cedula" value={form.cedula} onChange={f("cedula")} placeholder="1012345678"/>
           <Field label="Placa" value={form.placa} onChange={f("placa")} placeholder="ABC-123"/>
-          <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
         </div>
-        <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
+          <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1"/>
+        </div>
+        <Field label="Empresa" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ"/>
       </>
     );
     return null;

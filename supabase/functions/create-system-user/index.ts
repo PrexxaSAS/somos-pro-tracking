@@ -46,11 +46,12 @@ Deno.serve(async (req) => {
   if (callerError || !caller) return json({ error: "Perfil del solicitante no encontrado." }, 403);
 
   const payload = await req.json().catch(() => null);
-  if (!payload || payload.type !== "conductor") {
+  if (!payload || !["conductor", "system_user"].includes(payload.type)) {
     return json({ error: "Tipo de usuario no soportado." }, 400);
   }
 
   const nombre = clean(payload.nombre);
+  const rol = clean(payload.rol || "conductor").toLowerCase();
   const cedula = clean(payload.cedula);
   const placa = clean(payload.placa);
   const celular = clean(payload.celular);
@@ -59,8 +60,19 @@ Deno.serve(async (req) => {
   const nitProveedor = clean(payload.nit_proveedor);
   const empresa = clean(payload.empresa);
 
-  if (!nombre || !cedula || !placa || !username || !password) {
-    return json({ error: "Nombre, cedula, placa, usuario y contrasena son obligatorios." }, 400);
+  const rolesPermitidos = ["admin", "operador", "transportista", "conductor", "cliente"];
+  if (!rolesPermitidos.includes(rol)) {
+    return json({ error: "Rol no soportado." }, 400);
+  }
+
+  if (!nombre || !username || !password) {
+    return json({ error: "Nombre, usuario y contrasena son obligatorios." }, 400);
+  }
+  if (rol === "conductor" && (!cedula || !placa)) {
+    return json({ error: "Cedula y placa son obligatorias para conductor." }, 400);
+  }
+  if (rol === "transportista" && (!nitProveedor && !clean(payload.nit))) {
+    return json({ error: "NIT es obligatorio para transportista." }, 400);
   }
 
   const callerIsAdmin = caller.rol === "admin";
@@ -68,8 +80,11 @@ Deno.serve(async (req) => {
   if (!callerIsAdmin && !callerIsTransportista) {
     return json({ error: "No tienes permiso para crear usuarios." }, 403);
   }
-  if (callerIsTransportista && nitProveedor !== caller.nit) {
+  if (callerIsTransportista && (rol !== "conductor" || nitProveedor !== caller.nit)) {
     return json({ error: "Solo puedes crear conductores asociados a tu empresa." }, 403);
+  }
+  if (!callerIsAdmin && payload.type === "system_user") {
+    return json({ error: "Solo admin puede crear usuarios de sistema." }, 403);
   }
 
   const email = `${username}@somospro.local`;
@@ -77,7 +92,7 @@ Deno.serve(async (req) => {
     email,
     password,
     email_confirm: true,
-    user_metadata: { user: username, rol: "conductor", nombre },
+    user_metadata: { user: username, rol, nombre },
   });
 
   if (authError || !authData.user) {
@@ -92,11 +107,12 @@ Deno.serve(async (req) => {
         nombre,
         user: username,
         pass: "__auth_managed__",
-        rol: "conductor",
+        rol,
+        nit: rol === "transportista" ? clean(payload.nit || nitProveedor) : null,
         cedula,
         placa,
         celular,
-        nit_proveedor: nitProveedor,
+        nit_proveedor: rol === "conductor" ? nitProveedor : null,
         empresa,
         auth_user_id: authData.user.id,
       })
@@ -106,25 +122,42 @@ Deno.serve(async (req) => {
     if (usuarioError || !usuario) throw usuarioError || new Error("No se pudo crear perfil.");
     usuarioId = usuario.id;
 
-    const { data: conductor, error: conductorError } = await adminClient
-      .from("conductores")
-      .insert({
-        nombre,
-        cedula,
-        placa,
-        celular,
-        nit_proveedor: nitProveedor,
-        empresa,
-        usuario_id: usuario.id,
-      })
-      .select()
-      .single();
+    if (rol === "conductor") {
+      const { data: conductor, error: conductorError } = await adminClient
+        .from("conductores")
+        .insert({
+          nombre,
+          cedula,
+          placa,
+          celular,
+          nit_proveedor: nitProveedor,
+          empresa,
+          usuario_id: usuario.id,
+        })
+        .select()
+        .single();
 
-    if (conductorError || !conductor) throw conductorError || new Error("No se pudo crear conductor.");
+      if (conductorError || !conductor) throw conductorError || new Error("No se pudo crear conductor.");
 
-    await adminClient.from("usuarios").update({ conductor_id: conductor.id }).eq("id", usuario.id);
+      await adminClient.from("usuarios").update({ conductor_id: conductor.id }).eq("id", usuario.id);
 
-    return json({ usuario: { ...usuario, conductor_id: conductor.id }, conductor }, 201);
+      return json({ usuario: { ...usuario, conductor_id: conductor.id }, conductor }, 201);
+    }
+
+    if (rol === "transportista") {
+      const nitTransportista = clean(payload.nit || nitProveedor);
+      const { error: transportistaError } = await adminClient
+        .from("transportistas")
+        .upsert({
+          nombre: empresa || nombre,
+          nit: nitTransportista,
+          usuario_id: usuario.id,
+        }, { onConflict: "nit" });
+
+      if (transportistaError) throw transportistaError;
+    }
+
+    return json({ usuario }, 201);
   } catch (error) {
     if (usuarioId) await adminClient.from("usuarios").delete().eq("id", usuarioId);
     await adminClient.auth.admin.deleteUser(authData.user.id);

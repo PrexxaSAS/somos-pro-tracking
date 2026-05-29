@@ -12,15 +12,15 @@ supabase/functions/create-system-user/index.ts
 
 ## Funcion Actual
 
-Soporta creacion de conductores:
+Soporta creacion de usuarios autenticables:
 
 - Valida la sesion del usuario que llama.
-- Admin puede crear usuarios.
+- Admin puede crear usuarios de cualquier rol mediante `type: "system_user"`.
 - Transportista puede crear solo conductores de su propia empresa.
 - Crea usuario en Supabase Auth.
 - Crea perfil en `public.usuarios`.
-- Crea registro en `public.conductores`.
-- Vincula `usuarios.conductor_id`.
+- Si el rol es `conductor`, crea registro en `public.conductores` y vincula `usuarios.conductor_id`.
+- Si el rol es `transportista`, crea o actualiza el registro base en `public.transportistas`.
 
 ## Variables Requeridas
 
@@ -46,9 +46,10 @@ Tambien se puede crear desde el Dashboard de Supabase pegando el contenido de `i
 
 Despues de desplegar:
 
-1. Entrar al Preview como transportista.
-2. Inscribir un conductor nuevo.
+1. Entrar al Preview como admin.
+2. Crear un usuario nuevo desde Usuarios del Sistema.
 3. Confirmar en Authentication > Users que existe `usuario@somospro.local`.
 4. Confirmar en `public.usuarios` que tiene `auth_user_id`.
-5. Confirmar en `public.conductores` que existe el conductor.
-6. Probar login como ese conductor.
+5. Si es conductor, confirmar en `public.conductores` que existe el conductor.
+6. Probar login como ese usuario.
+7. Repetir con transportista para inscribir un conductor propio.

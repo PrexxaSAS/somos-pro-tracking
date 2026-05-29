@@ -50,6 +50,7 @@ El trabajo debe hacerse gradualmente:
 - Admin puede crear usuarios de cualquier rol.
 - Empresa transportista solo puede crear conductores asociados a su propia empresa.
 - Operador, conductor y cliente interno no pueden crear usuarios.
+- La creacion de usuarios autenticables debe pasar por la Edge Function `create-system-user`; no se deben crear accesos nuevos insertando solo en `public.usuarios`.
 - Operador puede ver pedidos, conductores, transportistas, devoluciones, recogidas y PQRS.
 - Operador puede registrar pedidos, editar datos basicos de pedidos y marcar entregas.
 - Operador no puede modificar conductores ni reasignar conductor en pedidos existentes.
@@ -383,6 +384,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se reforzo RLS de cliente para bloquear actualizaciones de devoluciones/recogidas ya asignadas y PQRS ya gestionadas.
 - Se agrego `docs/rls_step5_write_lockdown.sql` para cerrar escrituras directas no deseadas por rol.
 - Se definio que transportista no debe insertar usuarios/conductores directamente; la creacion de conductor queda por Edge Function `create-system-user`.
+- Se amplio `create-system-user` para que admin pueda crear usuarios autenticables de cualquier rol y para que la pantalla de Usuarios del Sistema invoque esa funcion.
 - Se corrigio alcance de Facturas Proveedor: operador puede crear, editar/eliminar y gestionar guias asociadas.
 - Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
 - Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.

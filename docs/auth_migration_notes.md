@@ -98,19 +98,19 @@ La app debe buscar el perfil en `public.usuarios` por `auth_user_id` despues de 
 
 El cliente no debe sembrar datos automaticamente si no ve usuarios. Si no hay usuarios visibles, debe mostrar error para evitar bucles e inserciones desde navegador.
 
-## Creacion De Nuevos Conductores
+## Creacion De Usuarios Autenticables
 
-El formulario de transportista invoca la Edge Function `create-system-user`.
+El formulario de transportista y la pantalla de usuarios de admin invocan la Edge Function `create-system-user`.
 
 La funcion:
 
 - Valida la sesion del usuario que llama.
-- Permite a admin crear usuarios.
+- Permite a admin crear usuarios de cualquier rol.
 - Permite a transportista crear solo conductores de su propia empresa.
 - Crea el usuario en Supabase Auth con email tecnico.
 - Crea el perfil en `public.usuarios`.
-- Crea el registro en `public.conductores`.
-- Vincula `usuarios.conductor_id`.
+- Si el rol es conductor, crea el registro en `public.conductores` y vincula `usuarios.conductor_id`.
+- Si el rol es transportista, crea o actualiza el registro base en `public.transportistas`.
 
 El email tecnico se forma asi:
 
