@@ -1768,6 +1768,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
   const vacio = { nombre:"", cedula:"", placa:"", celular:"", nit_proveedor:"", empresa:"", user_login:"", pass_login:"" };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     if (!form.nombre.trim()||!form.cedula.trim()||!form.placa.trim()) {
@@ -1804,6 +1805,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
         celular: form.celular.trim(),
         nit_proveedor: form.nit_proveedor.trim(),
         empresa: form.empresa.trim(),
+        activo: true,
         usuario_id: uData.id,
       }).select().single();
       if (cErr) { showToast("Error creando conductor: "+cErr.message,"error"); setGuardando(false); return; }
@@ -1827,7 +1829,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
         <Btn onClick={()=>setModal(true)}>+ Registrar Conductor</Btn>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-        {conductores.map(c=>{
+        {conductoresActivos.map(c=>{
           const asig=pedidos.filter(p=>p.conductor_id===c.id).length;
           const tran=pedidos.filter(p=>p.conductor_id===c.id&&p.estado==="en_transito").length;
           return (
@@ -1848,7 +1850,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
             </Card>
           );
         })}
-        {conductores.length===0&&<p style={{color:"#94a3b8"}}>Sin conductores registrados.</p>}
+        {conductoresActivos.length===0&&<p style={{color:"#94a3b8"}}>Sin conductores registrados.</p>}
       </div>
       {modal&&(
         <Modal title="Registrar Conductor" onClose={()=>setModal(false)}>
@@ -1898,8 +1900,9 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
 
   const esMia = user.rol==="transportista";
   const miNit = user.nit||"";
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
   const misEmp = esMia ? transportistas.filter(t=>t.nit===miNit) : transportistas;
-  const misCon = esMia ? conductores.filter(c=>c.nit_proveedor===miNit) : conductores;
+  const misCon = esMia ? conductoresActivos.filter(c=>c.nit_proveedor===miNit) : conductoresActivos;
 
   const crearEmpresa = async () => {
     if (!formE.nombre.trim()||!formE.nit.trim()) { showToast("Nombre y NIT son obligatorios","error"); return; }
@@ -1995,7 +1998,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             <Logo size={46}/>
             <div>
               <h2 style={{margin:0,color:"#fff",fontWeight:900}}>{user.empresa||user.nombre}</h2>
-              <p style={{margin:"4px 0 0",color:P[300],fontSize:13}}>NIT: {miNit} · {misCon.filter(c=>c.activo).length} conductor(es)</p>
+              <p style={{margin:"4px 0 0",color:P[300],fontSize:13}}>NIT: {miNit} · {misCon.length} conductor(es)</p>
             </div>
           </div>
         </Card>
@@ -2013,7 +2016,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
                 <span>NIT: <strong style={{fontFamily:"monospace"}}>{t.nit}</strong></span>
                 {t.contacto&&<span>👤 {t.contacto}</span>}
                 {t.tel&&<span>📱 {t.tel}</span>}
-                <span>🚗 {conductores.filter(c=>c.nit_proveedor===t.nit).length} conductor(es)</span>
+                <span>🚗 {conductoresActivos.filter(c=>c.nit_proveedor===t.nit).length} conductor(es)</span>
               </div>
               <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
                 <Btn size="sm" variant="secondary" onClick={()=>abrirEditarEmpresa(t)}>✏️ Editar</Btn>

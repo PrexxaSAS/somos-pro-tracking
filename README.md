@@ -87,6 +87,7 @@ Archivos principales:
 - `docs/rls_step6_column_guards.sql`: triggers para bloquear cambios de columnas sensibles por rol.
 - `docs/rls_step6b_trigger_null_context_fix.sql`: ajuste para que triggers no bloqueen operaciones administrativas con service_role.
 - `docs/rls_step7_pedidos_terminal_lock.sql`: bloquea modificaciones sobre pedidos en transito, entregados o con novedad, salvo cierre de entrega por conductor.
+- `docs/conductores_activo_migration.sql`: agrega baja logica de conductores con `conductores.activo`.
 - `docs/recogidas_paqueteria_migration.sql`: agrega campos de paqueteria a devoluciones y recogidas.
 - `docs/factura_guias_cascade_migration.sql`: ajusta FK para borrar guias asociadas al eliminar una factura proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
@@ -391,6 +392,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto eliminacion de usuarios para pasar por `create-system-user`, borrar Auth/perfil y conservar entidades operativas como conductores o transportistas.
 - Se agrego ajuste de triggers para que operaciones administrativas desde Edge Functions no sean bloqueadas cuando `auth.uid()` viene nulo.
 - Se agrego bloqueo operativo de pedidos: en `en_transito` solo el conductor puede cerrar con soporte/novedad; despues de `entregado` o `novedad` nadie puede modificar el pedido.
+- Se agrego baja logica de conductores: al eliminar el acceso de un conductor, queda inactivo y desaparece de listas operativas de transportista/admin, conservando historicos.
 - Se corrigio alcance de Facturas Proveedor: operador puede crear, editar/eliminar y gestionar guias asociadas.
 - Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
 - Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.

@@ -46,6 +46,7 @@ create table if not exists public.conductores (
   celular text,
   nit_proveedor text,
   empresa text,
+  activo boolean not null default true,
   usuario_id uuid references public.usuarios(id),
   created_at timestamptz default now()
 );

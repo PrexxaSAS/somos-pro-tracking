@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
     const { error: conductoresError } = await adminClient
       .from("conductores")
-      .update({ usuario_id: null })
+      .update({ usuario_id: null, activo: false })
       .eq("usuario_id", target.id);
     if (conductoresError) return json({ error: conductoresError.message }, 400);
 
@@ -185,6 +185,7 @@ Deno.serve(async (req) => {
           nit_proveedor: nitProveedor,
           empresa,
           usuario_id: target.id,
+          activo: true,
         };
 
         const { data: conductorExistente } = await adminClient
@@ -212,7 +213,7 @@ Deno.serve(async (req) => {
       } else {
         const { error: conductorDetachError } = await adminClient
           .from("conductores")
-          .update({ usuario_id: null })
+          .update({ usuario_id: null, activo: false })
           .eq("usuario_id", target.id);
         if (conductorDetachError) throw conductorDetachError;
       }
@@ -346,6 +347,7 @@ Deno.serve(async (req) => {
           nit_proveedor: nitProveedor,
           empresa,
           usuario_id: usuario.id,
+          activo: true,
         })
         .select()
         .single();
