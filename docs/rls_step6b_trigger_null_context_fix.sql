@@ -1,22 +1,6 @@
--- Ejecutar SOLO en Supabase STAGING.
---
--- Guardas por columna para complementar RLS.
---
--- RLS decide que filas puede tocar cada rol, pero no limita columnas.
--- Estos triggers bloquean cambios sensibles si un usuario autenticado intenta
--- modificar datos fuera de lo permitido usando la API directamente.
-
-create or replace function public.current_user_role()
-returns text
-language sql
-security definer
-set search_path = public
-as $$
-  select rol
-  from public.usuarios
-  where auth_user_id = auth.uid()
-  limit 1
-$$;
+-- Ajuste para operaciones administrativas hechas por Edge Functions con service_role.
+-- En ese contexto auth.uid() puede venir nulo; los triggers deben aplicar bloqueo
+-- solo cuando el rol detectado sea exactamente el rol restringido.
 
 create or replace function public.prevent_operator_pedido_sensitive_changes()
 returns trigger
@@ -52,12 +36,6 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_operator_pedido_sensitive_changes on public.pedidos;
-create trigger trg_operator_pedido_sensitive_changes
-before update on public.pedidos
-for each row
-execute function public.prevent_operator_pedido_sensitive_changes();
-
 create or replace function public.prevent_transportista_conductor_sensitive_changes()
 returns trigger
 language plpgsql
@@ -81,12 +59,6 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists trg_transportista_conductor_sensitive_changes on public.conductores;
-create trigger trg_transportista_conductor_sensitive_changes
-before update on public.conductores
-for each row
-execute function public.prevent_transportista_conductor_sensitive_changes();
 
 create or replace function public.prevent_transportista_usuario_sensitive_changes()
 returns trigger
@@ -118,12 +90,6 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_transportista_usuario_sensitive_changes on public.usuarios;
-create trigger trg_transportista_usuario_sensitive_changes
-before update on public.usuarios
-for each row
-execute function public.prevent_transportista_usuario_sensitive_changes();
-
 create or replace function public.prevent_cliente_devolucion_gestion_changes()
 returns trigger
 language plpgsql
@@ -153,12 +119,6 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists trg_cliente_devolucion_gestion_changes on public.devoluciones;
-create trigger trg_cliente_devolucion_gestion_changes
-before update on public.devoluciones
-for each row
-execute function public.prevent_cliente_devolucion_gestion_changes();
 
 create or replace function public.prevent_cliente_recogida_gestion_changes()
 returns trigger
@@ -190,12 +150,6 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_cliente_recogida_gestion_changes on public.recogidas;
-create trigger trg_cliente_recogida_gestion_changes
-before update on public.recogidas
-for each row
-execute function public.prevent_cliente_recogida_gestion_changes();
-
 create or replace function public.prevent_cliente_pqrs_gestion_changes()
 returns trigger
 language plpgsql
@@ -222,26 +176,3 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists trg_cliente_pqrs_gestion_changes on public.pqrs;
-create trigger trg_cliente_pqrs_gestion_changes
-before update on public.pqrs
-for each row
-execute function public.prevent_cliente_pqrs_gestion_changes();
-
-select
-  event_object_table as table_name,
-  trigger_name,
-  action_timing,
-  event_manipulation
-from information_schema.triggers
-where trigger_schema = 'public'
-  and trigger_name in (
-    'trg_operator_pedido_sensitive_changes',
-    'trg_transportista_conductor_sensitive_changes',
-    'trg_transportista_usuario_sensitive_changes',
-    'trg_cliente_devolucion_gestion_changes',
-    'trg_cliente_recogida_gestion_changes',
-    'trg_cliente_pqrs_gestion_changes'
-  )
-order by table_name, trigger_name;

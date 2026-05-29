@@ -85,6 +85,7 @@ Archivos principales:
 - `docs/rls_step4_cliente.sql`: politicas RLS para cliente interno, sus solicitudes y bloqueo de facturas proveedor.
 - `docs/rls_step5_write_lockdown.sql`: cierre de politicas de escritura por rol antes de produccion.
 - `docs/rls_step6_column_guards.sql`: triggers para bloquear cambios de columnas sensibles por rol.
+- `docs/rls_step6b_trigger_null_context_fix.sql`: ajuste para que triggers no bloqueen operaciones administrativas con service_role.
 - `docs/recogidas_paqueteria_migration.sql`: agrega campos de paqueteria a devoluciones y recogidas.
 - `docs/factura_guias_cascade_migration.sql`: ajusta FK para borrar guias asociadas al eliminar una factura proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
@@ -386,6 +387,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se definio que transportista no debe insertar usuarios/conductores directamente; la creacion de conductor queda por Edge Function `create-system-user`.
 - Se amplio `create-system-user` para que admin pueda crear usuarios autenticables de cualquier rol y para que la pantalla de Usuarios del Sistema invoque esa funcion.
 - Se ajusto eliminacion de usuarios para pasar por `create-system-user`, borrar Auth/perfil y conservar entidades operativas como conductores o transportistas.
+- Se agrego ajuste de triggers para que operaciones administrativas desde Edge Functions no sean bloqueadas cuando `auth.uid()` viene nulo.
 - Se corrigio alcance de Facturas Proveedor: operador puede crear, editar/eliminar y gestionar guias asociadas.
 - Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
 - Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.

@@ -4742,7 +4742,15 @@ function Usuarios({ usuarios, showToast, recargar }) {
         user_id: uid,
       },
     });
-    if (error) { showToast("Error eliminando usuario: "+error.message,"error"); return; }
+    if (error) {
+      let detalle = error.message;
+      try {
+        const body = await error.context?.json?.();
+        if (body?.error) detalle = body.error;
+      } catch {}
+      showToast("Error eliminando usuario: "+detalle,"error");
+      return;
+    }
     if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); return; }
     showToast("Usuario eliminado","info");
     if (recargar) await recargar();
