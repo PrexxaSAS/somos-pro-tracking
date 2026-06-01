@@ -4438,7 +4438,7 @@ function Login({ onLogin }) {
 export default function SomosProTracking() {
   const [user,           setUser]           = useState(null);
   const [tab,            setTab]            = useState("");
-  const [cargando,       setCargando]       = useState(false);
+  const [cargando,       setCargando]       = useState(true);
   const [pedidos,        setPedidos]        = useState([]);
   const [conductores,    setConductores]    = useState([]);
   const [transportistas, setTransportistas] = useState([]);
@@ -4626,6 +4626,61 @@ export default function SomosProTracking() {
     setUser(null);
     setTab("");
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const restaurarSesion = async () => {
+      setCargando(true);
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const authUser = sessionData?.session?.user;
+        if (!authUser) {
+          if (mounted) setCargando(false);
+          return;
+        }
+
+        const { data: perfil, error: perfilError } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('auth_user_id', authUser.id)
+          .maybeSingle();
+        if (perfilError) throw perfilError;
+        if (!perfil) {
+          await supabase.auth.signOut();
+          if (mounted) {
+            showToast("Sesion sin perfil asignado. Inicia sesion nuevamente.","error");
+            setCargando(false);
+          }
+          return;
+        }
+
+        if (mounted) await handleLogin(perfil);
+      } catch (error) {
+        console.error("No se pudo restaurar sesion:", error);
+        await supabase.auth.signOut();
+        if (mounted) {
+          setUser(null);
+          setTab("");
+          setCargando(false);
+        }
+      }
+    };
+
+    restaurarSesion();
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setTab("");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const check = () => setCollapsed(window.innerWidth < 820);

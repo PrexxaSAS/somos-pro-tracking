@@ -406,3 +406,4 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se bloqueo desde `create-system-user` la eliminacion o desactivacion de conductores con pedidos en transito; solo se permite si no tienen pedidos en transito asignados.
 - Se habilito al operador para asignar conductor a pedidos no cerrados/no en transito, sin exponer campos sensibles de admin.
 - Se agrego `docs/rls_step8_operador_assign_requests_pqrs.sql`: operador puede crear devoluciones y recogidas; las respuestas PQRS ya registradas no pueden editarse por operador ni admin.
+- Se ajusto restauracion de sesion: al recargar la pagina se recupera la sesion activa de Supabase Auth y se recarga el perfil sin enviar al login.
