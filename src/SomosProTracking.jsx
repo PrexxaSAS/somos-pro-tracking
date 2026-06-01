@@ -4397,7 +4397,7 @@ function Login({ onLogin }) {
 export default function SomosProTracking() {
   const [user,           setUser]           = useState(null);
   const [tab,            setTab]            = useState("");
-  const [cargando,       setCargando]       = useState(true);
+  const [cargando,       setCargando]       = useState(false);
   const [pedidos,        setPedidos]        = useState([]);
   const [conductores,    setConductores]    = useState([]);
   const [transportistas, setTransportistas] = useState([]);
@@ -4413,11 +4413,6 @@ export default function SomosProTracking() {
   const [toast,          setToast]          = useState(null);
 
   const showToast = (msg, type = "info") => setToast({ msg, type });
-
-  // ── Cargar datos desde Supabase al iniciar ──
-  useEffect(() => {
-    cargarTodo();
-  }, []);
 
   const cargarTodo = async (perfil = user) => {
     setCargando(true);
@@ -4695,8 +4690,6 @@ export default function SomosProTracking() {
     await cargarTodo();
   };
 
-  // Expose globally for ModalDetalle which doesn't receive sb as prop
-  window._sb = supabase;
   window._recargar = cargarTodo;
 
   const renderContent = () => {

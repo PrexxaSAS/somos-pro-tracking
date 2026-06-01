@@ -394,6 +394,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego bloqueo operativo de pedidos: en `en_transito` solo el conductor puede cerrar con soporte/novedad; despues de `entregado` o `novedad` nadie puede modificar el pedido.
 - Se agrego baja logica de conductores: al eliminar el acceso de un conductor, queda inactivo y desaparece de listas operativas de transportista/admin, conservando historicos.
 - Se limito la carga de datos por rol: cliente consulta pedidos sin soportes/base64 y solo admin/operador consultan facturas proveedor.
+- Se elimino la carga inicial sin rol para evitar consultas `select=*` antes de login y se retiro `window._sb` para no exponer el cliente Supabase globalmente.
 - Se corrigio alcance de Facturas Proveedor: operador puede crear, editar/eliminar y gestionar guias asociadas.
 - Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
 - Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.
