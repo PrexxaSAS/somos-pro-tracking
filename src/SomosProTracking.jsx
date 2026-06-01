@@ -470,7 +470,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                     ...(tipoModal==="empresa_transporte"
                       ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
                       : conductoresOpciones
-                    ).map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}`}))
+                    ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
                   ]}
                   disabled={pedidoBloqueadoEdicion}/>
                 {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiará a En Tránsito.</p>}
@@ -491,7 +491,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                 ...(tipoModal==="empresa_transporte"
                   ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
                   : conductoresOpciones
-                ).map(c=>({value:c.id,label:`${c.nombre} Â· ${c.placa}${c.empresa?" â€” "+c.empresa:""}`}))
+                ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
               ]}
               disabled={pedidoBloqueadoEdicion}/>
             {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiara a En Transito.</p>}
@@ -1730,7 +1730,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
                   ...(form.tipo==="empresa_transporte"
                     ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
                     : conductoresActivos
-                  ).map(c => ({ value: c.id, label: `${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}` }))
+                  ).map(c => ({ value: c.id, label: `${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}` }))
                 ]}/>
             )}
             <Field label="Notas / Observaciones" value={form.notas} onChange={f("notas")} as="textarea" placeholder="Instrucciones especiales..." />
