@@ -402,3 +402,5 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se ajusto UX de administracion: campos de credenciales usan autocompletado de nueva contrasena para evitar que el navegador rellene con el usuario actual.
 - Se reforzaron selectores operativos para listar solo conductores activos al asignar pedidos, devoluciones o recogidas.
 - Se ajusto el detalle de pedidos para mostrar campos inhabilitados cuando el pedido esta en transito o cerrado, en coherencia con las reglas de bloqueo de base de datos.
+- Se ajusto el detalle de pedidos para conservar visible el conductor historico si fue inactivado despues de quedar asignado.
+- Se bloqueo desde `create-system-user` la eliminacion o desactivacion de conductores con pedidos en transito; solo se permite si no tienen pedidos en transito asignados.

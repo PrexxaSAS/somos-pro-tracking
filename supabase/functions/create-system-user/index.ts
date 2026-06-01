@@ -45,6 +45,33 @@ Deno.serve(async (req) => {
 
   if (callerError || !caller) return json({ error: "Perfil del solicitante no encontrado." }, 403);
 
+  const getLinkedConductorId = async (profile: Record<string, unknown>) => {
+    const conductorId = clean(profile.conductor_id);
+    if (conductorId) return conductorId;
+
+    const { data } = await adminClient
+      .from("conductores")
+      .select("id")
+      .eq("usuario_id", clean(profile.id))
+      .maybeSingle();
+
+    return clean(data?.id);
+  };
+
+  const validateConductorWithoutTransit = async (conductorId: string) => {
+    const { count, error } = await adminClient
+      .from("pedidos")
+      .select("id", { count: "exact", head: true })
+      .eq("conductor_id", conductorId)
+      .eq("estado", "en_transito");
+
+    if (error) return error.message;
+    if ((count ?? 0) > 0) {
+      return "No se puede eliminar o desactivar el conductor porque tiene pedidos en transito asignados.";
+    }
+    return "";
+  };
+
   const payload = await req.json().catch(() => null);
   if (!payload || !["conductor", "system_user", "update_system_user", "delete_system_user"].includes(payload.type)) {
     return json({ error: "Tipo de usuario no soportado." }, 400);
@@ -65,6 +92,12 @@ Deno.serve(async (req) => {
     if (targetError || !target) return json({ error: "Usuario no encontrado." }, 404);
     if (target.user === "admin") return json({ error: "No se puede eliminar el admin principal." }, 400);
     if (target.auth_user_id === sessionData.user.id) return json({ error: "No puedes eliminar tu propio usuario en sesion." }, 400);
+
+    const targetConductorId = await getLinkedConductorId(target);
+    if (targetConductorId) {
+      const transitError = await validateConductorWithoutTransit(targetConductorId);
+      if (transitError) return json({ error: transitError }, 400);
+    }
 
     const { error: conductoresError } = await adminClient
       .from("conductores")
@@ -127,6 +160,12 @@ Deno.serve(async (req) => {
     if (targetError || !target) return json({ error: "Usuario no encontrado." }, 404);
     if (target.user === "admin" && rol !== "admin") {
       return json({ error: "No se puede cambiar el rol del admin principal." }, 400);
+    }
+
+    const targetConductorId = await getLinkedConductorId(target);
+    if (targetConductorId && rol !== "conductor") {
+      const transitError = await validateConductorWithoutTransit(targetConductorId);
+      if (transitError) return json({ error: transitError }, 400);
     }
 
     const { data: duplicate, error: duplicateError } = await adminClient

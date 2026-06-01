@@ -292,6 +292,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
   const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
   const conductoresActivos = conductores.filter(c=>c.activo!==false);
+  const conductorHistorico = cond && !conductoresActivos.some(c=>String(c.id)===String(cond.id)) ? cond : null;
+  const conductoresOpciones = conductorHistorico ? [conductorHistorico, ...conductoresActivos] : conductoresActivos;
 
   const guardar = async () => {
     if (pedidoBloqueadoEdicion) {
@@ -462,8 +464,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                   options={[
                     {value:"",label:"Sin asignar"},
                     ...(tipoModal==="empresa_transporte"
-                      ? conductoresActivos.filter(c=>c.nit_proveedor||(c.empresa&&c.empresa.trim()))
-                      : conductoresActivos
+                      ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
+                      : conductoresOpciones
                     ).map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}`}))
                   ]}
                   disabled={pedidoBloqueadoEdicion}/>
