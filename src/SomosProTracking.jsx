@@ -290,6 +290,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
   const pedidoEnTransito = pedido.estado === "en_transito";
   const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
+  const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     if (pedidoBloqueadoEdicion) {
@@ -423,14 +425,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
         )}
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          <Field label="Dirección de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47"/>
+          <Field label="Dirección de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47" disabled={pedidoBloqueadoEdicion}/>
           <Field label="Ciudad destino" value={ciudadEdit} onChange={setCiudadEdit} as="select"
-            options={[{value:"",label:"— Seleccione —"},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} — ${c.code}`}))]}/>
+            options={[{value:"",label:"— Seleccione —"},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} — ${c.code}`}))]}
+            disabled={pedidoBloqueadoEdicion}/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder="10"/>
-          <Field label="N° Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000"/>
-          <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date"/>
+          <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder="10" disabled={pedidoBloqueadoEdicion}/>
+          <Field label="N° Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000" disabled={pedidoBloqueadoEdicion}/>
+          <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date" disabled={pedidoBloqueadoEdicion}/>
         </div>
 
         {canEdit&&(
@@ -441,11 +444,12 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                 {value:"empresa_transporte",label:"🏢 Empresa Transportista"},
                 {value:"mensajeria",label:"📨 Mensajería"},
                 {value:"paqueteria",label:"📦 Paquetería Tercero"},
-              ]}/>
+              ]}
+              disabled={pedidoBloqueadoEdicion}/>
             {tipoModal==="paqueteria"?(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <Field label="Paquetería" value={paqModal} onChange={setPaqModal} placeholder="Servientrega, TCC..."/>
-                <Field label="N° Guía" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
+                <Field label="Paquetería" value={paqModal} onChange={setPaqModal} placeholder="Servientrega, TCC..." disabled={pedidoBloqueadoEdicion}/>
+                <Field label="N° Guía" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX" disabled={pedidoBloqueadoEdicion}/>
               </div>
             ):(
               <div>
@@ -458,10 +462,11 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                   options={[
                     {value:"",label:"Sin asignar"},
                     ...(tipoModal==="empresa_transporte"
-                      ? conductores.filter(c=>c.nit_proveedor||(c.empresa&&c.empresa.trim()))
-                      : conductores
+                      ? conductoresActivos.filter(c=>c.nit_proveedor||(c.empresa&&c.empresa.trim()))
+                      : conductoresActivos
                     ).map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}`}))
-                  ]}/>
+                  ]}
+                  disabled={pedidoBloqueadoEdicion}/>
                 {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiará a En Tránsito.</p>}
               </div>
             )}
@@ -482,11 +487,12 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
               {value:"despachado",label:"Despachado"},
               {value:"bloqueado",label:"Bloqueado Cartera"},
               {value:"novedad_despacho",label:"Despachado con Novedad"},
-            ]}/>
+            ]}
+            disabled={pedidoBloqueadoEdicion}/>
         )}
 
-        <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
-          onClick={()=>setNovedad(!novedad)}>
+        <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:puedeMarcarNovedadEntrega?"pointer":"not-allowed",opacity:puedeMarcarNovedadEntrega?1:0.65}}
+          onClick={()=>{ if (puedeMarcarNovedadEntrega) setNovedad(!novedad); }}>
           <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>v</span>}
           </div>
@@ -1487,6 +1493,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const vacio = { id: "", cliente: "", ciudad_codigo: "", direccion: "", cajas: "", factura: "", fecha_estimada: "", notas: "", conductor_id: "", tipo: "propio", paqueteria: "", guia_paqueteria: "" };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const filtrados = pedidos.filter(p => {
     const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria");
@@ -1504,7 +1511,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     }
     const ciudad = (ciudades||[]).find(c => c.code === form.ciudad_codigo);
     const ciudadOrigen = (ciudades||[]).find(c => c.code === form.ciudad_origen_codigo);
-    const cond   = conductores.find(c => String(c.id) === String(form.conductor_id));
+    const cond   = conductoresActivos.find(c => String(c.id) === String(form.conductor_id));
     const esPaq  = form.tipo === "paqueteria";
     const guia_interna = !esPaq ? generarGuia(pedidos) : null;
     const nuevo = {
@@ -1690,14 +1697,14 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
               <Field label="Asignar Conductor (opcional)" value={form.conductor_id}
                 onChange={v => {
                   f("conductor_id")(v);
-                  const c = conductores.find(cx=>String(cx.id)===String(v));
+                  const c = conductoresActivos.find(cx=>String(cx.id)===String(v));
                   if(c && form.tipo==="empresa_transporte") f("empresa_transporte")(c.empresa||"");
                 }} as="select"
                 options={[
                   { value: "", label: "— Sin asignar —" },
                   ...(form.tipo==="empresa_transporte"
-                    ? conductores.filter(c=>c.empresa||c.nit_proveedor)
-                    : conductores
+                    ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
+                    : conductoresActivos
                   ).map(c => ({ value: c.id, label: `${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}` }))
                 ]}/>
             )}
@@ -1871,8 +1878,8 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
               <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez"/>
-                <Field label="Contraseña *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="••••••••"/>
+                <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" data-lpignore="true"/>
+                <Field label="Contraseña *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="••••••••" name="spt_driver_password" autoComplete="new-password" data-lpignore="true"/>
               </div>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -2060,8 +2067,8 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
               <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                <Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz"/>
-                <Field label="Contraseña *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="••••••••"/>
+                <Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/>
+                <Field label="Contraseña *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="••••••••" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/>
               </div>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -2081,7 +2088,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
               <Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/>
               <Field label="Teléfono" value={formE.tel} onChange={fe("tel")}/>
             </div>
-            <Field label="Nueva Contraseña (vacío = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contraseña..."/>
+            <Field label="Nueva Contraseña (vacío = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contraseña..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="secondary" onClick={()=>setModEditEmp(null)}>Cancelar</Btn>
               <Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando?"Guardando...":"💾 Guardar"}</Btn>
@@ -2108,8 +2115,8 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
                 Este usuario permite ingresar al modulo de conductor para consultar pedidos, reportar ubicacion y registrar entregas.
               </p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez"/>
-                <Field label="Contraseña *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="••••••••"/>
+                <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/>
+                <Field label="Contraseña *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="••••••••" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/>
               </div>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -3317,6 +3324,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
   const esCliente = user.rol==="cliente";
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const abrirEditarCliente = (dev) => {
     setModEditar(dev);
@@ -3500,14 +3508,14 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
               <Field label="Conductor (opcional)" value={form.conductor_id}
                 onChange={v=>{
                   f("conductor_id")(v);
-                  const c=conductores.find(cx=>String(cx.id)===String(v));
+                  const c=conductoresActivos.find(cx=>String(cx.id)===String(v));
                   if(c&&form.tipo_envio==="empresa_transporte") f("paqueteria")(c.empresa||"");
                 }} as="select"
                 options={[
                   {value:"",label:"— Sin asignar —"},
                   ...((form.tipo_envio||"conductor")==="empresa_transporte"
-                    ? conductores.filter(c=>c.empresa||c.nit_proveedor)
-                    : conductores
+                    ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
+                    : conductoresActivos
                   ).map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}`}))
                 ]}/>
             )}
@@ -3537,6 +3545,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
   const [novedad, setNovedad] = useState(dev.novedad||false);
   const ciudad = ciudades.find(c=>c.code===dev.ciudad_codigo);
   const cond   = conductores.find(c=>String(c.id)===String(condId||dev.conductor_id||""));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     await onAsignar(dev.id, condId, novedad);
@@ -3577,7 +3586,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
           <>
             {!dev.paqueteria&&(
               <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-                options={[{value:"",label:"Sin asignar"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
+                options={[{value:"",label:"Sin asignar"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
             )}
             <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
               onClick={()=>setNovedad(!novedad)}>
@@ -3615,6 +3624,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
   const esCliente = user.rol==="cliente";
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const abrirEditarCliente = (rec) => {
     setModEditar(rec);
@@ -3801,7 +3811,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
               </div>
             ):(!esCliente && !modEditar &&
               <Field label="Conductor (opcional)" value={form.conductor_id} onChange={f("conductor_id")} as="select"
-                options={[{value:"",label:"— Sin asignar —"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
+                options={[{value:"",label:"— Sin asignar —"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
             )}
             <div style={{border:`1px dashed ${P[300]}`,borderRadius:10,padding:14,textAlign:"center",cursor:"pointer"}}
               onClick={()=>fileRef.current&&fileRef.current.click()}>
@@ -3830,6 +3840,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
   const [condId,  setCondId]  = useState(rec.conductor_id||"");
   const [novedad, setNovedad] = useState(rec.novedad||false);
   const cond = conductores.find(c=>String(c.id)===String(condId||rec.conductor_id||""));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     await onAsignar(rec.id, condId, novedad);
@@ -3863,7 +3874,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
         <>
           {!rec.paqueteria&&(
             <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-              options={[{value:"",label:"Sin asignar"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
+              options={[{value:"",label:"Sin asignar"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
           )}
           <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
             onClick={()=>setNovedad(!novedad)}>
@@ -4906,8 +4917,8 @@ function Usuarios({ usuarios, showToast, recargar }) {
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <Field label="Usuario (login) *" value={form.user} onChange={f("user")} required placeholder="usuario123"/>
-              <Field label="Contraseña *" value={form.pass} onChange={f("pass")} required type="password" placeholder="••••••••"/>
+              <Field label="Usuario (login) *" value={form.user} onChange={f("user")} required placeholder="usuario123" name="spt_admin_user_login" autoComplete="off" data-lpignore="true"/>
+              <Field label="Contraseña *" value={form.pass} onChange={f("pass")} required type="password" placeholder="••••••••" name="spt_admin_user_password" autoComplete="new-password" data-lpignore="true"/>
             </div>
             <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
             {camposRol()}
@@ -4924,8 +4935,8 @@ function Usuarios({ usuarios, showToast, recargar }) {
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <Field label="Usuario *" value={form.user} onChange={f("user")} required/>
-              <Field label="Nueva contraseña (vacío = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contraseña..."/>
+              <Field label="Usuario *" value={form.user} onChange={f("user")} required name="spt_admin_edit_login" autoComplete="off" data-lpignore="true"/>
+              <Field label="Nueva contraseña (vacío = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contraseña..." name="spt_admin_edit_password" autoComplete="new-password" data-lpignore="true"/>
             </div>
             <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
             {camposRol()}
@@ -4939,5 +4950,3 @@ function Usuarios({ usuarios, showToast, recargar }) {
     </div>
   );
 }
-
-

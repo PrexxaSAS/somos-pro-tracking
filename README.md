@@ -399,3 +399,6 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se reviso el resumen de politicas de escritura y se ajusto Facturas Proveedor para permitir gestion por admin y operador, bloqueando cliente, conductor y transportista.
 - Se agrego `docs/rls_step6_column_guards.sql` para proteger columnas sensibles que RLS no puede limitar por si sola.
 - Se ajusto eliminacion de Facturas Proveedor para borrar primero guias asociadas desde la app y se agrego migracion `ON DELETE CASCADE` en `factura_guias`.
+- Se ajusto UX de administracion: campos de credenciales usan autocompletado de nueva contrasena para evitar que el navegador rellene con el usuario actual.
+- Se reforzaron selectores operativos para listar solo conductores activos al asignar pedidos, devoluciones o recogidas.
+- Se ajusto el detalle de pedidos para mostrar campos inhabilitados cuando el pedido esta en transito o cerrado, en coherencia con las reglas de bloqueo de base de datos.
