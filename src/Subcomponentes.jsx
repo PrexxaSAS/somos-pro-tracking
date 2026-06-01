@@ -65,12 +65,15 @@ export function Btn({ children, onClick, variant = "primary", size = "md", style
   );
 }
 
-export function Field({ label, value, onChange, type = "text", placeholder = "", required, as = "input", options = [], style = {}, readOnly = false }) {
+export function Field({ label, value, onChange, type = "text", placeholder = "", required, as = "input", options = [], style = {}, readOnly = false, disabled = false, ...props }) {
+  const bloqueado = readOnly || disabled;
   const base = {
     border: `1.5px solid ${P[200]}`, borderRadius: 10,
     padding: "10px 14px", fontSize: 14, fontFamily: "inherit",
-    outline: "none", background: readOnly ? "#f8f9fa" : "#fafafa",
+    outline: "none", background: bloqueado ? "#eef2f7" : "#fafafa",
     width: "100%", boxSizing: "border-box",
+    color: bloqueado ? "#64748b" : "inherit",
+    cursor: disabled ? "not-allowed" : "text",
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, ...style }}>
@@ -80,16 +83,16 @@ export function Field({ label, value, onChange, type = "text", placeholder = "",
         </label>
       )}
       {as === "select" ? (
-        <select value={value} onChange={e => onChange(e.target.value)} style={base} disabled={readOnly}>
+        <select value={value} onChange={e => onChange(e.target.value)} style={{ ...base, cursor: disabled ? "not-allowed" : "pointer" }} disabled={bloqueado} {...props}>
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       ) : as === "textarea" ? (
         <textarea value={value} onChange={e => onChange(e.target.value)}
           placeholder={placeholder} rows={3}
-          style={{ ...base, resize: "vertical" }} readOnly={readOnly} />
+          style={{ ...base, resize: "vertical" }} readOnly={readOnly} disabled={disabled} {...props} />
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)}
-          placeholder={placeholder} style={base} readOnly={readOnly} />
+          placeholder={placeholder} style={base} readOnly={readOnly} disabled={disabled} {...props} />
       )}
     </div>
   );
@@ -98,7 +101,6 @@ export function Field({ label, value, onChange, type = "text", placeholder = "",
 export function Modal({ title, children, onClose, wide = false }) {
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: "fixed", inset: 0, background: "#00000088",
         zIndex: 1000, display: "flex", alignItems: "center",

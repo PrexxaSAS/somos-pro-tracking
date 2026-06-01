@@ -38,6 +38,39 @@ function fileToBase64(file){
   return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
 }
 
+function abrirArchivoGuardado(data, nombre = "documento") {
+  if (!data) return;
+  try {
+    const dataUrl = String(data).startsWith("data:")
+      ? String(data)
+      : `data:application/octet-stream;base64,${data}`;
+    const [meta, base64] = dataUrl.split(",");
+    const mimeDetectado = meta.match(/data:(.*?);base64/)?.[1] || "";
+    const extension = String(nombre || "").split(".").pop()?.toLowerCase();
+    const mimePorExtension = {
+      pdf: "application/pdf",
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      gif: "image/gif",
+    }[extension || ""];
+    const mime = mimeDetectado && mimeDetectado !== "application/octet-stream"
+      ? mimeDetectado
+      : (mimePorExtension || "application/pdf");
+    const bin = atob(base64 || "");
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) console.warn("El navegador bloqueo la ventana del visor.");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    console.error("No se pudo abrir el archivo guardado:", error);
+    window.open(String(data), "_blank", "noopener,noreferrer");
+  }
+}
+
 // Compress image to max 800px wide, quality 0.75 — keeps size under ~200KB
 function comprimirImagen(file, maxW=800, quality=0.75) {
   return new Promise((res) => {
@@ -233,7 +266,7 @@ function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   );
 }
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit }) {
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
   const [condId,     setCondId]     = useState(pedido.conductor_id||"") ;
   const [direccion,  setDireccion]  = useState(pedido.direccion||"");
   const [cajas,      setCajas]      = useState(String(pedido.cajas||""));
@@ -249,33 +282,58 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
   const [verMapa,    setVerMapa]    = useState(false);
   const [verGuia,    setVerGuia]    = useState(false);
   const [verCamara,  setVerCamara]  = useState(false);
+  const [novedadEntrega, setNovedadEntrega] = useState(pedido.novedad||false);
 
   const cond   = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
   const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
+  const tieneSoportes = ((pedido.soportes_data||[]).length > 0) || ((pedido.soportes||[]).length > 0);
+  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
+  const pedidoEnTransito = pedido.estado === "en_transito";
+  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
+  const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
+  const conductorHistorico = cond && !conductoresActivos.some(c=>String(c.id)===String(cond.id)) ? cond : null;
+  const conductoresOpciones = conductorHistorico ? [conductorHistorico, ...conductoresActivos] : conductoresActivos;
 
   const guardar = async () => {
+    if (pedidoBloqueadoEdicion) {
+      showToast(pedidoCerrado ? "No se puede modificar un pedido que ya fue entregado" : "No se puede editar un pedido en transito","error");
+      return;
+    }
     const c = conductores.find(c=>String(c.id)===String(condId));
     let nuevoEstado = pedido.estado;
     if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
     if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
     if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
     const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
-    const cambios = {
+    const cambiosBase = {
       direccion: direccion.trim()||pedido.direccion,
       cajas: parseInt(cajas)||pedido.cajas,
       factura: facturaEdit.trim()||pedido.factura,
       ciudad_codigo: ciudadEdit||pedido.ciudad_codigo,
       ciudad_nombre: ciudad?.name||pedido.ciudad_nombre||"",
-      conductor_id: c?.id||null,
-      placa: c?.placa||null,
-      nit_proveedor: c?.nit_proveedor||null,
-      estado: nuevoEstado,
-      estado_despacho: estadoDesp,
-      novedad,
-      tipo: tipoModal,
-      empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
-      paqueteria: tipoModal==="paqueteria" ? paqModal : null,
-      guia_paqueteria: tipoModal==="paqueteria" ? guiaPaq : null,
+      fecha_estimada: fechaEdit||pedido.fecha_estimada||null,
+    };
+    if (canBasicEdit && pedidoCerrado && tieneSoportes) {
+      cambiosBase.estado = novedad ? "novedad" : "entregado";
+      cambiosBase.novedad = novedad;
+    }
+    const cambios = canBasicEdit && !canEdit && !canAssign ? cambiosBase : {
+      ...cambiosBase,
+      ...(canEdit || canAssign ? {
+        conductor_id: c?.id||null,
+        placa: c?.placa||null,
+        nit_proveedor: c?.nit_proveedor||null,
+        estado: nuevoEstado,
+      } : {}),
+      ...(canEdit ? {
+        estado_despacho: estadoDesp,
+        novedad,
+        tipo: tipoModal,
+        empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
+        paqueteria: tipoModal==="paqueteria" ? paqModal : null,
+        guia_paqueteria: tipoModal==="paqueteria" ? guiaPaq : null,
+      } : {}),
     };
     setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
 
@@ -289,9 +347,18 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
 
 
   const subirFotos = async (fotos) => {
+    if (pedidoCerrado) {
+      showToast("No se puede modificar un pedido que ya fue entregado","error");
+      return;
+    }
+    if (pedidoEnTransito && !canDeliver) {
+      showToast("Solo el conductor puede registrar la entrega de un pedido en transito","error");
+      return;
+    }
     const hoy = new Date().toISOString().split("T")[0];
     const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
-    const estadoFinal = novedad ? "novedad" : "entregado";
+    const conNovedad = Boolean(novedadEntrega);
+    const estadoFinal = conNovedad ? "novedad" : "entregado";
     const nuevosSoportes = [...(pedido.soportes||[]),...nombres];
     const nuevosSoportesData = [...(pedido.soportes_data||[]),...fotos];
     const cambios = {
@@ -299,14 +366,14 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
       soportes_data: nuevosSoportesData,
       estado: estadoFinal,
       fecha_real: hoy,
-      novedad,
+      novedad: conNovedad,
     };
     setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
     try {
       const { error: sErr } = await supabase.from('pedidos').update(cambios).eq('id', pedido.id);
       if (sErr) {
         await supabase.from('pedidos').update({
-          estado: estadoFinal, fecha_real: hoy, novedad, soportes: cambios.soportes
+          estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes
         }).eq('id', pedido.id);
         showToast("⚠️ Estado guardado. Fotos muy pesadas — usa imágenes más pequeñas", "warning");
       } else {
@@ -345,6 +412,16 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           {pedido.novedad&&<span style={{fontSize:12,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
           <span style={{fontSize:11,color:"#94a3b8"}}>(automatico)</span>
         </div>
+        {pedidoCerrado&&(
+          <div style={{background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:12,color:"#475569",fontSize:13,fontWeight:700}}>
+            Pedido cerrado: no se permiten modificaciones despues de la entrega.
+          </div>
+        )}
+        {!pedidoCerrado&&pedidoEnTransito&&!canDeliver&&(
+          <div style={{background:"#fff7ed",border:"1px solid #fdba74",borderRadius:10,padding:12,color:"#9a3412",fontSize:13,fontWeight:700}}>
+            Pedido en transito: solo el conductor asignado puede registrar soporte de entrega y novedad.
+          </div>
+        )}
 
         {pedido.tipo==="paqueteria"&&(
           <div style={{background:"#ecfeff",borderRadius:10,padding:14,border:"1px solid #67e8f9"}}>
@@ -354,14 +431,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
         )}
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          <Field label="Dirección de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47"/>
+          <Field label="Dirección de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47" disabled={pedidoBloqueadoEdicion}/>
           <Field label="Ciudad destino" value={ciudadEdit} onChange={setCiudadEdit} as="select"
-            options={[{value:"",label:"— Seleccione —"},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} — ${c.code}`}))]}/>
+            options={[{value:"",label:"— Seleccione —"},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} — ${c.code}`}))]}
+            disabled={pedidoBloqueadoEdicion}/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder="10"/>
-          <Field label="N° Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000"/>
-          <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date"/>
+          <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder="10" disabled={pedidoBloqueadoEdicion}/>
+          <Field label="N° Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000" disabled={pedidoBloqueadoEdicion}/>
+          <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date" disabled={pedidoBloqueadoEdicion}/>
         </div>
 
         {canEdit&&(
@@ -372,11 +450,12 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                 {value:"empresa_transporte",label:"🏢 Empresa Transportista"},
                 {value:"mensajeria",label:"📨 Mensajería"},
                 {value:"paqueteria",label:"📦 Paquetería Tercero"},
-              ]}/>
+              ]}
+              disabled={pedidoBloqueadoEdicion}/>
             {tipoModal==="paqueteria"?(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <Field label="Paquetería" value={paqModal} onChange={setPaqModal} placeholder="Servientrega, TCC..."/>
-                <Field label="N° Guía" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
+                <Field label="Paquetería" value={paqModal} onChange={setPaqModal} placeholder="Servientrega, TCC..." disabled={pedidoBloqueadoEdicion}/>
+                <Field label="N° Guía" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX" disabled={pedidoBloqueadoEdicion}/>
               </div>
             ):(
               <div>
@@ -389,17 +468,37 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
                   options={[
                     {value:"",label:"Sin asignar"},
                     ...(tipoModal==="empresa_transporte"
-                      ? conductores.filter(c=>c.nit_proveedor||(c.empresa&&c.empresa.trim()))
-                      : conductores
-                    ).map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}`}))
-                  ]}/>
+                      ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
+                      : conductoresOpciones
+                    ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
+                  ]}
+                  disabled={pedidoBloqueadoEdicion}/>
                 {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiará a En Tránsito.</p>}
               </div>
             )}
           </div>
         )}
 
-        {!canEdit&&cond&&(
+        {canAssign&&tipoModal!=="paqueteria"&&(
+          <div>
+            <Field label="Asignar Conductor" value={condId} onChange={v=>{
+              setCondId(v);
+              const c = conductores.find(cx=>String(cx.id)===String(v));
+              if(c && tipoModal==="empresa_transporte") setEmpTrans(c.empresa||c.nit_proveedor||"");
+            }} as="select"
+              options={[
+                {value:"",label:"Sin asignar"},
+                ...(tipoModal==="empresa_transporte"
+                  ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
+                  : conductoresOpciones
+                ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
+              ]}
+              disabled={pedidoBloqueadoEdicion}/>
+            {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiara a En Transito.</p>}
+          </div>
+        )}
+
+        {!canEdit&&!canAssign&&cond&&(
           <div style={{background:"#eff6ff",borderRadius:10,padding:12}}>
             <span style={{fontSize:13,color:"#1e40af"}}>
               {cond.nombre} - Placa: {pedido.placa}{cond.cedula&&` - CC: ${cond.cedula}`}{cond.celular&&` - Tel: ${cond.celular}`}
@@ -413,18 +512,21 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
               {value:"despachado",label:"Despachado"},
               {value:"bloqueado",label:"Bloqueado Cartera"},
               {value:"novedad_despacho",label:"Despachado con Novedad"},
-            ]}/>
+            ]}
+            disabled={pedidoBloqueadoEdicion}/>
         )}
 
-        <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
-          onClick={()=>setNovedad(!novedad)}>
+        <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:puedeMarcarNovedadEntrega?"pointer":"not-allowed",opacity:puedeMarcarNovedadEntrega?1:0.65}}
+          onClick={()=>{ if (puedeMarcarNovedadEntrega) setNovedad(!novedad); }}>
           <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>v</span>}
           </div>
           <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>
-            Marcar como Entregado con Novedad
+            {pedidoCerrado&&tieneSoportes ? "Entrega con Novedad" : "Entregar con Novedad al cargar soporte"}
           </span>
-          {novedad&&<span style={{fontSize:11,color:"#dc2626",marginLeft:4}}>Al subir soporte el estado sera Con Novedad</span>}
+          {novedad&&<span style={{fontSize:11,color:"#dc2626",marginLeft:4}}>
+            {pedidoCerrado&&tieneSoportes ? "Guardar Cambios actualizara la novedad." : "La novedad se aplicara al cargar fotos y marcar entregado."}
+          </span>}
         </div>
 
         <div>
@@ -448,8 +550,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
             <p style={{color:"#94a3b8",fontSize:13,margin:"0 0 10px"}}>Sin soportes fotograficos.</p>
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {(pedido.soportes||[]).length<3&&(
-              <Btn variant="success" onClick={()=>setVerCamara(true)}>
+            {!pedidoCerrado&&(!pedidoEnTransito||canDeliver)&&(pedido.soportes||[]).length<3&&(
+          <Btn variant="success" onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}>
                 Cargar Fotos (max 3) y Marcar Entregado
               </Btn>
             )}
@@ -477,7 +579,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
           <div style={{display:"flex",gap:10}}>
             <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-            {canEdit&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
+            {(canEdit||canBasicEdit)&&!pedidoBloqueadoEdicion&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
           </div>
         </div>
       </div>
@@ -1404,7 +1506,7 @@ function Dashboard({ pedidos, conductores, devoluciones = [], recogidas = [], pq
   );
 }
 
-function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, recargar }) {
+function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, recargar, user }) {
   const [filtro,    setFiltro]    = useState("todos");
   const [busq,      setBusq]      = useState("");
   const [modNuevo,  setModNuevo]  = useState(false);
@@ -1416,6 +1518,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const vacio = { id: "", cliente: "", ciudad_codigo: "", direccion: "", cajas: "", factura: "", fecha_estimada: "", notas: "", conductor_id: "", tipo: "propio", paqueteria: "", guia_paqueteria: "" };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const filtrados = pedidos.filter(p => {
     const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria");
@@ -1433,7 +1536,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     }
     const ciudad = (ciudades||[]).find(c => c.code === form.ciudad_codigo);
     const ciudadOrigen = (ciudades||[]).find(c => c.code === form.ciudad_origen_codigo);
-    const cond   = conductores.find(c => c.id === parseInt(form.conductor_id));
+    const cond   = conductoresActivos.find(c => String(c.id) === String(form.conductor_id));
     const esPaq  = form.tipo === "paqueteria";
     const guia_interna = !esPaq ? generarGuia(pedidos) : null;
     const nuevo = {
@@ -1619,15 +1722,15 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
               <Field label="Asignar Conductor (opcional)" value={form.conductor_id}
                 onChange={v => {
                   f("conductor_id")(v);
-                  const c = conductores.find(cx=>String(cx.id)===String(v));
+                  const c = conductoresActivos.find(cx=>String(cx.id)===String(v));
                   if(c && form.tipo==="empresa_transporte") f("empresa_transporte")(c.empresa||"");
                 }} as="select"
                 options={[
                   { value: "", label: "— Sin asignar —" },
                   ...(form.tipo==="empresa_transporte"
-                    ? conductores.filter(c=>c.empresa||c.nit_proveedor)
-                    : conductores
-                  ).map(c => ({ value: c.id, label: `${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}` }))
+                    ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
+                    : conductoresActivos
+                  ).map(c => ({ value: c.id, label: `${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}` }))
                 ]}/>
             )}
             <Field label="Notas / Observaciones" value={form.notas} onChange={f("notas")} as="textarea" placeholder="Instrucciones especiales..." />
@@ -1639,7 +1742,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         </Modal>
       )}
 
-      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={true}/>}
+      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"} canAssign={user?.rol==="operador"}/>}
       {modGuia&&<GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={()=>setModGuia(null)}/>}
       {modCSV&&<ModalCSVPedidos onClose={()=>setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV}/>}
       {modGuias&&<ModalCSVGuias onClose={()=>setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar}/>}
@@ -1697,6 +1800,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
   const vacio = { nombre:"", cedula:"", placa:"", celular:"", nit_proveedor:"", empresa:"", user_login:"", pass_login:"" };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     if (!form.nombre.trim()||!form.cedula.trim()||!form.placa.trim()) {
@@ -1733,6 +1837,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
         celular: form.celular.trim(),
         nit_proveedor: form.nit_proveedor.trim(),
         empresa: form.empresa.trim(),
+        activo: true,
         usuario_id: uData.id,
       }).select().single();
       if (cErr) { showToast("Error creando conductor: "+cErr.message,"error"); setGuardando(false); return; }
@@ -1756,7 +1861,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
         <Btn onClick={()=>setModal(true)}>+ Registrar Conductor</Btn>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-        {conductores.map(c=>{
+        {conductoresActivos.map(c=>{
           const asig=pedidos.filter(p=>p.conductor_id===c.id).length;
           const tran=pedidos.filter(p=>p.conductor_id===c.id&&p.estado==="en_transito").length;
           return (
@@ -1777,7 +1882,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
             </Card>
           );
         })}
-        {conductores.length===0&&<p style={{color:"#94a3b8"}}>Sin conductores registrados.</p>}
+        {conductoresActivos.length===0&&<p style={{color:"#94a3b8"}}>Sin conductores registrados.</p>}
       </div>
       {modal&&(
         <Modal title="Registrar Conductor" onClose={()=>setModal(false)}>
@@ -1798,8 +1903,8 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
               <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez"/>
-                <Field label="Contraseña *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="••••••••"/>
+                <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" data-lpignore="true"/>
+                <Field label="Contraseña *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="••••••••" name="spt_driver_password" autoComplete="new-password" data-lpignore="true"/>
               </div>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -1827,8 +1932,9 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
 
   const esMia = user.rol==="transportista";
   const miNit = user.nit||"";
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
   const misEmp = esMia ? transportistas.filter(t=>t.nit===miNit) : transportistas;
-  const misCon = esMia ? conductores.filter(c=>c.nit_proveedor===miNit) : conductores;
+  const misCon = esMia ? conductoresActivos.filter(c=>c.nit_proveedor===miNit) : conductoresActivos;
 
   const crearEmpresa = async () => {
     if (!formE.nombre.trim()||!formE.nit.trim()) { showToast("Nombre y NIT son obligatorios","error"); return; }
@@ -1871,25 +1977,28 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   };
 
   const inscribirConductor = async () => {
-    if (!formC.nombre.trim()||!formC.placa.trim()||!formC.cedula.trim()) { showToast("Nombre, cédula y placa son obligatorios","error"); return; }
-    if (!formC.user_login.trim()||!formC.pass_login.trim()) { showToast("Usuario y contraseña son obligatorios","error"); return; }
+    if (!formC.nombre.trim()||!formC.placa.trim()||!formC.cedula.trim()) { showToast("Nombre, cedula y placa son obligatorios","error"); return; }
+    if (!formC.user_login.trim()||!formC.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios","error"); return; }
     const emp = modCond;
     setGuardando(true);
     try {
-      const { data: uData, error: uErr } = await supabase.from('usuarios').insert({
-        nombre:formC.nombre.trim(), user:formC.user_login.trim(), pass:formC.pass_login.trim(),
-        rol:'conductor', cedula:formC.cedula.trim(), placa:formC.placa.trim(),
-        celular:formC.celular.trim(), nit_proveedor:emp.nit, empresa:emp.nombre,
-      }).select().single();
-      if (uErr) { showToast("Error usuario: "+uErr.message,"error"); setGuardando(false); return; }
-      const { error: cErr } = await supabase.from('conductores').insert({
-        nombre:formC.nombre.trim(), cedula:formC.cedula.trim(), placa:formC.placa.trim(),
-        celular:formC.celular.trim(), nit_proveedor:emp.nit, empresa:emp.nombre,
-        usuario_id:uData.id,
+      const { data, error } = await supabase.functions.invoke('create-system-user', {
+        body: {
+          type: 'conductor',
+          nombre: formC.nombre.trim(),
+          cedula: formC.cedula.trim(),
+          placa: formC.placa.trim(),
+          celular: formC.celular.trim(),
+          user_login: formC.user_login.trim(),
+          pass_login: formC.pass_login.trim(),
+          nit_proveedor: emp.nit,
+          empresa: emp.nombre,
+        },
       });
-      if (cErr) { showToast("Error conductor: "+cErr.message,"error"); setGuardando(false); return; }
+      if (error) { showToast("Error creando acceso: "+error.message,"error"); setGuardando(false); return; }
+      if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
       setModCond(null); setFormC({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});
-      showToast(`✓ Conductor inscrito en ${emp.nombre}`,"success");
+      showToast(`Conductor inscrito en ${emp.nombre}`,"success");
       if(recargar) await recargar(); else if(window._recargar) await window._recargar();
     } catch(e) { showToast("Error: "+e.message,"error"); }
     setGuardando(false);
@@ -1898,14 +2007,18 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   const guardarEdicionConductor = async () => {
     if (!formEdit.nombre.trim()||!formEdit.placa.trim()) { showToast("Nombre y placa son obligatorios","error"); return; }
     setGuardando(true);
-    await supabase.from('conductores').update({
+    const nitProveedor = esMia ? (modEdit.nit_proveedor||miNit) : formEdit.nit_proveedor.trim();
+    const empresaProveedor = esMia ? (modEdit.empresa||user.empresa||user.nombre) : formEdit.empresa.trim();
+    const { error: cErr } = await supabase.from('conductores').update({
       nombre:formEdit.nombre.trim(), cedula:formEdit.cedula.trim(), placa:formEdit.placa.trim(),
-      celular:formEdit.celular.trim(), nit_proveedor:formEdit.nit_proveedor.trim(), empresa:formEdit.empresa.trim(),
+      celular:formEdit.celular.trim(), nit_proveedor:nitProveedor, empresa:empresaProveedor,
     }).eq('id', modEdit.id);
+    if (cErr) { showToast("Error actualizando conductor: "+cErr.message,"error"); setGuardando(false); return; }
     if (modEdit.usuario_id) {
-      await supabase.from('usuarios').update({nombre:formEdit.nombre.trim(),placa:formEdit.placa.trim(),celular:formEdit.celular.trim()}).eq('id',modEdit.usuario_id);
+      const { error: uErr } = await supabase.from('usuarios').update({nombre:formEdit.nombre.trim(),placa:formEdit.placa.trim(),celular:formEdit.celular.trim()}).eq('id',modEdit.usuario_id);
+      if (uErr) { showToast("Conductor actualizado, pero fallo usuario: "+uErr.message,"warning"); setGuardando(false); return; }
     }
-    setModEdit(null); showToast("✓ Conductor actualizado","success");
+    setModEdit(null); showToast("Conductor actualizado","success");
     if(recargar) await recargar(); else if(window._recargar) await window._recargar(); setGuardando(false);
   };
 
@@ -1917,7 +2030,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             <Logo size={46}/>
             <div>
               <h2 style={{margin:0,color:"#fff",fontWeight:900}}>{user.empresa||user.nombre}</h2>
-              <p style={{margin:"4px 0 0",color:P[300],fontSize:13}}>NIT: {miNit} · {misCon.filter(c=>c.activo).length} conductor(es)</p>
+              <p style={{margin:"4px 0 0",color:P[300],fontSize:13}}>NIT: {miNit} · {misCon.length} conductor(es)</p>
             </div>
           </div>
         </Card>
@@ -1935,7 +2048,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
                 <span>NIT: <strong style={{fontFamily:"monospace"}}>{t.nit}</strong></span>
                 {t.contacto&&<span>👤 {t.contacto}</span>}
                 {t.tel&&<span>📱 {t.tel}</span>}
-                <span>🚗 {conductores.filter(c=>c.nit_proveedor===t.nit).length} conductor(es)</span>
+                <span>🚗 {conductoresActivos.filter(c=>c.nit_proveedor===t.nit).length} conductor(es)</span>
               </div>
               <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
                 <Btn size="sm" variant="secondary" onClick={()=>abrirEditarEmpresa(t)}>✏️ Editar</Btn>
@@ -1979,8 +2092,8 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
               <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                <Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz"/>
-                <Field label="Contraseña *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="••••••••"/>
+                <Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/>
+                <Field label="Contraseña *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="••••••••" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/>
               </div>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -2000,7 +2113,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
               <Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/>
               <Field label="Teléfono" value={formE.tel} onChange={fe("tel")}/>
             </div>
-            <Field label="Nueva Contraseña (vacío = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contraseña..."/>
+            <Field label="Nueva Contraseña (vacío = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contraseña..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="secondary" onClick={()=>setModEditEmp(null)}>Cancelar</Btn>
               <Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando?"Guardando...":"💾 Guardar"}</Btn>
@@ -2022,10 +2135,13 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             </div>
             <Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/>
             <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
-              <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
+              <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso del conductor</p>
+              <p style={{fontSize:12,color:"#64748b",margin:"-4px 0 10px"}}>
+                Este usuario permite ingresar al modulo de conductor para consultar pedidos, reportar ubicacion y registrar entregas.
+              </p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez"/>
-                <Field label="Contraseña *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="••••••••"/>
+                <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/>
+                <Field label="Contraseña *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="••••••••" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/>
               </div>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -2046,9 +2162,18 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="Placa *" value={formEdit.placa} onChange={v=>setFormEdit(p=>({...p,placa:v}))} required placeholder="ABC-123"/>
-              <Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v=>setFormEdit(p=>({...p,nit_proveedor:v}))} placeholder="900123456-1"/>
+              {!esMia&&<Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v=>setFormEdit(p=>({...p,nit_proveedor:v}))} placeholder="900123456-1"/>}
             </div>
-            <Field label="Empresa" value={formEdit.empresa} onChange={v=>setFormEdit(p=>({...p,empresa:v}))} placeholder="Transportes XYZ"/>
+            {esMia?(
+              <div style={{background:P[50],border:`1px solid ${P[200]}`,borderRadius:10,padding:12,fontSize:12,color:P[800]}}>
+                <div style={{fontWeight:800,marginBottom:4}}>Pertenencia del conductor</div>
+                <div>NIT proveedor: <strong>{formEdit.nit_proveedor||miNit}</strong></div>
+                <div>Empresa: <strong>{formEdit.empresa||user.empresa||user.nombre}</strong></div>
+                <div style={{color:"#64748b",marginTop:6}}>Estos datos solo pueden ser modificados por un administrador.</div>
+              </div>
+            ):(
+              <Field label="Empresa" value={formEdit.empresa} onChange={v=>setFormEdit(p=>({...p,empresa:v}))} placeholder="Transportes XYZ"/>
+            )}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="secondary" onClick={()=>setModEdit(null)}>Cancelar</Btn>
               <Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando?"Guardando...":"💾 Guardar"}</Btn>
@@ -2341,16 +2466,23 @@ function ModalCSVCiudades({ onClose, onImportar }) {
   );
 }
 
-function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, recargar, transportistas }) {
+function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user, conductores, ciudades, showToast, recargar, transportistas }) {
   const [modDet,    setModDet]    = useState(null);
   const [modFotos,  setModFotos]  = useState(null);  // pedido para cargar soportes
   const [novedad,   setNovedad]   = useState(false);
   const condId = user.conductor_db_id || user.id;
   const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
+  const misDevoluciones = devoluciones.filter(d => String(d.conductor_id) === String(condId));
+  const misRecogidas = recogidas.filter(r => String(r.conductor_id) === String(condId));
   const activos = misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado));
   const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
 
   const marcarEntregado = async (pedido, fotos, conNovedad) => {
+    if (["entregado","novedad"].includes(pedido.estado)) {
+      showToast("No se puede modificar un pedido que ya fue entregado", "error");
+      setModFotos(null);
+      return;
+    }
     const hoy = new Date().toISOString().split("T")[0];
     const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
     const estadoFinal = conNovedad ? "novedad" : "entregado";
@@ -2396,7 +2528,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
       </Card>
 
       {/* Pedidos activos */}
-      {activos.length===0&&completados.length===0&&(
+      {activos.length===0&&completados.length===0&&misDevoluciones.length===0&&misRecogidas.length===0&&(
         <Card style={{textAlign:"center",padding:48,color:"#94a3b8"}}>
           <div style={{fontSize:40,marginBottom:12}}>📭</div>
           <p>Sin pedidos asignados por el momento.</p>
@@ -2462,9 +2594,63 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
         </>
       )}
 
+      {misDevoluciones.length>0&&(
+        <>
+          <h3 style={{color:"#dc2626",fontWeight:800,margin:"28px 0 14px"}}>↩️ Devoluciones Asignadas ({misDevoluciones.length})</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
+            {misDevoluciones.map(d=>(
+              <Card key={d.id} style={{borderLeft:"4px solid #dc2626"}}>
+                <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+                  <span style={{fontFamily:"monospace",fontWeight:900,color:"#dc2626",fontSize:15}}>{d.guia}</span>
+                  <Badge estado={d.estado}/>
+                  {d.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>⚠️ Con Novedad</span>}
+                </div>
+                <div style={{fontSize:13,color:"#64748b"}}>Factura: <strong>{d.factura}</strong> · Pedido: <strong>{d.pedido_ref}</strong></div>
+                <div style={{fontSize:13,color:"#64748b",marginTop:3}}>📍 {d.dir_recogida} · {d.ciudad_nombre}</div>
+                <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{d.unidades} uds · {d.volumen_m3} m³ · {d.peso_kg} kg</div>
+                {d.motivo&&<div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Motivo: {d.motivo}</div>}
+                {d.soporte_data&&(
+                  <Btn size="sm" variant="success" style={{marginTop:8}}
+                    onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
+                    📎 Ver Soporte
+                  </Btn>
+                )}
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {misRecogidas.length>0&&(
+        <>
+          <h3 style={{color:"#0891b2",fontWeight:800,margin:"28px 0 14px"}}>🔄 Recogidas Asignadas ({misRecogidas.length})</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
+            {misRecogidas.map(r=>(
+              <Card key={r.id} style={{borderLeft:"4px solid #0891b2"}}>
+                <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+                  <span style={{fontFamily:"monospace",fontWeight:900,color:"#0891b2",fontSize:15}}>{r.guia}</span>
+                  <Badge estado={r.estado}/>
+                  {r.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>⚠️ Con Novedad</span>}
+                </div>
+                <div style={{fontSize:13,color:"#64748b"}}>📍 Recogida: {r.dir_recogida} · {r.ciudad_recogida_nombre}</div>
+                <div style={{fontSize:13,color:"#64748b",marginTop:3}}>🏁 Entrega: {r.dir_entrega} · {r.ciudad_entrega_nombre}</div>
+                <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{r.unidades} uds · {r.volumen_m3} m³ · {r.peso_kg} kg</div>
+                {r.observaciones&&<div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Obs: {r.observaciones}</div>}
+                {r.doc_data&&(
+                  <Btn size="sm" variant="success" style={{marginTop:8}}
+                    onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
+                    📎 Ver Documento
+                  </Btn>
+                )}
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Modal detalle (solo lectura) */}
       {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
-        onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false}/>}
+        onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
 
       {/* Modal cargar soportes de entrega */}
       {modFotos&&(
@@ -2549,6 +2735,8 @@ function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recar
   // ── Eliminar factura ───────────────────────────────────────────────────────
   const eliminar = async (id, num) => {
     if (!window.confirm(`¿Eliminar factura ${num}? Se eliminarán también las guías relacionadas.`)) return;
+    const { error: guiasError } = await supabase.from('factura_guias').delete().eq('factura_id', id);
+    if (guiasError) { showToast("Error eliminando guÃ­as: " + guiasError.message, "error"); return; }
     const { error } = await supabase.from('facturas_proveedor').delete().eq('id', id);
     if (error) { showToast("Error: " + error.message, "error"); return; }
     showToast("Factura eliminada", "info");
@@ -3147,6 +3335,7 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
 
 function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, showToast, user, recargar }) {
   const [modNueva, setModNueva] = useState(false);
+  const [modEditar,setModEditar]= useState(null);
   const [modDet,   setModDet]   = useState(null);
   const [busq,     setBusq]     = useState("");
   const fileRef = useRef(null);
@@ -3159,6 +3348,31 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
   };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
+  const esCliente = user.rol==="cliente";
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
+
+  const abrirEditarCliente = (dev) => {
+    setModEditar(dev);
+    setForm({
+      ...vacio,
+      factura: dev.factura||"",
+      pedido_ref: dev.pedido_ref||"",
+      unidades: dev.unidades||"",
+      volumen_m3: dev.volumen_m3||"",
+      peso_kg: dev.peso_kg||"",
+      dir_recogida: dev.dir_recogida||"",
+      ciudad_codigo: dev.ciudad_codigo||"",
+      motivo: dev.motivo||"",
+      soporte_data: dev.soporte_data||null,
+      soporte_nombre: dev.soporte_nombre||"",
+    });
+  };
+
+  const cerrarFormulario = () => {
+    setModNueva(false);
+    setModEditar(null);
+    setForm(vacio);
+  };
 
   const cargarDoc = async (files) => {
     const file = files[0];
@@ -3174,7 +3388,27 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     }
     const guia = generarGuiaDV(devoluciones);
     const ciudad = (ciudades||[]).find(c=>c.code===form.ciudad_codigo);
-    const cond = form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    if (modEditar) {
+      const cambios = {
+        factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
+        unidades: parseInt(form.unidades)||0,
+        volumen_m3: parseFloat(form.volumen_m3)||0,
+        peso_kg: parseFloat(form.peso_kg)||0,
+        dir_recogida: form.dir_recogida.trim(),
+        ciudad_codigo: form.ciudad_codigo,
+        ciudad_nombre: ciudad?.name||"",
+        motivo: form.motivo.trim(),
+        soporte_data: form.soporte_data,
+        soporte_nombre: form.soporte_nombre,
+      };
+      const { error } = await supabase.from('devoluciones').update(cambios).eq('id', modEditar.id);
+      if (error) { showToast("Error: "+error.message,"error"); return; }
+      cerrarFormulario();
+      showToast("✓ Devolución actualizada","success");
+      if (recargar) await recargar();
+      return;
+    }
     const nueva = {
       id: guia, guia,
       factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
@@ -3221,9 +3455,8 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     if (recargar) await recargar();
   };
 
-  const esCliente = user.rol==="cliente";
   const filtradas = devoluciones.filter(d=>{
-    if (esCliente && d.solicitado_por !== (user.nombre||user.user)) return false;
+    if (esCliente && ![user.nombre, user.user].includes(d.solicitado_por)) return false;
     const q=busq.toLowerCase();
     return !busq||d.guia.toLowerCase().includes(q)||d.factura.toLowerCase().includes(q)||d.pedido_ref.toLowerCase().includes(q);
   });
@@ -3255,22 +3488,25 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
                 {d.fecha_real&&<div style={{fontSize:12,color:"#059669",marginTop:2}}>✅ Completado: {d.fecha_real}</div>}
                 {d.soporte_data&&(
                   <Btn size="sm" variant="success" style={{marginTop:8}}
-                    onClick={()=>window.open(d.soporte_data?.startsWith("data:")?d.soporte_data:"data:application/octet-stream;base64,"+d.soporte_data,"_blank")}>
+                    onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
                     📎 Ver Soporte
                   </Btn>
                 )}
               </div>
+              {esCliente && !d.conductor_id && d.estado==="sin_asignar" && (
+                <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(d)}>Editar</Btn>
+              )}
               {!esCliente&&<Btn size="sm" variant="secondary" onClick={()=>setModDet(d)}>Gestionar</Btn>}
             </div>
           </Card>
         ))}
       </div>
-      {modNueva&&(
-        <Modal title="Nueva Solicitud de Devolución" onClose={()=>{setModNueva(false);setForm(vacio);}} wide>
+      {(modNueva||modEditar)&&(
+        <Modal title={modEditar ? "Editar Solicitud de Devolución" : "Nueva Solicitud de Devolución"} onClose={cerrarFormulario} wide>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{background:"#fef2f2",borderRadius:10,padding:10,fontSize:12,color:"#dc2626",fontWeight:600}}>
+            {!modEditar&&<div style={{background:"#fef2f2",borderRadius:10,padding:10,fontSize:12,color:"#dc2626",fontWeight:600}}>
               Se generará automáticamente una Guía (DV-{new Date().getFullYear()}-XXXX).
-            </div>
+            </div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="N° Factura *" value={form.factura} onChange={f("factura")} placeholder="FAC-2200"/>
               <Field label="N° Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
@@ -3284,26 +3520,27 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
             <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
               options={[{value:"",label:"— Seleccione —"},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} — ${c.code}`}))]}/>
             <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolución..."/>
-            <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
+            {!esCliente && !modEditar && <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
               options={[{value:"conductor",label:"🚗 Conductor Propio"},{value:"empresa_transporte",label:"🏢 Empresa Transportista"},{value:"mensajeria",label:"📨 Mensajería"},{value:"paqueteria",label:"📦 Paquetería Tercero"}]}/>
-            {(form.tipo_envio||"conductor")==="paqueteria"&&(
+            }
+            {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <Field label="Empresa Paquetería" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega, TCC..."/>
                 <Field label="N° Guía" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
               </div>
             )}
-            {((form.tipo_envio||"conductor")!=="paqueteria")&&(
+            {!esCliente && !modEditar && ((form.tipo_envio||"conductor")!=="paqueteria")&&(
               <Field label="Conductor (opcional)" value={form.conductor_id}
                 onChange={v=>{
                   f("conductor_id")(v);
-                  const c=conductores.find(cx=>String(cx.id)===String(v));
+                  const c=conductoresActivos.find(cx=>String(cx.id)===String(v));
                   if(c&&form.tipo_envio==="empresa_transporte") f("paqueteria")(c.empresa||"");
                 }} as="select"
                 options={[
                   {value:"",label:"— Sin asignar —"},
                   ...((form.tipo_envio||"conductor")==="empresa_transporte"
-                    ? conductores.filter(c=>c.empresa||c.nit_proveedor)
-                    : conductores
+                    ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
+                    : conductoresActivos
                   ).map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}${c.empresa?" — "+c.empresa:""}`}))
                 ]}/>
             )}
@@ -3313,8 +3550,8 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
             </div>
             <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-              <Btn onClick={crear}>💾 Registrar Devolución</Btn>
+              <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+              <Btn onClick={crear}>{modEditar ? "💾 Guardar Cambios" : "💾 Registrar Devolución"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3333,6 +3570,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
   const [novedad, setNovedad] = useState(dev.novedad||false);
   const ciudad = ciudades.find(c=>c.code===dev.ciudad_codigo);
   const cond   = conductores.find(c=>String(c.id)===String(condId||dev.conductor_id||""));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     await onAsignar(dev.id, condId, novedad);
@@ -3363,7 +3601,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
           </div>
           {dev.soporte_data&&(
             <Btn size="sm" variant="success" style={{marginTop:10}}
-              onClick={()=>window.open(dev.soporte_data?.startsWith("data:")?dev.soporte_data:"data:application/octet-stream;base64,"+dev.soporte_data,"_blank")}>
+              onClick={()=>abrirArchivoGuardado(dev.soporte_data, dev.soporte_nombre || `soporte-${dev.guia}`)}>
               📎 Ver Soporte
             </Btn>
           )}
@@ -3373,7 +3611,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
           <>
             {!dev.paqueteria&&(
               <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-                options={[{value:"",label:"Sin asignar"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
+                options={[{value:"",label:"Sin asignar"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
             )}
             <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
               onClick={()=>setNovedad(!novedad)}>
@@ -3397,6 +3635,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
 
 function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, showToast, user, recargar }) {
   const [modNueva, setModNueva] = useState(false);
+  const [modEditar,setModEditar]= useState(null);
   const [modDet,   setModDet]   = useState(null);
   const [busq,     setBusq]     = useState("");
   const fileRef = useRef(null);
@@ -3409,6 +3648,31 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
   };
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
+  const esCliente = user.rol==="cliente";
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
+
+  const abrirEditarCliente = (rec) => {
+    setModEditar(rec);
+    setForm({
+      ...vacio,
+      dir_recogida: rec.dir_recogida||"",
+      ciudad_recogida_cod: rec.ciudad_recogida_cod||"",
+      dir_entrega: rec.dir_entrega||"",
+      ciudad_entrega_cod: rec.ciudad_entrega_cod||"",
+      unidades: rec.unidades||"",
+      volumen_m3: rec.volumen_m3||"",
+      peso_kg: rec.peso_kg||"",
+      observaciones: rec.observaciones||"",
+      doc_data: rec.doc_data||null,
+      doc_nombre: rec.doc_nombre||"",
+    });
+  };
+
+  const cerrarFormulario = () => {
+    setModNueva(false);
+    setModEditar(null);
+    setForm(vacio);
+  };
 
   const cargarDoc = async (files) => {
     const file = files[0]; if (!file) return;
@@ -3424,7 +3688,29 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     const guia = generarGuiaRC(recogidas);
     const crec = (ciudades||[]).find(c=>c.code===form.ciudad_recogida_cod);
     const cent = (ciudades||[]).find(c=>c.code===form.ciudad_entrega_cod);
-    const cond = form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
+    if (modEditar) {
+      const cambios = {
+        dir_recogida: form.dir_recogida.trim(),
+        ciudad_recogida_cod: form.ciudad_recogida_cod,
+        ciudad_recogida_nombre: crec?.name||"",
+        dir_entrega: form.dir_entrega.trim(),
+        ciudad_entrega_cod: form.ciudad_entrega_cod,
+        ciudad_entrega_nombre: cent?.name||"",
+        unidades: parseInt(form.unidades)||0,
+        volumen_m3: parseFloat(form.volumen_m3)||0,
+        peso_kg: parseFloat(form.peso_kg)||0,
+        observaciones: form.observaciones.trim(),
+        doc_data: form.doc_data,
+        doc_nombre: form.doc_nombre,
+      };
+      const { error } = await supabase.from('recogidas').update(cambios).eq('id', modEditar.id);
+      if (error) { showToast("Error: "+error.message,"error"); return; }
+      cerrarFormulario();
+      showToast("✓ Recogida actualizada","success");
+      if (recargar) await recargar();
+      return;
+    }
     const nueva = {
       id: guia, guia,
       dir_recogida: form.dir_recogida.trim(),
@@ -3473,9 +3759,8 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     if (recargar) await recargar();
   };
 
-  const esCliente = user.rol==="cliente";
   const filtradas = recogidas.filter(r=>{
-    if (esCliente && r.solicitado_por !== (user.nombre||user.user)) return false;
+    if (esCliente && ![user.nombre, user.user].includes(r.solicitado_por)) return false;
     const q=busq.toLowerCase();
     return !busq||r.guia.toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
   });
@@ -3509,18 +3794,21 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
                 {r.fecha_real&&<div style={{fontSize:12,color:"#059669",marginTop:2}}>✅ Completado: {r.fecha_real}</div>}
                 {r.doc_data&&(
                   <Btn size="sm" variant="success" style={{marginTop:8}}
-                    onClick={()=>window.open(r.doc_data?.startsWith("data:")?r.doc_data:"data:application/octet-stream;base64,"+r.doc_data,"_blank")}>
+                    onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
                     📎 Ver Documento
                   </Btn>
                 )}
               </div>
+              {esCliente && !r.conductor_id && r.estado==="sin_asignar" && (
+                <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(r)}>Editar</Btn>
+              )}
               {!esCliente&&<Btn size="sm" variant="secondary" onClick={()=>setModDet(r)}>Gestionar</Btn>}
             </div>
           </Card>
         ))}
       </div>
-      {modNueva&&(
-        <Modal title="Nueva Solicitud de Recogida" onClose={()=>{setModNueva(false);setForm(vacio);}} wide>
+      {(modNueva||modEditar)&&(
+        <Modal title={modEditar ? "Editar Solicitud de Recogida" : "Nueva Solicitud de Recogida"} onClose={cerrarFormulario} wide>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="Dirección de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
@@ -3538,16 +3826,17 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
               <Field label="Peso kg *" value={form.peso_kg} onChange={f("peso_kg")} type="number" placeholder="10"/>
             </div>
             <Field label="Observaciones" value={form.observaciones} onChange={f("observaciones")} as="textarea" placeholder="Instrucciones especiales..."/>
-            <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
+            {!esCliente && !modEditar && <Field label="Tipo de Envío" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
               options={[{value:"conductor",label:"🚗 Conductor Propio"},{value:"empresa_transporte",label:"🏢 Empresa Transportista"},{value:"mensajeria",label:"📨 Mensajería"},{value:"paqueteria",label:"📦 Paquetería Tercero"}]}/>
-            {(form.tipo_envio||"conductor")==="paqueteria"?(
+            }
+            {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"?(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <Field label="Empresa Paquetería" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega..."/>
                 <Field label="N° Guía" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
               </div>
-            ):(
+            ):(!esCliente && !modEditar &&
               <Field label="Conductor (opcional)" value={form.conductor_id} onChange={f("conductor_id")} as="select"
-                options={[{value:"",label:"— Sin asignar —"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
+                options={[{value:"",label:"— Sin asignar —"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
             )}
             <div style={{border:`1px dashed ${P[300]}`,borderRadius:10,padding:14,textAlign:"center",cursor:"pointer"}}
               onClick={()=>fileRef.current&&fileRef.current.click()}>
@@ -3555,8 +3844,8 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
             </div>
             <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-              <Btn onClick={crear}>💾 Registrar Recogida</Btn>
+              <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+              <Btn onClick={crear}>{modEditar ? "💾 Guardar Cambios" : "💾 Registrar Recogida"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3576,6 +3865,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
   const [condId,  setCondId]  = useState(rec.conductor_id||"");
   const [novedad, setNovedad] = useState(rec.novedad||false);
   const cond = conductores.find(c=>String(c.id)===String(condId||rec.conductor_id||""));
+  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
   const guardar = async () => {
     await onAsignar(rec.id, condId, novedad);
@@ -3599,7 +3889,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
         </div>
         {rec.doc_data&&(
           <Btn size="sm" variant="success" style={{marginTop:10}}
-            onClick={()=>window.open(rec.doc_data?.startsWith("data:")?rec.doc_data:"data:application/octet-stream;base64,"+rec.doc_data,"_blank")}>
+            onClick={()=>abrirArchivoGuardado(rec.doc_data, rec.doc_nombre || `documento-${rec.guia}`)}>
             📎 Ver Documento
           </Btn>
         )}
@@ -3609,7 +3899,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
         <>
           {!rec.paqueteria&&(
             <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-              options={[{value:"",label:"Sin asignar"},...conductores.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
+              options={[{value:"",label:"Sin asignar"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} · ${c.placa}`}))]}/>
           )}
           <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
             onClick={()=>setNovedad(!novedad)}>
@@ -3660,6 +3950,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     rechazada:  { label:"Rechazada",  color:"#64748b", bg:"#f1f5f9" },
   };
   const [modNueva,   setModNueva]   = useState(false);
+  const [modEditar,  setModEditar]  = useState(null);
   const [modGestion, setModGestion] = useState(null);
   const [busq,       setBusq]       = useState("");
   const [filtroEst,  setFiltroEst]  = useState("todos");
@@ -3668,9 +3959,39 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
 
+  const abrirEditarCliente = (p) => {
+    setModEditar(p);
+    setForm({
+      factura: p.factura||"",
+      pedido_ref: p.pedido_ref||"",
+      motivo: p.motivo||"",
+      descripcion: p.descripcion||"",
+    });
+  };
+
+  const cerrarFormulario = () => {
+    setModNueva(false);
+    setModEditar(null);
+    setForm(vacio);
+  };
+
   const crear = async () => {
     if (!form.factura.trim()||!form.pedido_ref.trim()||!form.motivo||!form.descripcion.trim()) {
       showToast("Todos los campos son obligatorios","error"); return;
+    }
+    if (modEditar) {
+      const cambios = {
+        factura: form.factura.trim(),
+        pedido_ref: form.pedido_ref.trim(),
+        motivo: form.motivo,
+        descripcion: form.descripcion.trim(),
+      };
+      const { error } = await supabase.from('pqrs').update(cambios).eq('id', modEditar.id);
+      if (error) { showToast("Error: "+error.message,"error"); return; }
+      cerrarFormulario();
+      showToast("✓ PQRS actualizada","success");
+      if (recargar) await recargar();
+      return;
     }
     const year = new Date().getFullYear();
     const usados = pqrs.map(p=>p.id).filter(id=>id.startsWith(`PQRS-${year}-`)).map(id=>parseInt(id.split("-")[2])||0);
@@ -3691,6 +4012,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   };
 
   const guardarGestion = async () => {
+    if ((modGestion.respuesta||"").trim() || modGestion.fecha_gestion || modGestion.gestionado_por) {
+      showToast("La respuesta de esta PQRS ya fue registrada y no se puede editar","error");
+      return;
+    }
     if (!gestion.trim()) { showToast("Escribe una respuesta de gestión","error"); return; }
     const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
       fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion" };
@@ -3708,14 +4033,15 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     if (recargar) await recargar();
   };
 
+  const esCliente = user.rol==="cliente";
+  const esOperador = user.rol==="admin"||user.rol==="operador";
   const filt = pqrs.filter(p=>{
+    if (esCliente && ![user.nombre, user.user].includes(p.solicitado_por)) return false;
     const q=busq.toLowerCase();
     const okB=!busq||p.id.toLowerCase().includes(q)||p.factura.toLowerCase().includes(q)||p.pedido_ref.toLowerCase().includes(q)||p.motivo.toLowerCase().includes(q);
     const okE=filtroEst==="todos"||p.estado===filtroEst;
     return okB&&okE;
   });
-  const esCliente = user.rol==="cliente";
-  const esOperador = user.rol==="admin"||user.rol==="operador";
 
   return (
     <div>
@@ -3746,6 +4072,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
         {filt.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>Sin PQRS registradas.</Card>}
         {filt.map(p=>{
           const est = ESTADOS_PQRS[p.estado]||ESTADOS_PQRS.abierta;
+          const tieneGestion = Boolean((p.respuesta||"").trim() || p.fecha_gestion || p.gestionado_por);
           return (
             <Card key={p.id} style={{borderLeft:`4px solid ${est.color}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
@@ -3772,7 +4099,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
                   )}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:130}}>
-                  {esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&(
+                  {esCliente&&p.estado==="abierta"&&(
+                    <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(p)}>Editar</Btn>
+                  )}
+                  {esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&(
                     <Btn size="sm" onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");}}>✏️ Gestionar</Btn>
                   )}
                   {esOperador&&p.estado==="en_gestion"&&(
@@ -3787,12 +4117,12 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
           );
         })}
       </div>
-      {modNueva&&(
-        <Modal title="Nueva PQRS" onClose={()=>{setModNueva(false);setForm(vacio);}}>
+      {(modNueva||modEditar)&&(
+        <Modal title={modEditar ? "Editar PQRS" : "Nueva PQRS"} onClose={cerrarFormulario}>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{background:"#fffbeb",borderRadius:10,padding:10,fontSize:12,color:"#92400e",fontWeight:600}}>
+            {!modEditar&&<div style={{background:"#fffbeb",borderRadius:10,padding:10,fontSize:12,color:"#92400e",fontWeight:600}}>
               Se generará automáticamente un número de caso PQRS-{new Date().getFullYear()}-XXXX.
-            </div>
+            </div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <Field label="N° Factura *"     value={form.factura}    onChange={f("factura")}    placeholder="FAC-2200"/>
               <Field label="N° Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
@@ -3802,8 +4132,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
             <Field label="Descripción detallada *" value={form.descripcion} onChange={f("descripcion")} as="textarea"
               placeholder="Describe con detalle la situación, fecha del evento, personas involucradas..."/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-              <Btn onClick={crear}>💾 Radicar PQRS</Btn>
+              <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+              <Btn onClick={crear}>{modEditar ? "💾 Guardar Cambios" : "💾 Radicar PQRS"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3835,10 +4165,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
 function SidebarApp({ user, activeTab, setActiveTab, onLogout, collapsed, setCollapsed, pqrs = [] }) {
   const MENUS = {
     admin:        [["dashboard","📊","Dashboard"],["pedidos","📦","Pedidos"],["rastreo","🗺️","Rastreo GPS"],["conductores","🚗","Conductores"],["transportistas","🏢","Transportistas"],["resumen","📋","Resumen Transportador"],["devoluciones","↩️","Devoluciones"],["recogidas","🔄","Recogidas"],["pqrs","📋","PQRS"],["ciudades","🏙️","Ciudades / DANE"],["paqueterias","📦","Paqueterías"],["promesas","📅","Promesas de Servicio"],["facturas","🧾","Facturas Proveedor"],["usuarios","👥","Usuarios"]],
-    operador:     [["dashboard","📊","Dashboard"],["pedidos","📦","Pedidos"],["rastreo","🗺️","Rastreo GPS"],["conductores","🚗","Conductores"],["resumen","📋","Resumen Transportador"],["devoluciones","↩️","Devoluciones"],["recogidas","🔄","Recogidas"],["pqrs","📋","PQRS"],["promesas","📅","Promesas de Servicio"]],
+    operador:     [["dashboard","📊","Dashboard"],["pedidos","📦","Pedidos"],["rastreo","🗺️","Rastreo GPS"],["conductores","🚗","Conductores"],["resumen","📋","Resumen Transportador"],["devoluciones","↩️","Devoluciones"],["recogidas","🔄","Recogidas"],["pqrs","📋","PQRS"],["promesas","📅","Promesas de Servicio"],["facturas","🧾","Facturas Proveedor"]],
     transportista:[["mi_empresa","🏢","Mi Empresa"]],
     conductor:    [["mis_pedidos","📦","Mis Pedidos"],["mi_ubicacion","📍","Mi Ubicación GPS"]],
-    cliente:      [["consultas","🔍","Estado Pedidos"],["devoluciones","↩️","Mis Devoluciones"],["recogidas","🔄","Mis Recogidas"],["pqrs","📋","PQRS"],["facturas","🧾","Facturas Proveedor"]],
+    cliente:      [["consultas","🔍","Estado Pedidos"],["devoluciones","↩️","Mis Devoluciones"],["recogidas","🔄","Mis Recogidas"],["pqrs","📋","PQRS"]],
   };
   const items = MENUS[user.rol] || [];
   const w = collapsed ? 64 : 210;
@@ -4030,7 +4360,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
 }
 
 
-function Login({ onLogin, usuarios }) {
+function Login({ onLogin }) {
   const [u,   setU]   = useState("");
   const [p,   setP]   = useState("");
   const [err, setErr] = useState("");
@@ -4039,17 +4369,34 @@ function Login({ onLogin, usuarios }) {
     e.preventDefault();
     setErr("");
     setCargando(true);
-    // Buscar en la lista de usuarios ya cargada desde Supabase
-    const found = usuarios.find(x => x.user === u.trim() && x.pass === p);
-    if (found) { setCargando(false); onLogin(found); }
-    else { setCargando(false); setErr("Usuario o contraseña incorrectos."); }
+    const username = u.trim().toLowerCase();
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: `${username}@somospro.local`,
+        password: p,
+      });
+      if (error) throw error;
+      const { data: found, error: profileError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('auth_user_id', data.user.id)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!found) throw new Error("Usuario autenticado sin perfil asignado. Ejecuta nuevamente el script de vinculacion Auth.");
+      setCargando(false);
+      onLogin(found);
+    } catch (authError) {
+      console.error("Error de login:", authError);
+      setCargando(false);
+      setErr(authError.message || "Usuario o contrasena incorrectos.");
+    }
   };
   const [cargando, setCargando] = useState(false);
 
   const demos = [
-    { l: "👑 Admin",        u: "admin",   p: "1039456779" },
+    { l: "👑 Admin",        u: "admin",   p: "admin123" },
     { l: "⚙️ Operador",     u: "operador",p: "op123" },
-    { l: "🏢 Transportista",u: "veloz",   p: "trans123" },
+    { l: "🏢 Transportista",u: "transprueba", p: "trans123" },
     { l: "🚗 Conductor",    u: "driver1", p: "cond123" },
     { l: "📦 Cliente",      u: "cliente", p: "cli123" },
   ];
@@ -4108,24 +4455,48 @@ export default function SomosProTracking() {
 
   const showToast = (msg, type = "info") => setToast({ msg, type });
 
-  // ── Cargar datos desde Supabase al iniciar ──
-  useEffect(() => {
-    cargarTodo();
-  }, []);
-
-  const cargarTodo = async () => {
+  const cargarTodo = async (perfil = user) => {
     setCargando(true);
     try {
+      const rolActual = perfil?.rol;
+      const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
+      const pedidosSelectCliente = [
+        "id",
+        "guia_interna",
+        "cliente",
+        "ciudad_codigo",
+        "ciudad_nombre",
+        "direccion",
+        "cajas",
+        "factura",
+        "conductor_id",
+        "placa",
+        "estado",
+        "estado_despacho",
+        "novedad",
+        "fecha_creacion",
+        "fecha_estimada",
+        "fecha_real",
+        "tipo",
+        "paqueteria",
+        "guia_paqueteria",
+        "ciudad_origen_codigo",
+        "ciudad_origen_nombre",
+        "direccion_origen",
+        "created_at",
+      ].join(",");
+      const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : "*";
+
       const [
-        { data: usu },  { data: tra },  { data: con },
-        { data: ped },  { data: ciu },  { data: paq },
-        { data: dev },  { data: rec },  { data: pqrsd },
-        { data: prom },
+        usuRes, traRes, conRes,
+        pedRes, ciuRes, paqRes,
+        devRes, recRes, pqrsRes,
+        promRes,
       ] = await Promise.all([
         supabase.from('usuarios').select('*').order('created_at'),
         supabase.from('transportistas').select('*').order('created_at'),
         supabase.from('conductores').select('*').order('created_at'),
-        supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
+        supabase.from('pedidos').select(pedidosSelect).order('created_at', { ascending: false }),
         supabase.from('ciudades').select('*').order('name'),
         supabase.from('paqueterias').select('*').order('nombre'),
         supabase.from('devoluciones').select('*').order('created_at', { ascending: false }),
@@ -4133,11 +4504,25 @@ export default function SomosProTracking() {
         supabase.from('pqrs').select('*').order('created_at', { ascending: false }),
         supabase.from('promesas_servicio').select('*'),
       ]);
+      const results = [usuRes, traRes, conRes, pedRes, ciuRes, paqRes, devRes, recRes, pqrsRes, promRes];
+      const failed = results.find(r => r.error);
+      if (failed) throw failed.error;
 
-      // Si no hay usuarios en Supabase, cargar los iniciales de demo
-      if (!usu || usu.length === 0) {
-        await sembrarDatosIniciales();
-        await cargarTodo();
+      const { data: usu } = usuRes;
+      const { data: tra } = traRes;
+      const { data: con } = conRes;
+      const { data: ped } = pedRes;
+      const { data: ciu } = ciuRes;
+      const { data: paq } = paqRes;
+      const { data: dev } = devRes;
+      const { data: rec } = recRes;
+      const { data: pqrsd } = pqrsRes;
+      const { data: prom } = promRes;
+
+      // Si no hay usuarios en Supabase, detener carga. No sembrar datos desde el cliente.
+      if (usu.length === 0) {
+        showToast('No hay usuarios visibles en Supabase. Verifica datos, Auth o politicas RLS.', 'error');
+        setCargando(false);
         return;
       }
 
@@ -4152,32 +4537,36 @@ export default function SomosProTracking() {
       setPqrs(pqrsd || []);
       setPromesas(prom || []);
       // Cargar facturas por separado - sin join anidado
-      try {
-        const { data: factData, error: factErr } = await supabase
-          .from('facturas_proveedor')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (factErr) { setFacturas([]); }
-        else {
-          // Load factura_guias separately and merge
-          const { data: guiasData } = await supabase
-            .from('factura_guias')
-            .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion)');
-          const guiasByFact = {};
-          (guiasData||[]).forEach(g => {
-            if (!guiasByFact[g.factura_id]) guiasByFact[g.factura_id] = [];
-            guiasByFact[g.factura_id].push(g);
-          });
-          const merged = (factData||[]).map(f => ({
-            ...f,
-            factura_guias: guiasByFact[f.id] || [],
-          }));
-          setFacturas(merged);
-        }
-      } catch(e) { console.error('facturas load error:', e); setFacturas([]); }
+      if (puedeVerFacturas) {
+        try {
+          const { data: factData, error: factErr } = await supabase
+            .from('facturas_proveedor')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (factErr) { setFacturas([]); }
+          else {
+            // Load factura_guias separately and merge
+            const { data: guiasData } = await supabase
+              .from('factura_guias')
+              .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion)');
+            const guiasByFact = {};
+            (guiasData||[]).forEach(g => {
+              if (!guiasByFact[g.factura_id]) guiasByFact[g.factura_id] = [];
+              guiasByFact[g.factura_id].push(g);
+            });
+            const merged = (factData||[]).map(f => ({
+              ...f,
+              factura_guias: guiasByFact[f.id] || [],
+            }));
+            setFacturas(merged);
+          }
+        } catch(e) { console.error('facturas load error:', e); setFacturas([]); }
+      } else {
+        setFacturas([]);
+      }
     } catch (e) {
       console.error('Error cargando datos:', e);
-      showToast('Sin conexión a la base de datos. Verifica tu internet y recarga.', 'error');
+      showToast('No se pudo cargar Supabase: '+(e.message || 'verifica variables y permisos.'), 'error');
     }
     setCargando(false);
   };
@@ -4229,7 +4618,69 @@ export default function SomosProTracking() {
     setUser(userWithConductorId);
     const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas" };
     setTab(def[u.rol] || "dashboard");
+    await cargarTodo(userWithConductorId);
   };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setTab("");
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const restaurarSesion = async () => {
+      setCargando(true);
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const authUser = sessionData?.session?.user;
+        if (!authUser) {
+          if (mounted) setCargando(false);
+          return;
+        }
+
+        const { data: perfil, error: perfilError } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('auth_user_id', authUser.id)
+          .maybeSingle();
+        if (perfilError) throw perfilError;
+        if (!perfil) {
+          await supabase.auth.signOut();
+          if (mounted) {
+            showToast("Sesion sin perfil asignado. Inicia sesion nuevamente.","error");
+            setCargando(false);
+          }
+          return;
+        }
+
+        if (mounted) await handleLogin(perfil);
+      } catch (error) {
+        console.error("No se pudo restaurar sesion:", error);
+        await supabase.auth.signOut();
+        if (mounted) {
+          setUser(null);
+          setTab("");
+          setCargando(false);
+        }
+      }
+    };
+
+    restaurarSesion();
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setTab("");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const check = () => setCollapsed(window.innerWidth < 820);
@@ -4246,7 +4697,7 @@ export default function SomosProTracking() {
     </div>
   );
 
-  if (!user) return <Login onLogin={handleLogin} usuarios={usuarios} />;
+  if (!user) return <Login onLogin={handleLogin} />;
 
   const props = { pedidos, setPedidos, conductores, setConductores, usuarios, setUsuarios, showToast, user };
 
@@ -4335,8 +4786,6 @@ export default function SomosProTracking() {
     await cargarTodo();
   };
 
-  // Expose globally for ModalDetalle which doesn't receive sb as prop
-  window._sb = supabase;
   window._recargar = cargarTodo;
 
   const renderContent = () => {
@@ -4344,18 +4793,20 @@ export default function SomosProTracking() {
     const re = cargarTodo;
     switch (tab) {
       case "dashboard":      return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades}/>;
-      case "pedidos":        return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} recargar={cargarTodo}/>;
+      case "pedidos":        return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} recargar={cargarTodo} user={user}/>;
       case "rastreo":        return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
       case "conductores":    return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={cargarTodo}/>;
       case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={cargarTodo}/>;
       case "resumen":        return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
-      case "facturas":       return <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={cargarTodo}/>;
+      case "facturas":       return user.rol==="admin"||user.rol==="operador"
+        ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={cargarTodo}/>
+        : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
       case "promesas":       return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
       case "ciudades":       return <Ciudades ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
       case "paqueterias":    return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={cargarTodo}/>;
       case "usuarios":       return <Usuarios usuarios={usuarios} showToast={showToast} recargar={cargarTodo}/>;
       case "mi_empresa":     return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={user} recargar={cargarTodo}/>;
-      case "mis_pedidos":    return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
+      case "mis_pedidos":    return <MisPedidosConductor pedidos={pedidos} devoluciones={devoluciones} recogidas={recogidas} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
       case "mi_ubicacion":   return <MiUbicacion user={user}/>;
       case "consultas":      return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
       case "pqrs":           return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={cargarTodo}/>;
@@ -4367,7 +4818,7 @@ export default function SomosProTracking() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#f7f5ff" }}>
-      <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={() => setUser(null)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
+      <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={handleLogout} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
       <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box" }}>
         {renderContent()}
       </main>
@@ -4376,7 +4827,7 @@ export default function SomosProTracking() {
   );
 }
 function Usuarios({ usuarios, showToast, recargar }) {
-  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",placa:"",nit_proveedor:"",celular:""};
+  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
   const [modal,     setModal]     = useState(false);
   const [modEditar, setModEditar] = useState(null);
   const [form,      setForm]      = useState(vacio);
@@ -4386,16 +4837,39 @@ function Usuarios({ usuarios, showToast, recargar }) {
 
   const abrirNuevo  = () => { setForm(vacio); setModal(true); };
   const abrirEditar = (u) => {
-    setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||""});
+    setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",cedula:u.cedula||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||""});
     setModEditar(u);
   };
 
   const crearUsuario = async () => {
     if (!form.nombre.trim()||!form.user.trim()||!form.pass.trim()) { showToast("Nombre, usuario y contraseña son obligatorios","error"); return; }
     if (usuarios.find(u=>u.user===form.user.trim())) { showToast("Ese usuario ya existe","error"); return; }
+    if (form.rol==="conductor" && (!form.cedula.trim()||!form.placa.trim()||!form.nit_proveedor.trim())) {
+      showToast("Cedula, placa y NIT proveedor son obligatorios para conductor","error");
+      return;
+    }
+    if (form.rol==="transportista" && !form.nit.trim()) {
+      showToast("NIT es obligatorio para transportista","error");
+      return;
+    }
     setGuardando(true);
-    const { error } = await supabase.from('usuarios').insert({...form});
-    if (error) { showToast("Error: "+error.message,"error"); setGuardando(false); return; }
+    const { data, error } = await supabase.functions.invoke('create-system-user', {
+      body: {
+        type: "system_user",
+        nombre: form.nombre.trim(),
+        rol: form.rol,
+        user_login: form.user.trim(),
+        pass_login: form.pass.trim(),
+        nit: form.nit.trim(),
+        empresa: form.empresa.trim(),
+        cedula: form.cedula.trim(),
+        placa: form.placa.trim(),
+        celular: form.celular.trim(),
+        nit_proveedor: form.nit_proveedor.trim(),
+      },
+    });
+    if (error) { showToast("Error creando acceso: "+error.message,"error"); setGuardando(false); return; }
+    if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
     setModal(false); setForm(vacio);
     showToast("✓ Usuario creado","success");
     if(recargar) await recargar(); setGuardando(false);
@@ -4404,10 +4878,42 @@ function Usuarios({ usuarios, showToast, recargar }) {
   const guardarEdicion = async () => {
     if (!form.nombre.trim()||!form.user.trim()) { showToast("Nombre y usuario son obligatorios","error"); return; }
     if (usuarios.find(u=>u.user===form.user.trim()&&u.id!==modEditar.id)) { showToast("Ese usuario ya existe","error"); return; }
+    if (form.rol==="conductor" && (!form.cedula.trim()||!form.placa.trim()||!form.nit_proveedor.trim())) {
+      showToast("Cedula, placa y NIT proveedor son obligatorios para conductor","error");
+      return;
+    }
+    if (form.rol==="transportista" && !form.nit.trim()) {
+      showToast("NIT es obligatorio para transportista","error");
+      return;
+    }
     setGuardando(true);
-    const passNueva = form.pass.trim()||modEditar.pass;
-    const { error } = await supabase.from('usuarios').update({...form,pass:passNueva}).eq('id',modEditar.id);
-    if (error) { showToast("Error: "+error.message,"error"); setGuardando(false); return; }
+    const { data, error } = await supabase.functions.invoke('create-system-user', {
+      body: {
+        type: "update_system_user",
+        user_id: modEditar.id,
+        nombre: form.nombre.trim(),
+        rol: form.rol,
+        user_login: form.user.trim(),
+        pass_login: form.pass.trim(),
+        nit: form.nit.trim(),
+        empresa: form.empresa.trim(),
+        cedula: form.cedula.trim(),
+        placa: form.placa.trim(),
+        celular: form.celular.trim(),
+        nit_proveedor: form.nit_proveedor.trim(),
+      },
+    });
+    if (error) {
+      let detalle = error.message;
+      try {
+        const body = await error.context?.json?.();
+        if (body?.error) detalle = body.error;
+      } catch {}
+      showToast("Error actualizando usuario: "+detalle,"error");
+      setGuardando(false);
+      return;
+    }
+    if (data?.error) { showToast("Error actualizando usuario: "+data.error,"error"); setGuardando(false); return; }
     setModEditar(null);
     showToast(form.pass.trim()?"✓ Usuario y contraseña actualizados":"✓ Usuario actualizado","success");
     if(recargar) await recargar(); setGuardando(false);
@@ -4416,7 +4922,22 @@ function Usuarios({ usuarios, showToast, recargar }) {
   const eliminar = async (uid, uname) => {
     if (uname==="admin") { showToast("No se puede eliminar el admin principal","error"); return; }
     if (!window.confirm("¿Eliminar este usuario?")) return;
-    await supabase.from('usuarios').delete().eq('id', uid);
+    const { data, error } = await supabase.functions.invoke('create-system-user', {
+      body: {
+        type: "delete_system_user",
+        user_id: uid,
+      },
+    });
+    if (error) {
+      let detalle = error.message;
+      try {
+        const body = await error.context?.json?.();
+        if (body?.error) detalle = body.error;
+      } catch {}
+      showToast("Error eliminando usuario: "+detalle,"error");
+      return;
+    }
+    if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); return; }
     showToast("Usuario eliminado","info");
     if (recargar) await recargar();
   };
@@ -4431,10 +4952,14 @@ function Usuarios({ usuarios, showToast, recargar }) {
     if (form.rol==="conductor") return (
       <>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Field label="Cedula" value={form.cedula} onChange={f("cedula")} placeholder="1012345678"/>
           <Field label="Placa" value={form.placa} onChange={f("placa")} placeholder="ABC-123"/>
-          <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
         </div>
-        <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
+          <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1"/>
+        </div>
+        <Field label="Empresa" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ"/>
       </>
     );
     return null;
@@ -4477,8 +5002,8 @@ function Usuarios({ usuarios, showToast, recargar }) {
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <Field label="Usuario (login) *" value={form.user} onChange={f("user")} required placeholder="usuario123"/>
-              <Field label="Contraseña *" value={form.pass} onChange={f("pass")} required type="password" placeholder="••••••••"/>
+              <Field label="Usuario (login) *" value={form.user} onChange={f("user")} required placeholder="usuario123" name="spt_admin_user_login" autoComplete="off" data-lpignore="true"/>
+              <Field label="Contraseña *" value={form.pass} onChange={f("pass")} required type="password" placeholder="••••••••" name="spt_admin_user_password" autoComplete="new-password" data-lpignore="true"/>
             </div>
             <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
             {camposRol()}
@@ -4495,8 +5020,8 @@ function Usuarios({ usuarios, showToast, recargar }) {
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <Field label="Usuario *" value={form.user} onChange={f("user")} required/>
-              <Field label="Nueva contraseña (vacío = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contraseña..."/>
+              <Field label="Usuario *" value={form.user} onChange={f("user")} required name="spt_admin_edit_login" autoComplete="off" data-lpignore="true"/>
+              <Field label="Nueva contraseña (vacío = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contraseña..." name="spt_admin_edit_password" autoComplete="new-password" data-lpignore="true"/>
             </div>
             <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
             {camposRol()}
@@ -4510,4 +5035,3 @@ function Usuarios({ usuarios, showToast, recargar }) {
     </div>
   );
 }
-
