@@ -266,7 +266,7 @@ function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   );
 }
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canDeliver = false }) {
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
   const [condId,     setCondId]     = useState(pedido.conductor_id||"") ;
   const [direccion,  setDireccion]  = useState(pedido.direccion||"");
   const [cajas,      setCajas]      = useState(String(pedido.cajas||""));
@@ -318,18 +318,22 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
       cambiosBase.estado = novedad ? "novedad" : "entregado";
       cambiosBase.novedad = novedad;
     }
-    const cambios = canBasicEdit && !canEdit ? cambiosBase : {
+    const cambios = canBasicEdit && !canEdit && !canAssign ? cambiosBase : {
       ...cambiosBase,
-      conductor_id: c?.id||null,
-      placa: c?.placa||null,
-      nit_proveedor: c?.nit_proveedor||null,
-      estado: nuevoEstado,
-      estado_despacho: estadoDesp,
-      novedad,
-      tipo: tipoModal,
-      empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
-      paqueteria: tipoModal==="paqueteria" ? paqModal : null,
-      guia_paqueteria: tipoModal==="paqueteria" ? guiaPaq : null,
+      ...(canEdit || canAssign ? {
+        conductor_id: c?.id||null,
+        placa: c?.placa||null,
+        nit_proveedor: c?.nit_proveedor||null,
+        estado: nuevoEstado,
+      } : {}),
+      ...(canEdit ? {
+        estado_despacho: estadoDesp,
+        novedad,
+        tipo: tipoModal,
+        empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
+        paqueteria: tipoModal==="paqueteria" ? paqModal : null,
+        guia_paqueteria: tipoModal==="paqueteria" ? guiaPaq : null,
+      } : {}),
     };
     setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
 
@@ -475,7 +479,26 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
           </div>
         )}
 
-        {!canEdit&&cond&&(
+        {canAssign&&tipoModal!=="paqueteria"&&(
+          <div>
+            <Field label="Asignar Conductor" value={condId} onChange={v=>{
+              setCondId(v);
+              const c = conductores.find(cx=>String(cx.id)===String(v));
+              if(c && tipoModal==="empresa_transporte") setEmpTrans(c.empresa||c.nit_proveedor||"");
+            }} as="select"
+              options={[
+                {value:"",label:"Sin asignar"},
+                ...(tipoModal==="empresa_transporte"
+                  ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
+                  : conductoresOpciones
+                ).map(c=>({value:c.id,label:`${c.nombre} Â· ${c.placa}${c.empresa?" â€” "+c.empresa:""}`}))
+              ]}
+              disabled={pedidoBloqueadoEdicion}/>
+            {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiara a En Transito.</p>}
+          </div>
+        )}
+
+        {!canEdit&&!canAssign&&cond&&(
           <div style={{background:"#eff6ff",borderRadius:10,padding:12}}>
             <span style={{fontSize:13,color:"#1e40af"}}>
               {cond.nombre} - Placa: {pedido.placa}{cond.cedula&&` - CC: ${cond.cedula}`}{cond.celular&&` - Tel: ${cond.celular}`}
@@ -1719,7 +1742,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         </Modal>
       )}
 
-      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"}/>}
+      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"} canAssign={user?.rol==="operador"}/>}
       {modGuia&&<GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={()=>setModGuia(null)}/>}
       {modCSV&&<ModalCSVPedidos onClose={()=>setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV}/>}
       {modGuias&&<ModalCSVGuias onClose={()=>setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar}/>}
@@ -3989,6 +4012,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   };
 
   const guardarGestion = async () => {
+    if ((modGestion.respuesta||"").trim() || modGestion.fecha_gestion || modGestion.gestionado_por) {
+      showToast("La respuesta de esta PQRS ya fue registrada y no se puede editar","error");
+      return;
+    }
     if (!gestion.trim()) { showToast("Escribe una respuesta de gestión","error"); return; }
     const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
       fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion" };
@@ -4045,6 +4072,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
         {filt.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>Sin PQRS registradas.</Card>}
         {filt.map(p=>{
           const est = ESTADOS_PQRS[p.estado]||ESTADOS_PQRS.abierta;
+          const tieneGestion = Boolean((p.respuesta||"").trim() || p.fecha_gestion || p.gestionado_por);
           return (
             <Card key={p.id} style={{borderLeft:`4px solid ${est.color}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
@@ -4074,7 +4102,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
                   {esCliente&&p.estado==="abierta"&&(
                     <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(p)}>Editar</Btn>
                   )}
-                  {esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&(
+                  {esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&(
                     <Btn size="sm" onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");}}>✏️ Gestionar</Btn>
                   )}
                   {esOperador&&p.estado==="en_gestion"&&(
