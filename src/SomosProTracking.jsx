@@ -4419,9 +4419,38 @@ export default function SomosProTracking() {
     cargarTodo();
   }, []);
 
-  const cargarTodo = async () => {
+  const cargarTodo = async (perfil = user) => {
     setCargando(true);
     try {
+      const rolActual = perfil?.rol;
+      const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
+      const pedidosSelectCliente = [
+        "id",
+        "guia_interna",
+        "cliente",
+        "ciudad_codigo",
+        "ciudad_nombre",
+        "direccion",
+        "cajas",
+        "factura",
+        "conductor_id",
+        "placa",
+        "estado",
+        "estado_despacho",
+        "novedad",
+        "fecha_creacion",
+        "fecha_estimada",
+        "fecha_real",
+        "tipo",
+        "paqueteria",
+        "guia_paqueteria",
+        "ciudad_origen_codigo",
+        "ciudad_origen_nombre",
+        "direccion_origen",
+        "created_at",
+      ].join(",");
+      const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : "*";
+
       const [
         usuRes, traRes, conRes,
         pedRes, ciuRes, paqRes,
@@ -4431,7 +4460,7 @@ export default function SomosProTracking() {
         supabase.from('usuarios').select('*').order('created_at'),
         supabase.from('transportistas').select('*').order('created_at'),
         supabase.from('conductores').select('*').order('created_at'),
-        supabase.from('pedidos').select('*').order('created_at', { ascending: false }),
+        supabase.from('pedidos').select(pedidosSelect).order('created_at', { ascending: false }),
         supabase.from('ciudades').select('*').order('name'),
         supabase.from('paqueterias').select('*').order('nombre'),
         supabase.from('devoluciones').select('*').order('created_at', { ascending: false }),
@@ -4472,29 +4501,33 @@ export default function SomosProTracking() {
       setPqrs(pqrsd || []);
       setPromesas(prom || []);
       // Cargar facturas por separado - sin join anidado
-      try {
-        const { data: factData, error: factErr } = await supabase
-          .from('facturas_proveedor')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (factErr) { setFacturas([]); }
-        else {
-          // Load factura_guias separately and merge
-          const { data: guiasData } = await supabase
-            .from('factura_guias')
-            .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion)');
-          const guiasByFact = {};
-          (guiasData||[]).forEach(g => {
-            if (!guiasByFact[g.factura_id]) guiasByFact[g.factura_id] = [];
-            guiasByFact[g.factura_id].push(g);
-          });
-          const merged = (factData||[]).map(f => ({
-            ...f,
-            factura_guias: guiasByFact[f.id] || [],
-          }));
-          setFacturas(merged);
-        }
-      } catch(e) { console.error('facturas load error:', e); setFacturas([]); }
+      if (puedeVerFacturas) {
+        try {
+          const { data: factData, error: factErr } = await supabase
+            .from('facturas_proveedor')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (factErr) { setFacturas([]); }
+          else {
+            // Load factura_guias separately and merge
+            const { data: guiasData } = await supabase
+              .from('factura_guias')
+              .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion)');
+            const guiasByFact = {};
+            (guiasData||[]).forEach(g => {
+              if (!guiasByFact[g.factura_id]) guiasByFact[g.factura_id] = [];
+              guiasByFact[g.factura_id].push(g);
+            });
+            const merged = (factData||[]).map(f => ({
+              ...f,
+              factura_guias: guiasByFact[f.id] || [],
+            }));
+            setFacturas(merged);
+          }
+        } catch(e) { console.error('facturas load error:', e); setFacturas([]); }
+      } else {
+        setFacturas([]);
+      }
     } catch (e) {
       console.error('Error cargando datos:', e);
       showToast('No se pudo cargar Supabase: '+(e.message || 'verifica variables y permisos.'), 'error');
@@ -4549,7 +4582,7 @@ export default function SomosProTracking() {
     setUser(userWithConductorId);
     const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas" };
     setTab(def[u.rol] || "dashboard");
-    await cargarTodo();
+    await cargarTodo(userWithConductorId);
   };
 
   const handleLogout = async () => {
