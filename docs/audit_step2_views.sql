@@ -1,5 +1,6 @@
 -- Auditoria fase 2: vistas de consulta.
 -- Ejecutar en staging despues de `audit_step1_event_log.sql` y `audit_step1b_reduce_noise.sql`.
+-- Luego ejecutar `audit_step3_secure_views.sql` para endurecer permisos de las vistas.
 
 create or replace view public.audit_events_resumen as
 select

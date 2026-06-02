@@ -92,6 +92,7 @@ Archivos principales:
 - `docs/factura_guias_cascade_migration.sql`: ajusta FK para borrar guias asociadas al eliminar una factura proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
 - `docs/table_review.md`: revision de tablas, duplicidades, decisiones actuales y recomendaciones por fase.
+- `docs/audit_step3_secure_views.sql`: endurece permisos de vistas de auditoria y aplica `security_invoker`.
 - `docs/table_cleanup_validation.sql`: consultas seguras para validar `usuarios.pass`, perfiles Auth y uso de `transportadoras` antes de limpiar estructura.
 - `docs/table_cleanup_step1_auth_pass.sql`: limpieza segura de `usuarios.pass` para perfiles que ya tienen Supabase Auth vinculado.
 - `docs/table_cleanup_step2_drop_transportadoras.sql`: limpieza controlada para retirar `transportadoras` en staging.
@@ -418,6 +419,7 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se creo `docs/audit_plan.md` y `docs/audit_step1_event_log.sql` para iniciar auditoria tecnica centralizada con tabla `audit_events` y triggers sobre tablas criticas.
 - Se agrego `docs/audit_step1b_reduce_noise.sql` para reducir ruido de auditoria: omitir updates sin cambios, registrar campos modificados y excluir base64/passwords.
 - Se agrego `docs/audit_step2_views.sql` con vistas SQL para consultar auditoria por modulo y por usuario, sin exponer aun una pantalla en la app.
+- Se agrego `docs/audit_step3_secure_views.sql` para cerrar acceso anonimo a vistas de auditoria, hacer que respeten permisos/RLS del usuario invocador y dejar lectura solo para administrador.
 - Se ajusto cierre de devoluciones y recogidas: si se selecciona conductor y se marca completado en el mismo modal, se guarda asignacion y cierre en una sola actualizacion auditable.
 - Se valido auditoria en staging: eventos reales, sin updates vacios, sin base64/passwords en datos auditados y con vistas SQL funcionando por modulo.
 - Se creo `docs/table_review.md` para documentar decisiones de tablas: `transportistas` queda como tabla operativa, `transportadoras` fue retirada en staging, `clientes` y `operadores` siguen como roles en `usuarios`, y `usuarios.pass` queda obsoleta temporal.

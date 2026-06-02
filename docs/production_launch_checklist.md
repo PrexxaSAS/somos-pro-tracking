@@ -84,6 +84,10 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - [x] Crear SQL fase 1 para tabla centralizada `audit_events`.
 - [x] Crear ajuste anti-ruido para auditoria: ignorar updates sin cambios y excluir base64/passwords.
 - [x] Crear vistas SQL para consultar auditoria por modulo y por usuario.
+- [x] Crear script para endurecer permisos de vistas de auditoria.
+- [ ] Ejecutar endurecimiento de vistas de auditoria en staging.
+- [ ] Validar que `anon` no tenga acceso a vistas de auditoria.
+- [ ] Validar que operador, cliente, conductor y transportista no puedan leer auditoria por API.
 - [x] Registrar quien gestiono PQRS.
 - [x] Registrar fecha de gestion de PQRS.
 - [x] Registrar quien gestiono devoluciones.
@@ -102,6 +106,8 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - `audit_events` registra eventos reales y omite updates sin cambios.
 - Los campos pesados/sensibles `soportes_data`, `soporte_data`, `doc_data` y `pass` no quedan guardados dentro de `old_data`/`new_data`.
 - Las vistas SQL de auditoria por modulo y por usuario funcionan.
+- Script de endurecimiento creado: `docs/audit_step3_secure_views.sql`.
+- Decision actual: solo administrador puede leer auditoria.
 - Pendiente fase posterior: construir una pantalla de auditoria dentro de la app si negocio lo requiere.
 
 ## 6. Revision de tablas

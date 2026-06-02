@@ -153,12 +153,13 @@ for each row execute function public.audit_row_change();
 alter table public.audit_events enable row level security;
 
 drop policy if exists "audit_events_select_admin_operator" on public.audit_events;
+drop policy if exists "audit_events_select_admin" on public.audit_events;
 
-create policy "audit_events_select_admin_operator"
+create policy "audit_events_select_admin"
 on public.audit_events
 for select
 to authenticated
-using (public.current_user_role() in ('admin', 'operador'));
+using (public.current_user_role() = 'admin');
 
 select
   event_object_table as table_name,
