@@ -9,6 +9,7 @@ import { mensajeError } from './utils/errors';
 import { comprimirImagen } from './utils/images';
 import { generarPDFSoportes } from './utils/pdf';
 import { exportarCSVFacturaProveedor } from './utils/facturasCsv';
+import { Login } from './components/auth/Login';
 
 const iSt = {
   border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -4297,7 +4298,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
 }
 
 
-function Login({ onLogin }) {
+function LoginLegacyUnused({ onLogin }) {
   const [u,   setU]   = useState("");
   const [p,   setP]   = useState("");
   const [err, setErr] = useState("");
