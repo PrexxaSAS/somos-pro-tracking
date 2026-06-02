@@ -55,13 +55,25 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 
 ## 3. Backups
 
+- [x] Crear carpeta local de backup pre-despliegue.
 - [ ] Tomar backup antes de cualquier cambio productivo.
 - [ ] Exportar esquema.
-- [ ] Exportar datos.
-- [ ] Guardar backup en ubicacion acordada.
-- [ ] Documentar fecha, responsable y proyecto respaldado.
-- [ ] Documentar pasos de restauracion.
+- [ ] Exportar datos o confirmar produccion vacia con conteos.
+- [x] Guardar backup en ubicacion acordada.
+- [x] Documentar fecha, responsable y proyecto respaldado.
+- [x] Documentar pasos de restauracion.
 - [ ] Validar al menos una restauracion en entorno de prueba o proyecto temporal.
+
+### Estado backup
+
+- Carpeta creada fuera del repo: `D:\Users\j.bustamante\Documents\somos-pro-tracking-backups\production\2026-06-02_prelaunch\`.
+- Metadata creada: `00_metadata.md`.
+- Plantilla de esquema creada: `01_schema.sql`.
+- Plantilla de conteos creada: `02_table_counts.csv`.
+- Plantilla de validacion RLS creada: `03_rls_validation_before_changes.csv`.
+- Notas de restauracion creadas: `04_restore_notes.md`.
+- Consulta de conteos creada: `docs/production_backup_counts.sql`.
+- Pendiente: reemplazar plantillas con export/resultados reales desde Supabase Dashboard/SQL Editor.
 
 ## 4. Pruebas de errores
 
@@ -85,9 +97,9 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - [x] Crear ajuste anti-ruido para auditoria: ignorar updates sin cambios y excluir base64/passwords.
 - [x] Crear vistas SQL para consultar auditoria por modulo y por usuario.
 - [x] Crear script para endurecer permisos de vistas de auditoria.
-- [ ] Ejecutar endurecimiento de vistas de auditoria en staging.
-- [ ] Validar que `anon` no tenga acceso a vistas de auditoria.
-- [ ] Validar que operador, cliente, conductor y transportista no puedan leer auditoria por API.
+- [x] Ejecutar endurecimiento de vistas de auditoria en staging.
+- [x] Validar que `anon` no tenga acceso a vistas de auditoria.
+- [x] Validar que operador, cliente, conductor y transportista no puedan leer auditoria por API.
 - [x] Registrar quien gestiono PQRS.
 - [x] Registrar fecha de gestion de PQRS.
 - [x] Registrar quien gestiono devoluciones.
@@ -108,6 +120,7 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - Las vistas SQL de auditoria por modulo y por usuario funcionan.
 - Script de endurecimiento creado: `docs/audit_step3_secure_views.sql`.
 - Decision actual: solo administrador puede leer auditoria.
+- Endurecimiento validado en staging: `authenticated` solo conserva `SELECT`, `anon` no aparece en permisos y la lectura queda limitada por RLS a admin.
 - Pendiente fase posterior: construir una pantalla de auditoria dentro de la app si negocio lo requiere.
 
 ## 6. Revision de tablas
@@ -149,6 +162,19 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - [ ] Migrar nuevos soportes a Storage.
 - [ ] Decidir si se migran soportes historicos base64.
 - [ ] Probar visualizacion y descarga manual.
+
+## 8. Dependencias frontend
+
+- [ ] Revisar vulnerabilidades reportadas por NPM.
+- [ ] Ejecutar `npm audit` cuando haya acceso estable al registry.
+- [ ] Evaluar si las correcciones requieren cambios mayores de versiones.
+- [ ] Aplicar fixes solo despues de validar que no rompan Vite/React/Supabase.
+
+### Estado dependencias
+
+- Al instalar dependencias para validar el build, NPM reporto 2 vulnerabilidades moderadas.
+- No se aplico `npm audit fix` para no mezclar correcciones de dependencias con la modularizacion del frontend.
+- Pendiente: tratar estas vulnerabilidades al final del bloque UX/UI o antes del despliegue productivo final.
 
 ## Estado actual
 

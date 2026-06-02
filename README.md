@@ -91,6 +91,7 @@ Archivos principales:
 - `docs/recogidas_paqueteria_migration.sql`: agrega campos de paqueteria a devoluciones y recogidas.
 - `docs/factura_guias_cascade_migration.sql`: ajusta FK para borrar guias asociadas al eliminar una factura proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
+- `docs/production_backup_counts.sql`: conteos de tablas principales para documentar el estado productivo antes de cambios.
 - `docs/table_review.md`: revision de tablas, duplicidades, decisiones actuales y recomendaciones por fase.
 - `docs/audit_step3_secure_views.sql`: endurece permisos de vistas de auditoria y aplica `security_invoker`.
 - `docs/table_cleanup_validation.sql`: consultas seguras para validar `usuarios.pass`, perfiles Auth y uso de `transportadoras` antes de limpiar estructura.
@@ -416,10 +417,13 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se creo `docs/production_launch_checklist.md` como checklist vivo para ordenar salida a produccion, backups, auditoria, migracion y pendientes tecnicos.
 - Se agrego `docs/production_rls_validation.sql` para validar RLS, politicas, funciones, triggers y cascada de facturas antes de produccion.
 - Se creo `docs/production_release_plan.md` para preparar salida a produccion sin intervenir aun datos reales: scripts permitidos/prohibidos, fases, variables, rollback y decisiones pendientes.
+- Se creo carpeta local de backup pre-despliegue fuera del repo con metadata, plantillas de esquema/conteos/validacion y notas de restauracion.
+- Se agrego `docs/production_backup_counts.sql` para generar el CSV de conteos productivos antes de cualquier cambio.
 - Se creo `docs/audit_plan.md` y `docs/audit_step1_event_log.sql` para iniciar auditoria tecnica centralizada con tabla `audit_events` y triggers sobre tablas criticas.
 - Se agrego `docs/audit_step1b_reduce_noise.sql` para reducir ruido de auditoria: omitir updates sin cambios, registrar campos modificados y excluir base64/passwords.
 - Se agrego `docs/audit_step2_views.sql` con vistas SQL para consultar auditoria por modulo y por usuario, sin exponer aun una pantalla en la app.
 - Se agrego `docs/audit_step3_secure_views.sql` para cerrar acceso anonimo a vistas de auditoria, hacer que respeten permisos/RLS del usuario invocador y dejar lectura solo para administrador.
+- Se valido el endurecimiento de auditoria en staging: `anon` sin permisos, `authenticated` solo con `SELECT`, y lectura efectiva limitada a administrador por RLS.
 - Se ajusto cierre de devoluciones y recogidas: si se selecciona conductor y se marca completado en el mismo modal, se guarda asignacion y cierre en una sola actualizacion auditable.
 - Se valido auditoria en staging: eventos reales, sin updates vacios, sin base64/passwords en datos auditados y con vistas SQL funcionando por modulo.
 - Se creo `docs/table_review.md` para documentar decisiones de tablas: `transportistas` queda como tabla operativa, `transportadoras` fue retirada en staging, `clientes` y `operadores` siguen como roles en `usuarios`, y `usuarios.pass` queda obsoleta temporal.

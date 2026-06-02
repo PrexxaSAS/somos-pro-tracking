@@ -3,134 +3,17 @@ import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ROLES } from './Constants
 import { USUARIOS_INICIALES, CONDUCTORES_INICIALES, TRANSPORTISTAS_INICIALES, PEDIDOS_INICIALES, PAQUETERIAS_INICIALES } from './DataStore';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
+import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
+import { descargarCSV, fileToBase64, abrirArchivoGuardado } from './utils/files';
+import { mensajeError } from './utils/errors';
+import { comprimirImagen } from './utils/images';
+import { generarPDFSoportes } from './utils/pdf';
 
 const iSt = {
   border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
   fontSize:14,fontFamily:"inherit",outline:"none",background:"#fafafa",
   width:"100%",boxSizing:"border-box",
 };
-
-function generarGuia(pedidos) {
-  const year = new Date().getFullYear();
-  const usados = pedidos.map(p=>p.guia_interna).filter(g=>g&&g.startsWith(`SPT-${year}-`)).map(g=>parseInt(g.split("-")[2])||0);
-  return `SPT-${year}-${String((usados.length?Math.max(...usados):0)+1).padStart(4,"0")}`;
-}
-function generarGuiaDV(lista) {
-  const year = new Date().getFullYear();
-  const pfx = `DV-${year}-`;
-  const usados = lista.map(d=>d.guia).filter(g=>g&&g.startsWith(pfx)).map(g=>parseInt(g.split("-")[2])||0);
-  return `${pfx}${String((usados.length?Math.max(...usados):0)+1).padStart(4,"0")}`;
-}
-function generarGuiaRC(lista) {
-  const year = new Date().getFullYear();
-  const pfx = `RC-${year}-`;
-  const usados = lista.map(r=>r.guia).filter(g=>g&&g.startsWith(pfx)).map(g=>parseInt(g.split("-")[2])||0);
-  return `${pfx}${String((usados.length?Math.max(...usados):0)+1).padStart(4,"0")}`;
-}
-
-function descargarCSV(nombre,cabecera,ejemplo){
-  const blob=new Blob([cabecera+"\n"+ejemplo],{type:"text/csv;charset=utf-8;"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");a.href=url;a.download=nombre;a.click();URL.revokeObjectURL(url);
-}
-
-function fileToBase64(file){
-  return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
-}
-
-function abrirArchivoGuardado(data, nombre = "documento") {
-  if (!data) return;
-  try {
-    const dataUrl = String(data).startsWith("data:")
-      ? String(data)
-      : `data:application/octet-stream;base64,${data}`;
-    const [meta, base64] = dataUrl.split(",");
-    const mimeDetectado = meta.match(/data:(.*?);base64/)?.[1] || "";
-    const extension = String(nombre || "").split(".").pop()?.toLowerCase();
-    const mimePorExtension = {
-      pdf: "application/pdf",
-      png: "image/png",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      webp: "image/webp",
-      gif: "image/gif",
-    }[extension || ""];
-    const mime = mimeDetectado && mimeDetectado !== "application/octet-stream"
-      ? mimeDetectado
-      : (mimePorExtension || "application/pdf");
-    const bin = atob(base64 || "");
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (!win) console.warn("El navegador bloqueo la ventana del visor.");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (error) {
-    console.error("No se pudo abrir el archivo guardado:", error);
-    window.open(String(data), "_blank", "noopener,noreferrer");
-  }
-}
-
-function mensajeError(error, contexto = "operacion") {
-  const raw = String(error?.message || error || "").trim();
-  const code = String(error?.code || "").trim();
-  const texto = raw.toLowerCase();
-
-  if (!raw) return "No se pudo completar la operacion. Intenta nuevamente.";
-  if (code === "PGRST116" || texto.includes("cannot coerce the result to a single json object")) {
-    return "No se encontro el registro esperado o hay datos duplicados. Recarga la pagina e intenta nuevamente.";
-  }
-  if (texto.includes("row-level security") || texto.includes("violates row-level security") || code === "42501") {
-    return "No tienes permisos para realizar esta accion con tu rol actual.";
-  }
-  if (texto.includes("jwt") || texto.includes("session") || texto.includes("sesion") || texto.includes("unauthorized") || code === "401") {
-    return "Tu sesion no es valida o expiro. Cierra sesion e ingresa nuevamente.";
-  }
-  if (texto.includes("duplicate key") || code === "23505") {
-    return "Ya existe un registro con esos datos. Revisa identificacion, guia, usuario o numero de factura.";
-  }
-  if (texto.includes("foreign key") || code === "23503") {
-    return "No se puede completar porque hay informacion relacionada. Revisa las guias, conductores o facturas asociadas.";
-  }
-  if (texto.includes("failed to fetch") || texto.includes("network") || texto.includes("fetch")) {
-    return "No se pudo conectar con el servidor. Revisa internet e intenta nuevamente.";
-  }
-  if (texto.includes("edge function returned a non-2xx") || texto.includes("failed to send a request to the edge function")) {
-    return "No se pudo ejecutar la funcion segura. Revisa la configuracion de Supabase Edge Functions.";
-  }
-
-  return `No se pudo completar ${contexto}: ${raw}`;
-}
-
-// Compress image to max 800px wide, quality 0.75 — keeps size under ~200KB
-function comprimirImagen(file, maxW=800, quality=0.75) {
-  return new Promise((res) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ratio = Math.min(maxW / img.width, maxW / img.height, 1);
-        canvas.width  = Math.round(img.width  * ratio);
-        canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        res(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function generarPDFSoportes(pedido, extras) {
-  const fecha = new Date().toLocaleDateString("es-CO",{day:"2-digit",month:"long",year:"numeric"});
-  const todos = [...(pedido.soportes_data||[]), ...(extras||[])];
-  const win = window.open("","_blank");
-  if(!win) return;
-  const imgs = todos.map((s,i)=>`<div style="page-break-inside:avoid;margin-bottom:32px"><p style="color:#4c1d95;font-weight:bold;margin:0 0 8px">Soporte ${i+1}${s.nombre?" - "+s.nombre:""}</p><img src="${s.data}" style="max-width:100%;border:2px solid #ddd6fe;border-radius:8px"/></div>`).join("");
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Soportes ${pedido.id}</title><style>body{font-family:Arial,sans-serif;padding:32px}h1{color:#4c1d95}hr{border:none;border-top:2px solid #ddd6fe;margin:16px 0}</style></head><body><h1>Soportes - ${pedido.guia_interna||pedido.id}</h1><p>Pedido: ${pedido.id} | Cliente: ${pedido.cliente} | ${fecha}</p><hr/>${imgs||"<p>Sin soportes.</p>"}</body></html>`);
-  win.print();
-}
 
 function CargadorFotos({ pedido, onGuardar, onClose, showToast }) {
   const [fotos, setFotos] = useState([]);
