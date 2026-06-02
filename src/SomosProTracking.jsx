@@ -8,6 +8,7 @@ import { descargarCSV, fileToBase64, abrirArchivoGuardado } from './utils/files'
 import { mensajeError } from './utils/errors';
 import { comprimirImagen } from './utils/images';
 import { generarPDFSoportes } from './utils/pdf';
+import { exportarCSVFacturaProveedor } from './utils/facturasCsv';
 
 const iSt = {
   border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -2815,7 +2816,7 @@ function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recar
                 </div>
                 <div style={{display:"flex",gap:8,flexDirection:"column"}}>
                   <Btn size="sm" onClick={()=>setModDet(fac)}>✏️ Gestionar Guías</Btn>
-                  <Btn size="sm" variant="success" onClick={()=>exportarCSV(fac, calcularLineas(fac), trans, formatCOP)}>⬇ Exportar CSV</Btn>
+                  <Btn size="sm" variant="success" onClick={()=>exportarCSVFacturaProveedor(fac, calcularLineas(fac), trans, formatCOP)}>⬇ Exportar CSV</Btn>
                   <Btn size="sm" variant="danger" onClick={()=>eliminar(fac.id, fac.numero_factura)}>× Eliminar</Btn>
                 </div>
               </div>
@@ -2861,7 +2862,7 @@ function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recar
 }
 
 // ── Función exportar CSV ──────────────────────────────────────────────────────
-function exportarCSV(fac, lineas, trans, formatCOP) {
+function exportarCSVLegacyUnused(fac, lineas, trans, formatCOP) {
   const headers = [
     "Fecha Factura","Guia Interna","Transportista","Fecha Despacho",
     "Codigo DANE","Ciudad Destino","N° Factura Proveedor",
@@ -3037,7 +3038,7 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
         <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
           {guiasRel.length>0&&(
             <Btn variant="success"
-              onClick={()=>exportarCSV(factura, guiasRel.map(g=>({
+              onClick={()=>exportarCSVFacturaProveedor(factura, guiasRel.map(g=>({
                 ...g,
                 cajas:g.pedidos?.cajas||0,
                 valorGuia: totalCajas>0?Math.round(valorCaja*(g.pedidos?.cajas||0)):0
