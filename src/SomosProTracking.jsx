@@ -71,6 +71,37 @@ function abrirArchivoGuardado(data, nombre = "documento") {
   }
 }
 
+function mensajeError(error, contexto = "operacion") {
+  const raw = String(error?.message || error || "").trim();
+  const code = String(error?.code || "").trim();
+  const texto = raw.toLowerCase();
+
+  if (!raw) return "No se pudo completar la operacion. Intenta nuevamente.";
+  if (code === "PGRST116" || texto.includes("cannot coerce the result to a single json object")) {
+    return "No se encontro el registro esperado o hay datos duplicados. Recarga la pagina e intenta nuevamente.";
+  }
+  if (texto.includes("row-level security") || texto.includes("violates row-level security") || code === "42501") {
+    return "No tienes permisos para realizar esta accion con tu rol actual.";
+  }
+  if (texto.includes("jwt") || texto.includes("session") || texto.includes("sesion") || texto.includes("unauthorized") || code === "401") {
+    return "Tu sesion no es valida o expiro. Cierra sesion e ingresa nuevamente.";
+  }
+  if (texto.includes("duplicate key") || code === "23505") {
+    return "Ya existe un registro con esos datos. Revisa identificacion, guia, usuario o numero de factura.";
+  }
+  if (texto.includes("foreign key") || code === "23503") {
+    return "No se puede completar porque hay informacion relacionada. Revisa las guias, conductores o facturas asociadas.";
+  }
+  if (texto.includes("failed to fetch") || texto.includes("network") || texto.includes("fetch")) {
+    return "No se pudo conectar con el servidor. Revisa internet e intenta nuevamente.";
+  }
+  if (texto.includes("edge function returned a non-2xx") || texto.includes("failed to send a request to the edge function")) {
+    return "No se pudo ejecutar la funcion segura. Revisa la configuracion de Supabase Edge Functions.";
+  }
+
+  return `No se pudo completar ${contexto}: ${raw}`;
+}
+
 // Compress image to max 800px wide, quality 0.75 — keeps size under ~200KB
 function comprimirImagen(file, maxW=800, quality=0.75) {
   return new Promise((res) => {
@@ -339,7 +370,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
 
     showToast("Guardando...","info");
     const { data: upd, error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select().single();
-    if (error) { showToast("Error: "+error.message+" ("+error.code+")","error"); return; }
+    if (error) { showToast(mensajeError(error, "los cambios del pedido"),"error"); return; }
     showToast("✓ Cambios guardados · Estado: "+nuevoEstado,"success");
     onClose();
     setTimeout(()=>{ if(window._recargar) window._recargar(); }, 200);
@@ -1563,7 +1594,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     };
     if (supabase) {
       const { error } = await supabase.from("pedidos").insert(nuevo);
-      if (error) { showToast("Error guardando pedido: "+error.message,"error"); return; }
+      if (error) { showToast(mensajeError(error, "el pedido"),"error"); return; }
       if(recargar) await recargar(); else if(window._recargar) await window._recargar();
     } else {
       setPedidos(prev => [nuevo, ...prev]);
@@ -1956,7 +1987,7 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
       setModEmpresa(false); setFormE({nombre:"",nit:"",contacto:"",tel:"",user_login:"",pass_login:""});
       showToast("✓ Empresa y usuario creados","success");
       if(recargar) await recargar(); else if(window._recargar) await window._recargar();
-    } catch(e) { showToast("Error: "+e.message,"error"); }
+    } catch(e) { showToast(mensajeError(e, "la empresa transportista"),"error"); }
     setGuardando(false);
   };
 
@@ -1995,12 +2026,12 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
           empresa: emp.nombre,
         },
       });
-      if (error) { showToast("Error creando acceso: "+error.message,"error"); setGuardando(false); return; }
+      if (error) { showToast(mensajeError(error, "el acceso del conductor"),"error"); setGuardando(false); return; }
       if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
       setModCond(null); setFormC({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});
       showToast(`Conductor inscrito en ${emp.nombre}`,"success");
       if(recargar) await recargar(); else if(window._recargar) await window._recargar();
-    } catch(e) { showToast("Error: "+e.message,"error"); }
+    } catch(e) { showToast(mensajeError(e, "el conductor"),"error"); }
     setGuardando(false);
   };
 
@@ -2724,7 +2755,7 @@ function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recar
         valor_total: valor,
         observaciones: form.observaciones.trim(),
       }).select().single();
-      if (error) { showToast("Error: " + error.message, "error"); setGuard(false); return; }
+      if (error) { showToast(mensajeError(error, "la factura"), "error"); setGuard(false); return; }
       showToast("✓ Factura creada · Ahora agrega las guías relacionadas", "success");
       setModNueva(false); setForm(vacio);
       if (recargar) await recargar();
@@ -2736,9 +2767,9 @@ function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recar
   const eliminar = async (id, num) => {
     if (!window.confirm(`¿Eliminar factura ${num}? Se eliminarán también las guías relacionadas.`)) return;
     const { error: guiasError } = await supabase.from('factura_guias').delete().eq('factura_id', id);
-    if (guiasError) { showToast("Error eliminando guÃ­as: " + guiasError.message, "error"); return; }
+    if (guiasError) { showToast(mensajeError(guiasError, "las guias asociadas"), "error"); return; }
     const { error } = await supabase.from('facturas_proveedor').delete().eq('id', id);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
+    if (error) { showToast(mensajeError(error, "la factura"), "error"); return; }
     showToast("Factura eliminada", "info");
     if (recargar) await recargar();
   };
@@ -3007,7 +3038,7 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
         factura_id: factura.id,
         pedido_id:  pedidoSel,
       });
-      if (error) { showToast("Error: " + error.message, "error"); setGuard(false); return; }
+      if (error) { showToast(mensajeError(error, "la guia relacionada"), "error"); setGuard(false); return; }
       showToast("✓ Guía relacionada", "success");
       setPedidoSel("");
       if (recargar) await recargar();
@@ -3017,7 +3048,7 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
 
   const quitarGuia = async (guiaId) => {
     const { error } = await supabase.from('factura_guias').delete().eq('id', guiaId);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
+    if (error) { showToast(mensajeError(error, "la guia relacionada"), "error"); return; }
     showToast("Guía desvinculada", "info");
     if (recargar) await recargar();
   };
@@ -3157,7 +3188,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
     setGuard(true);
     const { error } = await supabase.from('promesas_servicio')
       .upsert({ ciudad_codigo: nueva.ciudad_codigo, dias_plazo: dias }, { onConflict: 'ciudad_codigo' });
-    if (error) { showToast("Error: " + error.message, "error"); setGuard(false); return; }
+    if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); setGuard(false); return; }
     setNueva({ ciudad_codigo: "", dias_plazo: "" });
     showToast("✓ Promesa registrada", "success");
     if (recargar) await recargar();
@@ -3169,7 +3200,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
     if (isNaN(dias) || dias < 1) { showToast("Días inválidos", "error"); return; }
     const { error } = await supabase.from('promesas_servicio')
       .update({ dias_plazo: dias }).eq('ciudad_codigo', codigo);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
+    if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return; }
     setEditando(null);
     showToast("✓ Promesa actualizada", "success");
     if (recargar) await recargar();
@@ -3178,7 +3209,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
   const eliminar = async (codigo, nombre) => {
     if (!window.confirm(`¿Eliminar promesa de servicio para ${nombre}?`)) return;
     const { error } = await supabase.from('promesas_servicio').delete().eq('ciudad_codigo', codigo);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
+    if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return; }
     showToast("Promesa eliminada", "info");
     if (recargar) await recargar();
   };
@@ -3300,7 +3331,7 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
     if (!nueva.trim()) { showToast("Escribe el nombre de la empresa","error"); return; }
     if ((paqueterias||[]).includes(nueva.trim())) { showToast("Ya existe esa empresa","error"); return; }
     const { error } = await supabase.from('paqueterias').insert({ nombre: nueva.trim() });
-    if (error) { showToast("Error: "+error.message,"error"); return; }
+    if (error) { showToast(mensajeError(error, "la empresa de paqueteria"),"error"); return; }
     setNueva("");
     showToast("✓ Empresa de paquetería agregada","success");
     if (recargar) await recargar();
@@ -3403,7 +3434,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
         soporte_nombre: form.soporte_nombre,
       };
       const { error } = await supabase.from('devoluciones').update(cambios).eq('id', modEditar.id);
-      if (error) { showToast("Error: "+error.message,"error"); return; }
+      if (error) { showToast(mensajeError(error, "la devolucion"),"error"); return; }
       cerrarFormulario();
       showToast("✓ Devolución actualizada","success");
       if (recargar) await recargar();
@@ -3432,7 +3463,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
       solicitado_por: user.nombre||user.user,
     };
     const { error: devErr } = await supabase.from('devoluciones').insert(nueva);
-    if (devErr) { showToast("Error: "+devErr.message,"error"); return; }
+    if (devErr) { showToast(mensajeError(devErr, "la devolucion"),"error"); return; }
     setModNueva(false); setForm(vacio);
     showToast(`✓ Devolución creada · Guía: ${guia}`,"success");
     if (recargar) await recargar();
@@ -3711,7 +3742,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
         doc_nombre: form.doc_nombre,
       };
       const { error } = await supabase.from('recogidas').update(cambios).eq('id', modEditar.id);
-      if (error) { showToast("Error: "+error.message,"error"); return; }
+      if (error) { showToast(mensajeError(error, "la recogida"),"error"); return; }
       cerrarFormulario();
       showToast("✓ Recogida actualizada","success");
       if (recargar) await recargar();
@@ -3742,7 +3773,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
       solicitado_por: user.nombre||user.user,
     };
     const { error: recErr } = await supabase.from('recogidas').insert(nueva);
-    if (recErr) { showToast("Error: "+recErr.message,"error"); return; }
+    if (recErr) { showToast(mensajeError(recErr, "la recogida"),"error"); return; }
     setModNueva(false); setForm(vacio);
     showToast(`✓ Recogida creada · Guía: ${guia}`,"success");
     if (recargar) await recargar();
@@ -3999,7 +4030,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
         descripcion: form.descripcion.trim(),
       };
       const { error } = await supabase.from('pqrs').update(cambios).eq('id', modEditar.id);
-      if (error) { showToast("Error: "+error.message,"error"); return; }
+      if (error) { showToast(mensajeError(error, "la PQRS"),"error"); return; }
       cerrarFormulario();
       showToast("✓ PQRS actualizada","success");
       if (recargar) await recargar();
@@ -4017,7 +4048,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
       fecha_gestion: null, respuesta: "", gestionado_por: "",
     };
     const { error } = await supabase.from('pqrs').insert(nueva);
-    if (error) { showToast("Error: "+error.message,"error"); return; }
+    if (error) { showToast(mensajeError(error, "la PQRS"),"error"); return; }
     setModNueva(false); setForm(vacio);
     showToast(`✓ PQRS creada · Caso: ${nueva.id}`,"success");
     if (recargar) await recargar();
@@ -4032,7 +4063,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
       fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion" };
     const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
-    if (error) { showToast("Error: "+error.message,"error"); return; }
+    if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return; }
     setModGestion(null); setGestion("");
     showToast("✓ Gestión registrada","success");
     if (recargar) await recargar();
@@ -4040,7 +4071,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
 
   const cerrar = async (id, estado) => {
     const { error } = await supabase.from('pqrs').update({estado}).eq('id', id);
-    if (error) { showToast("Error: "+error.message,"error"); return; }
+    if (error) { showToast(mensajeError(error, "el cierre de PQRS"),"error"); return; }
     showToast(`Caso ${estado==="cerrada"?"cerrado":"rechazado"}`,"success");
     if (recargar) await recargar();
   };
@@ -4880,7 +4911,7 @@ function Usuarios({ usuarios, showToast, recargar }) {
         nit_proveedor: form.nit_proveedor.trim(),
       },
     });
-    if (error) { showToast("Error creando acceso: "+error.message,"error"); setGuardando(false); return; }
+    if (error) { showToast(mensajeError(error, "el acceso"),"error"); setGuardando(false); return; }
     if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
     setModal(false); setForm(vacio);
     showToast("✓ Usuario creado","success");
@@ -4921,7 +4952,7 @@ function Usuarios({ usuarios, showToast, recargar }) {
         const body = await error.context?.json?.();
         if (body?.error) detalle = body.error;
       } catch {}
-      showToast("Error actualizando usuario: "+detalle,"error");
+      showToast(mensajeError(detalle, "el usuario"),"error");
       setGuardando(false);
       return;
     }
@@ -4946,7 +4977,7 @@ function Usuarios({ usuarios, showToast, recargar }) {
         const body = await error.context?.json?.();
         if (body?.error) detalle = body.error;
       } catch {}
-      showToast("Error eliminando usuario: "+detalle,"error");
+      showToast(mensajeError(detalle, "el usuario"),"error");
       return;
     }
     if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); return; }

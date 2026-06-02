@@ -414,3 +414,6 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego `docs/audit_step1b_reduce_noise.sql` para reducir ruido de auditoria: omitir updates sin cambios, registrar campos modificados y excluir base64/passwords.
 - Se agrego `docs/audit_step2_views.sql` con vistas SQL para consultar auditoria por modulo y por usuario, sin exponer aun una pantalla en la app.
 - Se ajusto cierre de devoluciones y recogidas: si se selecciona conductor y se marca completado en el mismo modal, se guarda asignacion y cierre en una sola actualizacion auditable.
+- Se valido auditoria en staging: eventos reales, sin updates vacios, sin base64/passwords en datos auditados y con vistas SQL funcionando por modulo.
+- Se agrego helper de mensajes para convertir errores comunes de Supabase/RLS/Edge Functions en textos mas claros para el usuario.
+- Se creo `docs/error_message_test_plan.md` para validar mensajes de error por login, permisos, usuarios, pedidos, devoluciones, recogidas, PQRS y facturas.

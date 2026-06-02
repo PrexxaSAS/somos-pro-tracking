@@ -65,6 +65,8 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 
 ## 4. Pruebas de errores
 
+- [x] Crear plan de pruebas de errores por modulo.
+- [x] Agregar helper de mensajes para traducir errores comunes de Supabase/RLS/Edge Function.
 - [ ] Validar login invalido.
 - [ ] Validar sesion expirada o sin perfil.
 - [ ] Validar error por permisos RLS.
@@ -82,17 +84,25 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - [x] Crear SQL fase 1 para tabla centralizada `audit_events`.
 - [x] Crear ajuste anti-ruido para auditoria: ignorar updates sin cambios y excluir base64/passwords.
 - [x] Crear vistas SQL para consultar auditoria por modulo y por usuario.
-- [ ] Registrar quien gestiono PQRS.
-- [ ] Registrar fecha de gestion de PQRS.
-- [ ] Registrar quien gestiono devoluciones.
-- [ ] Registrar fecha de gestion de devoluciones.
-- [ ] Registrar quien gestiono recogidas.
-- [ ] Registrar fecha de gestion de recogidas.
-- [ ] Registrar quien marco entregas.
-- [ ] Registrar fecha de entrega.
-- [ ] Registrar quien creo/edito/eliminar facturas proveedor.
-- [ ] Definir historial de estados de pedidos.
-- [ ] Crear tabla de eventos si se decide auditar historico completo.
+- [x] Registrar quien gestiono PQRS.
+- [x] Registrar fecha de gestion de PQRS.
+- [x] Registrar quien gestiono devoluciones.
+- [x] Registrar fecha de gestion de devoluciones.
+- [x] Registrar quien gestiono recogidas.
+- [x] Registrar fecha de gestion de recogidas.
+- [x] Registrar quien marco entregas.
+- [x] Registrar fecha de entrega.
+- [x] Registrar quien creo/edito/eliminar facturas proveedor.
+- [x] Definir historial de estados de pedidos.
+- [x] Crear tabla de eventos si se decide auditar historico completo.
+
+### Estado auditoria
+
+- Auditoria tecnica validada en staging.
+- `audit_events` registra eventos reales y omite updates sin cambios.
+- Los campos pesados/sensibles `soportes_data`, `soporte_data`, `doc_data` y `pass` no quedan guardados dentro de `old_data`/`new_data`.
+- Las vistas SQL de auditoria por modulo y por usuario funcionan.
+- Pendiente fase posterior: construir una pantalla de auditoria dentro de la app si negocio lo requiere.
 
 ## 6. Revision de tablas
 
