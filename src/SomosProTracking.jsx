@@ -1846,35 +1846,21 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
     }
     setGuardando(true);
     try {
-      // 1. Crear usuario
-      const { data: uData, error: uErr } = await supabase.from('usuarios').insert({
-        nombre: form.nombre.trim(),
-        user: form.user_login.trim(),
-        pass: form.pass_login.trim(),
-        rol: 'conductor',
-        cedula: form.cedula.trim(),
-        placa: form.placa.trim(),
-        celular: form.celular.trim(),
-        nit_proveedor: form.nit_proveedor.trim(),
-        empresa: form.empresa.trim(),
-      }).select().single();
-      if (uErr) { showToast("Error creando usuario: "+uErr.message,"error"); setGuardando(false); return; }
-
-      // 2. Crear conductor vinculado al usuario
-      const { data: cData, error: cErr } = await supabase.from('conductores').insert({
-        nombre: form.nombre.trim(),
-        cedula: form.cedula.trim(),
-        placa: form.placa.trim(),
-        celular: form.celular.trim(),
-        nit_proveedor: form.nit_proveedor.trim(),
-        empresa: form.empresa.trim(),
-        activo: true,
-        usuario_id: uData.id,
-      }).select().single();
-      if (cErr) { showToast("Error creando conductor: "+cErr.message,"error"); setGuardando(false); return; }
-
-      // 3. Actualizar el usuario con el conductor_id para vincularlos
-      await supabase.from('usuarios').update({ conductor_id: cData.id }).eq('id', uData.id);
+      const { data, error } = await supabase.functions.invoke('create-system-user', {
+        body: {
+          type: 'conductor',
+          nombre: form.nombre.trim(),
+          cedula: form.cedula.trim(),
+          placa: form.placa.trim(),
+          celular: form.celular.trim(),
+          user_login: form.user_login.trim(),
+          pass_login: form.pass_login.trim(),
+          nit_proveedor: form.nit_proveedor.trim(),
+          empresa: form.empresa.trim(),
+        },
+      });
+      if (error) { showToast(mensajeError(error, "el acceso del conductor"),"error"); setGuardando(false); return; }
+      if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
 
       setModal(false); setForm(vacio);
       showToast("✓ Conductor y usuario creados","success");
@@ -1972,18 +1958,24 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
     if (!formE.user_login.trim()||!formE.pass_login.trim()) { showToast("Usuario y contraseña son obligatorios","error"); return; }
     setGuardando(true);
     try {
-      // Crear usuario transportista
-      const { data: uData, error: uErr } = await supabase.from('usuarios').insert({
-        nombre: formE.nombre.trim(), user: formE.user_login.trim(), pass: formE.pass_login.trim(),
-        rol:'transportista', nit:formE.nit.trim(), empresa:formE.nombre.trim(),
-      }).select().single();
-      if (uErr) { showToast("Error usuario: "+uErr.message,"error"); setGuardando(false); return; }
-      // Crear transportista vinculado
-      const { error: tErr } = await supabase.from('transportistas').insert({
-        nombre:formE.nombre.trim(), nit:formE.nit.trim(),
-        contacto:formE.contacto.trim(), tel:formE.tel.trim(), usuario_id:uData.id,
+      const { data, error } = await supabase.functions.invoke('create-system-user', {
+        body: {
+          type: 'system_user',
+          nombre: formE.nombre.trim(),
+          rol: 'transportista',
+          user_login: formE.user_login.trim(),
+          pass_login: formE.pass_login.trim(),
+          nit: formE.nit.trim(),
+          empresa: formE.nombre.trim(),
+        },
       });
-      if (tErr) { showToast("Error empresa: "+tErr.message,"error"); setGuardando(false); return; }
+      if (error) { showToast(mensajeError(error, "la empresa transportista"),"error"); setGuardando(false); return; }
+      if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
+      const { error: tErr } = await supabase.from('transportistas').update({
+        contacto: formE.contacto.trim(),
+        tel: formE.tel.trim(),
+      }).eq('nit', formE.nit.trim());
+      if (tErr) { showToast("Empresa creada, pero fallo contacto: "+tErr.message,"warning"); setGuardando(false); return; }
       setModEmpresa(false); setFormE({nombre:"",nit:"",contacto:"",tel:"",user_login:"",pass_login:""});
       showToast("✓ Empresa y usuario creados","success");
       if(recargar) await recargar(); else if(window._recargar) await window._recargar();
@@ -1994,9 +1986,27 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   const guardarEdicionEmpresa = async () => {
     if (!formE.nombre.trim()) { showToast("Nombre es obligatorio","error"); return; }
     setGuardando(true);
-    await supabase.from('transportistas').update({nombre:formE.nombre.trim(),contacto:formE.contacto.trim(),tel:formE.tel.trim()}).eq('id',modEditEmp.id);
-    if (formE.pass_login.trim() && modEditEmp.usuario_id) {
-      await supabase.from('usuarios').update({nombre:formE.nombre.trim(),pass:formE.pass_login.trim()}).eq('id',modEditEmp.usuario_id);
+    const { error: tErr } = await supabase.from('transportistas').update({nombre:formE.nombre.trim(),contacto:formE.contacto.trim(),tel:formE.tel.trim()}).eq('id',modEditEmp.id);
+    if (tErr) { showToast(mensajeError(tErr, "la empresa transportista"),"error"); setGuardando(false); return; }
+    if (modEditEmp.usuario_id) {
+      const { data: usuarioEmp, error: uLoadErr } = await supabase.from('usuarios').select('*').eq('id',modEditEmp.usuario_id).single();
+      if (uLoadErr) { showToast(mensajeError(uLoadErr, "el usuario transportista"),"error"); setGuardando(false); return; }
+      if (usuarioEmp.auth_user_id || formE.pass_login.trim()) {
+        const { data, error } = await supabase.functions.invoke('create-system-user', {
+          body: {
+            type: 'update_system_user',
+            user_id: modEditEmp.usuario_id,
+            nombre: formE.nombre.trim(),
+            rol: 'transportista',
+            user_login: usuarioEmp.user,
+            pass_login: formE.pass_login.trim(),
+            nit: modEditEmp.nit,
+            empresa: formE.nombre.trim(),
+          },
+        });
+        if (error) { showToast(mensajeError(error, "el acceso transportista"),"error"); setGuardando(false); return; }
+        if (data?.error) { showToast("Error actualizando acceso: "+data.error,"error"); setGuardando(false); return; }
+      }
     }
     setModEditEmp(null); showToast("✓ Empresa actualizada","success");
     if(recargar) await recargar(); else if(window._recargar) await window._recargar(); setGuardando(false);
@@ -4620,7 +4630,7 @@ export default function SomosProTracking() {
       // Usuarios iniciales — ignorar si ya existen
       for (const u of USUARIOS_INICIALES) {
         const { id, ...rest } = u;
-        await supabase.from('usuarios').upsert({ ...rest }, { onConflict: 'user', ignoreDuplicates: true });
+        console.warn('Sembrado de usuarios deshabilitado: usar scripts SQL y Supabase Auth.');
       }
       // Transportistas iniciales
       for (const t of TRANSPORTISTAS_INICIALES) {
@@ -4761,9 +4771,9 @@ export default function SomosProTracking() {
     for (const u of nuevos) {
       if (!u.id || typeof u.id === 'number') {
         const { id, ...rest } = u;
-        await supabase.from('usuarios').upsert(rest, { onConflict: 'user' });
+        throw new Error('Actualizacion directa de usuarios deshabilitada. Usar create-system-user.');
       } else {
-        await supabase.from('usuarios').upsert(u, { onConflict: 'user' });
+        throw new Error('Actualizacion directa de usuarios deshabilitada. Usar create-system-user.');
       }
     }
     await cargarTodo();

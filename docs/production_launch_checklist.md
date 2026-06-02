@@ -106,13 +106,27 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 
 ## 6. Revision de tablas
 
-- [ ] Decidir si se mantiene `transportistas`, `transportadoras` o ambas.
-- [ ] Documentar diferencia funcional mientras existan ambas.
-- [ ] Revisar si `clientes` requiere tabla propia en fase posterior.
-- [ ] Revisar si `operadores` requiere tabla propia en fase posterior.
-- [ ] Revisar columna `pass` en `usuarios`.
-- [ ] Definir cuando eliminar o dejar de usar `pass` despues de estabilizar Supabase Auth.
-- [ ] Revisar columnas obsoletas o duplicadas.
+- [x] Decidir si se mantiene `transportistas`, `transportadoras` o ambas.
+- [x] Documentar diferencia funcional mientras existan ambas.
+- [x] Revisar si `clientes` requiere tabla propia en fase posterior.
+- [x] Revisar si `operadores` requiere tabla propia en fase posterior.
+- [x] Revisar columna `pass` en `usuarios`.
+- [x] Definir cuando eliminar o dejar de usar `pass` despues de estabilizar Supabase Auth.
+- [x] Revisar columnas obsoletas o duplicadas.
+- [x] Corregir flujos legacy que aun insertan usuarios con `pass` directamente desde la app.
+- [ ] Confirmar en produccion si `transportadoras` tiene datos reales antes de retirarla.
+
+### Estado revision de tablas
+
+- Documento creado: `docs/table_review.md`.
+- Validacion segura creada: `docs/table_cleanup_validation.sql`.
+- Limpieza segura fase 1 creada: `docs/table_cleanup_step1_auth_pass.sql`.
+- Decision actual: `transportistas` es la tabla operativa; `transportadoras` queda congelada y no se usa para desarrollo nuevo.
+- No se crean tablas `clientes` ni `operadores` por ahora; ambos siguen como roles en `usuarios`.
+- `usuarios.pass` queda obsoleta y solo temporal por compatibilidad. La autenticacion real debe vivir en Supabase Auth.
+- Se mantienen snapshots como `placa` y `nit_proveedor` en pedidos/devoluciones/recogidas para conservar historico.
+- Flujo seguro aplicado: creacion de conductores y empresas transportistas con acceso ahora pasa por `create-system-user`.
+- Pendiente tecnico menor: revisar si se mantiene la sincronizacion directa de perfil conductor en `usuarios` para campos no sensibles.
 
 ## 7. Soportes fotograficos
 

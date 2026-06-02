@@ -91,6 +91,9 @@ Archivos principales:
 - `docs/recogidas_paqueteria_migration.sql`: agrega campos de paqueteria a devoluciones y recogidas.
 - `docs/factura_guias_cascade_migration.sql`: ajusta FK para borrar guias asociadas al eliminar una factura proveedor.
 - `docs/edge_functions.md`: instrucciones de despliegue y validacion de Edge Functions.
+- `docs/table_review.md`: revision de tablas, duplicidades, decisiones actuales y recomendaciones por fase.
+- `docs/table_cleanup_validation.sql`: consultas seguras para validar `usuarios.pass`, perfiles Auth y uso de `transportadoras` antes de limpiar estructura.
+- `docs/table_cleanup_step1_auth_pass.sql`: limpieza segura de `usuarios.pass` para perfiles que ya tienen Supabase Auth vinculado.
 - `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
 Tablas principales en Supabase:
@@ -107,6 +110,7 @@ Tablas principales en Supabase:
 - `promesas_servicio`
 - `facturas_proveedor`
 - `factura_guias`
+- `audit_events`
 
 ## Linea De Diseno
 
@@ -415,5 +419,9 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego `docs/audit_step2_views.sql` con vistas SQL para consultar auditoria por modulo y por usuario, sin exponer aun una pantalla en la app.
 - Se ajusto cierre de devoluciones y recogidas: si se selecciona conductor y se marca completado en el mismo modal, se guarda asignacion y cierre en una sola actualizacion auditable.
 - Se valido auditoria en staging: eventos reales, sin updates vacios, sin base64/passwords en datos auditados y con vistas SQL funcionando por modulo.
+- Se creo `docs/table_review.md` para documentar decisiones de tablas: `transportistas` queda como tabla operativa, `transportadoras` queda congelada, `clientes` y `operadores` siguen como roles en `usuarios`, y `usuarios.pass` queda obsoleta temporal.
+- Se corrigieron flujos legacy de creacion de accesos: registrar conductor y crear empresa transportista ya no insertan contrasenas en `usuarios.pass`; usan `create-system-user`.
+- Se agrego `docs/table_cleanup_validation.sql` para validar usuarios con pass legacy, perfiles sin Auth y registros en `transportadoras` antes de cualquier limpieza.
+- Se agrego `docs/table_cleanup_step1_auth_pass.sql` para reemplazar passwords legacy por `__auth_managed__` solo en perfiles que ya tienen `auth_user_id`.
 - Se agrego helper de mensajes para convertir errores comunes de Supabase/RLS/Edge Functions en textos mas claros para el usuario.
 - Se creo `docs/error_message_test_plan.md` para validar mensajes de error por login, permisos, usuarios, pedidos, devoluciones, recogidas, PQRS y facturas.
