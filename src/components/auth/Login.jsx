@@ -37,11 +37,11 @@ export function Login({ onLogin }) {
   const [cargando, setCargando] = useState(false);
 
   const demos = [
-    { l: "ðŸ‘‘ Admin",        u: "admin",   p: "admin123" },
-    { l: "âš™ï¸ Operador",     u: "operador",p: "op123" },
-    { l: "ðŸ¢ Transportista",u: "transprueba", p: "trans123" },
-    { l: "ðŸš— Conductor",    u: "driver1", p: "cond123" },
-    { l: "ðŸ“¦ Cliente",      u: "cliente", p: "cli123" },
+    { l: "Admin",        u: "admin",   p: "admin123" },
+    { l: "Operador",     u: "operador",p: "op123" },
+    { l: "Transportista",u: "transprueba", p: "trans123" },
+    { l: "Conductor",    u: "driver1", p: "cond123" },
+    { l: "Cliente",      u: "cliente", p: "cli123" },
   ];
 
   return (
@@ -51,15 +51,15 @@ export function Login({ onLogin }) {
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display: "inline-block", marginBottom: 16, filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.3))" }}><Logo size={90} /></div>
           <h1 style={{ color: "#fff", fontSize: 28, fontWeight: 900, margin: "0 0 6px" }}>Somos PRO Tracking</h1>
-          <p style={{ color: P[300], fontSize: 14, margin: 0 }}>Sistema de GestiÃ³n de Transporte</p>
+          <p style={{ color: P[300], fontSize: 14, margin: 0 }}>Sistema de Gestion de Transporte</p>
         </div>
         <Card style={{ boxShadow: `0 28px 64px ${P[950]}80` }}>
-          <h2 style={{ margin: "0 0 22px", fontSize: 18, color: P[800], fontWeight: 800 }}>Iniciar SesiÃ³n</h2>
+          <h2 style={{ margin: "0 0 22px", fontSize: 18, color: P[800], fontWeight: 800 }}>Iniciar Sesion</h2>
           <form onSubmit={login} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Field label="Usuario" value={u} onChange={setU} placeholder="admin" />
-            <Field label="ContraseÃ±a" value={p} onChange={setP} type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
-            {err && <p style={{ color: "#dc2626", fontSize: 13, background: "#fef2f2", padding: "9px 12px", borderRadius: 8, margin: 0 }}>âš ï¸ {err}</p>}
-            <Btn type="submit" size="lg" style={{ justifyContent: "center", marginTop: 4 }}>Entrar al Sistema â†’</Btn>
+            <Field label="Contrasena" value={p} onChange={setP} type="password" placeholder="********" />
+            {err && <p style={{ color: "#dc2626", fontSize: 13, background: "#fef2f2", padding: "9px 12px", borderRadius: 8, margin: 0 }}>{err}</p>}
+            <Btn type="submit" size="lg" style={{ justifyContent: "center", marginTop: 4 }}>Entrar al Sistema</Btn>
           </form>
           <div style={{ marginTop: 22, borderTop: `1px solid ${P[100]}`, paddingTop: 16 }}>
             <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 700 }}>ACCESOS DE DEMO:</p>
