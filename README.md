@@ -407,3 +407,10 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se habilito al operador para asignar conductor a pedidos no cerrados/no en transito, sin exponer campos sensibles de admin.
 - Se agrego `docs/rls_step8_operador_assign_requests_pqrs.sql`: operador puede crear devoluciones y recogidas; las respuestas PQRS ya registradas no pueden editarse por operador ni admin.
 - Se ajusto restauracion de sesion: al recargar la pagina se recupera la sesion activa de Supabase Auth y se recarga el perfil sin enviar al login.
+- Se creo `docs/production_launch_checklist.md` como checklist vivo para ordenar salida a produccion, backups, auditoria, migracion y pendientes tecnicos.
+- Se agrego `docs/production_rls_validation.sql` para validar RLS, politicas, funciones, triggers y cascada de facturas antes de produccion.
+- Se creo `docs/production_release_plan.md` para preparar salida a produccion sin intervenir aun datos reales: scripts permitidos/prohibidos, fases, variables, rollback y decisiones pendientes.
+- Se creo `docs/audit_plan.md` y `docs/audit_step1_event_log.sql` para iniciar auditoria tecnica centralizada con tabla `audit_events` y triggers sobre tablas criticas.
+- Se agrego `docs/audit_step1b_reduce_noise.sql` para reducir ruido de auditoria: omitir updates sin cambios, registrar campos modificados y excluir base64/passwords.
+- Se agrego `docs/audit_step2_views.sql` con vistas SQL para consultar auditoria por modulo y por usuario, sin exponer aun una pantalla en la app.
+- Se ajusto cierre de devoluciones y recogidas: si se selecciona conductor y se marca completado en el mismo modal, se guarda asignacion y cierre en una sola actualizacion auditable.

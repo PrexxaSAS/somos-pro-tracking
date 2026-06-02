@@ -1,0 +1,127 @@
+# Checklist de salida a produccion
+
+Este documento ordena los pendientes para lanzar Somos PRO Tracking con el menor riesgo posible. Se debe trabajar primero en staging/preview y solo pasar a produccion cuando cada bloque critico este validado.
+
+Plan operativo relacionado: `docs/production_release_plan.md`.
+
+## 1. Checklist Vercel/Supabase
+
+- [x] Confirmar proyecto Supabase de produccion.
+- [x] Confirmar proyecto Supabase de staging/preview separado.
+- [ ] Configurar variables de produccion en Vercel:
+  - [ ] `VITE_SUPABASE_URL`.
+  - [ ] `VITE_SUPABASE_ANON_KEY`.
+- [x] Configurar variables de preview en Vercel apuntando a staging.
+- [x] Confirmar que `SERVICE_ROLE_KEY` no exista en frontend ni en Vercel client-side.
+- [ ] Configurar `SERVICE_ROLE_KEY` solo en Supabase Edge Functions.
+- [ ] Desplegar Edge Function `create-system-user` en Supabase produccion.
+- [ ] Validar que la Edge Function tenga:
+  - [ ] `SUPABASE_URL`.
+  - [ ] `SUPABASE_ANON_KEY`.
+  - [ ] `SUPABASE_SERVICE_ROLE_KEY`.
+- [ ] Confirmar RLS activo en tablas publicas sensibles.
+- [ ] Confirmar que preview y produccion no comparten base de datos.
+- [ ] Hacer redeploy final de Vercel Preview antes de produccion.
+
+### Evidencia y estado del bloque 1
+
+- Staging/preview validado con proyecto Supabase de prueba: `dnahgbevwnbdhiqjlqyu`.
+- Produccion identificada con Supabase URL: `https://cfvvnvmezmrxehpaqayw.supabase.co`.
+- Project Ref de produccion inferido por URL: `cfvvnvmezmrxehpaqayw`.
+- Preview Vercel ya fue usado contra staging y los roles principales fueron probados.
+- En el repo, la `SERVICE_ROLE_KEY` solo aparece documentada y usada dentro de `supabase/functions/create-system-user/index.ts`; no aparece en `src/`.
+- Confirmado: no existe `SERVICE_ROLE_KEY` ni `SUPABASE_SERVICE_ROLE_KEY` en Vercel Production ni Preview.
+- Pendiente: Vercel Production no tiene aun `VITE_SUPABASE_URL` ni `VITE_SUPABASE_ANON_KEY`.
+- Queda pendiente ejecutar `docs/production_rls_validation.sql` en el proyecto que se usara para produccion.
+- Pendiente: `create-system-user` no existe aun en Supabase produccion.
+- Pendiente: configurar secrets de `create-system-user` en produccion: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+- Nota: estos pendientes no se deben ejecutar todavia; quedan preparados para ventana de salida.
+
+## 2. Datos y migracion a produccion
+
+- [ ] Decidir si produccion inicia limpia o con datos reales migrados.
+- [ ] Si inicia limpia:
+  - [ ] No ejecutar seeds ficticios.
+  - [ ] Crear solo usuarios iniciales reales.
+  - [ ] Crear ciudades, paqueterias y promesas necesarias.
+- [ ] Si migra datos reales:
+  - [ ] Exportar datos origen.
+  - [ ] Revisar compatibilidad de columnas.
+  - [ ] Preparar script de migracion.
+  - [ ] Probar migracion primero en staging.
+- [ ] Separar scripts productivos de scripts ficticios/staging.
+- [ ] Confirmar que `docs/staging_seed.sql` no se ejecute en produccion.
+- [x] Crear plan de scripts permitidos y scripts prohibidos para produccion.
+
+## 3. Backups
+
+- [ ] Tomar backup antes de cualquier cambio productivo.
+- [ ] Exportar esquema.
+- [ ] Exportar datos.
+- [ ] Guardar backup en ubicacion acordada.
+- [ ] Documentar fecha, responsable y proyecto respaldado.
+- [ ] Documentar pasos de restauracion.
+- [ ] Validar al menos una restauracion en entorno de prueba o proyecto temporal.
+
+## 4. Pruebas de errores
+
+- [ ] Validar login invalido.
+- [ ] Validar sesion expirada o sin perfil.
+- [ ] Validar error por permisos RLS.
+- [ ] Validar error al crear usuario duplicado.
+- [ ] Validar error al crear conductor sin datos obligatorios.
+- [ ] Validar error al subir soporte demasiado pesado.
+- [ ] Validar error al intentar editar pedido bloqueado.
+- [ ] Validar error al intentar editar PQRS ya respondida.
+- [ ] Confirmar que los mensajes sean claros para usuario final.
+
+## 5. Auditoria
+
+- [x] Definir campos minimos de auditoria por modulo.
+- [x] Crear plan de auditoria por fases.
+- [x] Crear SQL fase 1 para tabla centralizada `audit_events`.
+- [x] Crear ajuste anti-ruido para auditoria: ignorar updates sin cambios y excluir base64/passwords.
+- [x] Crear vistas SQL para consultar auditoria por modulo y por usuario.
+- [ ] Registrar quien gestiono PQRS.
+- [ ] Registrar fecha de gestion de PQRS.
+- [ ] Registrar quien gestiono devoluciones.
+- [ ] Registrar fecha de gestion de devoluciones.
+- [ ] Registrar quien gestiono recogidas.
+- [ ] Registrar fecha de gestion de recogidas.
+- [ ] Registrar quien marco entregas.
+- [ ] Registrar fecha de entrega.
+- [ ] Registrar quien creo/edito/eliminar facturas proveedor.
+- [ ] Definir historial de estados de pedidos.
+- [ ] Crear tabla de eventos si se decide auditar historico completo.
+
+## 6. Revision de tablas
+
+- [ ] Decidir si se mantiene `transportistas`, `transportadoras` o ambas.
+- [ ] Documentar diferencia funcional mientras existan ambas.
+- [ ] Revisar si `clientes` requiere tabla propia en fase posterior.
+- [ ] Revisar si `operadores` requiere tabla propia en fase posterior.
+- [ ] Revisar columna `pass` en `usuarios`.
+- [ ] Definir cuando eliminar o dejar de usar `pass` despues de estabilizar Supabase Auth.
+- [ ] Revisar columnas obsoletas o duplicadas.
+
+## 7. Soportes fotograficos
+
+- [ ] Mantener base64 temporalmente mientras se estabiliza produccion.
+- [ ] Definir bucket de Supabase Storage para soportes.
+- [ ] Definir estructura de rutas por modulo:
+  - [ ] pedidos.
+  - [ ] devoluciones.
+  - [ ] recogidas.
+  - [ ] PQRS, si aplica.
+- [ ] Definir politicas de Storage por rol.
+- [ ] Migrar nuevos soportes a Storage.
+- [ ] Decidir si se migran soportes historicos base64.
+- [ ] Probar visualizacion y descarga manual.
+
+## Estado actual
+
+- [x] Paso 1 y 2 funcionales en staging/preview segun validacion del desarrollador.
+- [ ] Checklist productivo formal pendiente.
+- [ ] Backup productivo pendiente.
+- [ ] Auditoria pendiente.
+- [ ] Storage pendiente.

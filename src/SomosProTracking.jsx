@@ -3448,9 +3448,15 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     if (recargar) await recargar();
   };
 
-  const marcarEntregado = async (id, novedad) => {
+  const marcarEntregado = async (id, novedad, condId) => {
     const hoy = new Date().toISOString().split("T")[0];
-    const cambios = { estado:novedad?"novedad":"entregado", fecha_real:hoy, novedad };
+    const cond = conductores.find(c=>String(c.id)===String(condId));
+    const cambios = {
+      estado:novedad?"novedad":"entregado",
+      fecha_real:hoy,
+      novedad,
+      ...(cond ? { conductor_id:cond.id, placa:cond.placa, nit_proveedor:cond.nit_proveedor } : {}),
+    };
     await supabase.from('devoluciones').update(cambios).eq('id',id);
     if (recargar) await recargar();
   };
@@ -3578,7 +3584,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
     onClose();
   };
   const marcar = () => {
-    onEntregado(dev.id, novedad);
+    onEntregado(dev.id, novedad, condId);
     showToast(novedad?"✓ Marcada con novedad":"✓ Recogida completada","success");
     onClose();
   };
@@ -3752,9 +3758,15 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     if (recargar) await recargar();
   };
 
-  const marcarEntregado = async (id, novedad) => {
+  const marcarEntregado = async (id, novedad, condId) => {
     const hoy = new Date().toISOString().split("T")[0];
-    const cambios = { estado:novedad?"novedad":"entregado", fecha_real:hoy, novedad };
+    const cond = conductores.find(c=>String(c.id)===String(condId));
+    const cambios = {
+      estado:novedad?"novedad":"entregado",
+      fecha_real:hoy,
+      novedad,
+      ...(cond ? { conductor_id:cond.id, placa:cond.placa, nit_proveedor:cond.nit_proveedor } : {}),
+    };
     await supabase.from('recogidas').update(cambios).eq('id',id);
     if (recargar) await recargar();
   };
@@ -3873,7 +3885,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
     onClose();
   };
   const marcar = () => {
-    onEntregado(rec.id, novedad);
+    onEntregado(rec.id, novedad, condId);
     showToast(novedad?"✓ Marcada con novedad":"✓ Recogida completada","success");
     onClose();
   };
