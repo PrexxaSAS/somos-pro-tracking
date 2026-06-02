@@ -42,7 +42,6 @@ as $$
 $$;
 
 drop policy if exists "transportistas_select_own_transportista" on public.transportistas;
-drop policy if exists "transportadoras_select_own_transportista" on public.transportadoras;
 drop policy if exists "conductores_select_own_transportista" on public.conductores;
 drop policy if exists "conductores_transportista_insert" on public.conductores;
 drop policy if exists "usuarios_select_transportista_drivers" on public.usuarios;
@@ -50,15 +49,6 @@ drop policy if exists "usuarios_transportista_insert_driver" on public.usuarios;
 
 create policy "transportistas_select_own_transportista"
 on public.transportistas
-for select
-to authenticated
-using (
-  public.is_transportista()
-  and nit = public.current_user_nit()
-);
-
-create policy "transportadoras_select_own_transportista"
-on public.transportadoras
 for select
 to authenticated
 using (
@@ -113,5 +103,5 @@ select
   with_check
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('transportistas', 'transportadoras', 'conductores', 'usuarios')
+  and tablename in ('transportistas', 'conductores', 'usuarios')
 order by tablename, policyname;

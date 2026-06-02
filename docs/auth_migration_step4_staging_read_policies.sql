@@ -36,7 +36,6 @@ using (
 );
 
 alter table public.transportistas enable row level security;
-alter table public.transportadoras enable row level security;
 alter table public.conductores enable row level security;
 alter table public.ciudades enable row level security;
 alter table public.paqueterias enable row level security;
@@ -49,7 +48,6 @@ alter table public.facturas_proveedor enable row level security;
 alter table public.factura_guias enable row level security;
 
 drop policy if exists "staging_authenticated_read" on public.transportistas;
-drop policy if exists "staging_authenticated_read" on public.transportadoras;
 drop policy if exists "staging_authenticated_read" on public.conductores;
 drop policy if exists "staging_authenticated_read" on public.ciudades;
 drop policy if exists "staging_authenticated_read" on public.paqueterias;
@@ -62,7 +60,6 @@ drop policy if exists "staging_authenticated_read" on public.facturas_proveedor;
 drop policy if exists "staging_authenticated_read" on public.factura_guias;
 
 create policy "staging_authenticated_read" on public.transportistas for select to authenticated using (true);
-create policy "staging_authenticated_read" on public.transportadoras for select to authenticated using (true);
 create policy "staging_authenticated_read" on public.conductores for select to authenticated using (true);
 create policy "staging_authenticated_read" on public.ciudades for select to authenticated using (true);
 create policy "staging_authenticated_read" on public.paqueterias for select to authenticated using (true);

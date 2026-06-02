@@ -55,7 +55,6 @@ $$;
 -- Asegurar RLS activo en tablas sensibles.
 alter table public.usuarios enable row level security;
 alter table public.transportistas enable row level security;
-alter table public.transportadoras enable row level security;
 alter table public.conductores enable row level security;
 alter table public.pedidos enable row level security;
 alter table public.devoluciones enable row level security;
@@ -72,7 +71,6 @@ drop policy if exists "usuarios_transportista_insert_driver" on public.usuarios;
 -- Retirar cualquier politica temporal abierta de escritura o lectura general.
 drop policy if exists "staging_authenticated_read" on public.usuarios;
 drop policy if exists "staging_authenticated_read" on public.transportistas;
-drop policy if exists "staging_authenticated_read" on public.transportadoras;
 drop policy if exists "staging_authenticated_read" on public.conductores;
 drop policy if exists "staging_authenticated_read" on public.pedidos;
 drop policy if exists "staging_authenticated_read" on public.devoluciones;

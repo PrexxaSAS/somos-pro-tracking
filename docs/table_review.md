@@ -8,7 +8,7 @@ Este documento deja la decision tecnica actual sobre las tablas principales. La 
 - Supabase Auth se mantiene como fuente real de autenticacion.
 - `conductores` se mantiene como entidad operativa de conductor.
 - `transportistas` se mantiene como entidad operativa de empresa transportista.
-- `transportadoras` queda congelada: no usarla para nuevas pantallas, reglas ni datos.
+- `transportadoras` fue retirada en staging: no usarla para nuevas pantallas, reglas ni datos.
 - No se crean tablas `clientes` ni `operadores` por ahora.
 - Las columnas de soporte base64 se mantienen temporalmente hasta migrar a Supabase Storage.
 
@@ -19,7 +19,7 @@ Este documento deja la decision tecnica actual sobre las tablas principales. La 
 | `usuarios` | Viva | Perfil, rol, login operativo y vinculo con Auth mediante `auth_user_id`. |
 | `conductores` | Viva | Datos operativos del conductor, asignaciones e historico. |
 | `transportistas` | Viva | Empresas transportistas, conductores por NIT y facturas proveedor. |
-| `transportadoras` | Congelada | Duplicada o legado. No usar en desarrollo nuevo. |
+| `transportadoras` | Retirada en staging | Duplicada o legado. No usar en desarrollo nuevo. |
 | `pedidos` | Viva | Operacion principal de pedidos y estados. |
 | `devoluciones` | Viva | Solicitudes y gestion de devoluciones. |
 | `recogidas` | Viva | Solicitudes y gestion de recogidas. |
@@ -41,11 +41,8 @@ Este documento deja la decision tecnica actual sobre las tablas principales. La 
 - relacion con `facturas_proveedor.transportista_id`;
 - filtros por NIT para empresa transportista.
 
-`transportadoras` aparece en scripts SQL y politicas, pero no aparece como fuente funcional en el frontend. Por ahora se recomienda:
+`transportadoras` aparecia en scripts SQL y politicas, pero no aparece como fuente funcional en el frontend. En staging ya fue retirada. Para produccion se recomienda:
 
-- no eliminarla todavia;
-- no poblarla con datos nuevos;
-- no crear nuevas politicas ni pantallas que dependan de ella;
 - confirmar antes de produccion si tiene datos reales o integraciones externas;
 - si no tiene uso real, preparar migracion posterior para retirarla o fusionarla en `transportistas`.
 
@@ -151,14 +148,14 @@ Se mantienen temporalmente para no romper operacion. Recomendacion futura:
 
 - Corregido: los flujos de creacion de conductores y empresas transportistas con acceso pasan por `create-system-user`.
 - Queda una sincronizacion directa no sensible hacia `usuarios` al editar conductor: nombre, placa y celular.
-- `transportadoras` sigue en scripts RLS/seed aunque no se use funcionalmente.
+- `transportadoras` queda pendiente de verificacion en produccion antes de retirarla alli.
 - `usuarios` y `conductores` tienen datos de conductor duplicados.
 - `solicitado_por` en texto puede fallar si cambia el nombre del usuario.
 - Los soportes base64 aumentan peso de consultas y base de datos.
 
 ## Orden recomendado
 
-1. Congelar `transportadoras` y no usarla en cambios nuevos.
+1. Confirmar si `transportadoras` existe o tiene datos reales en produccion antes de retirarla alli.
 2. Validar si la sincronizacion directa de perfil conductor en `usuarios` se mantiene o se mueve a una funcion segura.
 3. Mantener `clientes` y `operadores` solo en `usuarios`.
 4. Planear `solicitado_por_usuario_id` para solicitudes.

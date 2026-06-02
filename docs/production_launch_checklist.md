@@ -114,6 +114,7 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - [x] Definir cuando eliminar o dejar de usar `pass` despues de estabilizar Supabase Auth.
 - [x] Revisar columnas obsoletas o duplicadas.
 - [x] Corregir flujos legacy que aun insertan usuarios con `pass` directamente desde la app.
+- [x] Retirar `transportadoras` en staging con script controlado.
 - [ ] Confirmar en produccion si `transportadoras` tiene datos reales antes de retirarla.
 
 ### Estado revision de tablas
@@ -121,7 +122,8 @@ Plan operativo relacionado: `docs/production_release_plan.md`.
 - Documento creado: `docs/table_review.md`.
 - Validacion segura creada: `docs/table_cleanup_validation.sql`.
 - Limpieza segura fase 1 creada: `docs/table_cleanup_step1_auth_pass.sql`.
-- Decision actual: `transportistas` es la tabla operativa; `transportadoras` queda congelada y no se usa para desarrollo nuevo.
+- Limpieza segura fase 2 creada: `docs/table_cleanup_step2_drop_transportadoras.sql`.
+- Decision actual: `transportistas` es la tabla operativa; `transportadoras` fue retirada de staging y no se usa para desarrollo nuevo.
 - No se crean tablas `clientes` ni `operadores` por ahora; ambos siguen como roles en `usuarios`.
 - `usuarios.pass` queda obsoleta y solo temporal por compatibilidad. La autenticacion real debe vivir en Supabase Auth.
 - Se mantienen snapshots como `placa` y `nit_proveedor` en pedidos/devoluciones/recogidas para conservar historico.

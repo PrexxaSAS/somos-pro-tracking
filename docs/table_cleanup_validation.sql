@@ -21,12 +21,10 @@ where auth_user_id is null
 order by rol, "user";
 
 select
-  count(*) as total_transportadoras
-from public.transportadoras;
+  to_regclass('public.transportadoras') as transportadoras_table;
 
 select
-  *
-from public.transportadoras
-order by created_at desc
-limit 20;
-
+  case
+    when to_regclass('public.transportadoras') is null then 'retirada'
+    else 'existe'
+  end as estado_transportadoras;

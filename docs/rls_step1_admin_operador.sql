@@ -55,7 +55,6 @@ $$;
 
 alter table public.usuarios enable row level security;
 alter table public.transportistas enable row level security;
-alter table public.transportadoras enable row level security;
 alter table public.conductores enable row level security;
 alter table public.ciudades enable row level security;
 alter table public.paqueterias enable row level security;
@@ -69,7 +68,6 @@ alter table public.factura_guias enable row level security;
 
 -- Quitar politicas temporales abiertas.
 drop policy if exists "staging_authenticated_read" on public.transportistas;
-drop policy if exists "staging_authenticated_read" on public.transportadoras;
 drop policy if exists "staging_authenticated_read" on public.conductores;
 drop policy if exists "staging_authenticated_read" on public.ciudades;
 drop policy if exists "staging_authenticated_read" on public.paqueterias;
@@ -104,7 +102,6 @@ with check (public.is_admin());
 
 -- Lectura admin/operador en tablas operativas.
 drop policy if exists "transportistas_select_admin_operator" on public.transportistas;
-drop policy if exists "transportadoras_select_admin_operator" on public.transportadoras;
 drop policy if exists "conductores_select_admin_operator" on public.conductores;
 drop policy if exists "ciudades_select_admin_operator" on public.ciudades;
 drop policy if exists "paqueterias_select_admin_operator" on public.paqueterias;
@@ -117,7 +114,6 @@ drop policy if exists "facturas_select_admin_operator" on public.facturas_provee
 drop policy if exists "factura_guias_select_admin_operator" on public.factura_guias;
 
 create policy "transportistas_select_admin_operator" on public.transportistas for select to authenticated using (public.is_admin_or_operator());
-create policy "transportadoras_select_admin_operator" on public.transportadoras for select to authenticated using (public.is_admin_or_operator());
 create policy "conductores_select_admin_operator" on public.conductores for select to authenticated using (public.is_admin_or_operator());
 create policy "ciudades_select_admin_operator" on public.ciudades for select to authenticated using (public.is_admin_or_operator());
 create policy "paqueterias_select_admin_operator" on public.paqueterias for select to authenticated using (public.is_admin_or_operator());
@@ -131,7 +127,6 @@ create policy "factura_guias_select_admin_operator" on public.factura_guias for 
 
 -- Admin escritura total en tablas operativas.
 drop policy if exists "transportistas_admin_all" on public.transportistas;
-drop policy if exists "transportadoras_admin_all" on public.transportadoras;
 drop policy if exists "conductores_admin_all" on public.conductores;
 drop policy if exists "ciudades_admin_all" on public.ciudades;
 drop policy if exists "paqueterias_admin_all" on public.paqueterias;
@@ -144,7 +139,6 @@ drop policy if exists "facturas_admin_all" on public.facturas_proveedor;
 drop policy if exists "factura_guias_admin_all" on public.factura_guias;
 
 create policy "transportistas_admin_all" on public.transportistas for all to authenticated using (public.is_admin()) with check (public.is_admin());
-create policy "transportadoras_admin_all" on public.transportadoras for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "conductores_admin_all" on public.conductores for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "ciudades_admin_all" on public.ciudades for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "paqueterias_admin_all" on public.paqueterias for all to authenticated using (public.is_admin()) with check (public.is_admin());

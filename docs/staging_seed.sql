@@ -28,12 +28,6 @@ values
   ('10000000-0000-4000-8000-000000000001', 'Transportes Prueba S.A.S', '900111222-1', 'Contacto Prueba', '3007654321', '00000000-0000-4000-8000-000000000003')
 on conflict (nit) do nothing;
 
-insert into public.transportadoras
-  (id, nit, razon_social)
-values
-  ('40000000-0000-4000-8000-000000000001', '900111222-1', 'Transportes Prueba S.A.S')
-on conflict (nit) do nothing;
-
 insert into public.conductores
   (id, nombre, cedula, placa, celular, nit_proveedor, empresa, usuario_id)
 values

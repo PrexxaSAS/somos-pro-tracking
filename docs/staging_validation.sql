@@ -4,7 +4,6 @@
 
 select 'usuarios' as tabla, count(*) as total from public.usuarios
 union all select 'transportistas', count(*) from public.transportistas
-union all select 'transportadoras', count(*) from public.transportadoras
 union all select 'conductores', count(*) from public.conductores
 union all select 'ciudades', count(*) from public.ciudades
 union all select 'paqueterias', count(*) from public.paqueterias

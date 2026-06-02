@@ -94,6 +94,7 @@ Archivos principales:
 - `docs/table_review.md`: revision de tablas, duplicidades, decisiones actuales y recomendaciones por fase.
 - `docs/table_cleanup_validation.sql`: consultas seguras para validar `usuarios.pass`, perfiles Auth y uso de `transportadoras` antes de limpiar estructura.
 - `docs/table_cleanup_step1_auth_pass.sql`: limpieza segura de `usuarios.pass` para perfiles que ya tienen Supabase Auth vinculado.
+- `docs/table_cleanup_step2_drop_transportadoras.sql`: limpieza controlada para retirar `transportadoras` en staging.
 - `supabase/functions/create-system-user/index.ts`: Edge Function segura para crear usuarios Auth y perfiles.
 
 Tablas principales en Supabase:
@@ -419,9 +420,11 @@ Estas preguntas deben validarse con el coordinador de logistica:
 - Se agrego `docs/audit_step2_views.sql` con vistas SQL para consultar auditoria por modulo y por usuario, sin exponer aun una pantalla en la app.
 - Se ajusto cierre de devoluciones y recogidas: si se selecciona conductor y se marca completado en el mismo modal, se guarda asignacion y cierre en una sola actualizacion auditable.
 - Se valido auditoria en staging: eventos reales, sin updates vacios, sin base64/passwords en datos auditados y con vistas SQL funcionando por modulo.
-- Se creo `docs/table_review.md` para documentar decisiones de tablas: `transportistas` queda como tabla operativa, `transportadoras` queda congelada, `clientes` y `operadores` siguen como roles en `usuarios`, y `usuarios.pass` queda obsoleta temporal.
+- Se creo `docs/table_review.md` para documentar decisiones de tablas: `transportistas` queda como tabla operativa, `transportadoras` fue retirada en staging, `clientes` y `operadores` siguen como roles en `usuarios`, y `usuarios.pass` queda obsoleta temporal.
 - Se corrigieron flujos legacy de creacion de accesos: registrar conductor y crear empresa transportista ya no insertan contrasenas en `usuarios.pass`; usan `create-system-user`.
 - Se agrego `docs/table_cleanup_validation.sql` para validar usuarios con pass legacy, perfiles sin Auth y registros en `transportadoras` antes de cualquier limpieza.
 - Se agrego `docs/table_cleanup_step1_auth_pass.sql` para reemplazar passwords legacy por `__auth_managed__` solo en perfiles que ya tienen `auth_user_id`.
+- Se agrego `docs/table_cleanup_step2_drop_transportadoras.sql` para retirar la tabla duplicada `transportadoras` primero en staging, despues de validar dependencias.
+- Se retiro `transportadoras` en staging y se limpiaron referencias en scripts de esquema, seed, validacion y RLS para no recrearla.
 - Se agrego helper de mensajes para convertir errores comunes de Supabase/RLS/Edge Functions en textos mas claros para el usuario.
 - Se creo `docs/error_message_test_plan.md` para validar mensajes de error por login, permisos, usuarios, pedidos, devoluciones, recogidas, PQRS y facturas.

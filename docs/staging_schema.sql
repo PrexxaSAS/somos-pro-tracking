@@ -174,13 +174,6 @@ create table if not exists public.factura_guias (
   created_at timestamptz default now()
 );
 
-create table if not exists public.transportadoras (
-  id uuid primary key default gen_random_uuid(),
-  nit text not null unique,
-  razon_social text not null,
-  created_at timestamptz default now()
-);
-
 -- Tabla usada por el codigo, aunque no aparecio en el export de produccion.
 create table if not exists public.promesas_servicio (
   ciudad_codigo text primary key references public.ciudades(code),

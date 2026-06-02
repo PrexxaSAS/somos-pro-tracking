@@ -10,7 +10,6 @@ where schemaname = 'public'
   and tablename in (
     'usuarios',
     'transportistas',
-    'transportadoras',
     'conductores',
     'pedidos',
     'devoluciones',
@@ -36,7 +35,6 @@ where schemaname = 'public'
   and tablename in (
     'usuarios',
     'transportistas',
-    'transportadoras',
     'conductores',
     'pedidos',
     'devoluciones',
