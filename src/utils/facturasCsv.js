@@ -1,6 +1,6 @@
 export function exportarCSVFacturaProveedor(fac, lineas, trans, formatCOP) {
   const headers = [
-    "Fecha Factura","Guia Interna","Transportista","Fecha Despacho",
+    "Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho",
     "Codigo DANE","Ciudad Destino","N° Factura Proveedor",
     "Cajas","Valor Guia COP","Factura Interna","Pedido Interno"
   ];
@@ -9,6 +9,7 @@ export function exportarCSVFacturaProveedor(fac, lineas, trans, formatCOP) {
     l.pedidos?.guia_interna || "",
     trans?.nombre || "",
     l.pedidos?.fecha_creacion || "",
+    l.pedidos?.fecha_despacho || "",
     l.pedidos?.ciudad_codigo || "",
     l.pedidos?.ciudad_nombre || "",
     fac.numero_factura,

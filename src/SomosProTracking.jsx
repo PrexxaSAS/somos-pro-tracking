@@ -231,6 +231,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
     if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
     if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
     if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
+    const fechaDespacho = new Date().toISOString().split("T")[0];
+    const debeMarcarDespacho = nuevoEstado === "en_transito" && pedido.estado !== "en_transito" && !pedido.fecha_despacho;
     const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
     const cambiosBase = {
       direccion: direccion.trim()||pedido.direccion,
@@ -251,6 +253,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
         placa: c?.placa||null,
         nit_proveedor: c?.nit_proveedor||null,
         estado: nuevoEstado,
+        ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
       } : {}),
       ...(canEdit ? {
         estado_despacho: estadoDesp,
@@ -1136,6 +1139,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       placa:           cond ? cond.placa : null,
       nit_proveedor:   cond ? cond.nit_proveedor : null,
       estado:          esPaq ? "paqueteria" : (cond ? "en_transito" : "sin_asignar"),
+      fecha_despacho:  cond ? new Date().toISOString().split("T")[0] : null,
       estado_despacho: form.estado_despacho || "despachado",
       ciudad_origen_codigo: form.ciudad_origen_codigo || null,
       ciudad_origen_nombre: ciudadOrigen?.name || null,
@@ -3590,7 +3594,7 @@ export default function SomosProTracking() {
             // Load factura_guias separately and merge
             const { data: guiasData } = await supabase
               .from('factura_guias')
-              .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion)');
+              .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)');
             const guiasByFact = {};
             (guiasData||[]).forEach(g => {
               if (!guiasByFact[g.factura_id]) guiasByFact[g.factura_id] = [];

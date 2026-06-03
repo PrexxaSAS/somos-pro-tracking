@@ -143,12 +143,13 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
                 });
               });
               if(lineasTodas.length===0){showToast("Sin guías en el período seleccionado","error");return;}
-              const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Despacho","Codigo DANE","Ciudad Destino","N° Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
+              const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho","Codigo DANE","Ciudad Destino","N° Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
               const rows=lineasTodas.map(l=>[
                 l.fac.fecha_factura,
                 l.pedidos?.guia_interna||"",
                 l.trans?.nombre||"",
                 l.pedidos?.fecha_creacion||"",
+                l.pedidos?.fecha_despacho||"",
                 l.pedidos?.ciudad_codigo||"",
                 l.pedidos?.ciudad_nombre||"",
                 l.fac.numero_factura,
