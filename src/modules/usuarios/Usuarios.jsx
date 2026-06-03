@@ -198,8 +198,8 @@ export function Usuarios({ usuarios, showToast, recargar }) {
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <Field label="Usuario *" value={form.user} onChange={f("user")} required name="spt_admin_edit_login" autoComplete="off" data-lpignore="true"/>
-              <Field label="Nueva contraseña (vacío = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contraseña..." name="spt_admin_edit_password" autoComplete="new-password" data-lpignore="true"/>
+              <Field label="Usuario *" value={form.user} onChange={f("user")} required name="username" autoComplete="username"/>
+              <Field label="Nueva contraseña (vacío = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contraseña..." name="password" autoComplete="current-password"/>
             </div>
             <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
             {camposRol()}
