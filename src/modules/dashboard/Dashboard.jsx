@@ -25,6 +25,11 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
     d.setDate(d.getDate() + promMap[p.ciudad_codigo]);
     return d.toISOString().split("T")[0];
   };
+  const fechaRiesgoInfo = (p) => {
+    const limitePromesa = fechaLimite(p);
+    if (limitePromesa) return { fecha: limitePromesa, fuente: "promesa de servicio" };
+    return { fecha: p.fecha_estimada || "", fuente: "fecha estimada" };
+  };
 
   // Pedidos vencidos: activos cuya fecha límite ya pasó
   const vencidos = activos.filter(p => {
@@ -38,8 +43,8 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
   const manana = new Date(); manana.setDate(manana.getDate() + 1);
   const mananaStr = manana.toISOString().split("T")[0];
   const enRiesgo = activos.filter(p => {
-    const lim = fechaLimite(p) || p.fecha_estimada;
-    return lim && lim >= hoy && lim <= mananaStr;
+    const info = fechaRiesgoInfo(p);
+    return info.fecha && info.fecha >= hoy && info.fecha <= mananaStr;
   }).filter(p => !vencidos.includes(p));
 
   // ── Tiempo medio de entrega (días reales) ──
@@ -138,7 +143,10 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
               {vencidos.length} pedido(s) fuera de promesa
             </div>
             <div style={{ fontSize: 13, color: "#991b1b", marginTop: 2 }}>
-              {vencidos.slice(0,4).map(p => p.id).join(" · ")}{vencidos.length > 4 ? ` · +${vencidos.length-4}` : ""}
+              {vencidos.slice(0,4).map(p => {
+                const info = fechaRiesgoInfo(p);
+                return `${p.id} -> vencio ${info.fecha} segun ${info.fuente}`;
+              }).join(" | ")}{vencidos.length > 4 ? ` | +${vencidos.length-4}` : ""}
             </div>
           </div>
           <span style={{ background: "#dc2626", color: "#fff", borderRadius: 20,
@@ -156,7 +164,10 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
               {enRiesgo.length} pedido(s) en riesgo de vencer hoy o mañana
             </div>
             <div style={{ fontSize: 13, color: "#92400e", marginTop: 2 }}>
-              {enRiesgo.slice(0,4).map(p => `${p.id} → ${fechaLimite(p)||p.fecha_estimada}`).join(" · ")}
+              {enRiesgo.slice(0,4).map(p => {
+                const info = fechaRiesgoInfo(p);
+                return `${p.id} -> vence ${info.fecha} segun ${info.fuente}`;
+              }).join(" | ")}
             </div>
           </div>
           <span style={{ background: "#d97706", color: "#fff", borderRadius: 20,

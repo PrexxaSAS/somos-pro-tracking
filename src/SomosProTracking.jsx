@@ -184,7 +184,7 @@ function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   );
 }
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
   const [condId,     setCondId]     = useState(pedido.conductor_id||"") ;
   const [direccion,  setDireccion]  = useState(pedido.direccion||"");
   const [cajas,      setCajas]      = useState(String(pedido.cajas||""));
@@ -204,6 +204,13 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
 
   const cond   = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
   const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
+  const promesa = (promesas||[]).find(p=>p.ciudad_codigo===pedido.ciudad_codigo);
+  const fechaLimitePromesa = promesa && pedido.fecha_creacion ? (() => {
+    const d = new Date(pedido.fecha_creacion);
+    d.setDate(d.getDate() + Number(promesa.dias_plazo || 0));
+    return d.toISOString().split("T")[0];
+  })() : null;
+  const fuenteRiesgo = fechaLimitePromesa ? "Promesa de servicio" : "Fecha estimada";
   const tieneSoportes = ((pedido.soportes_data||[]).length > 0) || ((pedido.soportes||[]).length > 0);
   const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
   const pedidoEnTransito = pedido.estado === "en_transito";
@@ -318,6 +325,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, onClose, 
             <span>Ciudad destino: {ciudad?.name} ({pedido.ciudad_codigo})</span>
             <span>Factura: {pedido.factura}</span>
             <span>Estimado: {pedido.fecha_estimada||""}</span>
+            {fechaLimitePromesa&&<span>Limite promesa: {fechaLimitePromesa} ({promesa.dias_plazo} dia(s))</span>}
+            <span>Fuente riesgo: {fuenteRiesgo}</span>
             <span>Real: {pedido.fecha_real||"Pendiente"}</span>
             {pedido.guia_interna&&<span style={{fontFamily:"monospace",color:P[600],fontWeight:700}}>{pedido.guia_interna}</span>}
           </div>
@@ -1079,7 +1088,7 @@ function LinkCompartir({ onClose }) {
   );
 }
 
-function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, recargar, user }) {
+function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], recargar, user }) {
   const [filtro,    setFiltro]    = useState("todos");
   const [busq,      setBusq]      = useState("");
   const [modNuevo,  setModNuevo]  = useState(false);
@@ -1315,7 +1324,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         </Modal>
       )}
 
-      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"} canAssign={user?.rol==="operador"}/>}
+      {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} promesas={promesas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"} canAssign={user?.rol==="operador"}/>}
       {modGuia&&<GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={()=>setModGuia(null)}/>}
       {modCSV&&<ModalCSVPedidos onClose={()=>setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV}/>}
       {modGuias&&<ModalCSVGuias onClose={()=>setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar}/>}
@@ -4227,7 +4236,7 @@ export default function SomosProTracking() {
     const re = cargarTodo;
     switch (tab) {
       case "dashboard":      return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades}/>;
-      case "pedidos":        return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} recargar={cargarTodo} user={user}/>;
+      case "pedidos":        return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={cargarTodo} user={user}/>;
       case "rastreo":        return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
       case "conductores":    return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={cargarTodo}/>;
       case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={cargarTodo}/>;
