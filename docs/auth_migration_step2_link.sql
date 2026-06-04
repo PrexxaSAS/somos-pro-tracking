@@ -10,8 +10,7 @@
 -- driver1@somospro.local
 -- cliente@somospro.local
 --
--- Usar las mismas contrasenas ficticias de staging:
--- admin123, op123, trans123, cond123, cli123.
+-- Usar contrasenas temporales definidas fuera del repositorio.
 
 update public.usuarios u
 set auth_user_id = au.id

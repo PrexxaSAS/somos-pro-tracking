@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ROLES } from './Constants';
-import { USUARIOS_INICIALES, CONDUCTORES_INICIALES, TRANSPORTISTAS_INICIALES, PEDIDOS_INICIALES, PAQUETERIAS_INICIALES } from './DataStore';
+import { PAQUETERIAS_INICIALES } from './DataStore';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
@@ -3391,16 +3391,6 @@ export default function SomosProTracking() {
  // Sembrar datos iniciales si la BD est vaca 
  const sembrarDatosIniciales = async () => {
   try {
-   // Usuarios iniciales ignorar si ya existen
-   for (const u of USUARIOS_INICIALES) {
-    const { id, ...rest } = u;
-    console.warn('Sembrado de usuarios deshabilitado: usar scripts SQL y Supabase Auth.');
-   }
-   // Transportistas iniciales
-   for (const t of TRANSPORTISTAS_INICIALES) {
-    const { id, ...rest } = t;
-    await supabase.from('transportistas').upsert({ ...rest }, { onConflict: 'nit', ignoreDuplicates: true });
-   }
    // Ciudades base
    for (const c of CIUDADES_BASE) {
     await supabase.from('ciudades').upsert({ code: c.code, name: c.name }, { onConflict: 'code', ignoreDuplicates: true });

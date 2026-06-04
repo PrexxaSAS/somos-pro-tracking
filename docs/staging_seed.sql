@@ -6,11 +6,11 @@
 insert into public.usuarios
   (id, nombre, "user", pass, rol, nit, empresa, cedula, placa, celular, nit_proveedor)
 values
-  ('00000000-0000-4000-8000-000000000001', 'Admin Prueba', 'admin', 'admin123', 'admin', null, null, null, null, null, null),
-  ('00000000-0000-4000-8000-000000000002', 'Operador Prueba', 'operador', 'op123', 'operador', null, null, null, null, null, null),
-  ('00000000-0000-4000-8000-000000000003', 'Transportes Prueba S.A.S', 'transprueba', 'trans123', 'transportista', '900111222-1', 'Transportes Prueba S.A.S', null, null, null, null),
-  ('00000000-0000-4000-8000-000000000004', 'Conductor Prueba', 'driver1', 'cond123', 'conductor', null, 'Transportes Prueba S.A.S', '1010101010', 'ABC123', '3001234567', '900111222-1'),
-  ('00000000-0000-4000-8000-000000000005', 'Cliente Interno Prueba', 'cliente', 'cli123', 'cliente', null, null, null, null, null, null)
+  ('00000000-0000-4000-8000-000000000001', 'Admin Prueba', 'admin', '__auth_managed__', 'admin', null, null, null, null, null, null),
+  ('00000000-0000-4000-8000-000000000002', 'Operador Prueba', 'operador', '__auth_managed__', 'operador', null, null, null, null, null, null),
+  ('00000000-0000-4000-8000-000000000003', 'Transportes Prueba S.A.S', 'transprueba', '__auth_managed__', 'transportista', '900111222-1', 'Transportes Prueba S.A.S', null, null, null, null),
+  ('00000000-0000-4000-8000-000000000004', 'Conductor Prueba', 'driver1', '__auth_managed__', 'conductor', null, 'Transportes Prueba S.A.S', '1010101010', 'ABC123', '3001234567', '900111222-1'),
+  ('00000000-0000-4000-8000-000000000005', 'Cliente Interno Prueba', 'cliente', '__auth_managed__', 'cliente', null, null, null, null, null, null)
 on conflict ("user") do nothing;
 
 insert into public.ciudades (code, name)

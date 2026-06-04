@@ -65,17 +65,17 @@ En Supabase `somos-pro-tracking-prueba`:
 1. Ir a Authentication > Users.
 2. Crear cada usuario con email tecnico.
 3. Marcar email como confirmado si Supabase lo solicita.
-4. Usar las contrasenas ficticias de staging.
+4. Usar contrasenas temporales definidas fuera del repositorio.
 
 Usuarios:
 
-| user visible | email Auth | contrasena |
-| --- | --- | --- |
-| admin | admin@somospro.local | admin123 |
-| operador | operador@somospro.local | op123 |
-| transprueba | transprueba@somospro.local | trans123 |
-| driver1 | driver1@somospro.local | cond123 |
-| cliente | cliente@somospro.local | cli123 |
+| user visible | email Auth |
+| --- | --- |
+| admin | admin@somospro.local |
+| operador | operador@somospro.local |
+| transprueba | transprueba@somospro.local |
+| driver1 | driver1@somospro.local |
+| cliente | cliente@somospro.local |
 
 Despues ejecutar `docs/auth_migration_step2_link.sql`.
 
