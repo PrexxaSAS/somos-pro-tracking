@@ -87,9 +87,7 @@ const makePdf = (pedido, supports) => {
     const pageObj = addObject(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A4.width} ${A4.height}] /Resources << /Font << /F1 ${fontObj} 0 R >> /XObject << /Im${index + 1} ${imgObj} 0 R >> >> /Contents ${contentObj} 0 R >>`);
     pages.push(pageObj);
     addObject([
-      `<< /Type /XObject /Subtype /Image /Width ${support.width} /Height ${support.height}`,
-      "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode",
-      `/Length ${support.bytes.length} >>`,
+      `<< /Type /XObject /Subtype /Image /Width ${support.width} /Height ${support.height}\n/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode\n/Length ${support.bytes.length} >>`,
       "stream\n",
       support.bytes,
       "\nendstream",
