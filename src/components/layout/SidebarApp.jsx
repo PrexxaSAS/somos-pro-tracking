@@ -38,9 +38,10 @@ const MENUS = {
 
 const shortLabel = (label) => label.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 
-export function SidebarApp({ user, activeTab, setActiveTab, onLogout, collapsed, setCollapsed, pqrs = [] }) {
+export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed, pqrs = [] }) {
   const items = MENUS[user.rol] || [];
   const w = collapsed ? 64 : 210;
+  const canShareApp = ["admin", "operador", "transportista"].includes(user.rol);
 
   return (
     <div style={{ width:w, minHeight:"100vh", background:`linear-gradient(180deg,${P[950]},${P[800]})`, display:"flex", flexDirection:"column", transition:"width .2s", flexShrink:0, position:"relative", zIndex:10 }}>
@@ -77,6 +78,12 @@ export function SidebarApp({ user, activeTab, setActiveTab, onLogout, collapsed,
           );
         })}
       </nav>
+      {canShareApp && onShareApp && (
+        <button onClick={onShareApp}
+          style={{margin:"8px 8px 0",padding:"10px",background:`${P[600]}60`,border:`1px solid ${P[500]}`,borderRadius:8,color:"#fff",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:8,justifyContent:collapsed?"center":"flex-start"}}>
+          <span>{collapsed ? "QR" : "Compartir App"}</span>
+        </button>
+      )}
       <button onClick={onLogout}
         style={{margin:"8px",padding:"10px",background:`${P[700]}50`,border:`1px solid ${P[600]}`,borderRadius:8,color:P[200],cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:8,justifyContent:collapsed?"center":"flex-start"}}>
         <span>{collapsed ? "X" : "Salir"}</span>{!collapsed&&"Cerrar Sesion"}
