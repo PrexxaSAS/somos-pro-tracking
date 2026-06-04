@@ -1,7 +1,7 @@
-export function exportarCSVFacturaProveedor(fac, lineas, trans, formatCOP) {
+﻿export function exportarCSVFacturaProveedor(fac, lineas, trans, formatCOP) {
   const headers = [
     "Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho",
-    "Codigo DANE","Ciudad Destino","N° Factura Proveedor",
+    "Codigo DANE","Ciudad Destino","N Factura Proveedor",
     "Cajas","Valor Guia COP","Factura Interna","Pedido Interno"
   ];
   const rows = lineas.map(l => [
@@ -27,3 +27,4 @@ export function exportarCSVFacturaProveedor(fac, lineas, trans, formatCOP) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
