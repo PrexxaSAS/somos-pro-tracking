@@ -1953,14 +1953,14 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
         await supabase.from("pedidos").update({
           estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes,
         }).eq("id", pedido.id);
-        showToast("âš ï¸ Estado guardado pero fotos muy pesadas â€” usa imÃ¡genes mÃ¡s pequeÃ±as", "warning");
+        showToast("Estado guardado pero fotos muy pesadas - usa imagenes mas pequenas", "warning");
       } else if (e1) {
         showToast("Error guardando: "+e1.message, "error"); return;
       } else {
-        showToast(`âœ“ Entrega registrada Â· ${fotos.length} soporte(s) Â· Estado: ${estadoFinal==="entregado"?"Entregado âœ…":"Con Novedad âš ï¸"}`, "success");
+        showToast(`Entrega registrada - ${fotos.length} soporte(s) - Estado: ${estadoFinal==="entregado"?"Entregado":"Con Novedad"}`, "success");
       }
     } catch(e) {
-      showToast("Error de conexiÃ³n. Revisa tu internet e intenta de nuevo.", "error"); return;
+      showToast("Error de conexion. Revisa tu internet e intenta de nuevo.", "error"); return;
     }
     setModFotos(null);
     if (recargar) await recargar();
@@ -1973,9 +1973,9 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <Logo size={44}/>
           <div>
-            <h2 style={{margin:0,color:"#fff",fontWeight:900}}>ðŸ‘‹ {user.nombre}</h2>
+            <h2 style={{margin:0,color:"#fff",fontWeight:900}}>{user.nombre}</h2>
             <p style={{margin:"3px 0 0",color:P[300],fontSize:13}}>
-              Placa: {user.placa} Â· {activos.length} activo(s) Â· {completados.length} entregado(s)
+              Placa: {user.placa} - {activos.length} activo(s) - {completados.length} entregado(s)
             </p>
           </div>
         </div>
@@ -1984,34 +1984,34 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
       {/* Pedidos activos */}
       {activos.length===0&&completados.length===0&&misDevoluciones.length===0&&misRecogidas.length===0&&(
         <Card style={{textAlign:"center",padding:48,color:"#94a3b8"}}>
-          <div style={{fontSize:40,marginBottom:12}}>ðŸ“­</div>
+          <div style={{fontSize:40,marginBottom:12}}>--</div>
           <p>Sin pedidos asignados por el momento.</p>
         </Card>
       )}
 
       {activos.length>0&&(
         <>
-          <h3 style={{color:P[800],fontWeight:800,margin:"0 0 14px"}}>ðŸ“¦ Pedidos Activos ({activos.length})</h3>
+          <h3 style={{color:P[800],fontWeight:800,margin:"0 0 14px"}}>Pedidos Activos ({activos.length})</h3>
           <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:28}}>
             {activos.map(p=>(
               <Card key={p.id} style={{borderLeft:`4px solid ${ESTADOS_PEDIDO[p.estado]?.color||P[400]}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
                   <div>
                     <div style={{fontWeight:900,color:P[600],fontSize:18,fontFamily:"monospace"}}>{p.guia_interna||p.id}</div>
-                    <div style={{fontSize:12,color:"#94a3b8"}}>Factura: {p.factura} Â· {p.cajas} cajas</div>
+                    <div style={{fontSize:12,color:"#94a3b8"}}>Factura: {p.factura} - {p.cajas} cajas</div>
                   </div>
                   <Badge estado={p.estado}/>
                 </div>
                 <div style={{fontWeight:700,color:"#1e293b",marginBottom:6,fontSize:15}}>{p.cliente}</div>
                 <div style={{fontSize:13,color:"#64748b",display:"flex",flexDirection:"column",gap:3}}>
-                  <span>ðŸ™ï¸ {p.ciudad_nombre}</span>
-                  <span>ðŸ“ {p.direccion}</span>
-                  {p.fecha_estimada&&<span>ðŸ“… Entrega estimada: <strong>{p.fecha_estimada}</strong></span>}
+                  <span>Ciudad: {p.ciudad_nombre}</span>
+                  <span>Direccion: {p.direccion}</span>
+                  {p.fecha_estimada&&<span>Entrega estimada: <strong>{p.fecha_estimada}</strong></span>}
                 </div>
                 <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-                  <Btn size="sm" variant="secondary" onClick={()=>setModDet(p)}>ðŸ‘ Ver Detalle</Btn>
+                  <Btn size="sm" variant="secondary" onClick={()=>setModDet(p)}>Ver Detalle</Btn>
                   <Btn size="sm" variant="success" onClick={()=>{setModFotos(p);setNovedad(false);}}>
-                    ðŸ“¸ Registrar Entrega
+                    Registrar Entrega
                   </Btn>
                 </div>
               </Card>
@@ -2023,20 +2023,20 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
       {/* Pedidos completados */}
       {completados.length>0&&(
         <>
-          <h3 style={{color:"#059669",fontWeight:800,margin:"0 0 14px"}}>âœ… Entregados ({completados.length})</h3>
+          <h3 style={{color:"#059669",fontWeight:800,margin:"0 0 14px"}}>Entregados ({completados.length})</h3>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {completados.map(p=>(
               <Card key={p.id} style={{borderLeft:"4px solid #059669",opacity:0.85}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
                   <div>
                     <div style={{fontWeight:700,color:"#059669",fontFamily:"monospace"}}>{p.guia_interna||p.id}</div>
-                    <div style={{fontSize:13,color:"#64748b"}}>{p.cliente} Â· {p.ciudad_nombre}</div>
-                    <div style={{fontSize:12,color:"#94a3b8"}}>Entregado: {p.fecha_real} {p.novedad&&"Â· âš ï¸ Con Novedad"}</div>
+                    <div style={{fontSize:13,color:"#64748b"}}>{p.cliente} - {p.ciudad_nombre}</div>
+                    <div style={{fontSize:12,color:"#94a3b8"}}>Entregado: {p.fecha_real} {p.novedad&&"- Con Novedad"}</div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     {(p.soportes_data||[]).length>0&&(
                       <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}>
-                        ðŸ“„ Soportes ({p.soportes_data.length})
+                        Soportes ({p.soportes_data.length})
                       </Btn>
                     )}
                     <Badge estado={p.estado}/>
@@ -2050,23 +2050,23 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
 
       {misDevoluciones.length>0&&(
         <>
-          <h3 style={{color:"#dc2626",fontWeight:800,margin:"28px 0 14px"}}>â†©ï¸ Devoluciones Asignadas ({misDevoluciones.length})</h3>
+          <h3 style={{color:"#dc2626",fontWeight:800,margin:"28px 0 14px"}}>Devoluciones Asignadas ({misDevoluciones.length})</h3>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
             {misDevoluciones.map(d=>(
               <Card key={d.id} style={{borderLeft:"4px solid #dc2626"}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
                   <span style={{fontFamily:"monospace",fontWeight:900,color:"#dc2626",fontSize:15}}>{d.guia}</span>
                   <Badge estado={d.estado}/>
-                  {d.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>âš ï¸ Con Novedad</span>}
+                  {d.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
                 </div>
-                <div style={{fontSize:13,color:"#64748b"}}>Factura: <strong>{d.factura}</strong> Â· Pedido: <strong>{d.pedido_ref}</strong></div>
-                <div style={{fontSize:13,color:"#64748b",marginTop:3}}>ðŸ“ {d.dir_recogida} Â· {d.ciudad_nombre}</div>
-                <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{d.unidades} uds Â· {d.volumen_m3} mÂ³ Â· {d.peso_kg} kg</div>
+                <div style={{fontSize:13,color:"#64748b"}}>Factura: <strong>{d.factura}</strong> - Pedido: <strong>{d.pedido_ref}</strong></div>
+                <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Recogida: {d.dir_recogida} - {d.ciudad_nombre}</div>
+                <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{d.unidades} uds - {d.volumen_m3} m3 - {d.peso_kg} kg</div>
                 {d.motivo&&<div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Motivo: {d.motivo}</div>}
                 {d.soporte_data&&(
                   <Btn size="sm" variant="success" style={{marginTop:8}}
                     onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
-                    ðŸ“Ž Ver Soporte
+                    Ver Soporte
                   </Btn>
                 )}
               </Card>
@@ -2077,23 +2077,23 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
 
       {misRecogidas.length>0&&(
         <>
-          <h3 style={{color:"#0891b2",fontWeight:800,margin:"28px 0 14px"}}>ðŸ”„ Recogidas Asignadas ({misRecogidas.length})</h3>
+          <h3 style={{color:"#0891b2",fontWeight:800,margin:"28px 0 14px"}}>Recogidas Asignadas ({misRecogidas.length})</h3>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
             {misRecogidas.map(r=>(
               <Card key={r.id} style={{borderLeft:"4px solid #0891b2"}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
                   <span style={{fontFamily:"monospace",fontWeight:900,color:"#0891b2",fontSize:15}}>{r.guia}</span>
                   <Badge estado={r.estado}/>
-                  {r.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>âš ï¸ Con Novedad</span>}
+                  {r.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
                 </div>
-                <div style={{fontSize:13,color:"#64748b"}}>ðŸ“ Recogida: {r.dir_recogida} Â· {r.ciudad_recogida_nombre}</div>
-                <div style={{fontSize:13,color:"#64748b",marginTop:3}}>ðŸ Entrega: {r.dir_entrega} Â· {r.ciudad_entrega_nombre}</div>
-                <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{r.unidades} uds Â· {r.volumen_m3} mÂ³ Â· {r.peso_kg} kg</div>
+                <div style={{fontSize:13,color:"#64748b"}}>Recogida: {r.dir_recogida} - {r.ciudad_recogida_nombre}</div>
+                <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Entrega: {r.dir_entrega} - {r.ciudad_entrega_nombre}</div>
+                <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{r.unidades} uds - {r.volumen_m3} m3 - {r.peso_kg} kg</div>
                 {r.observaciones&&<div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Obs: {r.observaciones}</div>}
                 {r.doc_data&&(
                   <Btn size="sm" variant="success" style={{marginTop:8}}
                     onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
-                    ðŸ“Ž Ver Documento
+                    Ver Documento
                   </Btn>
                 )}
               </Card>
@@ -2108,24 +2108,24 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
 
       {/* Modal cargar soportes de entrega */}
       {modFotos&&(
-        <Modal title={`ðŸ“¸ Registrar Entrega â€” ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
+        <Modal title={`Registrar Entrega - ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
             {/* Info pedido */}
             <div style={{background:P[50],borderRadius:10,padding:14}}>
               <div style={{fontWeight:700,color:P[800],marginBottom:4}}>{modFotos.cliente}</div>
-              <div style={{fontSize:13,color:"#64748b"}}>ðŸ“ {modFotos.direccion} Â· {modFotos.ciudad_nombre}</div>
-              <div style={{fontSize:13,color:"#64748b"}}>ðŸ“‹ Factura: {modFotos.factura} Â· {modFotos.cajas} cajas</div>
+              <div style={{fontSize:13,color:"#64748b"}}>Direccion: {modFotos.direccion} - {modFotos.ciudad_nombre}</div>
+              <div style={{fontSize:13,color:"#64748b"}}>Factura: {modFotos.factura} - {modFotos.cajas} cajas</div>
             </div>
 
             {/* Checkbox novedad */}
             <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"12px 16px",cursor:"pointer",border:`2px solid ${novedad?"#dc2626":P[200]}`}}
               onClick={()=>setNovedad(!novedad)}>
               <div style={{width:22,height:22,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {novedad&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}>âœ“</span>}
+                {novedad&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}>✓</span>}
               </div>
               <div>
                 <div style={{fontWeight:700,color:novedad?"#dc2626":P[800],fontSize:14}}>Entrega con Novedad</div>
-                <div style={{fontSize:12,color:"#94a3b8"}}>Marca esto si hubo algÃºn inconveniente en la entrega</div>
+                <div style={{fontSize:12,color:"#94a3b8"}}>Marca esto si hubo algun inconveniente en la entrega</div>
               </div>
             </div>
 
