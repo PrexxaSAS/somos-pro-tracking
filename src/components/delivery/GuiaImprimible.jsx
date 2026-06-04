@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { P } from '../../Constants';
 import { Logo, Badge, Btn, Modal } from '../../Subcomponentes';
 
@@ -6,13 +7,13 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
  const cond = conductores.find(c=>c.id===pedido.conductor_id);
  const ciudad= (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
  const fecha = new Date().toLocaleDateString("es-CO",{day:"2-digit",month:"long",year:"numeric"});
- return (
-  <Modal title={"Guia - "+(pedido.guia_interna||pedido.id)} onClose={onClose} wide>
-   <div style={{marginBottom:14,display:"flex",justifyContent:"flex-end",gap:8}}>
-    <Btn onClick={()=>window.print()}>Imprimir / PDF</Btn>
-    <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-   </div>
-   <div id="guia-print" style={{border:`2px solid ${P[200]}`,borderRadius:12,padding:28}}>
+
+ const guiaDocumento = (printable = false) => (
+   <div
+    id={printable ? "guia-print-document" : "guia-screen-document"}
+    className={printable ? "guia-print-document" : ""}
+    style={{border:`2px solid ${P[200]}`,borderRadius:12,padding:28,background:"#fff"}}
+   >
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",paddingBottom:16,marginBottom:20,borderBottom:`3px solid ${P[600]}`}}>
      <div style={{display:"flex",alignItems:"center",gap:14}}>
       <Logo size={60}/>
@@ -86,7 +87,40 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
     </div>
     <div style={{marginTop:20,paddingTop:14,borderTop:"1px dashed #cbd5e1",fontSize:10,color:"#94a3b8"}}>Somos PRO Tracking - {fecha}</div>
    </div>
-   <style>{`@media print{body>*{visibility:hidden!important}#guia-print,#guia-print *{visibility:visible!important}#guia-print{position:fixed;top:0;left:0;width:100%;padding:20px}}`}</style>
-  </Modal>
+ );
+
+ return (
+  <>
+   <Modal title={"Guia - "+(pedido.guia_interna||pedido.id)} onClose={onClose} wide>
+    <div style={{marginBottom:14,display:"flex",justifyContent:"flex-end",gap:8}}>
+     <Btn onClick={()=>window.print()}>Imprimir / PDF</Btn>
+     <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
+    </div>
+    {guiaDocumento()}
+   </Modal>
+   {typeof document !== "undefined" && createPortal(
+    <div className="guia-print-portal">
+     {guiaDocumento(true)}
+    </div>,
+    document.body
+   )}
+   <style>{`
+    .guia-print-portal{display:none}
+    @media print{
+     @page{size:A4;margin:12mm}
+     body > *:not(.guia-print-portal){display:none!important}
+     .guia-print-portal{display:block!important;background:#fff!important}
+     .guia-print-document{
+      width:100%!important;
+      box-sizing:border-box!important;
+      border:none!important;
+      border-radius:0!important;
+      padding:0!important;
+      page-break-after:avoid!important;
+      break-after:avoid!important;
+     }
+    }
+   `}</style>
+  </>
  );
 }
