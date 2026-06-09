@@ -1948,6 +1948,10 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const sinFiltradias = sinPromesa.filter(c =>
   !busq || c.name.toLowerCase().includes(busq.toLowerCase()) || c.code.includes(busq)
  );
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
  const guardarNueva = async () => {
   if (!nueva.ciudad_codigo || !nueva.dias_plazo) {
@@ -1985,84 +1989,72 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  };
 
  return (
-  <div>
-   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
     <div>
-     <h2 style={{ margin: 0, color: P[800], fontWeight: 900 }}> Promesas de Servicio</h2>
-     <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>
-      Dias hbiles de entrega prometidos por destino. Se usan en el Dashboard para medir cumplimiento.
-     </p>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Promesas de Servicio</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Dias habiles de entrega prometidos por ciudad destino</p>
     </div>
-    <div style={{ fontSize: 13, fontWeight: 700, color: P[700] }}>
-     {conPromesa.length}/{ciudades.length} ciudades configuradias
-    </div>
-   </div>
-
-   {/* Agregar nueva */}
-   <Card style={{ marginBottom: 20, background: P[50], border: `1px solid ${P[200]}` }}>
-    <div style={{ fontWeight: 700, color: P[800], marginBottom: 12, fontSize: 14 }}> Agregar Promesa</div>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "end" }}>
+    <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"7px 12px", fontSize:13, fontWeight:850 }}>
+     {conPromesa.length}/{ciudades.length} configuradas
+    </span>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:18 }}>
+     <div style={{ fontWeight:850, marginBottom:12 }}>Agregar promesa</div>
+     <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "end" }}>
      <Field label="Ciudad destino" value={nueva.ciudad_codigo} onChange={v => setNueva(p => ({...p, ciudad_codigo: v}))} as="select"
       options={[
-       { value: "", label: " Selecciona ciudad " },
+       { value: "", label: "Selecciona ciudad" },
        ...(ciudades||[]).map(c => ({ value: c.code, label: `${c.name} (${c.code})${promMap[c.code] ? " " + promMap[c.code] + " dias" : ""}` }))
       ]}/>
      <Field label="Dias plazo" value={nueva.dias_plazo} onChange={v => setNueva(p => ({...p, dias_plazo: v}))}
       type="number" placeholder="2" style={{ width: 110 }}/>
-     <Btn onClick={guardarNueva} disabled={guard} style={{ alignSelf: "end", marginBottom: 0 }}>
-       Guardar
-     </Btn>
+     <button style={{ ...primaryButton, alignSelf:"end", height:40 }} onClick={guardarNueva} disabled={guard}>Guardar</button>
     </div>
-   </Card>
+    </section>
 
-   {/* Buscador */}
-   <Card style={{ padding: 12, marginBottom: 16 }}>
-    <input value={busq} onChange={e => setBusq(e.target.value)}
-     placeholder=" Buscar ciudad..." style={{ ...{ border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",background:"#fafafa",width:"100%",boxSizing:"border-box" } }}/>
-   </Card>
-
-   {/* Con promesa */}
-   {conPromesa.length > 0 && (
-    <Card style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
-     <div style={{ padding: "12px 20px", background: "#ecfdf5", borderBottom: "1px solid #bbf7d0" }}>
-      <span style={{ fontWeight: 700, color: "#059669", fontSize: 13 }}> Con Promesa Configurada ({conPromesa.length})</span>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{conPromesa.length} con promesa</span>
      </div>
-     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
       <thead>
-       <tr style={{ background: P[50] }}>
+       <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
         {["Ciudad", "Codigo DANE", "Dias Plazo", "Acciones"].map(h => (
-         <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: P[700] }}>{h}</th>
+         <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
         ))}
        </tr>
       </thead>
       <tbody>
        {conPromesa.map((c, i) => (
-        <tr key={c.code} style={{ borderTop: `1px solid ${P[100]}`, background: i % 2 ? "#fafafa" : "#fff" }}>
-         <td style={{ padding: "10px 16px", fontWeight: 600, color: "#1e293b" }}>{c.name}</td>
-         <td style={{ padding: "10px 16px", fontFamily: "monospace", color: P[600], fontSize: 12 }}>{c.code}</td>
-         <td style={{ padding: "10px 16px" }}>
+        <tr key={c.code} style={{ borderBottom:`1px solid ${border}` }}>
+         <td style={{ padding:"16px", fontWeight:800 }}>{c.name}</td>
+         <td style={{ padding:"16px", fontFamily:"monospace", color:"#5b33d6", fontWeight:850 }}>{c.code}</td>
+         <td style={{ padding:"16px" }}>
           {editando === c.code ? (
            <input type="number" value={diasEdit} onChange={e => setDiasEdit(e.target.value)}
-            style={{ width: 70, padding: "6px 10px", borderRadius: 8, border: `2px solid ${P[400]}`, fontSize: 14, fontWeight: 700 }}
+            style={{ width:70, padding:"8px 10px", borderRadius:10, border:`1px solid ${border}`, fontSize:14, fontWeight:800 }}
             autoFocus onKeyDown={e => e.key === "Enter" && guardarEdit(c.code)}/>
           ) : (
-           <span style={{ background: P[50], border: `1px solid ${P[200]}`, borderRadius: 20,
-            padding: "4px 14px", fontWeight: 800, color: P[700], fontSize: 15 }}>
-            {promMap[c.code]} da{promMap[c.code] !== 1 ? "s" : ""}
+           <span style={{ background:"#f0eef9", border:"1px solid #ddd6fe", borderRadius:99, padding:"5px 12px", fontWeight:850, color:"#5b33d6", fontSize:13 }}>
+            {promMap[c.code]} dia{promMap[c.code] !== 1 ? "s" : ""}
            </span>
           )}
          </td>
-         <td style={{ padding: "10px 16px" }}>
-          <div style={{ display: "flex", gap: 8 }}>
+         <td style={{ padding:"16px", textAlign:"right" }}>
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
            {editando === c.code ? (
             <>
-             <Btn size="sm" variant="success" onClick={() => guardarEdit(c.code)}> Guardar</Btn>
-             <Btn size="sm" variant="secondary" onClick={() => setEditando(null)}>Cancelar</Btn>
+             <button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={() => guardarEdit(c.code)}>Guardar</button>
+             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={() => setEditando(null)}>Cancelar</button>
             </>
            ) : (
             <>
-             <Btn size="sm" variant="secondary" onClick={() => { setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}> Editar</Btn>
-             <Btn size="sm" variant="danger" onClick={() => eliminar(c.code, c.name)}> Quitar</Btn>
+             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={() => { setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}>Editar</button>
+             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={() => eliminar(c.code, c.name)}>Quitar</button>
             </>
            )}
           </div>
@@ -2071,25 +2063,25 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
        ))}
       </tbody>
      </table>
-    </Card>
-   )}
-
-   {/* Sin promesa */}
-   {sinFiltradias.length > 0 && (
-    <Card style={{ padding: 0, overflow: "hidden" }}>
-     <div style={{ padding: "12px 20px", background: "#fef2f2", borderBottom: "1px solid #fca5a5" }}>
-      <span style={{ fontWeight: 700, color: "#dc2626", fontSize: 13 }}> Sin Promesa Configurada ({sinFiltradias.length})</span>
      </div>
-     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: 16 }}>
+    </section>
+
+   {sinFiltradias.length > 0 && (
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:"14px 18px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", gap:12 }}>
+      <span style={{ fontWeight:850 }}>Sin promesa configurada</span>
+      <span style={{ color:"#dc2626", fontSize:13, fontWeight:850 }}>{sinFiltradias.length}</span>
+     </div>
+     <div style={{ display:"flex", flexWrap:"wrap", gap:8, padding:16 }}>
       {sinFiltradias.map(c => (
-       <span key={c.code} style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 20,
-        padding: "5px 12px", fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
+       <span key={c.code} style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:99, padding:"6px 12px", fontSize:12, color:"#dc2626", fontWeight:750 }}>
         {c.name}
        </span>
       ))}
      </div>
-    </Card>
+    </section>
    )}
+   </main>
   </div>
  );
 }
@@ -2097,6 +2089,10 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
 
 function GestionPaqueterias({ paqueterias, showToast, recargar }) {
  const [nueva, setNueva] = useState("");
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
  const agregar = async () => {
   if (!nueva.trim()) { showToast("Escribe el nombre de la empresa","error"); return; }
   if ((paqueterias||[]).includes(nueva.trim())) { showToast("Ya existe esa empresa","error"); return; }
@@ -2107,27 +2103,40 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
   if (recargar) await recargar();
  };
  return (
-  <div>
-   <h2 style={{margin:"0 0 22px",color:P[800],fontWeight:900}}> Empresas de Paqueteria</h2>
-   <Card style={{marginBottom:20}}>
-    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Paqueterias</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Empresas externas usadas para guias de paqueteria</p>
+    </div>
+    <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"7px 12px", fontSize:13, fontWeight:850 }}>
+     {(paqueterias||[]).length} registradas
+    </span>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:18 }}>
+     <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center" }}>
      <input value={nueva} onChange={e=>setNueva(e.target.value)}
       onKeyDown={e=>e.key==="Enter"&&agregar()}
       placeholder="Nombre de la empresa (ej: Servientrega, TCC...)"
-      style={{...iSt,flex:1}}/>
-     <Btn onClick={agregar}>+ Agregar</Btn>
+      style={{...iSt, borderRadius:12, background:"#fff"}}/>
+     <button style={primaryButton} onClick={agregar}>+ Agregar</button>
     </div>
-   </Card>
-   <div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {(paqueterias||[]).length===0&&<Card style={{textAlign:"center",padding:32,color:"#94a3b8"}}>Sin empresas registradas.</Card>}
+    </section>
+    {(paqueterias||[]).length===0&&<section style={{ ...cardStyle, textAlign:"center", padding:42, color:"#9ca3af" }}>Sin empresas registradas.</section>}
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
     {(paqueterias||[]).map((p,i)=>(
-     <Card key={i} style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <span style={{fontWeight:600,color:"#334155"}}> {p}</span>
+     <article key={i} style={{ ...cardStyle, padding:18, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
+       <div style={{ width:38, height:38, borderRadius:12, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{String(p || "P").slice(0,1).toUpperCase()}</div>
+       <span style={{ fontWeight:800, color:"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p}</span>
+      </div>
       <button onClick={async ()=>{const{error}=await supabase.from('paqueterias').delete().eq('nombre',p); if(!error){showToast('Eliminado','info'); if(recargar) await recargar();}}}
-       style={{background:"none",border:"none",cursor:"pointer",color:"#ef4444",fontSize:18,padding:0,lineHeight:1}}></button>
-     </Card>
+       style={{ ...buttonBase, padding:"7px 10px", fontSize:13, color:"#dc2626" }}>Eliminar</button>
+     </article>
     ))}
-   </div>
+    </section>
+   </main>
   </div>
  );
 }
