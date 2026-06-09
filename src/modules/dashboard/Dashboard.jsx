@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '../../Subcomponentes';
-import { PaginationControls } from '../../components/ui/PaginationControls';
 
 const card = {
  background: "#fff",
@@ -14,8 +13,6 @@ const fmtPct = (value) => `${Math.round(value)}%`;
 
 export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [], promesas = [], ciudades = [], setActiveTab }) {
  const [gpsTick, setGpsTick] = useState(0);
- const [pedidosPage, setPedidosPage] = useState(1);
- const pedidosPageSize = 10;
  useEffect(() => {
   const t = setInterval(() => setGpsTick(n => n + 1), 15000);
   return () => clearInterval(t);
@@ -124,7 +121,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
   bg: "#fffbeb",
   border: "#f8cf76",
  } : null;
- const pedidosRecientes = pedidos.slice((pedidosPage - 1) * pedidosPageSize, pedidosPage * pedidosPageSize);
+ const pedidosRecientes = pedidos.slice(0, 10);
 
  return (
   <div style={{ minHeight: "100%", background: "#fafafa", margin: "-28px -24px", color: "#111827" }}>
@@ -292,7 +289,6 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
        </tbody>
      </table>
      </div>
-     <PaginationControls total={pedidos.length} page={pedidosPage} setPage={setPedidosPage} pageSize={pedidosPageSize} setPageSize={() => {}} pageSizeOptions={[10]} />
     </section>
    </div>
   </div>
