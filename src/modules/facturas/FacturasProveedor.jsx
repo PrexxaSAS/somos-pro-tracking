@@ -85,46 +85,58 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  };
 
  const formatCOP = n => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', minimumFractionDigits:0 }).format(n);
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+ const totalValor = filtradas.reduce((a, fac) => a + (Number(fac.valor_total) || 0), 0);
+ const totalGuias = filtradas.reduce((a, fac) => a + ((fac.factura_guias || []).length), 0);
 
  return (
-  <div>
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22,flexWrap:"wrap",gap:10}}>
-    <h2 style={{margin:0,fontWeight:900}}> Facturas de Proveedor</h2>
-    <Btn onClick={()=>setModNueva(true)}>+ Nueva Factura</Btn>
-   </div>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Facturas Proveedor</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion de facturas, guias relacionadas e informes de fletes</p>
+    </div>
+    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Factura</button>
+   </header>
 
-   <Card style={{padding:14,marginBottom:16}}>
-    <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"flex-end"}}>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+   <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+    <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"end", borderBottom:`1px solid ${border}` }}>
+     <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"flex-end"}}>
      <input value={busq} onChange={e=>setBusq(e.target.value)}
       placeholder=" Buscar por numero de factura o transportista..."
-      style={{...iSt,flex:1,minWidth:200}}/>
+      style={{...iSt,flex:1,minWidth:240,borderRadius:12,background:"#fff"}}/>
      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
        <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase"}}>Desde</label>
        <input type="date" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}
-        style={{...iSt,width:150}}/>
+        style={{...iSt,width:150,borderRadius:12,background:"#fff"}}/>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
        <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase"}}>Hasta</label>
        <input type="date" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}
-        style={{...iSt,width:150}}/>
+        style={{...iSt,width:150,borderRadius:12,background:"#fff"}}/>
       </div>
       {(fechaDesde||fechaHasta)&&(
-       <Btn variant="ghost" size="sm" onClick={()=>{setFechaDesde("");setFechaHasta("");}}> Limpiar</Btn>
+       <button style={{ ...buttonBase, padding:"8px 12px", fontSize:13 }} onClick={()=>{setFechaDesde("");setFechaHasta("");}}>Limpiar</button>
       )}
      </div>
     </div>
+     <span style={{ color:"#6b7280", fontSize:13, whiteSpace:"nowrap" }}>{filtradas.length} de {(facturas||[]).length}</span>
+    </div>
     {filtradas.length>0&&(
-     <div style={{marginTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <span style={{fontSize:12,color:"#64748b"}}>
-       {filtradas.length} factura(s)
+     <div style={{ padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:`1px solid ${border}` }}>
+      <span style={{fontSize:13,color:"#64748b"}}>
        {fechaDesde||fechaHasta
         ? fechaDesde&&fechaHasta?` ${fechaDesde} al ${fechaHasta}`
          :fechaDesde?` desde ${fechaDesde}`
          :` hasta ${fechaHasta}`
-        : " todias las fechas"}
+        : "Todas las fechas"} · {totalGuias} guia(s) · {formatCOP(totalValor)}
       </span>
-      <Btn size="sm" variant="success" onClick={()=>{
+      <button style={{ ...buttonBase, padding:"8px 12px", fontSize:13, color:"#059669" }} onClick={()=>{
        // Export all filtered facturas as one CSV
        const lineasTodias = [];
        filtradas.forEach(fac=>{
@@ -169,52 +181,45 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
        URL.revokeObjectURL(url);
        showToast(` CSV descargado ${lineasTodias.length} lneas ${filtradas.length} factura(s)`,"success");
       }}>
-        Descargar Informe Consolidado ({filtradas.length} factura(s))
-      </Btn>
+        Descargar Informe Consolidado
+      </button>
      </div>
     )}
-   </Card>
-
-   {filtradas.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>Sin facturas registradas.</Card>}
-
-   <div style={{display:"flex",flexDirection:"column",gap:12}}>
+    {filtradas.length===0 ? (
+     <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin facturas registradas.</div>
+    ) : (
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+       <thead>
+        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+         {["Factura", "Transportista", "Fecha", "Valor", "Guias", "Cajas", "Acciones"].map(h => (
+          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+         ))}
+        </tr>
+       </thead>
+       <tbody>
     {filtradas.map(fac => {
      const trans = transportistas.find(t => t.id === fac.transportista_id);
      const guias = fac.factura_guias || [];
      const totalCajas = guias.reduce((a,g) => a+(g.pedidos?.cajas||0), 0);
      return (
-      <Card key={fac.id} style={{borderLeft:"4px solid #7c3aed"}}>
-       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-        <div style={{flex:1}}>
-         <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
-          <span style={{fontFamily:"monospace",fontWeight:900,fontSize:16}}>{fac.numero_factura}</span>
-          <span style={{background:"#f5f3ff",color:"#7c3aed",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:700}}>
-           {guias.length} guia(s)
-          </span>
-          <span style={{background:"#ecfdf5",color:"#059669",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:700}}>
-           {totalCajas} cajas
-          </span>
-         </div>
-         <div style={{fontSize:13,color:"#334155",display:"flex",flexDirection:"column",gap:3}}>
-          <span> {trans?.nombre||""}</span>
-          <span> Fecha: {fac.fecha_factura}</span>
-          <span style={{fontWeight:700,fontSize:15}}> Total: {formatCOP(fac.valor_total)}</span>
-          {totalCajas>0&&<span style={{color:"#64748b",fontSize:12}}>
-           Valor/caja promedio: {formatCOP(Math.round(fac.valor_total/totalCajas))}
-          </span>}
-          {fac.observaciones&&<span style={{color:"#94a3b8",fontSize:12}}> {fac.observaciones}</span>}
-         </div>
-        </div>
-        <div style={{display:"flex",gap:8,flexDirection:"column"}}>
-         <Btn size="sm" onClick={()=>setModDet(fac)}> Gestionar Guias</Btn>
-         <Btn size="sm" variant="success" onClick={()=>exportarCSVFacturaProveedor(fac, calcularLineas(fac), trans, formatCOP)}> Exportar CSV</Btn>
-         <Btn size="sm" variant="danger" onClick={()=>eliminar(fac.id, fac.numero_factura)}> Eliminar</Btn>
-        </div>
-       </div>
-      </Card>
+      <tr key={fac.id} style={{ borderBottom:`1px solid ${border}` }}>
+       <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850, fontFamily:"monospace" }}>{fac.numero_factura}</td>
+       <td style={{ padding:"16px" }}><div style={{ fontWeight:750 }}>{trans?.nombre||""}</div>{fac.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{fac.observaciones}</div>}</td>
+       <td style={{ padding:"16px", color:"#4b5563" }}>{fac.fecha_factura}</td>
+       <td style={{ padding:"16px", fontWeight:850 }}>{formatCOP(fac.valor_total)}</td>
+       <td style={{ padding:"16px" }}><span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{guias.length}</span></td>
+       <td style={{ padding:"16px", fontWeight:850 }}>{totalCajas}</td>
+       <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}><button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(fac)}>Gestionar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>exportarCSVFacturaProveedor(fac, calcularLineas(fac), trans, formatCOP)}>CSV</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>eliminar(fac.id, fac.numero_factura)}>Eliminar</button></div></td>
+      </tr>
      );
     })}
-   </div>
+       </tbody>
+      </table>
+     </div>
+    )}
+   </section>
+   </main>
 
    {/* Modal nueva factura */}
    {modNueva&&(

@@ -12,6 +12,10 @@ export function Usuarios({ usuarios, showToast, recargar }) {
  const [guardando, setGuardando] = useState(false);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const roleColors = {admin:P[600],operador:P[400],transportista:"#0891b2",conductor:"#059669",cliente:"#d97706"};
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
  const abrirNuevo = () => { setForm(vacio); setModal(true); };
  const abrirEditar = (u) => {
@@ -144,20 +148,32 @@ export function Usuarios({ usuarios, showToast, recargar }) {
  };
 
  return (
-  <div>
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-    <h2 style={{margin:0,color:P[800],fontWeight:900}}> Usuarios del Sistema</h2>
-    <Btn onClick={abrirNuevo}>+ Nuevo Usuario</Btn>
-   </div>
-   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Usuarios</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Administracion de accesos, roles y perfiles del sistema</p>
+    </div>
+    <button style={primaryButton} onClick={abrirNuevo}>+ Nuevo Usuario</button>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:14 }}>
+     {Object.entries(ROLES).map(([rol,label]) => (
+      <div key={rol} style={{ ...cardStyle, padding:16 }}>
+       <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>{label}</div>
+       <div style={{ color:roleColors[rol] || "#111827", fontSize:28, fontWeight:900, marginTop:8 }}>{usuarios.filter(u=>u.rol===rol).length}</div>
+      </div>
+     ))}
+    </section>
+    <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
     {usuarios.map(u=>(
-     <Card key={u.id} style={{borderTop:`3px solid ${roleColors[u.rol]||P[400]}`}}>
+     <article key={u.id} style={{ ...cardStyle, padding:18, borderTop:`3px solid ${roleColors[u.rol]||P[400]}` }}>
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
-       <div style={{width:40,height:40,borderRadius:20,background:`linear-gradient(135deg,${roleColors[u.rol]},${roleColors[u.rol]}99)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:16}}>
+       <div style={{width:42,height:42,borderRadius:14,background:`${roleColors[u.rol] || "#6d42d8"}18`,display:"flex",alignItems:"center",justifyContent:"center",color:roleColors[u.rol] || "#6d42d8",fontWeight:900,fontSize:16}}>
         {u.nombre[0].toUpperCase()}
        </div>
        <div style={{flex:1,minWidth:0}}>
-        <div style={{fontWeight:800,color:"#1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.nombre}</div>
+        <div style={{fontWeight:850,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.nombre}</div>
         <div style={{fontSize:12,color:"#64748b"}}>@{u.user}</div>
        </div>
       </div>
@@ -167,13 +183,14 @@ export function Usuarios({ usuarios, showToast, recargar }) {
       {u.placa &&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>Placa: {u.placa}</p>}
       {u.celular&&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}> {u.celular}</p>}
       {u.empresa&&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>{u.empresa}</p>}
-      <div style={{display:"flex",gap:8,marginTop:12}}>
-       <Btn size="sm" variant="secondary" onClick={()=>abrirEditar(u)}> Editar</Btn>
-       {u.user!=="admin"&&<Btn size="sm" variant="danger" onClick={()=>eliminar(u.id,u.user)}> Eliminar</Btn>}
+      <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
+       <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditar(u)}>Editar</button>
+       {u.user!=="admin"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>eliminar(u.id,u.user)}>Eliminar</button>}
       </div>
-     </Card>
+     </article>
     ))}
-   </div>
+    </section>
+   </main>
 
    {modal&&(
     <Modal title="Nuevo Usuario" onClose={()=>setModal(false)}>
