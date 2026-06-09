@@ -1294,404 +1294,229 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
 function Transportistas({ transportistas, conductores, showToast, user, recargar }) {
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
- const [modCond,  setModCond]  = useState(null);
- const [modEdit,  setModEdit]  = useState(null);
+ const [modCond, setModCond] = useState(null);
+ const [modEdit, setModEdit] = useState(null);
  const [guardando, setGuardando] = useState(false);
- const [formE, setFormE] = useState({nombre:"",nit:"",contacto:"",tel:"",user_login:"",pass_login:""});
- const [formC, setFormC] = useState({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});
- const [formEdit, setFormEdit] = useState({nombre:"",cedula:"",placa:"",celular:"",nit_proveedor:"",empresa:""});
- const fe = k => v => setFormE(p=>({...p,[k]:v}));
- const fc = k => v => setFormC(p=>({...p,[k]:v}));
-
- const esMia = user.rol==="transportista";
- const miNit = user.nit||"";
- const conductoresActivos = conductores.filter(c=>c.activo!==false);
- const misEmp = esMia ? transportistas.filter(t=>t.nit===miNit) : transportistas;
- const misCon = esMia ? conductoresActivos.filter(c=>c.nit_proveedor===miNit) : conductoresActivos;
+ const [formE, setFormE] = useState({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
+ const [formC, setFormC] = useState({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
+ const [formEdit, setFormEdit] = useState({ nombre:"", cedula:"", placa:"", celular:"", nit_proveedor:"", empresa:"" });
+ const fe = k => v => setFormE(p => ({ ...p, [k]: v }));
+ const fc = k => v => setFormC(p => ({ ...p, [k]: v }));
+ const esMia = user.rol === "transportista";
+ const miNit = user.nit || "";
+ const conductoresActivos = conductores.filter(c => c.activo !== false);
+ const misEmp = esMia ? transportistas.filter(t => t.nit === miNit) : transportistas;
+ const misCon = esMia ? conductoresActivos.filter(c => c.nit_proveedor === miNit) : conductoresActivos;
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
  const crearEmpresa = async () => {
-  if (!formE.nombre.trim()||!formE.nit.trim()) { showToast("Nombre y NIT son obligatorios","error"); return; }
-  if (!formE.user_login.trim()||!formE.pass_login.trim()) { showToast("Usuario y contrasea son obligatorios","error"); return; }
+  if (!formE.nombre.trim() || !formE.nit.trim()) { showToast("Nombre y NIT son obligatorios", "error"); return; }
+  if (!formE.user_login.trim() || !formE.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios", "error"); return; }
   setGuardando(true);
   try {
-   const { data, error } = await supabase.functions.invoke('create-system-user', {
-    body: {
-     type: 'system_user',
-     nombre: formE.nombre.trim(),
-     rol: 'transportista',
-     user_login: formE.user_login.trim(),
-     pass_login: formE.pass_login.trim(),
-     nit: formE.nit.trim(),
-     empresa: formE.nombre.trim(),
-    },
-   });
-   if (error) { showToast(mensajeError(error, "la empresa transportista"),"error"); setGuardando(false); return; }
-   if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
-   const { error: tErr } = await supabase.from('transportistas').update({
-    contacto: formE.contacto.trim(),
-    tel: formE.tel.trim(),
-   }).eq('nit', formE.nit.trim());
-   if (tErr) { showToast("Empresa creada, pero fallo contacto: "+tErr.message,"warning"); setGuardando(false); return; }
-   setModEmpresa(false); setFormE({nombre:"",nit:"",contacto:"",tel:"",user_login:"",pass_login:""});
-   showToast(" Empresa y usuario creados","success");
-   if(recargar) await recargar(); else if(window._recargar) await window._recargar();
-  } catch(e) { showToast(mensajeError(e, "la empresa transportista"),"error"); }
+   const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'system_user', nombre:formE.nombre.trim(), rol:'transportista', user_login:formE.user_login.trim(), pass_login:formE.pass_login.trim(), nit:formE.nit.trim(), empresa:formE.nombre.trim() } });
+   if (error) { showToast(mensajeError(error, "la empresa transportista"), "error"); setGuardando(false); return; }
+   if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
+   const { error: tErr } = await supabase.from('transportistas').update({ contacto:formE.contacto.trim(), tel:formE.tel.trim() }).eq('nit', formE.nit.trim());
+   if (tErr) { showToast("Empresa creada, pero fallo contacto: " + tErr.message, "warning"); setGuardando(false); return; }
+   setModEmpresa(false); setFormE({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
+   showToast("Empresa y usuario creados", "success");
+   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  } catch(e) { showToast(mensajeError(e, "la empresa transportista"), "error"); }
   setGuardando(false);
  };
 
  const guardarEdicionEmpresa = async () => {
-  if (!formE.nombre.trim()) { showToast("Nombre es obligatorio","error"); return; }
+  if (!formE.nombre.trim()) { showToast("Nombre es obligatorio", "error"); return; }
   setGuardando(true);
-  const { error: tErr } = await supabase.from('transportistas').update({nombre:formE.nombre.trim(),contacto:formE.contacto.trim(),tel:formE.tel.trim()}).eq('id',modEditEmp.id);
-  if (tErr) { showToast(mensajeError(tErr, "la empresa transportista"),"error"); setGuardando(false); return; }
+  const { error: tErr } = await supabase.from('transportistas').update({ nombre:formE.nombre.trim(), contacto:formE.contacto.trim(), tel:formE.tel.trim() }).eq('id', modEditEmp.id);
+  if (tErr) { showToast(mensajeError(tErr, "la empresa transportista"), "error"); setGuardando(false); return; }
   if (modEditEmp.usuario_id) {
-   const { data: usuarioEmp, error: uLoadErr } = await supabase.from('usuarios').select('*').eq('id',modEditEmp.usuario_id).single();
-   if (uLoadErr) { showToast(mensajeError(uLoadErr, "el usuario transportista"),"error"); setGuardando(false); return; }
+   const { data: usuarioEmp, error: uLoadErr } = await supabase.from('usuarios').select('*').eq('id', modEditEmp.usuario_id).single();
+   if (uLoadErr) { showToast(mensajeError(uLoadErr, "el usuario transportista"), "error"); setGuardando(false); return; }
    if (usuarioEmp.auth_user_id || formE.pass_login.trim()) {
-    const { data, error } = await supabase.functions.invoke('create-system-user', {
-     body: {
-      type: 'update_system_user',
-      user_id: modEditEmp.usuario_id,
-      nombre: formE.nombre.trim(),
-      rol: 'transportista',
-      user_login: usuarioEmp.user,
-      pass_login: formE.pass_login.trim(),
-      nit: modEditEmp.nit,
-      empresa: formE.nombre.trim(),
-     },
-    });
-    if (error) { showToast(mensajeError(error, "el acceso transportista"),"error"); setGuardando(false); return; }
-    if (data?.error) { showToast("Error actualizando acceso: "+data.error,"error"); setGuardando(false); return; }
+    const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'update_system_user', user_id:modEditEmp.usuario_id, nombre:formE.nombre.trim(), rol:'transportista', user_login:usuarioEmp.user, pass_login:formE.pass_login.trim(), nit:modEditEmp.nit, empresa:formE.nombre.trim() } });
+    if (error) { showToast(mensajeError(error, "el acceso transportista"), "error"); setGuardando(false); return; }
+    if (data?.error) { showToast("Error actualizando acceso: " + data.error, "error"); setGuardando(false); return; }
    }
   }
-  setModEditEmp(null); showToast(" Empresa actualizada","success");
-  if(recargar) await recargar(); else if(window._recargar) await window._recargar(); setGuardando(false);
+  setModEditEmp(null); showToast("Empresa actualizada", "success");
+  if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  setGuardando(false);
  };
 
- const abrirEditarEmpresa = (t) => {
-  setFormE({nombre:t.nombre,nit:t.nit,contacto:t.contacto||"",tel:t.tel||"",user_login:"",pass_login:""});
-  setModEditEmp(t);
- };
+ const abrirEditarEmpresa = (t) => { setFormE({ nombre:t.nombre, nit:t.nit, contacto:t.contacto || "", tel:t.tel || "", user_login:"", pass_login:"" }); setModEditEmp(t); };
 
  const inscribirConductor = async () => {
-  if (!formC.nombre.trim()||!formC.placa.trim()||!formC.cedula.trim()) { showToast("Nombre, cedula y placa son obligatorios","error"); return; }
-  if (!formC.user_login.trim()||!formC.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios","error"); return; }
+  if (!formC.nombre.trim() || !formC.placa.trim() || !formC.cedula.trim()) { showToast("Nombre, cedula y placa son obligatorios", "error"); return; }
+  if (!formC.user_login.trim() || !formC.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios", "error"); return; }
   const emp = modCond;
   setGuardando(true);
   try {
-   const { data, error } = await supabase.functions.invoke('create-system-user', {
-    body: {
-     type: 'conductor',
-     nombre: formC.nombre.trim(),
-     cedula: formC.cedula.trim(),
-     placa: formC.placa.trim(),
-     celular: formC.celular.trim(),
-     user_login: formC.user_login.trim(),
-     pass_login: formC.pass_login.trim(),
-     nit_proveedor: emp.nit,
-     empresa: emp.nombre,
-    },
-   });
-   if (error) { showToast(mensajeError(error, "el acceso del conductor"),"error"); setGuardando(false); return; }
-   if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
-   setModCond(null); setFormC({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});
-   showToast(`Conductor inscrito en ${emp.nombre}`,"success");
-   if(recargar) await recargar(); else if(window._recargar) await window._recargar();
-  } catch(e) { showToast(mensajeError(e, "el conductor"),"error"); }
+   const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'conductor', nombre:formC.nombre.trim(), cedula:formC.cedula.trim(), placa:formC.placa.trim(), celular:formC.celular.trim(), user_login:formC.user_login.trim(), pass_login:formC.pass_login.trim(), nit_proveedor:emp.nit, empresa:emp.nombre } });
+   if (error) { showToast(mensajeError(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
+   if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
+   setModCond(null); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
+   showToast(`Conductor inscrito en ${emp.nombre}`, "success");
+   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  } catch(e) { showToast(mensajeError(e, "el conductor"), "error"); }
   setGuardando(false);
  };
 
  const guardarEdicionConductor = async () => {
-  if (!formEdit.nombre.trim()||!formEdit.placa.trim()) { showToast("Nombre y placa son obligatorios","error"); return; }
+  if (!formEdit.nombre.trim() || !formEdit.placa.trim()) { showToast("Nombre y placa son obligatorios", "error"); return; }
   setGuardando(true);
-  const nitProveedor = esMia ? (modEdit.nit_proveedor||miNit) : formEdit.nit_proveedor.trim();
-  const empresaProveedor = esMia ? (modEdit.empresa||user.empresa||user.nombre) : formEdit.empresa.trim();
-  const { error: cErr } = await supabase.from('conductores').update({
-   nombre:formEdit.nombre.trim(), cedula:formEdit.cedula.trim(), placa:formEdit.placa.trim(),
-   celular:formEdit.celular.trim(), nit_proveedor:nitProveedor, empresa:empresaProveedor,
-  }).eq('id', modEdit.id);
-  if (cErr) { showToast("Error actualizando conductor: "+cErr.message,"error"); setGuardando(false); return; }
+  const nitProveedor = esMia ? (modEdit.nit_proveedor || miNit) : formEdit.nit_proveedor.trim();
+  const empresaProveedor = esMia ? (modEdit.empresa || user.empresa || user.nombre) : formEdit.empresa.trim();
+  const { error: cErr } = await supabase.from('conductores').update({ nombre:formEdit.nombre.trim(), cedula:formEdit.cedula.trim(), placa:formEdit.placa.trim(), celular:formEdit.celular.trim(), nit_proveedor:nitProveedor, empresa:empresaProveedor }).eq('id', modEdit.id);
+  if (cErr) { showToast("Error actualizando conductor: " + cErr.message, "error"); setGuardando(false); return; }
   if (modEdit.usuario_id) {
-   const { error: uErr } = await supabase.from('usuarios').update({nombre:formEdit.nombre.trim(),placa:formEdit.placa.trim(),celular:formEdit.celular.trim()}).eq('id',modEdit.usuario_id);
-   if (uErr) { showToast("Conductor actualizado, pero fallo usuario: "+uErr.message,"warning"); setGuardando(false); return; }
+   const { error: uErr } = await supabase.from('usuarios').update({ nombre:formEdit.nombre.trim(), placa:formEdit.placa.trim(), celular:formEdit.celular.trim() }).eq('id', modEdit.usuario_id);
+   if (uErr) { showToast("Conductor actualizado, pero fallo usuario: " + uErr.message, "warning"); setGuardando(false); return; }
   }
-  setModEdit(null); showToast("Conductor actualizado","success");
-  if(recargar) await recargar(); else if(window._recargar) await window._recargar(); setGuardando(false);
+  setModEdit(null); showToast("Conductor actualizado", "success");
+  if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  setGuardando(false);
  };
 
  return (
-  <div>
-   {esMia&&(
-    <Card style={{background:`linear-gradient(135deg,${P[950]},${P[700]})`,marginBottom:22}}>
-     <div style={{display:"flex",alignItems:"center",gap:14}}>
-      <Logo size={46}/>
-      <div>
-       <h2 style={{margin:0,color:"#fff",fontWeight:900}}>{user.empresa||user.nombre}</h2>
-       <p style={{margin:"4px 0 0",color:P[300],fontSize:13}}>NIT: {miNit} {misCon.length} conductor(es)</p>
-      </div>
-     </div>
-    </Card>
-   )}
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-    <h3 style={{margin:0,color:P[800],fontWeight:800}}> {esMia?"Mi Empresa":"Empresas Transportistas"}</h3>
-    {!esMia&&<Btn onClick={()=>setModEmpresa(true)}>+ Nueva Empresa</Btn>}
-   </div>
-   {!esMia&&(
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginBottom:28}}>
-     {misEmp.map(t=>(
-      <Card key={t.id} style={{borderLeft:`4px solid ${P[500]}`}}>
-       <div style={{fontWeight:800,color:P[800],fontSize:15,marginBottom:6}}> {t.nombre}</div>
-       <div style={{fontSize:13,color:"#64748b",display:"flex",flexDirection:"column",gap:3}}>
-        <span>NIT: <strong style={{fontFamily:"monospace"}}>{t.nit}</strong></span>
-        {t.contacto&&<span> {t.contacto}</span>}
-        {t.tel&&<span> {t.tel}</span>}
-        <span> {conductoresActivos.filter(c=>c.nit_proveedor===t.nit).length} conductor(es)</span>
-       </div>
-       <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-        <Btn size="sm" variant="secondary" onClick={()=>abrirEditarEmpresa(t)}> Editar</Btn>
-        <Btn size="sm" variant="secondary" onClick={()=>{setModCond(t);setFormC({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});}}>+ Conductor</Btn>
-       </div>
-      </Card>
-     ))}
-     {misEmp.length===0&&<p style={{color:"#94a3b8",fontSize:13}}>Sin empresas registradas.</p>}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esMia ? "Mi Empresa" : "Transportistas"}</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>{esMia ? "Conductores asociados a tu empresa" : "Gestion de empresas transportistas y sus conductores"}</p>
     </div>
-   )}
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-    <h3 style={{margin:0,color:P[800],fontWeight:800}}> {esMia?"Mis Conductores":"Todos los Conductores"}</h3>
-    {esMia&&<Btn onClick={()=>{setModCond({nit:miNit,nombre:user.empresa||user.nombre});setFormC({nombre:"",cedula:"",placa:"",celular:"",user_login:"",pass_login:""});}}>+ Inscribir Conductor</Btn>}
-   </div>
-   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:14}}>
-    {misCon.map(c=>(
-     <Card key={c.id} style={{borderLeft:`3px solid ${P[400]}`}}>
-      <div style={{fontWeight:800,color:P[800],marginBottom:4}}> {c.nombre}</div>
-      {c.cedula&&<div style={{fontSize:12,color:"#94a3b8"}}>CC: {c.cedula}</div>}
-      <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Placa: <strong style={{fontFamily:"monospace"}}>{c.placa}</strong></div>
-      {c.celular&&<div style={{fontSize:12,color:"#64748b"}}> {c.celular}</div>}
-      {c.empresa&&<div style={{fontSize:12,color:P[600],fontWeight:600,marginTop:3}}> {c.empresa}</div>}
-      <div style={{display:"flex",gap:8,marginTop:10}}>
-       <span style={{background:"#ecfdf5",color:"#059669",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}> Activo</span>
-       <Btn size="sm" variant="secondary" onClick={()=>{setFormEdit({nombre:c.nombre,cedula:c.cedula||"",placa:c.placa||"",celular:c.celular||"",nit_proveedor:c.nit_proveedor||"",empresa:c.empresa||""});setModEdit(c);}}> Editar</Btn>
-      </div>
-     </Card>
-    ))}
-    {misCon.length===0&&<p style={{color:"#94a3b8",fontSize:13}}>Sin conductores inscritos.</p>}
-   </div>
+    {!esMia && <button style={primaryButton} onClick={() => setModEmpresa(true)}>+ Nueva Empresa</button>}
+    {esMia && <button style={primaryButton} onClick={() => { setModCond({ nit:miNit, nombre:user.empresa || user.nombre }); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" }); }}>+ Inscribir Conductor</button>}
+   </header>
 
-   {modEmpresa&&(
-    <Modal title="Nueva Empresa Transportista" onClose={()=>setModEmpresa(false)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="Razn Social *" value={formE.nombre} onChange={fe("nombre")} required placeholder="Transportes XYZ S.A.S"/>
-      <Field label="NIT *" value={formE.nit} onChange={fe("nit")} required placeholder="900123456-1"/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Persona de Contacto" value={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz"/>
-       <Field label="Telfono" value={formE.tel} onChange={fe("tel")} placeholder="3001234567"/>
-      </div>
-      <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
-       <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/>
-        <Field label="Contrasena *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:24 }}>
+    {esMia && (
+     <section style={{ ...cardStyle, padding:22 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+       <div style={{ width:46, height:46, borderRadius:14, background:"#6d42d8", color:"#fff", display:"grid", placeItems:"center", fontWeight:900 }}>PRO</div>
+       <div>
+        <h2 style={{ margin:0, fontSize:18, fontWeight:850 }}>{user.empresa || user.nombre}</h2>
+        <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:13 }}>NIT: {miNit} · {misCon.length} conductor(es)</p>
        </div>
       </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModEmpresa(false)}>Cancelar</Btn>
-       <Btn onClick={crearEmpresa} disabled={guardando}>{guardando?"Guardando...":" Crear Empresa y Usuario"}</Btn>
-      </div>
-     </div>
-    </Modal>
-   )}
+     </section>
+    )}
 
-   {modEditEmp&&(
-    <Modal title={`Editar ${modEditEmp.nombre}`} onClose={()=>setModEditEmp(null)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="Razn Social *" value={formE.nombre} onChange={fe("nombre")} required/>
-      <p style={{fontSize:12,color:"#64748b",margin:0}}>NIT: <strong>{modEditEmp.nit}</strong> (no modificable)</p>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/>
-       <Field label="Telfono" value={formE.tel} onChange={fe("tel")}/>
+    {!esMia && (
+     <section>
+      <h2 style={{ margin:"0 0 14px", fontSize:16, fontWeight:850 }}>Empresas Transportistas</h2>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))", gap:14 }}>
+       {misEmp.map(t => {
+        const total = conductoresActivos.filter(c => c.nit_proveedor === t.nit).length;
+        return (
+         <article key={t.id} style={{ ...cardStyle, padding:18 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start" }}>
+           <div>
+            <div style={{ fontSize:16, fontWeight:850 }}>{t.nombre}</div>
+            <div style={{ color:"#6b7280", fontSize:13, marginTop:5, fontFamily:"monospace" }}>{t.nit}</div>
+           </div>
+           <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"4px 10px", fontSize:12, fontWeight:800 }}>{total}</span>
+          </div>
+          <div style={{ marginTop:14, color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
+           {t.contacto && <span>Contacto: {t.contacto}</span>}
+           {t.tel && <span>Tel: {t.tel}</span>}
+           <span>{total} conductor(es)</span>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap" }}>
+           <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => abrirEditarEmpresa(t)}>Editar</button>
+           <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => { setModCond(t); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" }); }}>+ Conductor</button>
+          </div>
+         </article>
+        );
+       })}
+       {misEmp.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin empresas registradas.</div>}
       </div>
-      <Field label="Nueva Contrasena (vaco = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contrasea..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModEditEmp(null)}>Cancelar</Btn>
-       <Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando?"Guardando...":" Guardar"}</Btn>
-      </div>
-     </div>
-    </Modal>
-   )}
+     </section>
+    )}
 
-   {modCond&&(
-    <Modal title={`Inscribir Conductor ${modCond.nombre}`} onClose={()=>setModCond(null)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{background:P[50],borderRadius:10,padding:10,fontSize:12,color:P[700]}}>
-       Empresa: <strong>{modCond.nombre}</strong> NIT: <strong>{modCond.nit}</strong>
-      </div>
-      <Field label="Nombre *" value={formC.nombre} onChange={fc("nombre")} required/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Cedula *" value={formC.cedula} onChange={fc("cedula")} required placeholder="1012345678"/>
-       <Field label="Celular" value={formC.celular} onChange={fc("celular")} placeholder="3001234567"/>
-      </div>
-      <Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/>
-      <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
-       <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso del conductor</p>
-       <p style={{fontSize:12,color:"#64748b",margin:"-4px 0 10px"}}>
-        Este usuario permite ingresar al modulo de conductor para consultar pedidos, reportar ubicacion y registrar entregas.
-       </p>
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/>
-        <Field label="Contrasena *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/>
-       </div>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModCond(null)}>Cancelar</Btn>
-       <Btn onClick={inscribirConductor} disabled={guardando}>{guardando?"Guardando...":"Inscribir y Crear Usuario"}</Btn>
-      </div>
+    <section>
+     <h2 style={{ margin:"0 0 14px", fontSize:16, fontWeight:850 }}>{esMia ? "Mis Conductores" : "Todos los Conductores"}</h2>
+     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
+      {misCon.map(c => (
+       <article key={c.id} style={{ ...cardStyle, padding:18 }}>
+        <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:12 }}>
+         <div style={{ width:40, height:40, borderRadius:20, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{c.nombre?.[0]?.toUpperCase() || "C"}</div>
+         <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:850, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nombre}</div>
+          <div style={{ color:"#6b7280", fontSize:13 }}>Placa: <span style={{ fontFamily:"monospace", color:"#111827" }}>{c.placa}</span></div>
+         </div>
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
+         {c.cedula && <span>CC: {c.cedula}</span>}
+         {c.celular && <span>Tel: {c.celular}</span>}
+         {c.empresa && <span>{c.empresa}</span>}
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:14 }}>
+         <span style={{ background:"#ecfdf5", color:"#059669", borderRadius:99, padding:"4px 10px", fontSize:12, fontWeight:800 }}>Activo</span>
+         <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>Editar</button>
+        </div>
+       </article>
+      ))}
+      {misCon.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores inscritos.</div>}
      </div>
-    </Modal>
-   )}
+    </section>
+   </main>
 
-   {modEdit&&(
-    <Modal title={`Editar Conductor ${modEdit.nombre}`} onClose={()=>setModEdit(null)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="Nombre *" value={formEdit.nombre} onChange={v=>setFormEdit(p=>({...p,nombre:v}))} required/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Cedula" value={formEdit.cedula} onChange={v=>setFormEdit(p=>({...p,cedula:v}))} placeholder="1012345678"/>
-       <Field label="Celular" value={formEdit.celular} onChange={v=>setFormEdit(p=>({...p,celular:v}))} placeholder="3001234567"/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Placa *" value={formEdit.placa} onChange={v=>setFormEdit(p=>({...p,placa:v}))} required placeholder="ABC-123"/>
-       {!esMia&&<Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v=>setFormEdit(p=>({...p,nit_proveedor:v}))} placeholder="900123456-1"/>}
-      </div>
-      {esMia?(
-       <div style={{background:P[50],border:`1px solid ${P[200]}`,borderRadius:10,padding:12,fontSize:12,color:P[800]}}>
-        <div style={{fontWeight:800,marginBottom:4}}>Pertenencia del conductor</div>
-        <div>NIT proveedor: <strong>{formEdit.nit_proveedor||miNit}</strong></div>
-        <div>Empresa: <strong>{formEdit.empresa||user.empresa||user.nombre}</strong></div>
-        <div style={{color:"#64748b",marginTop:6}}>Estos datos solo pueden ser modificados por un administrador.</div>
-       </div>
-      ):(
-       <Field label="Empresa" value={formEdit.empresa} onChange={v=>setFormEdit(p=>({...p,empresa:v}))} placeholder="Transportes XYZ"/>
-      )}
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModEdit(null)}>Cancelar</Btn>
-       <Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando?"Guardando...":" Guardar"}</Btn>
-      </div>
-     </div>
-    </Modal>
-   )}
+   {modEmpresa && <Modal title="Nueva Empresa Transportista" onClose={() => setModEmpresa(false)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required placeholder="Transportes XYZ S.A.S"/><Field label="NIT *" value={formE.nit} onChange={fe("nit")} required placeholder="900123456-1"/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Persona de Contacto" value={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz"/><Field label="Telefono" value={formE.tel} onChange={fe("tel")} placeholder="3001234567"/></div><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEmpresa(false)}>Cancelar</Btn><Btn onClick={crearEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Crear Empresa y Usuario"}</Btn></div></div></Modal>}
+   {modEditEmp && <Modal title={`Editar ${modEditEmp.nombre}`} onClose={() => setModEditEmp(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required/><p style={{ fontSize:12, color:"#64748b", margin:0 }}>NIT: <strong>{modEditEmp.nit}</strong> (no modificable)</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/><Field label="Telefono" value={formE.tel} onChange={fe("tel")}/></div><Field label="Nueva Contrasena (vacio = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contrasena..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEditEmp(null)}>Cancelar</Btn><Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
+   {modCond && <Modal title={`Inscribir Conductor ${modCond.nombre}`} onClose={() => setModCond(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>Empresa: <strong>{modCond.nombre}</strong> · NIT: <strong>{modCond.nit}</strong></div><Field label="Nombre *" value={formC.nombre} onChange={fc("nombre")} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula *" value={formC.cedula} onChange={fc("cedula")} required placeholder="1012345678"/><Field label="Celular" value={formC.celular} onChange={fc("celular")} placeholder="3001234567"/></div><Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso del conductor</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModCond(null)}>Cancelar</Btn><Btn onClick={inscribirConductor} disabled={guardando}>{guardando ? "Guardando..." : "Inscribir y Crear Usuario"}</Btn></div></div></Modal>}
+   {modEdit && <Modal title={`Editar Conductor ${modEdit.nombre}`} onClose={() => setModEdit(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Nombre *" value={formEdit.nombre} onChange={v => setFormEdit(p => ({ ...p, nombre:v }))} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula" value={formEdit.cedula} onChange={v => setFormEdit(p => ({ ...p, cedula:v }))} placeholder="1012345678"/><Field label="Celular" value={formEdit.celular} onChange={v => setFormEdit(p => ({ ...p, celular:v }))} placeholder="3001234567"/></div><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Placa *" value={formEdit.placa} onChange={v => setFormEdit(p => ({ ...p, placa:v }))} required placeholder="ABC-123"/>{!esMia && <Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v => setFormEdit(p => ({ ...p, nit_proveedor:v }))} placeholder="900123456-1"/>}</div>{esMia ? <div style={{ background:"#f8fafc", border:`1px solid ${border}`, borderRadius:12, padding:12, fontSize:13, color:"#4b5563" }}><div style={{ fontWeight:800, marginBottom:4 }}>Pertenencia del conductor</div><div>NIT proveedor: <strong>{formEdit.nit_proveedor || miNit}</strong></div><div>Empresa: <strong>{formEdit.empresa || user.empresa || user.nombre}</strong></div><div style={{ color:"#6b7280", marginTop:6 }}>Estos datos solo pueden ser modificados por un administrador.</div></div> : <Field label="Empresa" value={formEdit.empresa} onChange={v => setFormEdit(p => ({ ...p, empresa:v }))} placeholder="Transportes XYZ"/>}<div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEdit(null)}>Cancelar</Btn><Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
   </div>
  );
 }
 
 function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
  const [gpsTick, setGpsTick] = useState(0);
- useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
- const [selCond,setSelCond]=useState("");
- const condIds=[...new Set(pedidos.filter(p=>p.conductor_id).map(p=>p.conductor_id))];
- const condOpts=condIds.map(id=>conductores.find(c=>c.id===id)).filter(Boolean);
- const cond=conductores.find(c=>String(c.id)===String(selCond));
- const misPeds = selCond ? pedidos.filter(p=>String(p.conductor_id)===String(selCond)&&p.estado==="en_transito") : [];
- const misDV  = selCond ? devoluciones.filter(d=>String(d.conductor_id)===String(selCond)&&d.estado==="en_transito") : [];
- const misRC  = selCond ? recogidas.filter(r=>String(r.conductor_id)===String(selCond)&&r.estado==="en_transito") : [];
- const totalCajas=misPeds.reduce((a,p)=>a+(parseInt(p.cajas)||0),0);
+ useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
+ const [selCond, setSelCond] = useState("");
+ const condIds = [...new Set(pedidos.filter(p => p.conductor_id).map(p => p.conductor_id))];
+ const condOpts = condIds.map(id => conductores.find(c => c.id === id)).filter(Boolean);
+ const cond = conductores.find(c => String(c.id) === String(selCond));
+ const misPeds = selCond ? pedidos.filter(p => String(p.conductor_id) === String(selCond) && p.estado === "en_transito") : [];
+ const misDV = selCond ? devoluciones.filter(d => String(d.conductor_id) === String(selCond) && d.estado === "en_transito") : [];
+ const misRC = selCond ? recogidas.filter(r => String(r.conductor_id) === String(selCond) && r.estado === "en_transito") : [];
+ const totalCajas = misPeds.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
 
- const imprimir=()=>{
-  if(!cond){return;}
-  const win=window.open("","_blank");
-  if(!win)return;
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Resumen ${cond.nombre}</title>
-  <style>body{font-family:Arial,sans-serif;padding:32px}h1{color:#4c1d95}h2{color:#6d28d9}table{width:100%;border-collapse:collapse}
-  th{background:#f5f3ff;color:#4c1d95;padding:10px 12px;text-align:left;font-size:12px;border-bottom:2px solid #ddd6fe}
-  td{padding:10px 12px;border-bottom:1px solid #ede9fe;font-size:13px}.total{font-size:16px;font-weight:bold;color:#4c1d95}</style></head>
-  <body>
-  <h1>Somos PRO Tracking Resumen de Despachos</h1>
-  <h2>Conductor: ${cond.nombre} Placa: ${cond.placa}${cond.celular?" Tel: "+cond.celular:""}</h2>
-  <p>Empresa: ${cond.empresa||""} NIT: ${cond.nit_proveedor||""}</p>
-  <p>Fecha: ${new Date().toLocaleDateString("es-CO",{day:"2-digit",month:"long",year:"numeric"})}</p>
-  <table><thead><tr><th>#</th><th>Guia Interna</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Fecha Est.</th></tr></thead>
-  <tbody>${misPeds.map((p,i)=>`<tr><td>${i+1}</td><td><strong>${p.guia_interna||""}</strong></td><td>${p.id}</td><td>${p.factura||""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}</td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${p.fecha_estimada||""}</td></tr>`).join("")}
-  </tbody></table>
-  <p class="total" style="margin-top:20px">Total pedidos: ${misPeds.length} Total cajas: <strong>${totalCajas}</strong></p>
-  </body></html>`);
+ const imprimir = () => {
+  if (!cond) return;
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Resumen ${cond.nombre}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111827}h1{margin:0 0 6px}p{color:#6b7280}table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.total{font-size:16px;font-weight:bold}</style></head><body><h1>Somos PRO Tracking Resumen de Despachos</h1><h2>Conductor: ${cond.nombre} Placa: ${cond.placa}${cond.celular ? " Tel: " + cond.celular : ""}</h2><p>Empresa: ${cond.empresa || ""} NIT: ${cond.nit_proveedor || ""}</p><p>Fecha: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })}</p><table><thead><tr><th>#</th><th>Guia Interna</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Fecha Est.</th></tr></thead><tbody>${misPeds.map((p,i) => `<tr><td>${i+1}</td><td><strong>${p.guia_interna || ""}</strong></td><td>${p.id}</td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}</td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${p.fecha_estimada || ""}</td></tr>`).join("")}</tbody></table><p class="total" style="margin-top:20px">Total pedidos: ${misPeds.length} Total cajas: <strong>${totalCajas}</strong></p></body></html>`);
   win.print();
  };
 
  return (
-  <div>
-   <h2 style={{margin:"0 0 22px",color:P[800],fontWeight:900}}> Resumen por Transportador Pedidos En Transito</h2>
-   <Card style={{marginBottom:20}}>
-    <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-     <Field label="Seleccionar Conductor / Transportador" value={selCond} onChange={setSelCond} as="select"
-      options={[{value:"",label:" Seleccione conductor "},...condOpts.map(c=>({value:c.id,label:`${c.nombre} ${c.placa} ${c.empresa||""}`}))]}
-      style={{flex:1,minWidth:280}} />
-     <Btn variant="ghost" onClick={imprimir} disabled={!cond} style={{marginTop:18}}> Imprimir Resumen</Btn>
-    </div>
-   </Card>
-   {cond&&(
-    <>
-     <Card style={{background:`linear-gradient(135deg,${P[800]},${P[600]})`,marginBottom:20}}>
-      <div style={{display:"flex",alignItems:"center",gap:14}}>
-       <div style={{width:52,height:52,borderRadius:26,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}></div>
-       <div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:18}}>{cond.nombre}</div>
-        <div style={{color:P[300],fontSize:13}}>Placa: {cond.placa}{cond.celular&&`  ${cond.celular}`}</div>
-        <div style={{color:P[300],fontSize:12}}>{cond.empresa||""} NIT: {cond.nit_proveedor||""}</div>
-       </div>
-       <div style={{marginLeft:"auto",textAlign:"right",display:"flex",gap:20}}>
-        <div>
-         <div style={{color:"#fff",fontSize:28,fontWeight:900,lineHeight:1}}>{misPeds.length}</div>
-         <div style={{color:P[300],fontSize:11}}>pedidos</div>
-        </div>
-        <div>
-         <div style={{color:"#fca5a5",fontSize:22,fontWeight:900,lineHeight:1}}>{misDV.length}</div>
-         <div style={{color:P[300],fontSize:11}}>devoluc.</div>
-        </div>
-        <div>
-         <div style={{color:"#86efac",fontSize:22,fontWeight:900,lineHeight:1}}>{misRC.length}</div>
-         <div style={{color:P[300],fontSize:11}}>recogidas</div>
-        </div>
-       </div>
-      </div>
-     </Card>
-     <Card style={{padding:0,overflow:"hidden"}}>
-      <div style={{overflowX:"auto"}}>
-       <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-        <thead><tr style={{background:P[50]}}>
-         {["#","Guia Interna","No. Pedido","Factura","Cliente","Ciudad","Cajas","Estado","Fecha Est."].map(h=>(
-          <th key={h} style={{padding:"11px 14px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>
-         ))}
-        </tr></thead>
-        <tbody>
-         {misPeds.map((p,i)=>(
-          <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
-           <td style={{padding:"11px 14px",color:"#94a3b8",fontSize:11}}>{i+1}</td>
-           <td style={{padding:"11px 14px",fontFamily:"monospace",fontSize:11,color:P[600],fontWeight:700}}>{p.guia_interna||""}</td>
-           <td style={{padding:"11px 14px",fontWeight:800,color:P[700]}}>{p.id}</td>
-           <td style={{padding:"11px 14px",fontFamily:"monospace",fontSize:12}}>{p.factura}</td>
-           <td style={{padding:"11px 14px",color:"#334155",maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cliente}</td>
-           <td style={{padding:"11px 14px",color:"#64748b",fontSize:12}}>{p.ciudad_nombre}</td>
-           <td style={{padding:"11px 14px",textAlign:"center",fontWeight:700}}>{p.cajas}</td>
-           <td style={{padding:"11px 14px"}}><Badge estado={p.estado}/></td>
-           <td style={{padding:"11px 14px",color:"#64748b",fontSize:12}}>{p.fecha_estimada||""}</td>
-          </tr>
-         ))}
-         <tr style={{background:P[50],borderTop:`2px solid ${P[200]}`}}>
-          <td colSpan={6} style={{padding:"12px 14px",fontWeight:700,color:P[800],textAlign:"right"}}>TOTAL</td>
-          <td style={{padding:"12px 14px",textAlign:"center",fontWeight:900,fontSize:16,color:P[700]}}>{totalCajas}</td>
-          <td colSpan={2} style={{padding:"12px 14px",color:"#64748b",fontSize:12}}>{misPeds.length} pedido(s)</td>
-         </tr>
-        </tbody>
-       </table>
-      </div>
-     </Card>
-    </>
-   )}
-   {!cond&&condOpts.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay pedidos con conductor asignado.</Card>}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Resumen Transportador</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Pedidos, devoluciones y recogidas activas por conductor</p>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:18 }}>
+     <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"end" }}>
+      <Field label="Seleccionar Conductor / Transportador" value={selCond} onChange={setSelCond} as="select" options={[{ value:"", label:"Seleccione conductor" }, ...condOpts.map(c => ({ value:c.id, label:`${c.nombre} ${c.placa} ${c.empresa || ""}` }))]} />
+      <button style={{ ...buttonBase, height:40 }} onClick={imprimir} disabled={!cond}>Imprimir Resumen</button>
+     </div>
+    </section>
+    {cond && <section style={{ ...cardStyle, padding:22 }}><div style={{ display:"flex", alignItems:"center", gap:16, justifyContent:"space-between", flexWrap:"wrap" }}><div style={{ display:"flex", alignItems:"center", gap:14 }}><div style={{ width:48, height:48, borderRadius:24, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{cond.nombre?.[0]?.toUpperCase() || "C"}</div><div><h2 style={{ margin:0, fontSize:18 }}>{cond.nombre}</h2><p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:13 }}>Placa: {cond.placa}{cond.celular && ` · ${cond.celular}`}</p><p style={{ margin:"3px 0 0", color:"#6b7280", fontSize:12 }}>{cond.empresa || ""} {cond.nit_proveedor ? `· NIT: ${cond.nit_proveedor}` : ""}</p></div></div><div style={{ display:"flex", gap:14 }}><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900 }}>{misPeds.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>pedidos</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900, color:"#ef4444" }}>{misDV.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>devoluc.</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900, color:"#059669" }}>{misRC.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>recogidas</div></div></div></div></section>}
+    {cond && <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}><div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}><thead><tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>{["#", "Guia Interna", "No. Pedido", "Factura", "Cliente", "Ciudad", "Cajas", "Estado", "Fecha Est."].map(h => <th key={h} style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>{h}</th>)}</tr></thead><tbody>{misPeds.map((p,i) => <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}><td style={{ padding:"16px", color:"#6b7280" }}>{i+1}</td><td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}>{p.guia_interna || ""}</td><td style={{ padding:"16px", fontWeight:800 }}>{p.id}</td><td style={{ padding:"16px", fontFamily:"monospace", color:"#4b5563" }}>{p.factura}</td><td style={{ padding:"16px" }}>{p.cliente}</td><td style={{ padding:"16px", color:"#4b5563" }}>{p.ciudad_nombre}</td><td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td><td style={{ padding:"16px" }}><Badge estado={p.estado} /></td><td style={{ padding:"16px", color:"#6b7280" }}>{p.fecha_estimada || ""}</td></tr>)}<tr style={{ background:"#fafafa" }}><td colSpan={6} style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>TOTAL</td><td style={{ padding:"16px", fontWeight:900, fontSize:16 }}>{totalCajas}</td><td colSpan={2} style={{ padding:"16px", color:"#6b7280" }}>{misPeds.length} pedido(s)</td></tr></tbody></table></div></section>}
+    {!cond && condOpts.length === 0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No hay pedidos con conductor asignado.</section>}
+   </main>
   </div>
  );
 }
-
-// Ciudades 
-
 function Ciudades({ ciudades, showToast, recargar }) {
  const [modNueva,setModNueva]=useState(false);
  const [modCSV,setModCSV]=useState(false);
