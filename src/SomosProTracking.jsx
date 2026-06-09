@@ -2255,47 +2255,65 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
   const q=busq.toLowerCase();
   return !busq||d.guia.toLowerCase().includes(q)||d.factura.toLowerCase().includes(q)||d.pedido_ref.toLowerCase().includes(q);
  });
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+ const totalAbiertas = filtradas.filter(d => d.estado !== "entregado" && d.estado !== "novedad").length;
+ const totalCerradas = filtradas.length - totalAbiertas;
 
  return (
-  <div>
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22,flexWrap:"wrap",gap:10}}>
-    <h2 style={{margin:0,color:"#dc2626",fontWeight:900}}> Devoluciones</h2>
-    <Btn onClick={()=>setModNueva(true)}>+ Nueva Devolucion</Btn>
-   </div>
-   <Card style={{padding:14,marginBottom:16}}>
-    <input value={busq} onChange={e=>setBusq(e.target.value)}
-     placeholder=" Buscar por guia, factura o pedido..." style={iSt}/>
-   </Card>
-   <div style={{display:"flex",flexDirection:"column",gap:12}}>
-    {filtradas.length===0&&<Card style={{textAlign:"center",padding:32,color:"#94a3b8"}}>Sin devoluciones registradas.</Card>}
-    {filtradas.map(d=>(
-     <Card key={d.id} style={{borderLeft:"4px solid #dc2626"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-       <div style={{flex:1}}>
-        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
-         <span style={{fontFamily:"monospace",fontWeight:900,color:"#dc2626",fontSize:15}}>{d.guia}</span>
-         <Badge estado={d.estado}/>
-         {d.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}> Con Novedad</span>}
-        </div>
-        <div style={{fontSize:13,color:"#64748b"}}>Factura: <strong>{d.factura}</strong> Pedido: <strong>{d.pedido_ref}</strong> {d.unidades} uds {d.ciudad_nombre}</div>
-        <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Motivo: {d.motivo}</div>
-        {d.paqueteria&&<div style={{fontSize:12,color:"#0891b2"}}> {d.paqueteria} {d.guia_paqueteria}</div>}
-        {d.fecha_real&&<div style={{fontSize:12,color:"#059669",marginTop:2}}> Completado: {d.fecha_real}</div>}
-        {d.soporte_data&&(
-         <Btn size="sm" variant="success" style={{marginTop:8}}
-          onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
-           Ver Soporte
-         </Btn>
-        )}
-       </div>
-       {esCliente && !d.conductor_id && d.estado==="sin_asignar" && (
-        <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(d)}>Editar</Btn>
-       )}
-       {!esCliente&&<Btn size="sm" variant="secondary" onClick={()=>setModDet(d)}>Gestionar</Btn>}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esCliente ? "Mis Devoluciones" : "Devoluciones"}</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de solicitudes de devolucion</p>
+    </div>
+    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Devolucion</button>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia, factura o pedido..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{filtradas.length} de {devoluciones.length}</span>
+      <span style={{ background:"#fef2f2", color:"#dc2626", borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800 }}>{totalAbiertas} abiertas</span>
+     </div>
+     {filtradas.length===0 ? (
+      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin devoluciones registradas.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+          {["Guia", "Factura", "Pedido", "Ciudad", "Unidades", "Estado", "Soporte", "Acciones"].map(h => (
+           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+          ))}
+         </tr>
+        </thead>
+        <tbody>
+         {filtradas.map(d=>(
+          <tr key={d.id} style={{ borderBottom:`1px solid ${border}` }}>
+           <td style={{ padding:"16px", color:"#dc2626", fontWeight:850, fontFamily:"monospace" }}>{d.guia}</td>
+           <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{d.factura}</td>
+           <td style={{ padding:"16px", fontWeight:750 }}>{d.pedido_ref}</td>
+           <td style={{ padding:"16px" }}><div>{d.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{d.dir_recogida}</div></td>
+           <td style={{ padding:"16px", fontWeight:850 }}>{d.unidades}</td>
+           <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={d.estado}/>{d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{d.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {d.fecha_real}</div>}</td>
+           <td style={{ padding:"16px" }}>{d.soporte_data ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
+           <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !d.conductor_id && d.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(d)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(d)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
       </div>
-     </Card>
-    ))}
-   </div>
+     )}
+    </section>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_data).length}</div></div>
+    </section>
+   </main>
    {(modNueva||modEditar)&&(
     <Modal title={modEditar ? "Editar Solicitud de Devolucion" : "Nueva Solicitud de Devolucion"} onClose={cerrarFormulario} wide>
      <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2565,49 +2583,65 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
   const q=busq.toLowerCase();
   return !busq||r.guia.toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
  });
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+ const totalAbiertas = filtradas.filter(r => r.estado !== "entregado" && r.estado !== "novedad").length;
+ const totalCerradas = filtradas.length - totalAbiertas;
 
  return (
-  <div>
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22,flexWrap:"wrap",gap:10}}>
-    <h2 style={{margin:0,color:"#0891b2",fontWeight:900}}> Recogidas</h2>
-    <Btn onClick={()=>setModNueva(true)}>+ Nueva Recogida</Btn>
-   </div>
-   <Card style={{padding:14,marginBottom:16}}>
-    <input value={busq} onChange={e=>setBusq(e.target.value)}
-     placeholder=" Buscar por guia o ciudad..." style={iSt}/>
-   </Card>
-   <div style={{display:"flex",flexDirection:"column",gap:12}}>
-    {filtradas.length===0&&<Card style={{textAlign:"center",padding:32,color:"#94a3b8"}}>Sin recogidas registradas.</Card>}
-    {filtradas.map(r=>(
-     <Card key={r.id} style={{borderLeft:"4px solid #0891b2"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-       <div style={{flex:1}}>
-        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
-         <span style={{fontFamily:"monospace",fontWeight:900,color:"#0891b2",fontSize:15}}>{r.guia}</span>
-         <Badge estado={r.estado}/>
-         {r.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}> Con Novedad</span>}
-        </div>
-        <div style={{fontSize:13,color:"#64748b"}}>
-          Recogida: {r.ciudad_recogida_nombre} Entrega: {r.ciudad_entrega_nombre}
-        </div>
-        <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{r.unidades} uds {r.volumen_m3} m {r.peso_kg} kg</div>
-        {r.paqueteria&&<div style={{fontSize:12,color:"#0891b2"}}> {r.paqueteria} {r.guia_paqueteria}</div>}
-        {r.fecha_real&&<div style={{fontSize:12,color:"#059669",marginTop:2}}> Completado: {r.fecha_real}</div>}
-        {r.doc_data&&(
-         <Btn size="sm" variant="success" style={{marginTop:8}}
-          onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
-           Ver Documento
-         </Btn>
-        )}
-       </div>
-       {esCliente && !r.conductor_id && r.estado==="sin_asignar" && (
-        <Btn size="sm" variant="secondary" onClick={()=>abrirEditarCliente(r)}>Editar</Btn>
-       )}
-       {!esCliente&&<Btn size="sm" variant="secondary" onClick={()=>setModDet(r)}>Gestionar</Btn>}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esCliente ? "Mis Recogidas" : "Recogidas"}</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de solicitudes de recogida</p>
+    </div>
+    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Recogida</button>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{filtradas.length} de {recogidas.length}</span>
+      <span style={{ background:"#ecfeff", color:"#0891b2", borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800 }}>{totalAbiertas} abiertas</span>
+     </div>
+     {filtradas.length===0 ? (
+      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin recogidas registradas.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+          {["Guia", "Recogida", "Entrega", "Unidades", "Peso", "Estado", "Documento", "Acciones"].map(h => (
+           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+          ))}
+         </tr>
+        </thead>
+        <tbody>
+         {filtradas.map(r=>(
+          <tr key={r.id} style={{ borderBottom:`1px solid ${border}` }}>
+           <td style={{ padding:"16px", color:"#0891b2", fontWeight:850, fontFamily:"monospace" }}>{r.guia}</td>
+           <td style={{ padding:"16px" }}><div>{r.ciudad_recogida_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_recogida}</div></td>
+           <td style={{ padding:"16px" }}><div>{r.ciudad_entrega_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_entrega}</div></td>
+           <td style={{ padding:"16px", fontWeight:850 }}>{r.unidades}</td>
+           <td style={{ padding:"16px", color:"#4b5563" }}>{r.peso_kg} kg</td>
+           <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={r.estado}/>{r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{r.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {r.fecha_real}</div>}</td>
+           <td style={{ padding:"16px" }}>{r.doc_data ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
+           <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !r.conductor_id && r.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(r)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(r)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
       </div>
-     </Card>
-    ))}
-   </div>
+     )}
+    </section>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_data).length}</div></div>
+    </section>
+   </main>
    {(modNueva||modEditar)&&(
     <Modal title={modEditar ? "Editar Solicitud de Recogida" : "Nueva Solicitud de Recogida"} onClose={cerrarFormulario} wide>
      <div style={{display:"flex",flexDirection:"column",gap:14}}>
