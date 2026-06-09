@@ -15,6 +15,7 @@ import { LinkCompartir } from './components/share/LinkCompartir';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Usuarios } from './modules/usuarios/Usuarios';
+import logoSrc from '../Logo.png';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -3497,10 +3498,9 @@ export default function SomosProTracking() {
  }, []);
 
  if (cargando) return (
-  <div style={{ minHeight:"100vh", background:`linear-gradient(160deg,${P[950]},${P[700]})`, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:20 }}>
-   <Logo size={80}/>
-   <div style={{ color:"#fff", fontSize:18, fontWeight:700 }}>Cargando Somos PRO Tracking...</div>
-   <div style={{ color:P[300], fontSize:13 }}>Conectando con la base de datos</div>
+  <div style={{ minHeight:"100vh", background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:18, fontFamily:"'Segoe UI', system-ui, sans-serif" }}>
+   <img src={logoSrc} alt="SomosPro" style={{ width:88, height:88, objectFit:"contain" }} />
+   <div style={{ color:"#18213f", fontSize:20, fontWeight:800, textAlign:"center" }}>Bienvenido a SomosPro</div>
   </div>
  );
 
