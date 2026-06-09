@@ -1098,43 +1098,65 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
 function RastreoGPS({ pedidos, conductores, ciudades }) {
  const conCond = pedidos.filter(p => p.conductor_id);
  const [sel, setSel] = useState(conCond[0] || null);
- const cond = conductores.find(c => c.id === sel?.conductor_id);
- const ciudad = (ciudades||[]).find(c => c.code === sel?.ciudad_codigo);
+ const cond = conductores.find(c => String(c.id) === String(sel?.conductor_id));
+ const ciudad = (ciudades || []).find(c => c.code === sel?.ciudad_codigo);
  const mapUrl = sel ? `https://maps.google.com/maps?q=${encodeURIComponent((sel.direccion || "") + ", " + (ciudad?.name || "") + ", Colombia")}&output=embed&z=14` : null;
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
 
  return (
-  <div>
-   <h2 style={{ margin: "0 0 22px", color: P[800], fontWeight: 900 }}> Rastreo GPS</h2>
-   <div style={{ display: "grid", gridTemplateColumns: "minmax(240px,280px) 1fr", gap: 20, alignItems: "start" }}>
-    <Card style={{ padding: 14 }}>
-     <p style={{ fontWeight: 700, color: P[700], fontSize: 11, textTransform: "uppercase", margin: "0 0 12px" }}>Pedidos con conductor</p>
-     <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 500, overflowY: "auto" }}>
-      {conCond.length === 0 && <p style={{ color: "#94a3b8", fontSize: 13 }}>Sin pedidos asignados.</p>}
-      {conCond.map(p => (
-       <button key={p.id} onClick={() => setSel(p)} style={{ width: "100%", padding: "10px 12px", background: sel?.id === p.id ? P[50] : "#fafafa", border: `1.5px solid ${sel?.id === p.id ? P[400] : "#e2e8f0"}`, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-        <div style={{ fontWeight: 700, color: P[700] }}>{p.id}</div>
-        <div style={{ fontSize: 12, color: "#64748b" }}>{p.cliente}</div>
-        <div style={{ fontSize: 11, color: "#94a3b8" }}>{p.ciudad_nombre}</div>
-        <div style={{ marginTop: 4 }}><Badge estado={p.estado} /></div>
-       </button>
-      ))}
-     </div>
-    </Card>
-    <Card>
-     {sel && mapUrl ? (
-      <>
-       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 800, color: P[800], fontSize: 16 }}>{sel.id} {sel.cliente}</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}> {sel.direccion}, {ciudad?.name}</div>
-        {cond && <div style={{ fontSize: 13, color: P[600], marginTop: 2 }}> {cond.nombre} Placa: {sel.placa}</div>}
-       </div>
-       <div style={{ borderRadius: 12, overflow: "hidden", border: `2px solid ${P[200]}` }}>
-        <iframe title="mapa-rastreo" src={mapUrl} width="100%" height="340" style={{ border: "none", display: "block" }} allowFullScreen loading="lazy" />
-       </div>
-      </>
-     ) : <p style={{ color: "#94a3b8", textAlign: "center", padding: 48 }}>Selecciona un pedido para ver el mapa de entrega.</p>}
-    </Card>
-   </div>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Rastreo GPS</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Seguimiento geografico de pedidos con conductor asignado</p>
+   </header>
+
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
+    <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:16, alignItems:"start" }}>
+     <section style={{ ...cardStyle, overflow:"hidden" }}>
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}` }}>
+       <h2 style={{ margin:0, fontSize:14, fontWeight:850 }}>Pedidos con conductor</h2>
+       <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:12 }}>{conCond.length} pedido(s) disponibles</p>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:0, maxHeight:"calc(100vh - 190px)", overflowY:"auto" }}>
+       {conCond.length === 0 && <p style={{ color:"#9ca3af", fontSize:13, padding:20, margin:0 }}>Sin pedidos asignados.</p>}
+       {conCond.map(p => {
+        const active = sel?.id === p.id;
+        return (
+         <button key={p.id} onClick={() => setSel(p)} style={{ width:"100%", padding:"14px 18px", background:active?"#f0eef9":"#fff", border:"none", borderBottom:`1px solid ${border}`, cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"flex-start" }}>
+           <div>
+            <div style={{ fontWeight:850, color:active?"#5b33d6":"#111827" }}>{p.guia_interna || p.id}</div>
+            <div style={{ fontSize:13, color:"#4b5563", marginTop:4 }}>{p.cliente}</div>
+            <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>{p.ciudad_nombre}</div>
+           </div>
+           <Badge estado={p.estado} />
+          </div>
+         </button>
+        );
+       })}
+      </div>
+     </section>
+
+     <section style={{ ...cardStyle, minHeight:520, overflow:"hidden" }}>
+      {sel && mapUrl ? (
+       <>
+        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
+         <div>
+          <div style={{ fontWeight:850, fontSize:17 }}>{sel.guia_interna || sel.id} <span style={{ color:"#6b7280", fontWeight:650 }}>{sel.cliente}</span></div>
+          <div style={{ fontSize:13, color:"#6b7280", marginTop:6 }}>{sel.direccion}, {ciudad?.name || sel.ciudad_nombre}</div>
+          {cond && <div style={{ fontSize:13, color:"#5b33d6", marginTop:4 }}>{cond.nombre} · Placa: {sel.placa || cond.placa}</div>}
+         </div>
+         <Badge estado={sel.estado} />
+        </div>
+        <iframe title="mapa-rastreo" src={mapUrl} width="100%" height="458" style={{ border:"none", display:"block" }} allowFullScreen loading="lazy" />
+       </>
+      ) : (
+       <div style={{ minHeight:520, display:"grid", placeItems:"center", color:"#9ca3af", textAlign:"center", padding:40 }}>Selecciona un pedido para ver el mapa de entrega.</div>
+      )}
+     </section>
+    </div>
+   </main>
   </div>
  );
 }
@@ -1144,19 +1166,23 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
  const [guardando, setGuardando] = useState(false);
  const vacio = { nombre:"", cedula:"", placa:"", celular:"", nit_proveedor:"", empresa:"", user_login:"", pass_login:"" };
  const [form, setForm] = useState(vacio);
- const f = k => v => setForm(p=>({...p,[k]:v}));
- const conductoresActivos = conductores.filter(c=>c.activo!==false);
+ const f = k => v => setForm(p => ({ ...p, [k]: v }));
+ const conductoresActivos = conductores.filter(c => c.activo !== false);
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
  const guardar = async () => {
-  if (!form.nombre.trim()||!form.cedula.trim()||!form.placa.trim()) {
-   showToast("Nombre, cdula y placa son obligatorios","error"); return;
+  if (!form.nombre.trim() || !form.cedula.trim() || !form.placa.trim()) {
+   showToast("Nombre, cedula y placa son obligatorios", "error"); return;
   }
-  if (!form.user_login.trim()||!form.pass_login.trim()) {
-   showToast("Usuario y contrasea son obligatorios","error"); return;
+  if (!form.user_login.trim() || !form.pass_login.trim()) {
+   showToast("Usuario y contrasena son obligatorios", "error"); return;
   }
   if (form.nit_proveedor.trim()) {
-   const existe = (transportistas||[]).find(t=>t.nit===form.nit_proveedor.trim());
-   if (!existe) { showToast("El NIT no corresponde a ninguna empresa registrada","error"); return; }
+   const existe = (transportistas || []).find(t => t.nit === form.nit_proveedor.trim());
+   if (!existe) { showToast("El NIT no corresponde a ninguna empresa registrada", "error"); return; }
   }
   setGuardando(true);
   try {
@@ -1173,74 +1199,91 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
      empresa: form.empresa.trim(),
     },
    });
-   if (error) { showToast(mensajeError(error, "el acceso del conductor"),"error"); setGuardando(false); return; }
-   if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
-
+   if (error) { showToast(mensajeError(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
+   if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
    setModal(false); setForm(vacio);
-   showToast(" Conductor y usuario creados","success");
-   if(recargar) await recargar(); else if(window._recargar) await window._recargar();
+   showToast("Conductor y usuario creados", "success");
+   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
   } catch(e) {
-   showToast("Error inesperado: "+e.message,"error");
+   showToast("Error inesperado: " + e.message, "error");
   }
   setGuardando(false);
  };
 
  return (
-  <div>
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-    <h2 style={{margin:0,color:P[800],fontWeight:900}}> Conductores</h2>
-    <Btn onClick={()=>setModal(true)}>+ Registrar Conductor</Btn>
-   </div>
-   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-    {conductoresActivos.map(c=>{
-     const asig=pedidos.filter(p=>p.conductor_id===c.id).length;
-     const tran=pedidos.filter(p=>p.conductor_id===c.id&&p.estado==="en_transito").length;
-     return (
-      <Card key={c.id} style={{borderTop:`3px solid ${P[500]}`}}>
-       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
-        <div style={{width:44,height:44,borderRadius:22,background:`linear-gradient(135deg,${P[700]},${P[500]})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:18}}></div>
-        <div>
-         <div style={{fontWeight:800,color:P[800]}}>{c.nombre}</div>
-         <div style={{fontSize:12,color:"#64748b"}}>Placa: <strong style={{fontFamily:"monospace"}}>{c.placa}</strong></div>
-         {c.cedula&&<div style={{fontSize:11,color:"#94a3b8"}}>CC: {c.cedula}</div>}
-         {c.celular&&<div style={{fontSize:12,color:"#64748b"}}> {c.celular}</div>}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Conductores</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion de conductores, placas y disponibilidad operativa</p>
+    </div>
+    <button style={primaryButton} onClick={() => setModal(true)}>+ Registrar Conductor</button>
+   </header>
+
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:14 }}>
+     {conductoresActivos.map(c => {
+      const asignados = pedidos.filter(p => String(p.conductor_id) === String(c.id)).length;
+      const transito = pedidos.filter(p => String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
+      return (
+       <article key={c.id} style={{ ...cardStyle, padding:18 }}>
+        <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
+         <div style={{ width:46, height:46, borderRadius:23, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900, fontSize:15, flexShrink:0 }}>
+          {c.nombre?.split(/\s+/).slice(0,2).map(x => x[0]).join("").toUpperCase() || "C"}
+         </div>
+         <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:850, fontSize:16, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nombre}</div>
+          <div style={{ color:"#6b7280", fontSize:13, marginTop:3 }}>Placa: <span style={{ fontFamily:"monospace", color:"#111827" }}>{c.placa}</span></div>
+         </div>
         </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+         <div style={{ background:"#fafafa", border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:800, textTransform:"uppercase" }}>Asignados</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:900 }}>{asignados}</div>
+         </div>
+         <div style={{ background:"#fafafa", border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:800, textTransform:"uppercase" }}>En Transito</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:900, color:transito ? "#6d42d8" : "#111827" }}>{transito}</div>
+         </div>
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
+         {c.cedula && <span>CC: {c.cedula}</span>}
+         {c.celular && <span>Tel: {c.celular}</span>}
+         {c.empresa && <span>{c.empresa}</span>}
+        </div>
+       </article>
+      );
+     })}
+     {conductoresActivos.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores registrados.</div>}
+    </section>
+   </main>
+
+   {modal && (
+    <Modal title="Registrar Conductor" onClose={() => setModal(false)}>
+     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>
+       Se creara automaticamente el usuario de acceso al sistema.
+      </div>
+      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required placeholder="Juan Perez" />
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+       <Field label="Cedula *" value={form.cedula} onChange={f("cedula")} required placeholder="1012345678" />
+       <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567" />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+       <Field label="Placa *" value={form.placa} onChange={f("placa")} required placeholder="ABC-123" />
+       <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1" />
+      </div>
+      <Field label="Empresa de transporte" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S" />
+      <div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}>
+       <p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p>
+       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" data-lpignore="true" />
+        <Field label="Contrasena *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="" name="spt_driver_password" autoComplete="new-password" data-lpignore="true" />
        </div>
-       <div style={{fontSize:13,color:"#64748b",display:"flex",flexDirection:"column",gap:3}}>
-        {c.empresa&&<span> {c.empresa}</span>}
-        <span> Asignados: <strong>{asig}</strong> En transito: <strong style={{color:P[600]}}>{tran}</strong></span>
-       </div>
-      </Card>
-     );
-    })}
-    {conductoresActivos.length===0&&<p style={{color:"#94a3b8"}}>Sin conductores registrados.</p>}
-   </div>
-   {modal&&(
-    <Modal title="Registrar Conductor" onClose={()=>setModal(false)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{background:P[50],borderRadius:10,padding:10,fontSize:12,color:P[700]}}>
-       Se crear automaticamente el usuario de acceso al sistema.
       </div>
-      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required placeholder="Juan Prez"/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Cedula *" value={form.cedula} onChange={f("cedula")} required placeholder="1012345678"/>
-       <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Placa *" value={form.placa} onChange={f("placa")} required placeholder="ABC-123"/>
-       <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1"/>
-      </div>
-      <Field label="Empresa de transporte" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S"/>
-      <div style={{borderTop:`1px solid ${P[100]}`,paddingTop:12}}>
-       <p style={{fontSize:12,fontWeight:700,color:P[700],margin:"0 0 10px",textTransform:"uppercase"}}>Acceso al Sistema</p>
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" data-lpignore="true"/>
-        <Field label="Contrasena *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="" name="spt_driver_password" autoComplete="new-password" data-lpignore="true"/>
-       </div>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModal(false)}>Cancelar</Btn>
-       <Btn onClick={guardar} disabled={guardando}>{guardando?"Guardando...":" Guardar y Crear Usuario"}</Btn>
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+       <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
+       <Btn onClick={guardar} disabled={guardando}>{guardando ? "Guardando..." : "Guardar y Crear Usuario"}</Btn>
       </div>
      </div>
     </Modal>
@@ -1248,7 +1291,6 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
   </div>
  );
 }
-
 function Transportistas({ transportistas, conductores, showToast, user, recargar }) {
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
