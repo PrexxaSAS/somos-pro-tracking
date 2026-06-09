@@ -1057,8 +1057,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
          );
         })}
        </tbody>
-      </table>
+     </table>
      </div>
+     <PaginationControls total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
     </section>
    </main>
 
