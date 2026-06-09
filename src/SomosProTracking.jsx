@@ -893,6 +893,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  });
  const totalCajas = filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
+ const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
+ const pageEnd = Math.min(filtrados.length, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, filtro, pageSize]);
 
  const guardar = async () => {
@@ -1014,7 +1016,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      </div>
 
      <div style={{ padding:"12px 16px", color:"#6b7280", fontSize:13, borderBottom:`1px solid ${border}` }}>
-      {filtrados.length} de {pedidos.length} pedidos · {totalCajas} cajas
+      Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
      </div>
 
      <div style={{ overflowX:"auto" }}>
