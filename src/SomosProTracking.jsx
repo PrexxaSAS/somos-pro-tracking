@@ -864,25 +864,31 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
 }
 
 function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], recargar, user }) {
- const [filtro,  setFiltro]  = useState("todos");
- const [busq,   setBusq]   = useState("");
+ const [filtro, setFiltro] = useState("todos");
+ const [busq, setBusq] = useState("");
  const [modNuevo, setModNuevo] = useState(false);
- const [modDet,  setModDet]  = useState(null);
- const [modGuia,  setModGuia]  = useState(null);
- const [modCSV,  setModCSV]  = useState(false);
+ const [modDet, setModDet] = useState(null);
+ const [modGuia, setModGuia] = useState(null);
+ const [modCSV, setModCSV] = useState(false);
  const [modGuias, setModGuias] = useState(false);
 
  const vacio = { id: "", cliente: "", ciudad_codigo: "", direccion: "", cajas: "", factura: "", fecha_estimada: "", notas: "", conductor_id: "", tipo: "propio", paqueteria: "", guia_paqueteria: "" };
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
- const conductoresActivos = conductores.filter(c=>c.activo!==false);
+ const conductoresActivos = conductores.filter(c => c.activo !== false);
 
  const filtrados = pedidos.filter(p => {
   const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria");
-  const q  = busq.toLowerCase();
-  const okB = !busq || p.id.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || p.factura?.toLowerCase().includes(q) || (p.ciudad_nombre || "").toLowerCase().includes(q);
+  const q = busq.toLowerCase();
+  const okB = !busq ||
+   (p.id || "").toLowerCase().includes(q) ||
+   (p.guia_interna || "").toLowerCase().includes(q) ||
+   (p.cliente || "").toLowerCase().includes(q) ||
+   (p.factura || "").toLowerCase().includes(q) ||
+   (p.ciudad_nombre || "").toLowerCase().includes(q);
   return okF && okB;
  });
+ const totalCajas = filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
 
  const guardar = async () => {
   if (!form.id.trim() || !form.cliente.trim() || !form.ciudad_codigo || !form.factura.trim()) {
@@ -891,9 +897,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   if (pedidos.find(p => p.id === form.id.trim())) {
    showToast("Ya existe un pedido con ese numero", "error"); return;
   }
-  const ciudad = (ciudades||[]).find(c => c.code === form.ciudad_codigo);
-  const ciudadOrigen = (ciudades||[]).find(c => c.code === form.ciudad_origen_codigo);
-  const cond  = conductoresActivos.find(c => String(c.id) === String(form.conductor_id));
+  const ciudad = (ciudades || []).find(c => c.code === form.ciudad_codigo);
+  const ciudadOrigen = (ciudades || []).find(c => c.code === form.ciudad_origen_codigo);
+  const cond = conductoresActivos.find(c => String(c.id) === String(form.conductor_id));
   const esPaq = form.tipo === "paqueteria";
   const guia_interna = !esPaq ? generarGuia(pedidos) : null;
   const nuevo = {
@@ -903,13 +909,13 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    direccion: form.direccion.trim(), cajas: parseInt(form.cajas) || 0,
    factura: form.factura.trim(), fecha_estimada: form.fecha_estimada || null,
    notas: form.notas.trim(), tipo: form.tipo,
-   empresa_transporte: form.tipo==="empresa_transporte"?form.empresa_transporte:null,
-   paqueteria:   esPaq ? form.paqueteria : null,
+   empresa_transporte: form.tipo === "empresa_transporte" ? form.empresa_transporte : null,
+   paqueteria: esPaq ? form.paqueteria : null,
    guia_paqueteria: esPaq ? form.guia_paqueteria.trim() : null,
-   conductor_id:  cond ? cond.id : null,
-   placa:      cond ? cond.placa : null,
-   nit_proveedor:  cond ? cond.nit_proveedor : null,
-   estado:     esPaq ? "paqueteria" : (cond ? "en_transito" : "sin_asignar"),
+   conductor_id: cond ? cond.id : null,
+   placa: cond ? cond.placa : null,
+   nit_proveedor: cond ? cond.nit_proveedor : null,
+   estado: esPaq ? "paqueteria" : (cond ? "en_transito" : "sin_asignar"),
    fecha_despacho: cond ? new Date().toISOString().split("T")[0] : null,
    estado_despacho: form.estado_despacho || "despachado",
    ciudad_origen_codigo: form.ciudad_origen_codigo || null,
@@ -921,41 +927,39 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   };
   if (supabase) {
    const { error } = await supabase.from("pedidos").insert(nuevo);
-   if (error) { showToast(mensajeError(error, "el pedido"),"error"); return; }
-   if(recargar) await recargar(); else if(window._recargar) await window._recargar();
+   if (error) { showToast(mensajeError(error, "el pedido"), "error"); return; }
+   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
   } else {
    setPedidos(prev => [nuevo, ...prev]);
   }
   setModNuevo(false);
   setForm(vacio);
-  showToast(` Pedido ${form.id} creado Guia: ${guia_interna||"N/A"}`, "success");
+  showToast(`Pedido ${form.id} creado. Guia: ${guia_interna || "N/A"}`, "success");
  };
 
  const imprimirPlanilla = () => {
   const win = window.open('', '_blank');
   if (!win) { showToast("Permite ventanas emergentes para imprimir", "error"); return; }
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Planilla Somos PRO Tracking</title>
-  <style>body{font-family:Arial,sans-serif;padding:32px;color:#1e293b}h1{color:#4c1d95;margin-bottom:4px}p{color:#64748b;margin:0 0 20px}
-  table{width:100%;border-collapse:collapse}th{background:#f5f3ff;color:#4c1d95;padding:10px 12px;text-align:left;font-size:12px;border-bottom:2px solid #ddd6fe}
-  td{padding:10px 12px;border-bottom:1px solid #ede9fe;font-size:13px}.badge{padding:3px 10px;border-radius:12px;font-weight:700;font-size:11px}
-  .footer{margin-top:30px;font-size:10px;color:#94a3b8;text-align:center}</style></head>
+  <style>body{font-family:Arial,sans-serif;padding:32px;color:#1e293b}h1{color:#111827;margin-bottom:4px}p{color:#64748b;margin:0 0 20px}
+  table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}
+  td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.footer{margin-top:30px;font-size:10px;color:#94a3b8;text-align:center}</style></head>
   <body><h1>Planilla de Despachos Somos PRO Tracking</h1>
-  <p>Fecha de impresion: ${new Date().toLocaleDateString("es-CO",{day:"2-digit",month:"long",year:"numeric"})} Total pedidos: ${filtrados.length}</p>
+  <p>Fecha de impresion: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })} Total pedidos: ${filtrados.length}</p>
   <table><thead><tr><th>#</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad / DANE</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Conductor / Paqueteria</th><th>Firma Recibido</th></tr></thead>
   <tbody>${filtrados.map((p, i) => {
    const cond = conductores.find(c => c.id === p.conductor_id);
-   const trans = p.tipo === "paqueteria" ? ` ${p.paqueteria} ${p.guia_paqueteria}` : (cond ? `${cond.nombre} ${p.placa}` : "Sin asignar");
-   return `<tr><td>${i+1}</td><td><strong>${p.id}</strong></td><td>${p.factura||""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}<br/><small>${p.ciudad_codigo}</small></td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${trans}</td><td></td></tr>`;
+   const trans = p.tipo === "paqueteria" ? `${p.paqueteria || ""} ${p.guia_paqueteria || ""}` : (cond ? `${cond.nombre} ${p.placa || ""}` : "Sin asignar");
+   return `<tr><td>${i+1}</td><td><strong>${p.guia_interna || p.id}</strong></td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}<br/><small>${p.ciudad_codigo}</small></td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${trans}</td><td></td></tr>`;
   }).join("")}</tbody></table>
   <div class="footer">Somos PRO Tracking Documento generado automaticamente</div></body></html>`);
   win.print();
  };
 
-
  const handleImportarCSV = async (rows) => {
-  const conGuias = rows.map((r,i) => ({
+  const conGuias = rows.map((r, i) => ({
    ...r,
-   guia_interna: r.tipo !== "paqueteria" ? generarGuia([...pedidos,...rows.slice(0,i)]) : null,
+   guia_interna: r.tipo !== "paqueteria" ? generarGuia([...pedidos, ...rows.slice(0, i)]) : null,
    estado_despacho: r.estado_despacho || "despachado",
    novedad: false,
    soportes_data: [],
@@ -965,149 +969,132 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    if (error) { showToast("Error importando " + p.id + ": " + error.message, "error"); return; }
   }
   setModCSV(false);
-  showToast(" " + rows.length + " pedido(s) importados", "success");
+  showToast(rows.length + " pedido(s) importados", "success");
   if (recargar) await recargar();
  };
 
+ const pageBg = "#fafafa";
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+
  return (
-  <div>
-   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
-    <h2 style={{ margin: 0, color: P[800], fontWeight: 900 }}> Pedidos</h2>
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-     <Btn variant="ghost" size="sm" onClick={imprimirPlanilla}> Planilla</Btn>
-     <Btn variant="secondary" size="sm" onClick={() => setModCSV(true)}> CSV Pedidos</Btn>
-     <Btn variant="secondary" size="sm" onClick={() => setModGuias(true)}> Cargar Guias Paqueteria</Btn>
-     <Btn size="sm" onClick={() => setModNuevo(true)}>+ Nuevo Pedido</Btn>
+  <div style={{ minHeight:"100%", background:pageBg, margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Pedidos</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de todos los pedidos</p>
     </div>
-   </div>
+    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+     <button style={buttonBase} onClick={imprimirPlanilla}>Planilla</button>
+     <button style={buttonBase} onClick={() => setModCSV(true)}>CSV Pedidos</button>
+     <button style={buttonBase} onClick={() => setModGuias(true)}>Cargar Guias Paqueteria</button>
+     <button style={primaryButton} onClick={() => setModNuevo(true)}>+ Nuevo Pedido</button>
+    </div>
+   </header>
 
-   <Card style={{ padding: 14, marginBottom: 16 }}>
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-     <input value={busq} onChange={e => setBusq(e.target.value)}
-      placeholder=" Buscar por N pedido, factura, cliente o ciudad..."
-      style={{ ...iSt, flex: 1, minWidth: 200 }} />
-     <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...iSt, width: "auto" }}>
-      <option value="todos">Todos los estados</option>
-      {Object.entries(ESTADOS_PEDIDO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-      <option value="paqueteria_tipo">Solo Paqueteria</option>
-     </select>
-    </div>
-    <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
-     {filtrados.length} de {pedidos.length} pedidos {filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0)} cajas
-    </div>
-   </Card>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
+    <section style={{ ...cardStyle, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr 180px", gap:12, borderBottom:`1px solid ${border}` }}>
+      <div style={{ position:"relative" }}>
+       <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#6b7280", fontSize:18 }}>⌕</span>
+       <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar por N pedido, factura, cliente o ciudad..." style={{ width:"100%", height:38, border:`1px solid ${border}`, borderRadius:12, padding:"0 14px 0 38px", boxSizing:"border-box", fontSize:14, fontFamily:"inherit", outline:"none", background:"#fff" }} />
+      </div>
+      <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width:"100%", height:38, border:`1px solid ${border}`, borderRadius:12, padding:"0 12px", fontSize:14, fontFamily:"inherit", outline:"none", background:"#fff" }}>
+       <option value="todos">Todos los estados</option>
+       {Object.entries(ESTADOS_PEDIDO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+       <option value="paqueteria_tipo">Solo Paqueteria</option>
+      </select>
+     </div>
 
-   <Card style={{ padding: 0, overflow: "hidden" }}>
-    <div style={{ overflowX: "auto" }}>
-     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-      <thead>
-       <tr style={{ background: P[50] }}>
-        {["No. Pedido","Factura","Cliente","Ciudad / DANE","Cajas","Estado","Conductor / Paqueteria","Acciones"].map(h => (
-         <th key={h} style={{ padding: "11px 14px", textAlign: "left", fontWeight: 700, color: P[700], fontSize: 11, whiteSpace: "nowrap" }}>{h}</th>
-        ))}
-       </tr>
-      </thead>
-      <tbody>
-       {filtrados.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>Sin pedidos</td></tr>}
-       {filtrados.map((p, i) => {
-        const cond = conductores.find(c => c.id === p.conductor_id);
-        return (
-         <tr key={p.id} style={{ borderTop: `1px solid ${P[100]}`, background: i % 2 ? "#fafafa" : "#fff" }}>
-          <td style={{ padding: "11px 14px", fontWeight: 800, color: P[700] }}>{p.id}</td>
-          <td style={{ padding: "11px 14px", fontFamily: "monospace", fontSize: 12 }}>{p.factura}</td>
-          <td style={{ padding: "11px 14px", color: "#334155", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.cliente}</td>
-          <td style={{ padding: "11px 14px" }}>
-           <div style={{ color: "#334155", fontSize: 13 }}>{p.ciudad_nombre}</div>
-           <div style={{ fontFamily: "monospace", color: P[500], fontSize: 10 }}>{p.ciudad_codigo}</div>
-          </td>
-          <td style={{ padding: "11px 14px", textAlign: "center", fontWeight: 700 }}>{p.cajas}</td>
-          <td style={{ padding: "11px 14px" }}><Badge estado={p.estado} /></td>
-          <td style={{ padding: "11px 14px", fontSize: 12 }}>
-           {p.tipo === "paqueteria"
-            ? <span style={{ color: "#0891b2" }}> {p.paqueteria}<br/><span style={{ fontFamily: "monospace", fontSize: 11 }}>{p.guia_paqueteria}</span></span>
-            : cond ? <span>{cond.nombre}<br/><span style={{ color: "#94a3b8", fontFamily: "monospace" }}>{p.placa}</span></span>
-                : <span style={{ color: "#ef4444" }}>Sin asignar</span>
-           }
-          </td>
-          <td style={{ padding: "11px 14px" }}>
-           <div style={{ display: "flex", gap: 6 }}>
-            <Btn size="sm" variant="secondary" onClick={() => setModDet(p)}>Ver</Btn>
-            <Btn size="sm" variant="ghost" onClick={() => setModGuia(p)}>Guia</Btn>
-           </div>
-          </td>
-         </tr>
-        );
-       })}
-      </tbody>
-     </table>
-    </div>
-   </Card>
+     <div style={{ padding:"12px 16px", color:"#6b7280", fontSize:13, borderBottom:`1px solid ${border}` }}>
+      {filtrados.length} de {pedidos.length} pedidos · {totalCajas} cajas
+     </div>
+
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+       <thead>
+        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+         {[
+          ["No. Pedido", "left"], ["Factura", "left"], ["Cliente", "left"], ["Ciudad / DANE", "left"], ["Cajas", "right"], ["Estado", "left"], ["Conductor", "left"], ["Acciones", "right"]
+         ].map(([h, align]) => <th key={h} style={{ textAlign:align, padding:"14px 16px", borderBottom:`1px solid ${border}`, fontWeight:800 }}>{h}</th>)}
+        </tr>
+       </thead>
+       <tbody>
+        {filtrados.length === 0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin pedidos</td></tr>}
+        {filtrados.map(p => {
+         const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+         return (
+          <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
+           <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}>{p.guia_interna || p.id}</td>
+           <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace", fontSize:13 }}>{p.factura}</td>
+           <td style={{ padding:"16px", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
+           <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.ciudad_codigo}</div></td>
+           <td style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>{p.cajas}</td>
+           <td style={{ padding:"16px" }}><Badge estado={p.estado} /></td>
+           <td style={{ padding:"16px" }}>
+            {p.tipo === "paqueteria" ? (
+             <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></>
+            ) : cond ? (
+             <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond.placa}</div></>
+            ) : <span style={{ color:"#ef4444" }}>Sin asignar</span>}
+           </td>
+           <td style={{ padding:"16px", textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:8 }}>
+             <button onClick={() => setModDet(p)} style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }}>Ver</button>
+             <button onClick={() => setModGuia(p)} style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }}>Guia</button>
+            </div>
+           </td>
+          </tr>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+    </section>
+   </main>
 
    {modNuevo && (
     <Modal title="Nuevo Pedido" onClose={() => setModNuevo(false)}>
-     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
        <Field label="N de Pedido" value={form.id} onChange={f("id")} required placeholder="PED-012" />
        <Field label="N de Factura" value={form.factura} onChange={f("factura")} required placeholder="FAC-3000" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
        <Field label="Cantidad de Cajas" value={form.cajas} onChange={f("cajas")} type="number" placeholder="10" />
        <Field label="Fecha Entrega Estimada" value={form.fecha_estimada} onChange={f("fecha_estimada")} type="date" />
       </div>
       <Field label="Nombre del Cliente / Destinatario" value={form.cliente} onChange={f("cliente")} required placeholder="Empresa Destino S.A.S" />
-      <Field label="Ciudad de Entrega (Codigo DANE)" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} required as="select"
-       options={[{ value: "", label: " Seleccione ciudad " }, ...(ciudades||[]).map(c => ({ value: c.code, label: `${c.name} ${c.code}` }))]} />
+      <Field label="Ciudad de Entrega (Codigo DANE)" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} required as="select" options={[{ value:"", label:" Seleccione ciudad " }, ...(ciudades || []).map(c => ({ value:c.code, label:`${c.name} ${c.code}` }))]} />
       <Field label="Direccion de Entrega" value={form.direccion} onChange={f("direccion")} placeholder="Cra 15 #93-47 Of 302" />
-      {/* ORIGEN CEDI de despacho */}
-      <div style={{background:P[50],borderRadius:10,padding:"10px 14px",border:`1px solid ${P[200]}`}}>
-       <div style={{fontSize:11,fontWeight:700,color:P[700],textTransform:"uppercase",marginBottom:10}}> Origen / CEDI de Despacho</div>
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Field label="Ciudad Origen (DANE)" value={form.ciudad_origen_codigo} onChange={f("ciudad_origen_codigo")} as="select"
-         options={[{value:"",label:" Sin especificar "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
-        <Field label="Direccion Origen / CEDI" value={form.direccion_origen} onChange={f("direccion_origen")} placeholder="Bodega principal, Cra 10 #5-20"/>
+      <div style={{ background:"#f8fafc", borderRadius:12, padding:"12px 14px", border:`1px solid ${border}` }}>
+       <div style={{ fontSize:11, fontWeight:800, color:"#6b7280", textTransform:"uppercase", marginBottom:10 }}>Origen / CEDI de Despacho</div>
+       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <Field label="Ciudad Origen (DANE)" value={form.ciudad_origen_codigo} onChange={f("ciudad_origen_codigo")} as="select" options={[{ value:"", label:" Sin especificar " }, ...(ciudades || []).map(c => ({ value:c.code, label:`${c.name} ${c.code}` }))]} />
+        <Field label="Direccion Origen / CEDI" value={form.direccion_origen} onChange={f("direccion_origen")} placeholder="Bodega principal" />
        </div>
       </div>
-      <Field label="Tipo de Envio" value={form.tipo} onChange={f("tipo")} as="select"
-       options={[{ value: "propio", label: " Transporte Propio" }, { value: "empresa_transporte", label: " Empresa Transportista" }, { value: "mensajeria", label: " Mensajeria" }, { value: "paqueteria", label: " Paqueteria Tercero" }]} />
-      {form.tipo === "paqueteria" && (
-       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Field label="Empresa Paqueteria" value={form.paqueteria} onChange={f("paqueteria")} as="select"
-         options={[{ value: "", label: " Seleccione " }, ...(paqueterias||[]).filter(p=>typeof p==="string"&&p).map(p => ({ value: p, label: p }))]} />
-        <Field label="No. Guia Paqueteria" value={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-XXXXX" />
-       </div>
-      )}
-      {form.tipo !== "paqueteria" && (
-       <Field label="Asignar Conductor (opcional)" value={form.conductor_id}
-        onChange={v => {
-         f("conductor_id")(v);
-         const c = conductoresActivos.find(cx=>String(cx.id)===String(v));
-         if(c && form.tipo==="empresa_transporte") f("empresa_transporte")(c.empresa||"");
-        }} as="select"
-        options={[
-         { value: "", label: " Sin asignar " },
-         ...(form.tipo==="empresa_transporte"
-          ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
-          : conductoresActivos
-         ).map(c => ({ value: c.id, label: `${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}` }))
-        ]}/>
-      )}
+      <Field label="Tipo de Envio" value={form.tipo} onChange={f("tipo")} as="select" options={[{ value:"propio", label:"Transporte Propio" }, { value:"empresa_transporte", label:"Empresa Transportista" }, { value:"mensajeria", label:"Mensajeria" }, { value:"paqueteria", label:"Paqueteria Tercero" }]} />
+      {form.tipo === "paqueteria" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Empresa Paqueteria" value={form.paqueteria} onChange={f("paqueteria")} as="select" options={[{ value:"", label:" Seleccione " }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} /><Field label="No. Guia Paqueteria" value={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-XXXXX" /></div>}
+      {form.tipo !== "paqueteria" && <Field label="Asignar Conductor (opcional)" value={form.conductor_id} onChange={v => { f("conductor_id")(v); const c = conductoresActivos.find(cx => String(cx.id) === String(v)); if (c && form.tipo === "empresa_transporte") f("empresa_transporte")(c.empresa || ""); }} as="select" options={[{ value:"", label:" Sin asignar " }, ...(form.tipo === "empresa_transporte" ? conductoresActivos.filter(c => c.empresa || c.nit_proveedor) : conductoresActivos).map(c => ({ value:c.id, label:`${c.nombre} - ${c.placa}${c.empresa ? " - " + c.empresa : ""}` }))]} />}
       <Field label="Notas / Observaciones" value={form.notas} onChange={f("notas")} as="textarea" placeholder="Instrucciones especiales..." />
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
        <Btn variant="secondary" onClick={() => setModNuevo(false)}>Cancelar</Btn>
-       <Btn onClick={guardar}> Guardar Pedido</Btn>
+       <Btn onClick={guardar}>Guardar Pedido</Btn>
       </div>
      </div>
     </Modal>
    )}
 
-   {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} promesas={promesas} onClose={()=>setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol!=="operador"} canBasicEdit={user?.rol==="operador"} canAssign={user?.rol==="operador"}/>}
-   {modGuia&&<GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={()=>setModGuia(null)}/>}
-   {modCSV&&<ModalCSVPedidos onClose={()=>setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV}/>}
-   {modGuias&&<ModalCSVGuias onClose={()=>setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar}/>}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
+   {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
+   {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
+   {modGuias && <ModalCSVGuias onClose={() => setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar} />}
   </div>
  );
 }
-
 function RastreoGPS({ pedidos, conductores, ciudades }) {
  const conCond = pedidos.filter(p => p.conductor_id);
  const [sel, setSel] = useState(conCond[0] || null);
@@ -3624,9 +3611,9 @@ export default function SomosProTracking() {
  };
 
  return (
-  <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#f7f5ff" }}>
+  <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#fafafa" }}>
    <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
-   <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box" }}>
+   <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa" }}>
     {renderContent()}
    </main>
    {modCompartir && <LinkCompartir onClose={()=>setModCompartir(false)} />}
