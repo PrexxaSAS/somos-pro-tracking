@@ -3097,85 +3097,116 @@ function MiUbicacion({ user }) {
 // Consultas (cliente interno) 
 
 function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast }) {
- // Poll GPS data every 10s
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
- const [busq,  setBusq]  = useState("");
+ const [busq, setBusq] = useState("");
  const [modMapa, setModMapa] = useState(null);
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  const filtP = pedidos.filter(p => {
   const q = busq.toLowerCase();
-  return !busq || p.id.toLowerCase().includes(q) || (p.cliente||"").toLowerCase().includes(q) || (p.factura||"").toLowerCase().includes(q) || (p.ciudad_nombre||"").toLowerCase().includes(q) || (p.guia_interna||"").toLowerCase().includes(q);
+  return !busq ||
+   (p.id || "").toLowerCase().includes(q) ||
+   (p.cliente || "").toLowerCase().includes(q) ||
+   (p.factura || "").toLowerCase().includes(q) ||
+   (p.ciudad_nombre || "").toLowerCase().includes(q) ||
+   (p.guia_interna || "").toLowerCase().includes(q);
  });
+ const pageItems = filtP.slice((page - 1) * pageSize, page * pageSize);
+ useEffect(() => { setPage(1); }, [busq, pageSize]);
+
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"8px 12px", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" };
+ const activos = filtP.filter(p => ["sin_asignar", "pendiente", "en_transito", "paqueteria"].includes(p.estado)).length;
+ const entregados = filtP.filter(p => p.estado === "entregado").length;
+ const novedades = filtP.filter(p => p.estado === "novedad" || p.novedad).length;
+ const totalCajas = filtP.reduce((a,p)=>a+(parseInt(p.cajas)||0),0);
+
+ const renderMapa = (p, cond, ciudad) => {
+  const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
+  const gpsReciente = gps && (Date.now()-gps.ts) < 300000;
+  const entregado = ["entregado","novedad"].includes(p.estado);
+  if (entregado) return (
+   <div style={{ background:"#ecfdf5", border:`1px solid #a7f3d0`, borderRadius:12, padding:"12px 16px", color:"#059669", fontWeight:750, fontSize:13 }}>
+    Pedido entregado. Rastreo GPS no disponible.
+   </div>
+  );
+  const mapSrc = gpsReciente
+   ? `https://maps.google.com/maps?q=${gps.lat},${gps.lng}&output=embed&z=15`
+   : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"") + ", " + (ciudad?.name||p.ciudad_nombre||"") + ", Colombia")}&output=embed&z=15`;
+  return (
+   <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? "#6d42d8" : border}`, background:"#fff" }}>
+    {gpsReciente && <div style={{ background:"#6d42d8", color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:800 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
+    <iframe title={"mapa-"+p.id} width="100%" height="280" style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
+    <div style={{ background:"#f8fafc", padding:"9px 14px", fontSize:12, color:"#4b5563" }}>
+     {gpsReciente ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : `${p.direccion || ""}, ${ciudad?.name || p.ciudad_nombre || ""}`}
+     {cond && <span style={{ marginLeft:12 }}>{cond.nombre} · {p.placa}</span>}
+     {!gpsReciente && <span style={{ marginLeft:8, color:"#9ca3af" }}>(GPS no activo, mostrando destino)</span>}
+    </div>
+   </div>
+  );
+ };
 
  return (
-  <div>
-   <h2 style={{margin:"0 0 22px",color:P[800],fontWeight:900}}> Estado de Pedidos</h2>
-   <Card style={{padding:14,marginBottom:16}}>
-    <input value={busq} onChange={e=>setBusq(e.target.value)}
-     placeholder=" Buscar por N pedido, guia, factura, cliente o ciudad..." style={iSt}/>
-   </Card>
-   <div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {filtP.length===0&&<p style={{color:"#94a3b8",textAlign:"center",padding:32}}>Sin resultados.</p>}
-    {filtP.map(p=>{
-     const cond  = conductores.find(c=>String(c.id)===String(p.conductor_id));
-     const ciudad = (ciudades||[]).find(c=>c.code===p.ciudad_codigo);
-     return (
-      <Card key={p.id} style={{padding:18,borderLeft:`4px solid ${ESTADOS_PEDIDO[p.estado]?.color||P[300]}`}}>
-       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-        <div>
-         {p.guia_interna&&<div style={{fontFamily:"monospace",fontWeight:900,color:P[600],fontSize:15}}>{p.guia_interna}</div>}
-         <div style={{fontWeight:800,color:P[800],fontSize:14}}>{p.id} <span style={{fontWeight:400,color:"#64748b",fontSize:12}}> Factura: {p.factura}</span></div>
-        </div>
-        <Badge estado={p.estado}/>
-       </div>
-       <div style={{fontWeight:600,color:"#1e293b",marginBottom:6}}>{p.cliente}</div>
-       <div style={{fontSize:13,color:"#64748b",display:"flex",flexDirection:"column",gap:3}}>
-        <span> {p.cajas} cajas  {p.ciudad_nombre}  {p.direccion}</span>
-        <span>
-         {p.tipo==="paqueteria"?` ${p.paqueteria} ${p.guia_paqueteria}`:cond?` ${cond.nombre} ${p.placa}`:"Sin conductor asignado"}
-         {" "} Est: {p.fecha_estimada||""}
-         {p.fecha_real&&<span style={{color:"#059669"}}>  Entregado: {p.fecha_real}</span>}
-        </span>
-        {p.novedad&&<span style={{color:"#dc2626",fontWeight:700}}> Entregado con Novedad</span>}
-       </div>
-       <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-        {(p.soportes_data||[]).length>0&&(
-         <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}> Ver Soportes ({p.soportes_data.length})</Btn>
-        )}
-        <Btn size="sm" variant="secondary" onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>
-         {modMapa?.id===p.id?" Ocultar Mapa":" Rastreo"}
-        </Btn>
-       </div>
-       {modMapa?.id===p.id&&(()=>{
-        const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
-        const gpsReciente = gps && (Date.now()-gps.ts) < 300000; // 5 min
-        const entregado = ["entregado","novedad"].includes(p.estado);
-        if (entregado) return (
-         <div style={{marginTop:12,background:"#ecfdf5",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#059669",fontWeight:700}}>
-           Pedido entregado rastreo GPS no disponible
-         </div>
-        );
-        const mapSrc = gpsReciente
-         ? `https://maps.google.com/maps?q=${gps.lat},${gps.lng}&output=embed&z=15`
-         : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"")+", "+(ciudad?.name||p.ciudad_nombre||"")+", Colombia")}&output=embed&z=15`;
-        return (
-         <div style={{marginTop:14,borderRadius:12,overflow:"hidden",border:`2px solid ${gpsReciente?P[400]:P[200]}`}}>
-          {gpsReciente&&<div style={{background:P[600],color:"#fff",padding:"6px 14px",fontSize:12,fontWeight:700}}> GPS en Vivo ltima actualizacin hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
-          <iframe title={"mapa-"+p.id} width="100%" height="280" style={{border:"none",display:"block"}}
-           src={mapSrc} allowFullScreen loading="lazy"/>
-          <div style={{background:P[50],padding:"8px 14px",fontSize:12,color:P[700]}}>
-           {gpsReciente ? ` ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : ` ${p.direccion}, ${ciudad?.name}`}
-           {cond&&<span style={{marginLeft:12}}> {cond.nombre} {p.placa}</span>}
-           {!gpsReciente&&<span style={{marginLeft:8,color:"#94a3b8"}}>(GPS no activo mostrando destino)</span>}
-          </div>
-         </div>
-        );
-       })()}
-      </Card>
-     );
-    })}
-   </div>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Estado de Pedidos</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Consulta y seguimiento de pedidos registrados</p>
+   </header>
+
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Total pedidos</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtP.length}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Activos</div><div style={{ fontSize:28, fontWeight:900, color:"#6d42d8", marginTop:8 }}>{activos}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Entregados</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{entregados}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Novedades</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{novedades}</div></div>
+    </section>
+
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por pedido, guia, factura, cliente o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13, whiteSpace:"nowrap" }}>{filtP.length} pedidos · {totalCajas} cajas</span>
+     </div>
+
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+       <thead>
+        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+         {["Pedido", "Factura", "Cliente", "Destino", "Cajas", "Estado", "Transporte", "Acciones"].map(h => (
+          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+         ))}
+        </tr>
+       </thead>
+       <tbody>
+        {filtP.length===0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin resultados.</td></tr>}
+        {pageItems.map(p=>{
+         const cond = conductores.find(c=>String(c.id)===String(p.conductor_id));
+         const ciudad = (ciudades||[]).find(c=>c.code===p.ciudad_codigo);
+         const soportes = p.soportes_data || [];
+         return (
+          <React.Fragment key={p.id}>
+           <tr style={{ borderBottom:`1px solid ${border}` }}>
+            <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
+            <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
+            <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
+            <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
+            <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
+            <td style={{ padding:"16px" }}><Badge estado={p.estado}/>{p.novedad&&<div style={{ color:"#dc2626", fontSize:12, fontWeight:800, marginTop:4 }}>Con Novedad</div>}</td>
+            <td style={{ padding:"16px" }}>{p.tipo==="paqueteria" ? <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></> : cond ? <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa}</div></> : <span style={{ color:"#9ca3af" }}>Sin conductor</span>}</td>
+            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"inline-flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669" }} onClick={()=>generarPDFSoportes(p,[])}>Soportes ({soportes.length})</button>}<button style={buttonBase} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
+           </tr>
+           {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
+          </React.Fragment>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+     <PaginationControls total={filtP.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+    </section>
+   </main>
   </div>
  );
 }
