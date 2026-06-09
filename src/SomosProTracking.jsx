@@ -2917,6 +2917,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  const [busq,    setBusq]    = useState("");
  const [filtroEst, setFiltroEst] = useState("todos");
  const [gestion,  setGestion]  = useState("");
+ const [gestionSoporte, setGestionSoporte] = useState({ data:null, nombre:"" });
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
  const vacio = { factura:"", pedido_ref:"", motivo:"", descripcion:"" };
@@ -2982,12 +2983,21 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   }
   if (!gestion.trim()) { showToast("Escribe una respuesta de gestin","error"); return; }
   const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
-   fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion" };
+   fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion",
+   soporte_data: gestionSoporte.data || modGestion.soporte_data || null,
+   soporte_nombre: gestionSoporte.nombre || modGestion.soporte_nombre || "" };
   const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
   if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return; }
-  setModGestion(null); setGestion("");
+  setModGestion(null); setGestion(""); setGestionSoporte({ data:null, nombre:"" });
   showToast(" Gestion registrada","success");
   if (recargar) await recargar();
+ };
+
+ const cargarSoporteGestion = async (files) => {
+  const file = files?.[0];
+  if (!file) return;
+  const data = await fileToBase64(file);
+  setGestionSoporte({ data, nombre:file.name });
  };
 
  const cerrar = async (id, estado) => {
@@ -3064,8 +3074,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
             <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{p.descripcion}</div></td>
             <td style={{ padding:"16px" }}><div>{p.solicitado_por}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.fecha_creacion}</div></td>
             <td style={{ padding:"16px" }}><span style={{ background:est.bg, color:est.color, border:`1px solid ${est.color}40`, borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800, whiteSpace:"nowrap" }}>{est.label}</span></td>
-            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div></div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
+            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div>{p.soporte_data&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoGuardado(p.soporte_data, p.soporte_nombre || `soporte-${p.id}`)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
+            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:p.soporte_data||null, nombre:p.soporte_nombre||"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
            </tr>
           );
          })}
@@ -3098,7 +3108,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     </Modal>
    )}
    {modGestion&&(
-    <Modal title={`Gestionar PQRS ${modGestion.id}`} onClose={()=>setModGestion(null)}>
+   <Modal title={`Gestionar PQRS ${modGestion.id}`} onClose={()=>setModGestion(null)}>
      <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{background:"#f8fafc",borderRadius:10,padding:14}}>
        <div style={{fontWeight:700,color:P[800],marginBottom:6}}>Motivo: {modGestion.motivo}</div>
@@ -3107,6 +3117,15 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
       </div>
       <Field label="Respuesta / Gestion realizada *" value={gestion} onChange={setGestion} as="textarea"
        placeholder="Describe las acciones tomadias, compensaciones, compromisos..."/>
+      <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"14px", textAlign:"center", cursor:"pointer", color:gestionSoporte.nombre?"#059669":P[600], fontWeight:700 }}>
+       <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>cargarSoporteGestion(e.target.files)}/>
+       {gestionSoporte.nombre ? gestionSoporte.nombre : "Adjuntar soporte de gestion (opcional)"}
+      </label>
+      {gestionSoporte.data&&(
+       <button style={{ ...buttonBase, color:"#059669" }} onClick={()=>abrirArchivoGuardado(gestionSoporte.data, gestionSoporte.nombre || `soporte-${modGestion.id}`)}>
+        Ver soporte adjunto
+       </button>
+      )}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
        <Btn variant="secondary" onClick={()=>setModGestion(null)}>Cancelar</Btn>
        <Btn onClick={guardarGestion}> Registrar Gestion</Btn>
@@ -3258,7 +3277,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
        <thead>
         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
          {["Pedido", "Factura", "Cliente", "Destino", "Cajas", "Estado", "Transporte", "Acciones"].map(h => (
-          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap", width:h==="Acciones" ? 220 : undefined, minWidth:h==="Acciones" ? 220 : undefined }}>{h}</th>
          ))}
         </tr>
        </thead>
@@ -3278,7 +3297,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
             <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
             <td style={{ padding:"16px" }}>{p.tipo==="paqueteria" ? <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></> : cond ? <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa}</div></> : <span style={{ color:"#9ca3af" }}>Sin conductor</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"inline-flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669" }} onClick={()=>generarPDFSoportes(p,[])}>Soportes ({soportes.length})</button>}<button style={buttonBase} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
+            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>generarPDFSoportes(p,[])}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
            </tr>
            {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
           </React.Fragment>
