@@ -1872,7 +1872,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
            <td style={tdStyle}>{p.cliente}</td>
            <td style={tdStyle}>{p.ciudad_nombre}</td>
            <td style={tdStyle}>{p.fecha_real || "Pendiente"}</td>
-           <td style={tdStyle}><Badge estado={p.estado}/>{p.novedad&&<div style={{ color:"#dc2626", fontSize:12, fontWeight:800, marginTop:4 }}>Con Novedad</div>}</td>
+           <td style={tdStyle}><Badge estado={p.estado}/></td>
            <td style={{ ...tdStyle, textAlign:"right" }}>
             {(p.soportes_data||[]).length>0 ? (
              <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}>
@@ -3276,7 +3276,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
             <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
             <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
             <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
-            <td style={{ padding:"16px" }}><Badge estado={p.estado}/>{p.novedad&&<div style={{ color:"#dc2626", fontSize:12, fontWeight:800, marginTop:4 }}>Con Novedad</div>}</td>
+            <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
             <td style={{ padding:"16px" }}>{p.tipo==="paqueteria" ? <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></> : cond ? <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa}</div></> : <span style={{ color:"#9ca3af" }}>Sin conductor</span>}</td>
             <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"inline-flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669" }} onClick={()=>generarPDFSoportes(p,[])}>Soportes ({soportes.length})</button>}<button style={buttonBase} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
            </tr>
