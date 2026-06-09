@@ -1708,7 +1708,7 @@ function ModalCSVCiudades({ onClose, onImportar }) {
  );
 }
 
-function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user, conductores, ciudades, showToast, recargar, transportistas }) {
+function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, recargar }) {
  const [modDet,  setModDet]  = useState(null);
  const [modFotos, setModFotos] = useState(null); // pedido para cargar soportes
  const [novedad,  setNovedad]  = useState(false);
@@ -1716,6 +1716,10 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
  const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
  const activos = misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado));
  const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const thStyle = { padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}`, color:"#6b7280", fontSize:12, textTransform:"uppercase", whiteSpace:"nowrap" };
+ const tdStyle = { padding:"16px", borderBottom:`1px solid ${border}`, verticalAlign:"middle" };
 
  const marcarEntregado = async (pedido, fotos, conNovedad) => {
   if (["entregado","novedad"].includes(pedido.estado)) {
@@ -1753,86 +1757,139 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
  };
 
  return (
-  <div>
-   {/* Banner conductor */}
-   <Card style={{background:`linear-gradient(135deg,${P[800]},${P[600]})`,marginBottom:22}}>
-    <div style={{display:"flex",alignItems:"center",gap:14}}>
-     <Logo size={44}/>
-     <div>
-      <h2 style={{margin:0,color:"#fff",fontWeight:900}}>{user.nombre}</h2>
-      <p style={{margin:"3px 0 0",color:P[300],fontSize:13}}>
-       Placa: {user.placa} - {activos.length} activo(s) - {completados.length} entregado(s)
-      </p>
-     </div>
-    </div>
-   </Card>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Pedidos</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Pedidos asignados para entrega</p>
+   </header>
 
-   {/* Pedidos activos */}
-   {activos.length===0&&completados.length===0&&(
-    <Card style={{textAlign:"center",padding:48,color:"#94a3b8"}}>
-     <div style={{fontSize:40,marginBottom:12}}>--</div>
-     <p>Sin pedidos asignados por el momento.</p>
-    </Card>
-   )}
-
-   {activos.length>0&&(
-    <>
-     <h3 style={{color:P[800],fontWeight:800,margin:"0 0 14px"}}>Pedidos Activos ({activos.length})</h3>
-     <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:28}}>
-      {activos.map(p=>(
-       <Card key={p.id} style={{borderLeft:`4px solid ${ESTADOS_PEDIDO[p.estado]?.color||P[400]}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-         <div>
-          <div style={{fontWeight:900,color:P[600],fontSize:18,fontFamily:"monospace"}}>{p.guia_interna||p.id}</div>
-          <div style={{fontSize:12,color:"#94a3b8"}}>Factura: {p.factura} - {p.cajas} cajas</div>
-         </div>
-         <Badge estado={p.estado}/>
-        </div>
-        <div style={{fontWeight:700,color:"#1e293b",marginBottom:6,fontSize:15}}>{p.cliente}</div>
-        <div style={{fontSize:13,color:"#64748b",display:"flex",flexDirection:"column",gap:3}}>
-         <span>Ciudad: {p.ciudad_nombre}</span>
-         <span>Direccion: {p.direccion}</span>
-         {p.fecha_estimada&&<span>Entrega estimada: <strong>{p.fecha_estimada}</strong></span>}
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-         <Btn size="sm" variant="secondary" onClick={()=>setModDet(p)}>Ver Detalle</Btn>
-         <Btn size="sm" variant="success" onClick={()=>{setModFotos(p);setNovedad(false);}}>
-          Registrar Entrega
-         </Btn>
-        </div>
-       </Card>
-      ))}
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}>
+      <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Total asignados</div>
+      <div style={{ fontSize:30, fontWeight:900, marginTop:8 }}>{misPeds.length}</div>
      </div>
-    </>
-   )}
-
-   {/* Pedidos completados */}
-   {completados.length>0&&(
-    <>
-     <h3 style={{color:"#059669",fontWeight:800,margin:"0 0 14px"}}>Entregados ({completados.length})</h3>
-     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {completados.map(p=>(
-       <Card key={p.id} style={{borderLeft:"4px solid #059669",opacity:0.85}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-         <div>
-          <div style={{fontWeight:700,color:"#059669",fontFamily:"monospace"}}>{p.guia_interna||p.id}</div>
-          <div style={{fontSize:13,color:"#64748b"}}>{p.cliente} - {p.ciudad_nombre}</div>
-          <div style={{fontSize:12,color:"#94a3b8"}}>Entregado: {p.fecha_real} {p.novedad&&"- Con Novedad"}</div>
-         </div>
-         <div style={{display:"flex",gap:8}}>
-          {(p.soportes_data||[]).length>0&&(
-           <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}>
-            Soportes ({p.soportes_data.length})
-           </Btn>
-          )}
-          <Badge estado={p.estado}/>
-         </div>
-        </div>
-       </Card>
-      ))}
+     <div style={{ ...cardStyle, padding:18 }}>
+      <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Activos</div>
+      <div style={{ fontSize:30, fontWeight:900, color:"#6d42d8", marginTop:8 }}>{activos.length}</div>
      </div>
-    </>
-   )}
+     <div style={{ ...cardStyle, padding:18 }}>
+      <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Entregados</div>
+      <div style={{ fontSize:30, fontWeight:900, color:"#059669", marginTop:8 }}>{completados.length}</div>
+     </div>
+     <div style={{ ...cardStyle, padding:18 }}>
+      <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Vehiculo</div>
+      <div style={{ fontSize:18, fontWeight:850, marginTop:10 }}>{user.placa || "Sin placa"}</div>
+      <div style={{ color:"#6b7280", fontSize:12, marginTop:3 }}>{user.nombre}</div>
+     </div>
+    </section>
+
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+      <div>
+       <h2 style={{ margin:0, fontSize:16, fontWeight:850 }}>Pedidos activos</h2>
+       <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:13 }}>Registra la entrega desde esta lista.</p>
+      </div>
+      <span style={{ background:"#f0eef9", color:"#4f2ca8", borderRadius:999, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{activos.length} activos</span>
+     </div>
+
+     {activos.length===0 ? (
+      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes pedidos activos por el momento.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr>
+          <th style={thStyle}>No. pedido</th>
+          <th style={thStyle}>Cliente</th>
+          <th style={thStyle}>Ciudad / direccion</th>
+          <th style={thStyle}>Cajas</th>
+          <th style={thStyle}>Fecha estimada</th>
+          <th style={thStyle}>Estado</th>
+          <th style={{ ...thStyle, textAlign:"right" }}>Acciones</th>
+         </tr>
+        </thead>
+        <tbody>
+         {activos.map(p=>(
+          <tr key={p.id}>
+           <td style={tdStyle}>
+            <div style={{ fontWeight:900, color:"#4f2ca8", fontFamily:"monospace" }}>{p.guia_interna||p.id}</div>
+            <div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:2 }}>{p.factura}</div>
+           </td>
+           <td style={tdStyle}>{p.cliente}</td>
+           <td style={tdStyle}>
+            <div>{p.ciudad_nombre}</div>
+            <div style={{ color:"#6b7280", fontSize:12, marginTop:2 }}>{p.direccion}</div>
+           </td>
+           <td style={{ ...tdStyle, fontWeight:850 }}>{p.cajas}</td>
+           <td style={tdStyle}>{p.fecha_estimada || "Pendiente"}</td>
+           <td style={tdStyle}><Badge estado={p.estado}/></td>
+           <td style={{ ...tdStyle, textAlign:"right" }}>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>
+             <Btn size="sm" variant="secondary" onClick={()=>setModDet(p)}>Ver</Btn>
+             <Btn size="sm" variant="success" onClick={()=>{setModFotos(p);setNovedad(false);}}>Registrar Entrega</Btn>
+            </div>
+           </td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     )}
+    </section>
+
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+      <div>
+       <h2 style={{ margin:0, fontSize:16, fontWeight:850 }}>Entregados</h2>
+       <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:13 }}>Historial de pedidos cerrados.</p>
+      </div>
+      <span style={{ background:"#ecfdf5", color:"#047857", borderRadius:999, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{completados.length} cerrados</span>
+     </div>
+
+     {completados.length===0 ? (
+      <div style={{ padding:30, textAlign:"center", color:"#9ca3af" }}>Aun no tienes pedidos entregados.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr>
+          <th style={thStyle}>No. pedido</th>
+          <th style={thStyle}>Cliente</th>
+          <th style={thStyle}>Ciudad</th>
+          <th style={thStyle}>Fecha real</th>
+          <th style={thStyle}>Estado</th>
+          <th style={{ ...thStyle, textAlign:"right" }}>Soportes</th>
+         </tr>
+        </thead>
+        <tbody>
+         {completados.map(p=>(
+          <tr key={p.id}>
+           <td style={tdStyle}>
+            <div style={{ fontWeight:900, color:"#059669", fontFamily:"monospace" }}>{p.guia_interna||p.id}</div>
+            <div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:2 }}>{p.factura}</div>
+           </td>
+           <td style={tdStyle}>{p.cliente}</td>
+           <td style={tdStyle}>{p.ciudad_nombre}</td>
+           <td style={tdStyle}>{p.fecha_real || "Pendiente"}</td>
+           <td style={tdStyle}><Badge estado={p.estado}/>{p.novedad&&<div style={{ color:"#dc2626", fontSize:12, fontWeight:800, marginTop:4 }}>Con Novedad</div>}</td>
+           <td style={{ ...tdStyle, textAlign:"right" }}>
+            {(p.soportes_data||[]).length>0 ? (
+             <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}>
+              Soportes ({p.soportes_data.length})
+             </Btn>
+            ) : (
+             <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>
+            )}
+           </td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     )}
+    </section>
+   </main>
 
    {/* Modal detalle (solo lectura) */}
    {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
