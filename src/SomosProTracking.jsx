@@ -3341,6 +3341,8 @@ export default function SomosProTracking() {
     "tipo",
     "paqueteria",
     "guia_paqueteria",
+    "soportes",
+    "soportes_data",
     "ciudad_origen_codigo",
     "ciudad_origen_nombre",
     "direccion_origen",
