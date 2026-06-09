@@ -51,7 +51,7 @@ const MENUS = {
     ["facturas", "Facturas Proveedor", FileText],
   ],
   transportista: [["mi_empresa", "Mi Empresa", Truck]],
-  conductor: [["mis_pedidos", "Mis Pedidos", Box], ["mi_ubicacion", "Mi Ubicacion GPS", MapPin]],
+  conductor: [["mis_pedidos", "Mis Pedidos", Box], ["mis_devoluciones", "Mis Devoluciones", RotateCcw], ["mis_recogidas", "Mis Recogidas", PackageCheck], ["mi_ubicacion", "Mi Ubicacion GPS", MapPin]],
   cliente: [["consultas", "Estado Pedidos", Box], ["devoluciones", "Mis Devoluciones", RotateCcw], ["recogidas", "Mis Recogidas", PackageCheck], ["pqrs", "PQRS", HelpCircle]],
 };
 

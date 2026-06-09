@@ -1714,8 +1714,6 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
  const [novedad,  setNovedad]  = useState(false);
  const condId = user.conductor_db_id || user.id;
  const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
- const misDevoluciones = devoluciones.filter(d => String(d.conductor_id) === String(condId));
- const misRecogidas = recogidas.filter(r => String(r.conductor_id) === String(condId));
  const activos = misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado));
  const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
 
@@ -1770,7 +1768,7 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
    </Card>
 
    {/* Pedidos activos */}
-   {activos.length===0&&completados.length===0&&misDevoluciones.length===0&&misRecogidas.length===0&&(
+   {activos.length===0&&completados.length===0&&(
     <Card style={{textAlign:"center",padding:48,color:"#94a3b8"}}>
      <div style={{fontSize:40,marginBottom:12}}>--</div>
      <p>Sin pedidos asignados por el momento.</p>
@@ -1836,60 +1834,6 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
     </>
    )}
 
-   {misDevoluciones.length>0&&(
-    <>
-     <h3 style={{color:"#dc2626",fontWeight:800,margin:"28px 0 14px"}}>Devoluciones Asignadias ({misDevoluciones.length})</h3>
-     <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
-      {misDevoluciones.map(d=>(
-       <Card key={d.id} style={{borderLeft:"4px solid #dc2626"}}>
-        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
-         <span style={{fontFamily:"monospace",fontWeight:900,color:"#dc2626",fontSize:15}}>{d.guia}</span>
-         <Badge estado={d.estado}/>
-         {d.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
-        </div>
-        <div style={{fontSize:13,color:"#64748b"}}>Factura: <strong>{d.factura}</strong> - Pedido: <strong>{d.pedido_ref}</strong></div>
-        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Recogida: {d.dir_recogida} - {d.ciudad_nombre}</div>
-        <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{d.unidades} uds - {d.volumen_m3} m3 - {d.peso_kg} kg</div>
-        {d.motivo&&<div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Motivo: {d.motivo}</div>}
-        {d.soporte_data&&(
-         <Btn size="sm" variant="success" style={{marginTop:8}}
-          onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
-          Ver Soporte
-         </Btn>
-        )}
-       </Card>
-      ))}
-     </div>
-    </>
-   )}
-
-   {misRecogidas.length>0&&(
-    <>
-     <h3 style={{color:"#0891b2",fontWeight:800,margin:"28px 0 14px"}}>Recogidas Asignadias ({misRecogidas.length})</h3>
-     <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
-      {misRecogidas.map(r=>(
-       <Card key={r.id} style={{borderLeft:"4px solid #0891b2"}}>
-        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
-         <span style={{fontFamily:"monospace",fontWeight:900,color:"#0891b2",fontSize:15}}>{r.guia}</span>
-         <Badge estado={r.estado}/>
-         {r.novedad&&<span style={{fontSize:11,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
-        </div>
-        <div style={{fontSize:13,color:"#64748b"}}>Recogida: {r.dir_recogida} - {r.ciudad_recogida_nombre}</div>
-        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Entrega: {r.dir_entrega} - {r.ciudad_entrega_nombre}</div>
-        <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{r.unidades} uds - {r.volumen_m3} m3 - {r.peso_kg} kg</div>
-        {r.observaciones&&<div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>Obs: {r.observaciones}</div>}
-        {r.doc_data&&(
-         <Btn size="sm" variant="success" style={{marginTop:8}}
-          onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
-          Ver Documento
-         </Btn>
-        )}
-       </Card>
-      ))}
-     </div>
-    </>
-   )}
-
    {/* Modal detalle (solo lectura) */}
    {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
     onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
@@ -1927,6 +1871,88 @@ function MisPedidosConductor({ pedidos, devoluciones = [], recogidas = [], user,
      </div>
     </Modal>
    )}
+  </div>
+ );
+}
+
+function MisDevolucionesConductor({ devoluciones = [], user }) {
+ const condId = user.conductor_db_id || user.id;
+ const items = devoluciones.filter(d => String(d.conductor_id) === String(condId));
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ return (
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Devoluciones</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Devoluciones asignadas a tu ruta</p>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:14 }}>
+    {items.length===0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes devoluciones asignadas.</section>}
+    {items.map(d=>(
+     <section key={d.id} style={{ ...cardStyle, padding:18, borderLeft:"4px solid #dc2626" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+       <div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+         <span style={{ fontFamily:"monospace", fontWeight:900, color:"#dc2626", fontSize:15 }}>{d.guia}</span>
+         <Badge estado={d.estado}/>
+         {d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13 }}>Factura: <strong>{d.factura}</strong> · Pedido: <strong>{d.pedido_ref}</strong></div>
+        <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>Recogida: {d.dir_recogida} · {d.ciudad_nombre}</div>
+        <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{d.unidades} uds · {d.volumen_m3} m3 · {d.peso_kg} kg</div>
+        {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Motivo: {d.motivo}</div>}
+       </div>
+       {d.soporte_data&&(
+        <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
+         onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
+         Ver Soporte
+        </button>
+       )}
+      </div>
+     </section>
+    ))}
+   </main>
+  </div>
+ );
+}
+
+function MisRecogidasConductor({ recogidas = [], user }) {
+ const condId = user.conductor_db_id || user.id;
+ const items = recogidas.filter(r => String(r.conductor_id) === String(condId));
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ return (
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Recogidas</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Recogidas asignadas a tu ruta</p>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:14 }}>
+    {items.length===0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes recogidas asignadas.</section>}
+    {items.map(r=>(
+     <section key={r.id} style={{ ...cardStyle, padding:18, borderLeft:"4px solid #0891b2" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+       <div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+         <span style={{ fontFamily:"monospace", fontWeight:900, color:"#0891b2", fontSize:15 }}>{r.guia}</span>
+         <Badge estado={r.estado}/>
+         {r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13 }}>Recogida: <strong>{r.ciudad_recogida_nombre}</strong> · Entrega: <strong>{r.ciudad_entrega_nombre}</strong></div>
+        <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>{r.dir_recogida} → {r.dir_entrega}</div>
+        <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{r.unidades} uds · {r.volumen_m3} m3 · {r.peso_kg} kg</div>
+        {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Obs: {r.observaciones}</div>}
+       </div>
+       {r.doc_data&&(
+        <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
+         onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
+         Ver Documento
+        </button>
+       )}
+      </div>
+     </section>
+    ))}
+   </main>
   </div>
  );
 }
@@ -3573,7 +3599,9 @@ export default function SomosProTracking() {
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={cargarTodo}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} showToast={showToast} recargar={cargarTodo}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={user} recargar={cargarTodo}/>;
-   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} devoluciones={devoluciones} recogidas={recogidas} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
+   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
+   case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
+   case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
    case "mi_ubicacion":  return <MiUbicacion user={user}/>;
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={cargarTodo}/>;
@@ -3594,3 +3622,4 @@ export default function SomosProTracking() {
   </div>
  );
 }
+
