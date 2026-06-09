@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '../../Subcomponentes';
+import { PaginationControls } from '../../components/ui/PaginationControls';
 
 const card = {
  background: "#fff",
@@ -11,8 +12,10 @@ const card = {
 
 const fmtPct = (value) => `${Math.round(value)}%`;
 
-export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [], promesas = [], ciudades = [] }) {
+export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [], promesas = [], ciudades = [], setActiveTab }) {
  const [gpsTick, setGpsTick] = useState(0);
+ const [pedidosPage, setPedidosPage] = useState(1);
+ const pedidosPageSize = 10;
  useEffect(() => {
   const t = setInterval(() => setGpsTick(n => n + 1), 15000);
   return () => clearInterval(t);
@@ -121,6 +124,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
   bg: "#fffbeb",
   border: "#f8cf76",
  } : null;
+ const pedidosRecientes = pedidos.slice((pedidosPage - 1) * pedidosPageSize, pedidosPage * pedidosPageSize);
 
  return (
   <div style={{ minHeight: "100%", background: "#fafafa", margin: "-28px -24px", color: "#111827" }}>
@@ -256,7 +260,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
     <section style={{ ...card, padding: 0, overflow: "hidden" }}>
      <div style={{ padding: "18px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <h2 style={{ margin: 0, fontSize: 16 }}>Pedidos Recientes</h2>
-      <span style={{ color: "#6d42d8", fontSize: 13, fontWeight: 700 }}>Ver todos</span>
+      <button onClick={() => setActiveTab?.("pedidos")} style={{ border:"none", background:"transparent", color:"#6d42d8", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Ver todos</button>
      </div>
      <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -268,7 +272,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
         </tr>
        </thead>
        <tbody>
-        {pedidos.slice(0, 8).map(p => {
+        {pedidosRecientes.map(p => {
          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
          return (
           <tr key={p.id}>
@@ -286,8 +290,9 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
          );
         })}
        </tbody>
-      </table>
+     </table>
      </div>
+     <PaginationControls total={pedidos.length} page={pedidosPage} setPage={setPedidosPage} pageSize={pedidosPageSize} setPageSize={() => {}} pageSizeOptions={[10]} />
     </section>
    </div>
   </div>

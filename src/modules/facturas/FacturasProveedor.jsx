@@ -4,6 +4,7 @@ import { Btn, Card, Field, Modal } from '../../Subcomponentes';
 import { supabase } from '../../supabase';
 import { mensajeError } from '../../utils/errors';
 import { exportarCSVFacturaProveedor } from '../../utils/facturasCsv';
+import { PaginationControls } from '../../components/ui/PaginationControls';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -18,6 +19,8 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const [guard,   setGuard]   = useState(false);
  const [fechaDesde, setFechaDesde] = useState("");
  const [fechaHasta, setFechaHasta] = useState("");
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  const vacio = { numero_factura:"", transportista_id:"", fecha_factura:"", valor_total:"", observaciones:"" };
  const [form, setForm] = useState(vacio);
@@ -91,6 +94,8 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
  const totalValor = filtradas.reduce((a, fac) => a + (Number(fac.valor_total) || 0), 0);
  const totalGuias = filtradas.reduce((a, fac) => a + ((fac.factura_guias || []).length), 0);
+ const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
+ React.useEffect(() => { setPage(1); }, [busq, fechaDesde, fechaHasta, pageSize]);
 
  return (
   <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
@@ -198,7 +203,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
         </tr>
        </thead>
        <tbody>
-    {filtradas.map(fac => {
+    {pageItems.map(fac => {
      const trans = transportistas.find(t => t.id === fac.transportista_id);
      const guias = fac.factura_guias || [];
      const totalCajas = guias.reduce((a,g) => a+(g.pedidos?.cajas||0), 0);
@@ -218,6 +223,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
       </table>
      </div>
     )}
+    <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
    </section>
    </main>
 

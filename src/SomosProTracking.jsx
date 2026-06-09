@@ -12,6 +12,7 @@ import { CargadorFotos } from './components/delivery/CargadorFotos';
 import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
 import { LinkCompartir } from './components/share/LinkCompartir';
+import { PaginationControls } from './components/ui/PaginationControls';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Usuarios } from './modules/usuarios/Usuarios';
@@ -871,6 +872,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [modGuia, setModGuia] = useState(null);
  const [modCSV, setModCSV] = useState(false);
  const [modGuias, setModGuias] = useState(false);
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  const vacio = { id: "", cliente: "", ciudad_codigo: "", direccion: "", cajas: "", factura: "", fecha_estimada: "", notas: "", conductor_id: "", tipo: "propio", paqueteria: "", guia_paqueteria: "" };
  const [form, setForm] = useState(vacio);
@@ -889,6 +892,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   return okF && okB;
  });
  const totalCajas = filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
+ const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize]);
 
  const guardar = async () => {
   if (!form.id.trim() || !form.cliente.trim() || !form.ciudad_codigo || !form.factura.trim()) {
@@ -1023,7 +1028,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        </thead>
        <tbody>
         {filtrados.length === 0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin pedidos</td></tr>}
-        {filtrados.map(p => {
+        {pageItems.map(p => {
          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
          return (
           <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
@@ -1936,6 +1941,8 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const [nueva,  setNueva]  = useState({ ciudad_codigo: "", dias_plazo: "" });
  const [guard,  setGuard]  = useState(false);
  const [busq,   setBusq]   = useState("");
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  // Map for quick lookup
  const promMap = Object.fromEntries((promesas||[]).map(p => [p.ciudad_codigo, p.dias_plazo]));
@@ -1952,6 +1959,8 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+ const pageItems = conPromesa.slice((page - 1) * pageSize, page * pageSize);
+ useEffect(() => { setPage(1); }, [busq, pageSize]);
 
  const guardarNueva = async () => {
   if (!nueva.ciudad_codigo || !nueva.dias_plazo) {
@@ -2029,7 +2038,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
        </tr>
       </thead>
       <tbody>
-       {conPromesa.map((c, i) => (
+       {pageItems.map((c, i) => (
         <tr key={c.code} style={{ borderBottom:`1px solid ${border}` }}>
          <td style={{ padding:"16px", fontWeight:800 }}>{c.name}</td>
          <td style={{ padding:"16px", fontFamily:"monospace", color:"#5b33d6", fontWeight:850 }}>{c.code}</td>
@@ -2064,6 +2073,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
       </tbody>
      </table>
      </div>
+     <PaginationControls total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
     </section>
 
    {sinFiltradias.length > 0 && (
@@ -2129,7 +2139,7 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
      <article key={i} style={{ ...cardStyle, padding:18, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
       <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
        <div style={{ width:38, height:38, borderRadius:12, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{String(p || "P").slice(0,1).toUpperCase()}</div>
-       <span style={{ fontWeight:800, color:"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p}</span>
+       <span style={{ fontWeight:800, color:"#111827", whiteSpace:"normal", overflowWrap:"anywhere", lineHeight:1.25 }}>{p}</span>
       </div>
       <button onClick={async ()=>{const{error}=await supabase.from('paqueterias').delete().eq('nombre',p); if(!error){showToast('Eliminado','info'); if(recargar) await recargar();}}}
        style={{ ...buttonBase, padding:"7px 10px", fontSize:13, color:"#dc2626" }}>Eliminar</button>
@@ -2148,6 +2158,8 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
  const fileRef = useRef(null);
 
  const vacio = {
@@ -2282,6 +2294,8 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
  const totalAbiertas = filtradas.filter(d => d.estado !== "entregado" && d.estado !== "novedad").length;
  const totalCerradas = filtradas.length - totalAbiertas;
+ const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
+ useEffect(() => { setPage(1); }, [busq, pageSize]);
 
  return (
   <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
@@ -2293,6 +2307,11 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Devolucion</button>
    </header>
    <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_data).length}</div></div>
+    </section>
     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
      <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
       <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia, factura o pedido..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
@@ -2312,7 +2331,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
          </tr>
         </thead>
         <tbody>
-         {filtradas.map(d=>(
+         {pageItems.map(d=>(
           <tr key={d.id} style={{ borderBottom:`1px solid ${border}` }}>
            <td style={{ padding:"16px", color:"#dc2626", fontWeight:850, fontFamily:"monospace" }}>{d.guia}</td>
            <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{d.factura}</td>
@@ -2328,11 +2347,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
        </table>
       </div>
      )}
-    </section>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_data).length}</div></div>
+     <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
     </section>
    </main>
    {(modNueva||modEditar)&&(
@@ -2472,6 +2487,8 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
  const fileRef = useRef(null);
 
  const vacio = {
@@ -2610,6 +2627,8 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
  const totalAbiertas = filtradas.filter(r => r.estado !== "entregado" && r.estado !== "novedad").length;
  const totalCerradas = filtradas.length - totalAbiertas;
+ const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
+ useEffect(() => { setPage(1); }, [busq, pageSize]);
 
  return (
   <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
@@ -2621,6 +2640,11 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Recogida</button>
    </header>
    <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_data).length}</div></div>
+    </section>
     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
      <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
       <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
@@ -2640,7 +2664,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
          </tr>
         </thead>
         <tbody>
-         {filtradas.map(r=>(
+         {pageItems.map(r=>(
           <tr key={r.id} style={{ borderBottom:`1px solid ${border}` }}>
            <td style={{ padding:"16px", color:"#0891b2", fontWeight:850, fontFamily:"monospace" }}>{r.guia}</td>
            <td style={{ padding:"16px" }}><div>{r.ciudad_recogida_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_recogida}</div></td>
@@ -2656,11 +2680,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
        </table>
       </div>
      )}
-    </section>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_data).length}</div></div>
+     <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
     </section>
    </main>
    {(modNueva||modEditar)&&(
@@ -2811,6 +2831,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  const [busq,    setBusq]    = useState("");
  const [filtroEst, setFiltroEst] = useState("todos");
  const [gestion,  setGestion]  = useState("");
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
  const vacio = { factura:"", pedido_ref:"", motivo:"", descripcion:"" };
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
@@ -2902,6 +2924,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+ const pageItems = filt.slice((page - 1) * pageSize, page * pageSize);
+ useEffect(() => { setPage(1); }, [busq, filtroEst, pageSize]);
 
  return (
   <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
@@ -2943,7 +2967,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
          </tr>
         </thead>
         <tbody>
-         {filt.map(p=>{
+         {pageItems.map(p=>{
           const est = ESTADOS_PQRS[p.estado]||ESTADOS_PQRS.abierta;
           const tieneGestion = Boolean((p.respuesta||"").trim() || p.fecha_gestion || p.gestionado_por);
           return (
@@ -2963,6 +2987,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
        </table>
       </div>
      )}
+     <PaginationControls total={filt.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
     </section>
    </main>
    {(modNueva||modEditar)&&(
@@ -3500,7 +3525,7 @@ export default function SomosProTracking() {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
-   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades}/>;
+   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={cargarTodo} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={cargarTodo}/>;
