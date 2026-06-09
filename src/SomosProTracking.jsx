@@ -3119,12 +3119,18 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
        placeholder="Describe las acciones tomadias, compensaciones, compromisos..."/>
       <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"14px", textAlign:"center", cursor:"pointer", color:gestionSoporte.nombre?"#059669":P[600], fontWeight:700 }}>
        <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>cargarSoporteGestion(e.target.files)}/>
-       {gestionSoporte.nombre ? gestionSoporte.nombre : "Adjuntar soporte de gestion (opcional)"}
+       {gestionSoporte.nombre ? "Cambiar soporte" : "Adjuntar soporte de gestion (opcional)"}
       </label>
       {gestionSoporte.data&&(
-       <button style={{ ...buttonBase, color:"#059669" }} onClick={()=>abrirArchivoGuardado(gestionSoporte.data, gestionSoporte.nombre || `soporte-${modGestion.id}`)}>
-        Ver soporte adjunto
-       </button>
+       <div style={{ display:"flex", alignItems:"center", gap:8, border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px", background:"#f8fafc" }}>
+        <span style={{ flex:1, minWidth:0, color:"#059669", fontWeight:800, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{gestionSoporte.nombre || `soporte-${modGestion.id}`}</span>
+        <button type="button" style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669" }} onClick={()=>abrirArchivoGuardado(gestionSoporte.data, gestionSoporte.nombre || `soporte-${modGestion.id}`)}>
+         Ver
+        </button>
+        <button type="button" title="Quitar soporte" style={{ width:32, height:32, border:`1px solid #fecaca`, background:"#fff", color:"#dc2626", borderRadius:10, cursor:"pointer", fontWeight:900, fontSize:18, lineHeight:1 }} onClick={()=>setGestionSoporte({ data:null, nombre:"" })}>
+         x
+        </button>
+       </div>
       )}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
        <Btn variant="secondary" onClick={()=>setModGestion(null)}>Cancelar</Btn>
