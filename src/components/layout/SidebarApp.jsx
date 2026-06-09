@@ -1,93 +1,249 @@
 import React from 'react';
-import { P, ROLES } from '../../Constants';
-import { Logo } from '../../Subcomponentes';
+import {
+  BarChart3,
+  Box,
+  Building2,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  FileText,
+  HelpCircle,
+  LogOut,
+  MapPin,
+  PackageCheck,
+  RotateCcw,
+  Share2,
+  Truck,
+  User,
+  Users,
+  Warehouse,
+} from 'lucide-react';
+import { ROLES } from '../../Constants';
 
 const MENUS = {
   admin: [
-    ["dashboard", "Dashboard"],
-    ["pedidos", "Pedidos"],
-    ["rastreo", "Rastreo GPS"],
-    ["conductores", "Conductores"],
-    ["transportistas", "Transportistas"],
-    ["resumen", "Resumen Transportador"],
-    ["devoluciones", "Devoluciones"],
-    ["recogidas", "Recogidas"],
-    ["pqrs", "PQRS"],
-    ["ciudades", "Ciudades / DANE"],
-    ["paqueterias", "Paqueterias"],
-    ["promesas", "Promesas de Servicio"],
-    ["facturas", "Facturas Proveedor"],
-    ["usuarios", "Usuarios"],
+    ["dashboard", "Dashboard", BarChart3],
+    ["pedidos", "Pedidos", Box],
+    ["rastreo", "Rastreo GPS", MapPin],
+    ["conductores", "Conductores", Users],
+    ["transportistas", "Transportistas", Truck],
+    ["resumen", "Resumen Transportador", ClipboardList],
+    ["devoluciones", "Devoluciones", RotateCcw],
+    ["recogidas", "Recogidas", PackageCheck],
+    ["pqrs", "PQRS", HelpCircle],
+    ["ciudades", "Ciudades / DANE", Building2],
+    ["paqueterias", "Paqueterias", Warehouse],
+    ["promesas", "Promesas de Servicio", CalendarClock],
+    ["facturas", "Facturas Proveedor", FileText],
+    ["usuarios", "Usuarios", User],
   ],
   operador: [
-    ["dashboard", "Dashboard"],
-    ["pedidos", "Pedidos"],
-    ["rastreo", "Rastreo GPS"],
-    ["conductores", "Conductores"],
-    ["resumen", "Resumen Transportador"],
-    ["devoluciones", "Devoluciones"],
-    ["recogidas", "Recogidas"],
-    ["pqrs", "PQRS"],
-    ["promesas", "Promesas de Servicio"],
-    ["facturas", "Facturas Proveedor"],
+    ["dashboard", "Dashboard", BarChart3],
+    ["pedidos", "Pedidos", Box],
+    ["rastreo", "Rastreo GPS", MapPin],
+    ["conductores", "Conductores", Users],
+    ["resumen", "Resumen Transportador", ClipboardList],
+    ["devoluciones", "Devoluciones", RotateCcw],
+    ["recogidas", "Recogidas", PackageCheck],
+    ["pqrs", "PQRS", HelpCircle],
+    ["promesas", "Promesas de Servicio", CalendarClock],
+    ["facturas", "Facturas Proveedor", FileText],
   ],
-  transportista: [["mi_empresa", "Mi Empresa"]],
-  conductor: [["mis_pedidos", "Mis Pedidos"], ["mi_ubicacion", "Mi Ubicacion GPS"]],
-  cliente: [["consultas", "Estado Pedidos"], ["devoluciones", "Mis Devoluciones"], ["recogidas", "Mis Recogidas"], ["pqrs", "PQRS"]],
+  transportista: [["mi_empresa", "Mi Empresa", Truck]],
+  conductor: [["mis_pedidos", "Mis Pedidos", Box], ["mi_ubicacion", "Mi Ubicacion GPS", MapPin]],
+  cliente: [["consultas", "Estado Pedidos", Box], ["devoluciones", "Mis Devoluciones", RotateCcw], ["recogidas", "Mis Recogidas", PackageCheck], ["pqrs", "PQRS", HelpCircle]],
 };
-
-const shortLabel = (label) => label.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 
 export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed, pqrs = [] }) {
   const items = MENUS[user.rol] || [];
-  const w = collapsed ? 64 : 210;
+  const width = collapsed ? 72 : 246;
   const canShareApp = ["admin", "operador", "transportista"].includes(user.rol);
 
   return (
-    <div style={{ width:w, minHeight:"100vh", background:`linear-gradient(180deg,${P[950]},${P[800]})`, display:"flex", flexDirection:"column", transition:"width .2s", flexShrink:0, position:"relative", zIndex:10 }}>
-      <div style={{ padding: collapsed?"14px 10px":"18px 16px", display:"flex", alignItems:"center", gap:10, borderBottom:`1px solid ${P[700]}40` }}>
-        <Logo size={collapsed?36:42}/>
-        {!collapsed&&<div><div style={{color:"#fff",fontWeight:900,fontSize:14,lineHeight:1}}>Somos PRO</div><div style={{color:P[300],fontSize:10}}>Tracking</div></div>}
-        <button onClick={()=>setCollapsed(!collapsed)} style={{marginLeft:"auto",background:"none",border:"none",color:P[300],cursor:"pointer",fontSize:16,padding:2,lineHeight:1}}>
-          {collapsed ? ">" : "<"}
+    <aside style={{
+      width,
+      height: "100vh",
+      background: "#fff",
+      borderRight: "1px solid #e5e7eb",
+      display: "flex",
+      flexDirection: "column",
+      transition: "width .2s ease",
+      flexShrink: 0,
+      position: "sticky",
+      top: 0,
+      zIndex: 20,
+      color: "#111827",
+    }}>
+      <div style={{ padding: collapsed ? "16px 10px" : "18px 12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: "#6d42d8",
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: 900,
+          fontSize: 13,
+          flexShrink: 0,
+        }}>
+          PRO
+        </div>
+        {!collapsed && (
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>Somos PRO</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3 }}>Tracking</div>
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? "Expandir menu" : "Contraer menu"}
+          style={{
+            width: 28,
+            height: 28,
+            border: "none",
+            background: "transparent",
+            color: "#6b7280",
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+            borderRadius: 8,
+            flexShrink: 0,
+          }}
+        >
+          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
         </button>
       </div>
-      {!collapsed&&(
-        <div style={{padding:"12px 16px",borderBottom:`1px solid ${P[700]}40`}}>
-          <div style={{width:36,height:36,borderRadius:18,background:`linear-gradient(135deg,${P[500]},${P[400]})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:16,marginBottom:6}}>
-            {user.nombre?.[0]?.toUpperCase()||"U"}
+
+      {!collapsed && (
+        <div style={{ padding: "12px 12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 38,
+            height: 38,
+            borderRadius: 19,
+            background: "#f1f0f8",
+            display: "grid",
+            placeItems: "center",
+            color: "#4f2ca8",
+            fontWeight: 800,
+          }}>
+            {user.nombre?.[0]?.toUpperCase() || "U"}
           </div>
-          <div style={{color:"#fff",fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.nombre}</div>
-          <div style={{color:P[300],fontSize:11}}>{ROLES[user.rol]||user.rol}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.nombre}</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{ROLES[user.rol] || user.rol}</div>
+          </div>
         </div>
       )}
-      <nav style={{flex:1,padding:"8px 0",overflowY:"auto"}}>
-        {items.map(([id,label])=>{
-          const active = activeTab===id;
-          const badgeCount = id==="pqrs" ? (pqrs||[]).filter(p=>p.estado==="abierta").length : 0;
+
+      <nav style={{ flex: 1, overflowY: "auto", padding: "6px 8px 12px" }}>
+        {items.map(([id, label, Icon]) => {
+          const active = activeTab === id;
+          const badgeCount = id === "pqrs" ? (pqrs || []).filter(p => p.estado === "abierta").length : 0;
           return (
-            <button key={id} onClick={()=>setActiveTab(id)}
-              style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:collapsed?"12px":"10px 16px",background:active?`${P[600]}40`:"transparent",border:"none",cursor:"pointer",color:active?"#fff":P[300],fontWeight:active?700:400,fontSize:13,transition:"all .15s",textAlign:"left",borderLeft:active?`3px solid ${P[400]}`:"3px solid transparent",justifyContent:collapsed?"center":"flex-start"}}>
-              <span style={{fontSize:11,flexShrink:0,position:"relative",fontWeight:900,minWidth:collapsed?24:22,textAlign:"center",letterSpacing:0}}>
-                {shortLabel(label)}
-                {badgeCount>0&&<span style={{position:"absolute",top:-8,right:-9,background:"#dc2626",color:"#fff",borderRadius:"50%",width:15,height:15,fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{badgeCount>9?"9+":badgeCount}</span>}
-              </span>
-              {!collapsed&&<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{label}</span>}
-              {!collapsed&&badgeCount>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:12,padding:"1px 7px",fontSize:10,fontWeight:900,flexShrink:0}}>{badgeCount}</span>}
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              title={collapsed ? label : undefined}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                minHeight: 36,
+                padding: collapsed ? "9px 0" : "9px 12px",
+                marginBottom: 3,
+                background: active ? "#f0eef9" : "transparent",
+                border: "none",
+                borderRadius: 10,
+                cursor: "pointer",
+                color: active ? "#3f2386" : "#374151",
+                fontWeight: active ? 700 : 500,
+                fontSize: 14,
+                textAlign: "left",
+                justifyContent: collapsed ? "center" : "flex-start",
+                position: "relative",
+              }}
+            >
+              <Icon size={17} strokeWidth={active ? 2.4 : 1.9} />
+              {!collapsed && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
+              {badgeCount > 0 && (
+                <span style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  borderRadius: 99,
+                  minWidth: 18,
+                  height: 18,
+                  padding: "0 5px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  position: collapsed ? "absolute" : "static",
+                  top: 2,
+                  right: 8,
+                }}>
+                  {badgeCount > 9 ? "9+" : badgeCount}
+                </span>
+              )}
             </button>
           );
         })}
       </nav>
-      {canShareApp && onShareApp && (
-        <button onClick={onShareApp}
-          style={{margin:"8px 8px 0",padding:"10px",background:`${P[600]}60`,border:`1px solid ${P[500]}`,borderRadius:8,color:"#fff",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:8,justifyContent:collapsed?"center":"flex-start"}}>
-          <span>{collapsed ? "QR" : "Compartir App"}</span>
+
+      <div style={{ flexShrink: 0, borderTop: "1px solid #e5e7eb", padding: "10px 8px 14px", background: "#fff" }}>
+        {canShareApp && onShareApp && (
+          <button
+            onClick={onShareApp}
+            title="Compartir App"
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
+              gap: 12,
+              minHeight: 38,
+              padding: collapsed ? "9px 0" : "9px 12px",
+              border: "none",
+              background: "transparent",
+              borderRadius: 10,
+              color: "#374151",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 500,
+            }}
+          >
+            <Share2 size={17} />
+            {!collapsed && "Compartir App"}
+          </button>
+        )}
+        <button
+          onClick={onLogout}
+          title="Cerrar Sesion"
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
+            gap: 12,
+            minHeight: 38,
+            padding: collapsed ? "9px 0" : "9px 12px",
+            border: "none",
+            background: "transparent",
+            borderRadius: 10,
+            color: "#ef4444",
+            cursor: "pointer",
+            fontSize: 14,
+            fontWeight: 500,
+          }}
+        >
+          <LogOut size={17} />
+          {!collapsed && "Cerrar Sesion"}
         </button>
-      )}
-      <button onClick={onLogout}
-        style={{margin:"8px",padding:"10px",background:`${P[700]}50`,border:`1px solid ${P[600]}`,borderRadius:8,color:P[200],cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:8,justifyContent:collapsed?"center":"flex-start"}}>
-        <span>{collapsed ? "X" : "Salir"}</span>{!collapsed&&"Cerrar Sesion"}
-      </button>
-    </div>
+      </div>
+    </aside>
   );
 }
