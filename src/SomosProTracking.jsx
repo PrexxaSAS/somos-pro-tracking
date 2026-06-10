@@ -1299,11 +1299,12 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
   </div>
  );
 }
-function Transportistas({ transportistas, conductores, showToast, user, recargar }) {
+function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar }) {
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
  const [modCond, setModCond] = useState(null);
  const [modEdit, setModEdit] = useState(null);
+ const [modSoportes, setModSoportes] = useState(null);
  const [guardando, setGuardando] = useState(false);
  const [formE, setFormE] = useState({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
  const [formC, setFormC] = useState({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
@@ -1315,6 +1316,8 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
  const conductoresActivos = conductores.filter(c => c.activo !== false);
  const misEmp = esMia ? transportistas.filter(t => t.nit === miNit) : transportistas;
  const misCon = esMia ? conductoresActivos.filter(c => c.nit_proveedor === miNit) : conductoresActivos;
+ const misConIds = new Set(misCon.map(c => String(c.id)));
+ const pedidosMisConductores = esMia ? pedidos.filter(p => misConIds.has(String(p.conductor_id))) : [];
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
@@ -1387,6 +1390,30 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
   }
   setModEdit(null); showToast("Conductor actualizado", "success");
   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  setGuardando(false);
+ };
+
+ const reemplazarSoportesPedido = async (files) => {
+  const selected = Array.from(files || []).slice(0, 3);
+  if (!modSoportes || selected.length === 0) return;
+  setGuardando(true);
+  try {
+   const soportesData = await Promise.all(selected.map(async (file) => ({
+    nombre:file.name,
+    data: await fileToBase64(file),
+   })));
+   const soportes = soportesData.map((s, i) => `soporte_${modSoportes.id}_${i + 1}.jpg`);
+   const { error } = await supabase
+    .from("pedidos")
+    .update({ soportes, soportes_data: soportesData })
+    .eq("id", modSoportes.id);
+   if (error) { showToast(mensajeError(error, "los soportes del pedido"), "error"); setGuardando(false); return; }
+   setModSoportes(null);
+   showToast("Soportes reemplazados", "success");
+   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  } catch(e) {
+   showToast("Error reemplazando soportes: " + e.message, "error");
+  }
   setGuardando(false);
  };
 
@@ -1469,15 +1496,85 @@ function Transportistas({ transportistas, conductores, showToast, user, recargar
         </div>
        </article>
       ))}
-      {misCon.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores inscritos.</div>}
+     {misCon.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores inscritos.</div>}
      </div>
     </section>
+
+    {esMia && (
+     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+       <div>
+        <h2 style={{ margin:0, fontSize:16, fontWeight:850 }}>Pedidos de mis conductores</h2>
+        <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:13 }}>Consulta los pedidos asignados y reemplaza soportes de entrega si hubo error de archivo.</p>
+       </div>
+       <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{pedidosMisConductores.length} pedidos</span>
+      </div>
+      {pedidosMisConductores.length === 0 ? (
+       <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Aun no hay pedidos asociados a tus conductores.</div>
+      ) : (
+       <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+         <thead>
+          <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+           {["Pedido", "Factura", "Cliente", "Destino", "Conductor", "Estado", "Soportes", "Acciones"].map(h => (
+            <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+           ))}
+          </tr>
+         </thead>
+         <tbody>
+          {pedidosMisConductores.map(p => {
+           const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+           const soportesCount = Array.isArray(p.soportes_data) ? p.soportes_data.length : 0;
+           return (
+            <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
+             <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
+             <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
+             <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
+             <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
+             <td style={{ padding:"16px" }}><div>{cond?.nombre || "Sin conductor"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond?.placa || ""}</div></td>
+             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
+             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>generarPDFSoportes(p,[])}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
+             <td style={{ padding:"16px", textAlign:"right" }}>
+              <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModSoportes(p)} disabled={soportesCount === 0}>
+               Reemplazar soportes
+              </button>
+             </td>
+            </tr>
+           );
+          })}
+         </tbody>
+        </table>
+       </div>
+      )}
+     </section>
+    )}
    </main>
 
    {modEmpresa && <Modal title="Nueva Empresa Transportista" onClose={() => setModEmpresa(false)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required placeholder="Transportes XYZ S.A.S"/><Field label="NIT *" value={formE.nit} onChange={fe("nit")} required placeholder="900123456-1"/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Persona de Contacto" value={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz"/><Field label="Telefono" value={formE.tel} onChange={fe("tel")} placeholder="3001234567"/></div><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEmpresa(false)}>Cancelar</Btn><Btn onClick={crearEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Crear Empresa y Usuario"}</Btn></div></div></Modal>}
    {modEditEmp && <Modal title={`Editar ${modEditEmp.nombre}`} onClose={() => setModEditEmp(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required/><p style={{ fontSize:12, color:"#64748b", margin:0 }}>NIT: <strong>{modEditEmp.nit}</strong> (no modificable)</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/><Field label="Telefono" value={formE.tel} onChange={fe("tel")}/></div><Field label="Nueva Contrasena (vacio = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contrasena..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEditEmp(null)}>Cancelar</Btn><Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
    {modCond && <Modal title={`Inscribir Conductor ${modCond.nombre}`} onClose={() => setModCond(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>Empresa: <strong>{modCond.nombre}</strong> · NIT: <strong>{modCond.nit}</strong></div><Field label="Nombre *" value={formC.nombre} onChange={fc("nombre")} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula *" value={formC.cedula} onChange={fc("cedula")} required placeholder="1012345678"/><Field label="Celular" value={formC.celular} onChange={fc("celular")} placeholder="3001234567"/></div><Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso del conductor</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModCond(null)}>Cancelar</Btn><Btn onClick={inscribirConductor} disabled={guardando}>{guardando ? "Guardando..." : "Inscribir y Crear Usuario"}</Btn></div></div></Modal>}
    {modEdit && <Modal title={`Editar Conductor ${modEdit.nombre}`} onClose={() => setModEdit(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Nombre *" value={formEdit.nombre} onChange={v => setFormEdit(p => ({ ...p, nombre:v }))} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula" value={formEdit.cedula} onChange={v => setFormEdit(p => ({ ...p, cedula:v }))} placeholder="1012345678"/><Field label="Celular" value={formEdit.celular} onChange={v => setFormEdit(p => ({ ...p, celular:v }))} placeholder="3001234567"/></div><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Placa *" value={formEdit.placa} onChange={v => setFormEdit(p => ({ ...p, placa:v }))} required placeholder="ABC-123"/>{!esMia && <Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v => setFormEdit(p => ({ ...p, nit_proveedor:v }))} placeholder="900123456-1"/>}</div>{esMia ? <div style={{ background:"#f8fafc", border:`1px solid ${border}`, borderRadius:12, padding:12, fontSize:13, color:"#4b5563" }}><div style={{ fontWeight:800, marginBottom:4 }}>Pertenencia del conductor</div><div>NIT proveedor: <strong>{formEdit.nit_proveedor || miNit}</strong></div><div>Empresa: <strong>{formEdit.empresa || user.empresa || user.nombre}</strong></div><div style={{ color:"#6b7280", marginTop:6 }}>Estos datos solo pueden ser modificados por un administrador.</div></div> : <Field label="Empresa" value={formEdit.empresa} onChange={v => setFormEdit(p => ({ ...p, empresa:v }))} placeholder="Transportes XYZ"/>}<div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEdit(null)}>Cancelar</Btn><Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
+   {modSoportes && (
+    <Modal title={`Reemplazar soportes ${modSoportes.guia_interna || modSoportes.id}`} onClose={() => setModSoportes(null)}>
+     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", color:"#9a3412", borderRadius:12, padding:12, fontSize:13, fontWeight:700 }}>
+       Esta accion reemplaza todos los soportes actuales del pedido. El historico del pedido no cambia.
+      </div>
+      <div style={{ ...cardStyle, padding:14 }}>
+       <div style={{ fontWeight:850, color:"#111827" }}>{modSoportes.cliente}</div>
+       <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Factura: {modSoportes.factura} · Estado: {ESTADOS_PEDIDO[modSoportes.estado]?.label || modSoportes.estado}</div>
+       <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Soportes actuales: {(modSoportes.soportes_data || []).length}</div>
+      </div>
+      <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"18px", textAlign:"center", cursor:guardando?"not-allowed":"pointer", color:P[600], fontWeight:800 }}>
+       <input type="file" accept="image/*" multiple disabled={guardando} style={{display:"none"}} onChange={e=>reemplazarSoportesPedido(e.target.files)}/>
+       {guardando ? "Reemplazando..." : "Seleccionar nuevas fotos (max 3)"}
+      </label>
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+       <Btn variant="secondary" onClick={() => setModSoportes(null)} disabled={guardando}>Cancelar</Btn>
+      </div>
+     </div>
+    </Modal>
+   )}
   </div>
  );
 }
@@ -3673,7 +3770,7 @@ export default function SomosProTracking() {
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={cargarTodo} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={cargarTodo}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={cargarTodo}/>;
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={cargarTodo}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
     ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={cargarTodo}/>
@@ -3682,7 +3779,7 @@ export default function SomosProTracking() {
    case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={cargarTodo}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} showToast={showToast} recargar={cargarTodo}/>;
-   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} showToast={showToast} user={user} recargar={cargarTodo}/>;
+   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={cargarTodo}/>;
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
