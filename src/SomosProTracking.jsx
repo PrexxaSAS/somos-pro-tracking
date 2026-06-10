@@ -1,6 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ROLES } from './Constants';
-import { PAQUETERIAS_INICIALES } from './DataStore';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
@@ -3426,7 +3425,7 @@ export default function SomosProTracking() {
  const [transportistas, setTransportistas] = useState([]);
  const [usuarios,    setUsuarios]    = useState([]);
  const [ciudades,    setCiudades]    = useState(CIUDADES_BASE);
- const [paqueterias,  setPaqueterias]  = useState(PAQUETERIAS_INICIALES);
+ const [paqueterias,  setPaqueterias]  = useState([]);
  const [devoluciones,  setDevoluciones]  = useState([]);
  const [recogidas,   setRecogidas]   = useState([]);
  const [pqrs,      setPqrs]      = useState([]);
@@ -3516,7 +3515,7 @@ export default function SomosProTracking() {
    setConductores(con || []);
    setPedidos(ped || []);
    if (ciu && ciu.length > 0) setCiudades(ciu);
-   if (paq && paq.length > 0) setPaqueterias(paq.map(p => p.nombre));
+   setPaqueterias((paq || []).map(p => p.nombre));
    setDevoluciones(dev || []);
    setRecogidas(rec || []);
    setPqrs(pqrsd || []);
@@ -3554,22 +3553,6 @@ export default function SomosProTracking() {
    showToast('No se pudo cargar Supabase: '+(e.message || 'verifica variables y permisos.'), 'error');
   }
   setCargando(false);
- };
-
- // Sembrar datos iniciales si la BD est vaca 
- const sembrarDatosIniciales = async () => {
-  try {
-   // Ciudades base
-   for (const c of CIUDADES_BASE) {
-    await supabase.from('ciudades').upsert({ code: c.code, name: c.name }, { onConflict: 'code', ignoreDuplicates: true });
-   }
-   // Paqueterias
-   for (const p of PAQUETERIAS_INICIALES) {
-    await supabase.from('paqueterias').upsert({ nombre: p }, { onConflict: 'nombre', ignoreDuplicates: true });
-   }
-  } catch(e) {
-   console.log('Sembrado inicial:', e.message);
-  }
  };
 
  const showToastYRecargar = async (msg, type = "success") => {
