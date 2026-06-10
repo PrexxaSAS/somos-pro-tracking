@@ -11,15 +11,7 @@ for select
 to authenticated
 using (
   public.is_transportista()
-  and (
-    nit_proveedor = public.current_user_nit()
-    or exists (
-      select 1
-      from public.conductores c
-      where c.id = pedidos.conductor_id
-        and c.nit_proveedor = public.current_user_nit()
-    )
-  )
+  and nit_proveedor = public.current_user_nit()
 );
 
 create policy "pedidos_transportista_update_supports"
@@ -28,27 +20,11 @@ for update
 to authenticated
 using (
   public.is_transportista()
-  and (
-    nit_proveedor = public.current_user_nit()
-    or exists (
-      select 1
-      from public.conductores c
-      where c.id = pedidos.conductor_id
-        and c.nit_proveedor = public.current_user_nit()
-    )
-  )
+  and nit_proveedor = public.current_user_nit()
 )
 with check (
   public.is_transportista()
-  and (
-    nit_proveedor = public.current_user_nit()
-    or exists (
-      select 1
-      from public.conductores c
-      where c.id = pedidos.conductor_id
-        and c.nit_proveedor = public.current_user_nit()
-    )
-  )
+  and nit_proveedor = public.current_user_nit()
 );
 
 create or replace function public.prevent_closed_pedido_changes()
@@ -73,15 +49,7 @@ begin
   then
     if role_actual = 'transportista'
       and support_only_change
-      and (
-        old.nit_proveedor = public.current_user_nit()
-        or exists (
-          select 1
-          from public.conductores c
-          where c.id = old.conductor_id
-            and c.nit_proveedor = public.current_user_nit()
-        )
-      )
+      and old.nit_proveedor = public.current_user_nit()
     then
       return new;
     end if;
