@@ -1062,6 +1062,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   }).filter(Boolean);
 
   let insertados = 0;
+  const pedidosInsertados = [];
   for (const p of conGuias) {
    const { error } = await supabase.from("pedidos").insert(p);
    if (error) {
@@ -1069,19 +1070,21 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     registrarError(rowOriginal || p, p.id, error.message);
    } else {
     insertados += 1;
+    pedidosInsertados.push(p);
    }
   }
 
   setModCSV(false);
   if (erroresImportacion.length > 0) {
    const detalle = erroresImportacion.map(e => `${e.id}: ${e.error}`).join(" | ");
+   if (pedidosInsertados.length > 0) setPedidos(prev => [...pedidosInsertados, ...prev]);
    setReporteImportacion({ insertados, errores: erroresImportacion, headers: csvHeaders });
    showToast(`${insertados} pedido(s) importados. ${erroresImportacion.length} con error: ${detalle}`, insertados > 0 ? "info" : "error");
   } else {
    setReporteImportacion(null);
    showToast(insertados + " pedido(s) importados", "success");
+   if (recargar) await recargar();
   }
-  if (recargar) await recargar();
  };
 
  const pageBg = "#fafafa";
@@ -1209,7 +1212,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
-    <Modal title="Resultado de importacion CSV" onClose={() => setReporteImportacion(null)} wide>
+    <Modal title="Resultado de importacion CSV" onClose={async () => { setReporteImportacion(null); if (recargar) await recargar(); }} wide>
      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ background:"#fffbeb", border:"1px solid #fde68a", color:"#92400e", borderRadius:12, padding:14, fontSize:14 }}>
        <strong>{reporteImportacion.insertados}</strong> pedido(s) importados correctamente.{" "}
@@ -1234,7 +1237,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        </table>
       </div>
       <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-       <Btn variant="secondary" onClick={() => setReporteImportacion(null)}>Cerrar</Btn>
+       <Btn variant="secondary" onClick={async () => { setReporteImportacion(null); if (recargar) await recargar(); }}>Cerrar</Btn>
        <Btn onClick={descargarErroresImportacion}>Descargar errores CSV</Btn>
       </div>
      </div>
