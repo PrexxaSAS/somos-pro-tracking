@@ -273,7 +273,12 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
          return (
           <tr key={p.id}>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", color: "#5b33d6", fontWeight: 800 }}>{p.guia_interna || p.id}</td>
+           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
+            <div style={{ color: "#5b33d6", fontWeight: 800 }}>{p.guia_interna || p.id}</div>
+            {p.tipo !== "paqueteria" && p.guia_interna && p.guia_interna !== p.id && (
+             <div style={{ color: "#6b7280", fontSize: 12, fontFamily: "monospace", marginTop: 3 }}>{p.id}</div>
+            )}
+           </td>
            <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", color: "#4b5563" }}>{p.factura}</td>
            <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>{p.cliente}</td>
            <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
