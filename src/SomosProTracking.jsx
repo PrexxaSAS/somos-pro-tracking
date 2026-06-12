@@ -772,10 +772,12 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     ciudad_origen_nombre: ciudadOrigen?.name || obj.ciudad_origen_nombre || null,
     direccion_origen: obj.direccion_origen || null,
     conductor_id: null, placa: null, nit_proveedor: null,
-    estado:    esPaq ? "paqueteria" : "sin_asignar",
-    estado_despacho: "despachado", novedad: false,
-    fecha_creacion: new Date().toISOString().split("T")[0],
-    fecha_real: null, soportes: [], soportes_data: [],
+   estado:    esPaq ? "paqueteria" : "sin_asignar",
+   estado_despacho: "despachado", novedad: false,
+   fecha_creacion: new Date().toISOString().split("T")[0],
+   fecha_real: null, soportes: [], soportes_data: [],
+   _csvOriginal: obj,
+   _csvHeaders: hdrs,
    };
   });
  };
@@ -872,6 +874,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [modGuia, setModGuia] = useState(null);
  const [modCSV, setModCSV] = useState(false);
  const [modGuias, setModGuias] = useState(false);
+ const [reporteImportacion, setReporteImportacion] = useState(null);
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
 
@@ -960,10 +963,49 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    return `<tr><td>${i+1}</td><td><strong>${p.guia_interna || p.id}</strong></td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}<br/><small>${p.ciudad_codigo}</small></td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${trans}</td><td></td></tr>`;
   }).join("")}</tbody></table>
   <div class="footer">Somos PRO Tracking Documento generado automaticamente</div></body></html>`);
-  win.print();
+ win.print();
+};
+
+ const limpiarFilaPedidoCSV = (row) => {
+  const { _csvOriginal, _csvHeaders, ...pedido } = row;
+  return pedido;
+ };
+
+ const descargarErroresImportacion = () => {
+  if (!reporteImportacion?.errores?.length) return;
+  const headersBase = reporteImportacion.headers || [];
+  const headersExtra = reporteImportacion.errores.flatMap(e => Object.keys(e.original || {}));
+  const headers = [...new Set([...headersBase, ...headersExtra])].filter(h => h && h !== "error");
+  const escapeCsv = (value) => {
+   const text = String(value ?? "");
+   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lineas = [
+   [...headers, "error"].map(escapeCsv).join(","),
+   ...reporteImportacion.errores.map(e => [
+    ...headers.map(h => escapeCsv(e.original?.[h] ?? "")),
+    escapeCsv(e.error),
+   ].join(",")),
+  ];
+  const blob = new Blob([lineas.join("\n")], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `errores_importacion_pedidos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
  };
 
  const handleImportarCSV = async (rows) => {
+  const csvHeaders = rows[0]?._csvHeaders || [];
+  const erroresImportacion = [];
+  const registrarError = (row, id, error) => {
+   erroresImportacion.push({
+    id,
+    error,
+    original: row?._csvOriginal || limpiarFilaPedidoCSV(row || {}),
+   });
+  };
   const ids = rows.map(r => String(r.id || "").trim()).filter(Boolean);
   const duplicadosCsv = ids.filter((id, index) => ids.indexOf(id) !== index);
   const duplicadosUnicos = [...new Set(duplicadosCsv)];
@@ -983,7 +1025,6 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    existentes.push(...(data || []).map(p => p.id));
   }
 
-  const erroresImportacion = [];
   const idsProcesadosCsv = new Set();
   const existentesSet = new Set(existentes.map(String));
   const duplicadosSet = new Set(duplicadosUnicos.map(String));
@@ -992,25 +1033,25 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const conGuias = rows.map((r) => {
    const pedidoId = String(r.id || "").trim();
    if (!pedidoId) {
-    erroresImportacion.push({ id: "Sin ID", error: "El pedido no tiene numero de pedido." });
+    registrarError(r, "Sin ID", "El pedido no tiene numero de pedido.");
     return null;
    }
    if (idsProcesadosCsv.has(pedidoId)) {
-    erroresImportacion.push({ id: pedidoId, error: "Esta repetido dentro del CSV." });
+    registrarError(r, pedidoId, "Esta repetido dentro del CSV.");
     return null;
    }
    idsProcesadosCsv.add(pedidoId);
    if (duplicadosSet.has(pedidoId)) {
-    erroresImportacion.push({ id: pedidoId, error: "Tiene mas de una fila en el CSV; se omitio para evitar inconsistencias." });
+    registrarError(r, pedidoId, "Tiene mas de una fila en el CSV; se omitio para evitar inconsistencias.");
     return null;
    }
    if (existentesSet.has(pedidoId)) {
-    erroresImportacion.push({ id: pedidoId, error: "Ya existe en la base de datos." });
+    registrarError(r, pedidoId, "Ya existe en la base de datos.");
     return null;
    }
    const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
    const pedidoConGuia = {
-    ...r,
+    ...limpiarFilaPedidoCSV(r),
     guia_interna: guiaInterna,
     estado_despacho: r.estado_despacho || "despachado",
     novedad: false,
@@ -1024,7 +1065,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   for (const p of conGuias) {
    const { error } = await supabase.from("pedidos").insert(p);
    if (error) {
-    erroresImportacion.push({ id: p.id, error: error.message });
+    const rowOriginal = rows.find(r => String(r.id || "").trim() === String(p.id));
+    registrarError(rowOriginal || p, p.id, error.message);
    } else {
     insertados += 1;
    }
@@ -1033,8 +1075,10 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   setModCSV(false);
   if (erroresImportacion.length > 0) {
    const detalle = erroresImportacion.map(e => `${e.id}: ${e.error}`).join(" | ");
+   setReporteImportacion({ insertados, errores: erroresImportacion, headers: csvHeaders });
    showToast(`${insertados} pedido(s) importados. ${erroresImportacion.length} con error: ${detalle}`, insertados > 0 ? "info" : "error");
   } else {
+   setReporteImportacion(null);
    showToast(insertados + " pedido(s) importados", "success");
   }
   if (recargar) await recargar();
@@ -1164,6 +1208,38 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
+   {reporteImportacion && (
+    <Modal title="Resultado de importacion CSV" onClose={() => setReporteImportacion(null)} wide>
+     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:"#fffbeb", border:"1px solid #fde68a", color:"#92400e", borderRadius:12, padding:14, fontSize:14 }}>
+       <strong>{reporteImportacion.insertados}</strong> pedido(s) importados correctamente.{" "}
+       <strong>{reporteImportacion.errores.length}</strong> pedido(s) quedaron con error.
+      </div>
+      <div style={{ maxHeight:280, overflow:"auto", border:"1px solid #e5e7eb", borderRadius:12 }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <thead>
+         <tr style={{ background:"#fafafa", color:"#6b7280", textTransform:"uppercase", fontSize:12 }}>
+          <th style={{ padding:"12px", textAlign:"left", borderBottom:"1px solid #e5e7eb" }}>No. Pedido</th>
+          <th style={{ padding:"12px", textAlign:"left", borderBottom:"1px solid #e5e7eb" }}>Error</th>
+         </tr>
+        </thead>
+        <tbody>
+         {reporteImportacion.errores.map((e, i) => (
+          <tr key={`${e.id}-${i}`}>
+           <td style={{ padding:"12px", borderBottom:"1px solid #e5e7eb", fontWeight:800, color:"#5b33d6" }}>{e.id}</td>
+           <td style={{ padding:"12px", borderBottom:"1px solid #e5e7eb", color:"#dc2626" }}>{e.error}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+       <Btn variant="secondary" onClick={() => setReporteImportacion(null)}>Cerrar</Btn>
+       <Btn onClick={descargarErroresImportacion}>Descargar errores CSV</Btn>
+      </div>
+     </div>
+    </Modal>
+   )}
    {modGuias && <ModalCSVGuias onClose={() => setModGuias(false)} pedidos={pedidos} ciudades={ciudades} showToast={showToast} recargar={recargar} />}
   </div>
  );
