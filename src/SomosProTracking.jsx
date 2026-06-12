@@ -964,13 +964,49 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  };
 
  const handleImportarCSV = async (rows) => {
-  const conGuias = rows.map((r, i) => ({
-   ...r,
-   guia_interna: r.tipo !== "paqueteria" ? generarGuia([...pedidos, ...rows.slice(0, i)]) : null,
-   estado_despacho: r.estado_despacho || "despachado",
-   novedad: false,
-   soportes_data: [],
-  }));
+  const ids = rows.map(r => String(r.id || "").trim()).filter(Boolean);
+  const duplicadosCsv = ids.filter((id, index) => ids.indexOf(id) !== index);
+  const duplicadosUnicos = [...new Set(duplicadosCsv)];
+  if (duplicadosUnicos.length > 0) {
+   const msg = `El CSV tiene pedidos repetidos: ${duplicadosUnicos.join(", ")}. Corrige el archivo antes de importar.`;
+   showToast(msg, "error");
+   throw new Error(msg);
+  }
+
+  const existentes = [];
+  for (let i = 0; i < ids.length; i += 100) {
+   const chunk = ids.slice(i, i + 100);
+   const { data, error } = await supabase
+    .from("pedidos")
+    .select("id")
+    .in("id", chunk);
+   if (error) {
+    const msg = `No se pudo validar si los pedidos ya existen: ${error.message}`;
+    showToast(msg, "error");
+    throw new Error(msg);
+   }
+   existentes.push(...(data || []).map(p => p.id));
+  }
+
+  if (existentes.length > 0) {
+   const msg = `Estos pedidos ya existen y no se importaron: ${existentes.join(", ")}. Retiralos del CSV o usa numeros de pedido nuevos.`;
+   showToast(msg, "error");
+   throw new Error(msg);
+  }
+
+  const baseGuias = [...pedidos];
+  const conGuias = rows.map((r) => {
+   const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
+   const pedidoConGuia = {
+    ...r,
+    guia_interna: guiaInterna,
+    estado_despacho: r.estado_despacho || "despachado",
+    novedad: false,
+    soportes_data: [],
+   };
+   baseGuias.push(pedidoConGuia);
+   return pedidoConGuia;
+  });
   for (const p of conGuias) {
    const { error } = await supabase.from("pedidos").insert(p);
    if (error) { showToast("Error importando " + p.id + ": " + error.message, "error"); return; }
