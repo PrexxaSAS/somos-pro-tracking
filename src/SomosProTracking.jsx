@@ -967,11 +967,6 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const ids = rows.map(r => String(r.id || "").trim()).filter(Boolean);
   const duplicadosCsv = ids.filter((id, index) => ids.indexOf(id) !== index);
   const duplicadosUnicos = [...new Set(duplicadosCsv)];
-  if (duplicadosUnicos.length > 0) {
-   const msg = `El CSV tiene pedidos repetidos: ${duplicadosUnicos.join(", ")}. Corrige el archivo antes de importar.`;
-   showToast(msg, "error");
-   throw new Error(msg);
-  }
 
   const existentes = [];
   for (let i = 0; i < ids.length; i += 100) {
@@ -988,14 +983,31 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    existentes.push(...(data || []).map(p => p.id));
   }
 
-  if (existentes.length > 0) {
-   const msg = `Estos pedidos ya existen y no se importaron: ${existentes.join(", ")}. Retiralos del CSV o usa numeros de pedido nuevos.`;
-   showToast(msg, "error");
-   throw new Error(msg);
-  }
+  const erroresImportacion = [];
+  const idsProcesadosCsv = new Set();
+  const existentesSet = new Set(existentes.map(String));
+  const duplicadosSet = new Set(duplicadosUnicos.map(String));
 
   const baseGuias = [...pedidos];
   const conGuias = rows.map((r) => {
+   const pedidoId = String(r.id || "").trim();
+   if (!pedidoId) {
+    erroresImportacion.push({ id: "Sin ID", error: "El pedido no tiene numero de pedido." });
+    return null;
+   }
+   if (idsProcesadosCsv.has(pedidoId)) {
+    erroresImportacion.push({ id: pedidoId, error: "Esta repetido dentro del CSV." });
+    return null;
+   }
+   idsProcesadosCsv.add(pedidoId);
+   if (duplicadosSet.has(pedidoId)) {
+    erroresImportacion.push({ id: pedidoId, error: "Tiene mas de una fila en el CSV; se omitio para evitar inconsistencias." });
+    return null;
+   }
+   if (existentesSet.has(pedidoId)) {
+    erroresImportacion.push({ id: pedidoId, error: "Ya existe en la base de datos." });
+    return null;
+   }
    const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
    const pedidoConGuia = {
     ...r,
@@ -1006,13 +1018,25 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    };
    baseGuias.push(pedidoConGuia);
    return pedidoConGuia;
-  });
+  }).filter(Boolean);
+
+  let insertados = 0;
   for (const p of conGuias) {
    const { error } = await supabase.from("pedidos").insert(p);
-   if (error) { showToast("Error importando " + p.id + ": " + error.message, "error"); return; }
+   if (error) {
+    erroresImportacion.push({ id: p.id, error: error.message });
+   } else {
+    insertados += 1;
+   }
   }
+
   setModCSV(false);
-  showToast(rows.length + " pedido(s) importados", "success");
+  if (erroresImportacion.length > 0) {
+   const detalle = erroresImportacion.map(e => `${e.id}: ${e.error}`).join(" | ");
+   showToast(`${insertados} pedido(s) importados. ${erroresImportacion.length} con error: ${detalle}`, insertados > 0 ? "info" : "error");
+  } else {
+   showToast(insertados + " pedido(s) importados", "success");
+  }
   if (recargar) await recargar();
  };
 
