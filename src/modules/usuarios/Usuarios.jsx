@@ -127,11 +127,11 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  const camposRol = () => {
   const transportistaOpciones = (transportistas || [])
    .filter(t => t?.nit)
-   .map(t => ({ value:t.nit, label:`${t.nombre || t.empresa || t.nit} - ${t.nit}` }));
+   .map(t => ({ value:t.nit, label:t.nombre || t.empresa || t.nit }));
   const transportistaActualExiste = !form.nit_proveedor || transportistaOpciones.some(t => t.value === form.nit_proveedor);
   const opcionesEmpresaConductor = [
-   { value:"", label:"Seleccione empresa transportista" },
-   ...(!transportistaActualExiste ? [{ value:form.nit_proveedor, label:`${form.empresa || "Empresa actual"} - ${form.nit_proveedor}` }] : []),
+   { value:"", label:"Seleccione" },
+   ...(!transportistaActualExiste ? [{ value:form.nit_proveedor, label:form.empresa || "Empresa actual" }] : []),
    ...transportistaOpciones,
   ];
   const seleccionarEmpresaConductor = (nit) => {
