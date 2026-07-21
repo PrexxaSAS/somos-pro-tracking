@@ -71,6 +71,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
   if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
   if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
+  if(tipoModal==="paqueteria") nuevoEstado="paqueteria";
   const fechaDespacho = new Date().toISOString().split("T")[0];
   const debeMarcarDespacho = nuevoEstado === "en_transito" && pedido.estado !== "en_transito" && !pedido.fecha_despacho;
   const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
@@ -89,9 +90,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   const cambios = canBasicEdit && !canEdit && !canAssign ? cambiosBase : {
    ...cambiosBase,
    ...(canEdit || canAssign ? {
-    conductor_id: c?.id||null,
-    placa: c?.placa||null,
-    nit_proveedor: c?.nit_proveedor||null,
+    conductor_id: tipoModal==="paqueteria" ? null : (c?.id||null),
+    placa: tipoModal==="paqueteria" ? null : (c?.placa||null),
+    nit_proveedor: tipoModal==="paqueteria" ? null : (c?.nit_proveedor||null),
     estado: nuevoEstado,
     ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
    } : {}),
