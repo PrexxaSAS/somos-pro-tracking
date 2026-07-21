@@ -4,7 +4,7 @@ import { Btn, Card, Field, Modal } from '../../Subcomponentes';
 import { supabase } from '../../supabase';
 import { mensajeError } from '../../utils/errors';
 
-export function Usuarios({ usuarios, showToast, recargar }) {
+export function Usuarios({ usuarios, transportistas = [], showToast, recargar }) {
  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
  const [modal,   setModal]   = useState(false);
  const [modEditar, setModEditar] = useState(null);
@@ -125,6 +125,24 @@ export function Usuarios({ usuarios, showToast, recargar }) {
  };
 
  const camposRol = () => {
+  const transportistaOpciones = (transportistas || [])
+   .filter(t => t?.nit)
+   .map(t => ({ value:t.nit, label:`${t.nombre || t.empresa || t.nit} - ${t.nit}` }));
+  const transportistaActualExiste = !form.nit_proveedor || transportistaOpciones.some(t => t.value === form.nit_proveedor);
+  const opcionesEmpresaConductor = [
+   { value:"", label:"Seleccione empresa transportista" },
+   ...(!transportistaActualExiste ? [{ value:form.nit_proveedor, label:`${form.empresa || "Empresa actual"} - ${form.nit_proveedor}` }] : []),
+   ...transportistaOpciones,
+  ];
+  const seleccionarEmpresaConductor = (nit) => {
+   const empresa = (transportistas || []).find(t => t.nit === nit);
+   setForm(p => ({
+    ...p,
+    nit_proveedor:nit,
+    empresa:empresa?.nombre || empresa?.empresa || "",
+   }));
+  };
+
   if (form.rol==="transportista") return (
    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
     <Field label="NIT" value={form.nit} onChange={f("nit")} placeholder="900123456-1"/>
@@ -139,9 +157,9 @@ export function Usuarios({ usuarios, showToast, recargar }) {
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
      <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
-     <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1"/>
+     <Field label="Empresa" value={form.nit_proveedor} onChange={seleccionarEmpresaConductor} as="select" options={opcionesEmpresaConductor}/>
     </div>
-    <Field label="Empresa" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ"/>
+    {form.nit_proveedor && <div style={{background:"#f8fafc",border:`1px solid ${border}`,borderRadius:12,padding:"10px 12px",fontSize:13,color:"#4b5563"}}>NIT proveedor: <strong>{form.nit_proveedor}</strong></div>}
    </>
   );
   return null;
