@@ -489,7 +489,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   );
   if (!paraActualizar.length) { showToast("No hay pedidos para actualizar.","error"); return; }
   setAplicando(true);
-  let ok = 0; let fallos = 0;
+  let ok = 0; const fallosDetalle = [];
 
   // Fecha estimada = hoy + 2 dias
   const fechaEst = new Date();
@@ -515,14 +515,15 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
    if (m.fechaReal) cambios.fecha_real = m.fechaReal;
 
    const { error } = await supabase.from("pedidos").update(cambios).eq("id", m.pedidoId);
-   if (error) { fallos++; console.error(m.pedidoId, error.message); }
+   if (error) { fallosDetalle.push({ id: m.pedidoId, mensaje: error.message }); console.error(m.pedidoId, error.message); }
    else ok++;
   }
 
   setAplicando(false);
-  setResultado({ ok, fallos, noMatch: matches.filter(m=>!m.encontrado).length,
+  setResultado({ ok, fallos: fallosDetalle.length, fallosDetalle,
+   noMatch: matches.filter(m=>!m.encontrado).length,
    omitidos: matches.filter(m=>m.yaConGuia&&!m.estadoCambio&&!sobrescribir).length });
-  showToast(` ${ok} actualizado(s)${fallos?" "+fallos+" error(es)":""}`, ok>0?"success":"error");
+  showToast(` ${ok} actualizado(s)${fallosDetalle.length?" "+fallosDetalle.length+" error(es)":""}`, ok>0?"success":"error");
   if (ok > 0 && recargar) await recargar();
  };
 
@@ -591,6 +592,14 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
        {resultado.noMatch>0&&<span> <strong>{resultado.noMatch}</strong> no encontrados en el sistema</span>}
        {resultado.fallos>0&&<span> <strong>{resultado.fallos}</strong> error(es) en Supabase</span>}
       </div>
+      {resultado.fallosDetalle?.length>0&&(
+       <div style={{marginTop:10,maxHeight:160,overflowY:"auto",background:"#fff",border:"1px solid #fca5a5",
+        borderRadius:8,padding:"8px 10px",fontSize:11,fontFamily:"monospace",color:"#991b1b"}}>
+        {resultado.fallosDetalle.map(f=>(
+         <div key={f.id}><strong>{f.id}</strong>: {f.mensaje}</div>
+        ))}
+       </div>
+      )}
       <Btn size="sm" variant="secondary" style={{marginTop:12}} onClick={onClose}>Cerrar</Btn>
      </div>
     )}
