@@ -24,6 +24,37 @@ const iSt = {
  width:"100%",boxSizing:"border-box",
 };
 
+// Las listas ya no descargan las columnas base64 (soportes_data, soporte_data, doc_data)
+// para no agotar el egress de Supabase; estos helpers las piden solo al abrir el archivo.
+async function cargarSoportesPedido(pedidoId) {
+ const { data, error } = await supabase.from('pedidos').select('soportes_data').eq('id', pedidoId).single();
+ if (error) throw error;
+ return Array.isArray(data?.soportes_data) ? data.soportes_data : [];
+}
+
+async function verPDFSoportes(pedido, showToast) {
+ try {
+  const soportesData = Array.isArray(pedido.soportes_data) && pedido.soportes_data.length > 0
+   ? pedido.soportes_data
+   : await cargarSoportesPedido(pedido.id);
+  await generarPDFSoportes({ ...pedido, soportes_data: soportesData }, []);
+ } catch (e) {
+  console.error('soportes:', e);
+  if (showToast) showToast('No se pudieron cargar los soportes: ' + (e.message || e), 'error');
+ }
+}
+
+async function abrirArchivoRemoto(tabla, id, colData, colNombre, nombreFallback, showToast) {
+ try {
+  const { data, error } = await supabase.from(tabla).select(`${colData},${colNombre}`).eq('id', id).single();
+  if (error) throw error;
+  if (!data?.[colData]) { if (showToast) showToast('El registro no tiene archivo guardado.', 'error'); return; }
+  abrirArchivoGuardado(data[colData], data[colNombre] || nombreFallback);
+ } catch (e) {
+  console.error('archivo:', e);
+  if (showToast) showToast('No se pudo abrir el archivo: ' + (e.message || e), 'error');
+ }
+}
 
 function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
@@ -42,6 +73,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  const [verGuia,  setVerGuia]  = useState(false);
  const [verCamara, setVerCamara] = useState(false);
  const [novedadEntrega, setNovedadEntrega] = useState(pedido.novedad||false);
+ const [soportesData, setSoportesData] = useState(Array.isArray(pedido.soportes_data)?pedido.soportes_data:[]);
+
+ useEffect(() => {
+  let activo = true;
+  if ((pedido.soportes||[]).length > 0 && soportesData.length === 0) {
+   cargarSoportesPedido(pedido.id).then(d => { if (activo && d.length) setSoportesData(d); }).catch(()=>{});
+  }
+  return () => { activo = false; };
+ }, [pedido.id]);
 
  const cond  = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
  const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
@@ -52,7 +92,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   return d.toISOString().split("T")[0];
  })() : null;
  const fuenteRiesgo = fechaLimitePromesa ? "Promesa de servicio" : "Fecha estimada";
- const tieneSoportes = ((pedido.soportes_data||[]).length > 0) || ((pedido.soportes||[]).length > 0);
+ const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0);
  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
  const pedidoEnTransito = pedido.estado === "en_transito";
  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
@@ -130,7 +170,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   const conNovedad = Boolean(novedadEntrega);
   const estadoFinal = conNovedad ? "novedad" : "entregado";
   const nuevosSoportes = [...(pedido.soportes||[]),...nombres];
-  const nuevosSoportesData = [...(pedido.soportes_data||[]),...fotos];
+  const nuevosSoportesData = [...soportesData,...fotos];
   const cambios = {
    soportes: nuevosSoportes,
    soportes_data: nuevosSoportesData,
@@ -303,9 +343,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
 
     <div>
      <div style={{fontWeight:700,fontSize:13,color:P[800],marginBottom:10}}>Soportes Fotograficos de Entrega</div>
-     {(pedido.soportes_data||[]).length>0?(
+     {soportesData.length>0?(
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:12}}>
-       {(pedido.soportes_data||[]).map((s,i)=>(
+       {soportesData.map((s,i)=>(
         <div key={i} style={{borderRadius:8,overflow:"hidden",border:`2px solid ${P[200]}`}}>
          <img src={s.data} alt={"s"+i} style={{width:"100%",height:90,objectFit:"cover",display:"block"}} />
          <div style={{fontSize:10,color:P[700],padding:"4px 8px",fontWeight:600,background:P[50]}}>Soporte {i+1}</div>
@@ -327,8 +367,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
         Cargar Fotos (max 3) y Marcar Entregado
        </Btn>
       )}
-      {(pedido.soportes_data||[]).length>0&&(
-       <Btn variant="secondary" onClick={()=>generarPDFSoportes(pedido,[])}>Ver PDF Soportes</Btn>
+      {tieneSoportes&&(
+       <Btn variant="secondary" onClick={()=>verPDFSoportes({...pedido, soportes_data:soportesData}, showToast)}>Ver PDF Soportes</Btn>
       )}
      </div>
     </div>
@@ -1678,7 +1718,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
          <tbody>
           {pedidosMisConductores.map(p => {
            const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-           const soportesCount = Array.isArray(p.soportes_data) ? p.soportes_data.length : 0;
+           const soportesCount = Array.isArray(p.soportes) && p.soportes.length > 0 ? p.soportes.length : (Array.isArray(p.soportes_data) ? p.soportes_data.length : 0);
            return (
             <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
              <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
@@ -1687,7 +1727,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
              <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
              <td style={{ padding:"16px" }}><div>{cond?.nombre || "Sin conductor"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond?.placa || ""}</div></td>
              <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
-             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>generarPDFSoportes(p,[])}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
+             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>verPDFSoportes(p, showToast)}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
              <td style={{ padding:"16px", textAlign:"right" }}>
               <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModSoportes(p)} disabled={soportesCount === 0}>
                Reemplazar soportes
@@ -1717,7 +1757,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
       <div style={{ ...cardStyle, padding:14 }}>
        <div style={{ fontWeight:850, color:"#111827" }}>{modSoportes.cliente}</div>
        <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Factura: {modSoportes.factura} · Estado: {ESTADOS_PEDIDO[modSoportes.estado]?.label || modSoportes.estado}</div>
-       <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Soportes actuales: {(modSoportes.soportes_data || []).length}</div>
+       <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Soportes actuales: {(modSoportes.soportes || modSoportes.soportes_data || []).length}</div>
       </div>
       <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"18px", textAlign:"center", cursor:guardando?"not-allowed":"pointer", color:P[600], fontWeight:800 }}>
        <input type="file" accept="image/*" multiple disabled={guardando} style={{display:"none"}} onChange={e=>reemplazarSoportesPedido(e.target.files)}/>
@@ -1981,9 +2021,13 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
   const hoy = new Date().toISOString().split("T")[0];
   const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
   const estadoFinal = conNovedad ? "novedad" : "entregado";
+  let soportesPrevios = Array.isArray(pedido.soportes_data) ? pedido.soportes_data : [];
+  if (soportesPrevios.length === 0 && (pedido.soportes||[]).length > 0) {
+   try { soportesPrevios = await cargarSoportesPedido(pedido.id); } catch(e) { soportesPrevios = []; }
+  }
   const cambios = {
    soportes: [...(pedido.soportes||[]),...nombres],
-   soportes_data: [...(Array.isArray(pedido.soportes_data)?pedido.soportes_data:[]),...fotos],
+   soportes_data: [...soportesPrevios,...fotos],
    estado: estadoFinal,
    fecha_real: hoy,
    novedad: conNovedad,
@@ -2125,9 +2169,9 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
            <td style={tdStyle}>{p.fecha_real || "Pendiente"}</td>
            <td style={tdStyle}><Badge estado={p.estado}/></td>
            <td style={{ ...tdStyle, textAlign:"right" }}>
-            {(p.soportes_data||[]).length>0 ? (
-             <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}>
-              Soportes ({p.soportes_data.length})
+            {(p.soportes||p.soportes_data||[]).length>0 ? (
+             <Btn size="sm" variant="success" onClick={()=>verPDFSoportes(p, showToast)}>
+              Soportes ({(p.soportes||p.soportes_data||[]).length})
              </Btn>
             ) : (
              <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>
@@ -2210,9 +2254,9 @@ function MisDevolucionesConductor({ devoluciones = [], user }) {
         <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{d.unidades} uds · {d.volumen_m3} m3 · {d.peso_kg} kg</div>
         {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Motivo: {d.motivo}</div>}
        </div>
-       {d.soporte_data&&(
+       {(d.soporte_nombre||d.soporte_data)&&(
         <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
-         onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
+         onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`)}>
          Ver Soporte
         </button>
        )}
@@ -2251,9 +2295,9 @@ function MisRecogidasConductor({ recogidas = [], user }) {
         <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{r.unidades} uds · {r.volumen_m3} m3 · {r.peso_kg} kg</div>
         {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Obs: {r.observaciones}</div>}
        </div>
-       {r.doc_data&&(
+       {(r.doc_nombre||r.doc_data)&&(
         <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
-         onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
+         onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`)}>
          Ver Documento
         </button>
        )}
@@ -2522,7 +2566,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    dir_recogida: dev.dir_recogida||"",
    ciudad_codigo: dev.ciudad_codigo||"",
    motivo: dev.motivo||"",
-   soporte_data: dev.soporte_data||null,
+   soporte_data: null, // el archivo actual no se descarga; solo se envia si se adjunta uno nuevo
    soporte_nombre: dev.soporte_nombre||"",
   });
  };
@@ -2558,8 +2602,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     ciudad_codigo: form.ciudad_codigo,
     ciudad_nombre: ciudad?.name||"",
     motivo: form.motivo.trim(),
-    soporte_data: form.soporte_data,
-    soporte_nombre: form.soporte_nombre,
+    ...(form.soporte_data ? { soporte_data: form.soporte_data, soporte_nombre: form.soporte_nombre } : {}),
    };
    const { error } = await supabase.from('devoluciones').update(cambios).eq('id', modEditar.id);
    if (error) { showToast(mensajeError(error, "la devolucion"),"error"); return; }
@@ -2647,7 +2690,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_data).length}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_nombre||d.soporte_data).length}</div></div>
     </section>
     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
      <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
@@ -2676,7 +2719,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
            <td style={{ padding:"16px" }}><div>{d.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{d.dir_recogida}</div></td>
            <td style={{ padding:"16px", fontWeight:850 }}>{d.unidades}</td>
            <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={d.estado}/>{d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{d.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {d.fecha_real}</div>}</td>
-           <td style={{ padding:"16px" }}>{d.soporte_data ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
+           <td style={{ padding:"16px" }}>{(d.soporte_nombre||d.soporte_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`, showToast)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
            <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !d.conductor_id && d.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(d)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(d)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
           </tr>
          ))}
@@ -2785,9 +2828,9 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
      <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e"}}>
        Motivo: {dev.motivo}
      </div>
-     {dev.soporte_data&&(
+     {(dev.soporte_nombre||dev.soporte_data)&&(
       <Btn size="sm" variant="success" style={{marginTop:10}}
-       onClick={()=>abrirArchivoGuardado(dev.soporte_data, dev.soporte_nombre || `soporte-${dev.guia}`)}>
+       onClick={()=>abrirArchivoRemoto('devoluciones', dev.id, 'soporte_data', 'soporte_nombre', `soporte-${dev.guia}`, showToast)}>
         Ver Soporte
       </Btn>
      )}
@@ -2851,7 +2894,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
    volumen_m3: rec.volumen_m3||"",
    peso_kg: rec.peso_kg||"",
    observaciones: rec.observaciones||"",
-   doc_data: rec.doc_data||null,
+   doc_data: null, // el archivo actual no se descarga; solo se envia si se adjunta uno nuevo
    doc_nombre: rec.doc_nombre||"",
   });
  };
@@ -2889,8 +2932,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     volumen_m3: parseFloat(form.volumen_m3)||0,
     peso_kg: parseFloat(form.peso_kg)||0,
     observaciones: form.observaciones.trim(),
-    doc_data: form.doc_data,
-    doc_nombre: form.doc_nombre,
+    ...(form.doc_data ? { doc_data: form.doc_data, doc_nombre: form.doc_nombre } : {}),
    };
    const { error } = await supabase.from('recogidas').update(cambios).eq('id', modEditar.id);
    if (error) { showToast(mensajeError(error, "la recogida"),"error"); return; }
@@ -2980,7 +3022,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_data).length}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_nombre||r.doc_data).length}</div></div>
     </section>
     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
      <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
@@ -3009,7 +3051,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
            <td style={{ padding:"16px", fontWeight:850 }}>{r.unidades}</td>
            <td style={{ padding:"16px", color:"#4b5563" }}>{r.peso_kg} kg</td>
            <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={r.estado}/>{r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{r.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {r.fecha_real}</div>}</td>
-           <td style={{ padding:"16px" }}>{r.doc_data ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
+           <td style={{ padding:"16px" }}>{(r.doc_nombre||r.doc_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`, showToast)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
            <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !r.conductor_id && r.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(r)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(r)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
           </tr>
          ))}
@@ -3100,9 +3142,9 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
      <span> Entrega: {rec.ciudad_entrega_nombre}</span>
      <span> {rec.unidades} uds {rec.peso_kg} kg</span>
     </div>
-    {rec.doc_data&&(
+    {(rec.doc_nombre||rec.doc_data)&&(
      <Btn size="sm" variant="success" style={{marginTop:10}}
-      onClick={()=>abrirArchivoGuardado(rec.doc_data, rec.doc_nombre || `documento-${rec.guia}`)}>
+      onClick={()=>abrirArchivoRemoto('recogidas', rec.id, 'doc_data', 'doc_nombre', `documento-${rec.guia}`, showToast)}>
        Ver Documento
      </Btn>
     )}
@@ -3235,8 +3277,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   if (!gestion.trim()) { showToast("Escribe una respuesta de gestin","error"); return; }
   const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
    fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion",
-   soporte_data: gestionSoporte.data || modGestion.soporte_data || null,
-   soporte_nombre: gestionSoporte.nombre || modGestion.soporte_nombre || "" };
+   soporte_data: gestionSoporte.data || null,
+   soporte_nombre: gestionSoporte.nombre || "" };
   const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
   if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return; }
   setModGestion(null); setGestion(""); setGestionSoporte({ data:null, nombre:"" });
@@ -3325,8 +3367,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
             <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{p.descripcion}</div></td>
             <td style={{ padding:"16px" }}><div>{p.solicitado_por}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.fecha_creacion}</div></td>
             <td style={{ padding:"16px" }}><span style={{ background:est.bg, color:est.color, border:`1px solid ${est.color}40`, borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800, whiteSpace:"nowrap" }}>{est.label}</span></td>
-            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div>{p.soporte_data&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoGuardado(p.soporte_data, p.soporte_nombre || `soporte-${p.id}`)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:p.soporte_data||null, nombre:p.soporte_nombre||"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
+            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div>{(p.soporte_nombre||p.soporte_data)&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoRemoto('pqrs', p.id, 'soporte_data', 'soporte_nombre', `soporte-${p.id}`, showToast)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
+            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:null, nombre:"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
            </tr>
           );
          })}
@@ -3543,7 +3585,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
         {pageItems.map(p=>{
          const cond = conductores.find(c=>String(c.id)===String(p.conductor_id));
          const ciudad = (ciudades||[]).find(c=>c.code===p.ciudad_codigo);
-         const soportes = p.soportes_data || [];
+         const soportes = p.soportes || p.soportes_data || [];
          return (
           <React.Fragment key={p.id}>
            <tr style={{ borderBottom:`1px solid ${border}` }}>
@@ -3554,7 +3596,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
             <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
             <td style={{ padding:"16px" }}>{p.tipo==="paqueteria" ? <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></> : cond ? <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa}</div></> : <span style={{ color:"#9ca3af" }}>Sin conductor</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>generarPDFSoportes(p,[])}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
+            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
            </tr>
            {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
           </React.Fragment>
@@ -3597,6 +3639,8 @@ export default function SomosProTracking() {
   try {
    const rolActual = perfil?.rol;
    const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
+   // Listas livianas: se excluyen las columnas base64 (soportes_data, soporte_data,
+   // doc_data) que disparaban el egress; se descargan solo al abrir cada archivo.
    const pedidosSelectCliente = [
     "id",
     "guia_interna",
@@ -3618,13 +3662,60 @@ export default function SomosProTracking() {
     "paqueteria",
     "guia_paqueteria",
     "soportes",
-    "soportes_data",
     "ciudad_origen_codigo",
     "ciudad_origen_nombre",
     "direccion_origen",
     "created_at",
    ].join(",");
-   const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : "*";
+   const pedidosSelectCompleto = [
+    "id",
+    "guia_interna",
+    "cliente",
+    "ciudad_codigo",
+    "ciudad_nombre",
+    "direccion",
+    "cajas",
+    "factura",
+    "conductor_id",
+    "placa",
+    "nit_proveedor",
+    "estado",
+    "estado_despacho",
+    "novedad",
+    "fecha_creacion",
+    "fecha_estimada",
+    "fecha_real",
+    "fecha_despacho",
+    "tipo",
+    "empresa_transporte",
+    "paqueteria",
+    "guia_paqueteria",
+    "soportes",
+    "notas",
+    "ciudad_origen_codigo",
+    "ciudad_origen_nombre",
+    "direccion_origen",
+    "created_at",
+   ].join(",");
+   const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : pedidosSelectCompleto;
+   const devolucionesSelect = [
+    "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
+    "dir_recogida","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
+    "placa","nit_proveedor","estado","novedad","paqueteria","guia_paqueteria",
+    "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
+   ].join(",");
+   const recogidasSelect = [
+    "id","guia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
+    "dir_entrega","ciudad_entrega_cod","ciudad_entrega_nombre","unidades",
+    "volumen_m3","peso_kg","observaciones","conductor_id","placa","nit_proveedor",
+    "estado","novedad","paqueteria","guia_paqueteria","doc_nombre",
+    "fecha_creacion","fecha_real","solicitado_por","created_at",
+   ].join(",");
+   const pqrsSelect = [
+    "id","factura","pedido_ref","motivo","descripcion","estado","solicitado_por",
+    "gestionado_por","respuesta","fecha_creacion","fecha_gestion",
+    "soporte_nombre","created_at",
+   ].join(",");
 
    const [
     usuRes, traRes, conRes,
@@ -3638,9 +3729,9 @@ export default function SomosProTracking() {
     supabase.from('pedidos').select(pedidosSelect).order('created_at', { ascending: false }),
     supabase.from('ciudades').select('*').order('name'),
     supabase.from('paqueterias').select('*').order('nombre'),
-    supabase.from('devoluciones').select('*').order('created_at', { ascending: false }),
-    supabase.from('recogidas').select('*').order('created_at', { ascending: false }),
-    supabase.from('pqrs').select('*').order('created_at', { ascending: false }),
+    supabase.from('devoluciones').select(devolucionesSelect).order('created_at', { ascending: false }),
+    supabase.from('recogidas').select(recogidasSelect).order('created_at', { ascending: false }),
+    supabase.from('pqrs').select(pqrsSelect).order('created_at', { ascending: false }),
     supabase.from('promesas_servicio').select('*'),
    ]);
    const results = [usuRes, traRes, conRes, pedRes, ciuRes, paqRes, devRes, recRes, pqrsRes, promRes];
