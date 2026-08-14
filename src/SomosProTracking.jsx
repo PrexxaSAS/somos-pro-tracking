@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ROLES } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
@@ -23,8 +23,39 @@ const iSt = {
  width:"100%",boxSizing:"border-box",
 };
 
+// Las listas ya no descargan las columnas base64 (soportes_data, soporte_data, doc_data)
+// para no agotar el egress de Supabase; estos helpers las piden solo al abrir el archivo.
+async function cargarSoportesPedido(pedidoId) {
+ const { data, error } = await supabase.from('pedidos').select('soportes_data').eq('id', pedidoId).single();
+ if (error) throw error;
+ return Array.isArray(data?.soportes_data) ? data.soportes_data : [];
+}
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
+async function verPDFSoportes(pedido, showToast) {
+ try {
+  const soportesData = Array.isArray(pedido.soportes_data) && pedido.soportes_data.length > 0
+   ? pedido.soportes_data
+   : await cargarSoportesPedido(pedido.id);
+  await generarPDFSoportes({ ...pedido, soportes_data: soportesData }, []);
+ } catch (e) {
+  console.error('soportes:', e);
+  if (showToast) showToast('No se pudieron cargar los soportes: ' + (e.message || e), 'error');
+ }
+}
+
+async function abrirArchivoRemoto(tabla, id, colData, colNombre, nombreFallback, showToast) {
+ try {
+  const { data, error } = await supabase.from(tabla).select(`${colData},${colNombre}`).eq('id', id).single();
+  if (error) throw error;
+  if (!data?.[colData]) { if (showToast) showToast('El registro no tiene archivo guardado.', 'error'); return; }
+  abrirArchivoGuardado(data[colData], data[colNombre] || nombreFallback);
+ } catch (e) {
+  console.error('archivo:', e);
+  if (showToast) showToast('No se pudo abrir el archivo: ' + (e.message || e), 'error');
+ }
+}
+
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
  const [direccion, setDireccion] = useState(pedido.direccion||"");
  const [cajas,   setCajas]   = useState(String(pedido.cajas||""));
@@ -41,6 +72,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
  const [verGuia,  setVerGuia]  = useState(false);
  const [verCamara, setVerCamara] = useState(false);
  const [novedadEntrega, setNovedadEntrega] = useState(pedido.novedad||false);
+ const [soportesData, setSoportesData] = useState(Array.isArray(pedido.soportes_data)?pedido.soportes_data:[]);
+
+ useEffect(() => {
+  let activo = true;
+  if ((pedido.soportes||[]).length > 0 && soportesData.length === 0) {
+   cargarSoportesPedido(pedido.id).then(d => { if (activo && d.length) setSoportesData(d); }).catch(()=>{});
+  }
+  return () => { activo = false; };
+ }, [pedido.id]);
 
  const cond  = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
  const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
@@ -51,7 +91,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
   return d.toISOString().split("T")[0];
  })() : null;
  const fuenteRiesgo = fechaLimitePromesa ? "Promesa de servicio" : "Fecha estimada";
- const tieneSoportes = ((pedido.soportes_data||[]).length > 0) || ((pedido.soportes||[]).length > 0);
+ const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0);
  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
  const pedidoEnTransito = pedido.estado === "en_transito";
  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
@@ -70,6 +110,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
   if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
   if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
   if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
+  if(tipoModal==="paqueteria") nuevoEstado="paqueteria";
   const fechaDespacho = new Date().toISOString().split("T")[0];
   const debeMarcarDespacho = nuevoEstado === "en_transito" && pedido.estado !== "en_transito" && !pedido.fecha_despacho;
   const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
@@ -88,9 +129,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
   const cambios = canBasicEdit && !canEdit && !canAssign ? cambiosBase : {
    ...cambiosBase,
    ...(canEdit || canAssign ? {
-    conductor_id: c?.id||null,
-    placa: c?.placa||null,
-    nit_proveedor: c?.nit_proveedor||null,
+    conductor_id: tipoModal==="paqueteria" ? null : (c?.id||null),
+    placa: tipoModal==="paqueteria" ? null : (c?.placa||null),
+    nit_proveedor: tipoModal==="paqueteria" ? null : (c?.nit_proveedor||null),
     estado: nuevoEstado,
     ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
    } : {}),
@@ -128,7 +169,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
   const conNovedad = Boolean(novedadEntrega);
   const estadoFinal = conNovedad ? "novedad" : "entregado";
   const nuevosSoportes = [...(pedido.soportes||[]),...nombres];
-  const nuevosSoportesData = [...(pedido.soportes_data||[]),...fotos];
+  const nuevosSoportesData = [...soportesData,...fotos];
   const cambios = {
    soportes: nuevosSoportes,
    soportes_data: nuevosSoportesData,
@@ -224,7 +265,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
        disabled={pedidoBloqueadoEdicion}/>
       {tipoModal==="paqueteria"?(
        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <Field label="Paqueteria" value={paqModal} onChange={setPaqModal} placeholder="Servientrega, TCC..." disabled={pedidoBloqueadoEdicion}/>
+        <Field label="Paqueteria" value={paqModal} onChange={setPaqModal} as="select" options={[{ value:"", label:"Seleccione" }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} disabled={pedidoBloqueadoEdicion}/>
         <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX" disabled={pedidoBloqueadoEdicion}/>
        </div>
       ):(
@@ -301,9 +342,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
 
     <div>
      <div style={{fontWeight:700,fontSize:13,color:P[800],marginBottom:10}}>Soportes Fotograficos de Entrega</div>
-     {(pedido.soportes_data||[]).length>0?(
+     {soportesData.length>0?(
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:12}}>
-       {(pedido.soportes_data||[]).map((s,i)=>(
+       {soportesData.map((s,i)=>(
         <div key={i} style={{borderRadius:8,overflow:"hidden",border:`2px solid ${P[200]}`}}>
          <img src={s.data} alt={"s"+i} style={{width:"100%",height:90,objectFit:"cover",display:"block"}} />
          <div style={{fontSize:10,color:P[700],padding:"4px 8px",fontWeight:600,background:P[50]}}>Soporte {i+1}</div>
@@ -325,8 +366,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
         Cargar Fotos (max 3) y Marcar Entregado
        </Btn>
       )}
-      {(pedido.soportes_data||[]).length>0&&(
-       <Btn variant="secondary" onClick={()=>generarPDFSoportes(pedido,[])}>Ver PDF Soportes</Btn>
+      {tieneSoportes&&(
+       <Btn variant="secondary" onClick={()=>verPDFSoportes({...pedido, soportes_data:soportesData}, showToast)}>Ver PDF Soportes</Btn>
       )}
      </div>
     </div>
@@ -359,12 +400,51 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, promesas 
  );
 }
 
-// ModalCSVGuias 
+// ModalCSVGuias
+
+// Fecha de elaboracion del CSV. Acepta AAAA-MM-DD, DD/MM/AAAA (formato colombiano),
+// DD-MM-AAAA con hora opcional y el numero serial que exporta Excel.
+// Devuelve NaN si no se puede interpretar.
+function parsearFechaCsv(valor) {
+ const txt = String(valor || "").trim();
+ if (!txt) return NaN;
+
+ if (/^\d{5}(\.\d+)?$/.test(txt)) {           // serial de Excel (dias desde 1899-12-30)
+  return Date.UTC(1899, 11, 30) + parseFloat(txt) * 86400000;
+ }
+
+ const [fechaTxt, horaTxt] = txt.split(/[ T]/);
+ const partes = fechaTxt.split(/[/-]/).map(p => p.trim());
+ if (partes.length !== 3 || partes.some(p => !p || !/^\d+$/.test(p))) {
+  const nativo = Date.parse(txt);
+  return Number.isNaN(nativo) ? NaN : nativo;
+ }
+
+ let anio, mes, dia;
+ if (partes[0].length === 4) {
+  [anio, mes, dia] = partes.map(Number);       // AAAA-MM-DD
+ } else {
+  const [p0, p1] = partes.map(Number);
+  if (p1 > 12 && p0 <= 12) { mes = p0; dia = p1; }  // MM/DD/AAAA inequivoco
+  else { dia = p0; mes = p1; }                      // DD/MM/AAAA (por defecto)
+  anio = Number(partes[2]);
+ }
+ if (!anio || !mes || !dia || mes > 12 || dia > 31) return NaN;
+ if (anio < 100) anio += 2000;
+
+ let ts = Date.UTC(anio, mes - 1, dia);
+ if (horaTxt) {
+  const [hh, mm, ss] = horaTxt.split(":").map(n => parseInt(n, 10) || 0);
+  ts += ((hh || 0) * 3600 + (mm || 0) * 60 + (ss || 0)) * 1000;
+ }
+ return ts;
+}
 
 function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar }) {
  const [archivo,  setArchivo]  = useState("");
  const [matches,  setMatches]  = useState([]);
- const [errores,  setErrores]  = useState([]); // duplicate pedidoId in CSV
+ const [errores,  setErrores]  = useState([]); // duplicados sin fecha para resolver
+ const [resueltos, setResueltos] = useState([]); // duplicados resueltos por fecha
  const [err,    setErr]    = useState("");
  const [cargando,  setCargando] = useState(false);
  const [aplicando, setAplicando] = useState(false);
@@ -377,13 +457,18 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   const lineas = texto.trim().split(/\r?\n/).filter(l => l.trim());
   if (lineas.length < 2) throw new Error("El archivo est vaco o solo tiene encabezado.");
   const sep = lineas[0].includes(";") ? ";" : ",";
-  const hdrs = lineas[0].split(sep).map(h =>
-   h.trim().replace(/"/g,"").toLowerCase().replace(/\.\d+$/,"")
-  );
+  const hdrsRaw = lineas[0].split(sep).map(h => h.trim().replace(/"/g,""));
+  // Normaliza encabezados para que "Fecha Elaboracion", "Fecha_Elaboracion" y
+  // "Fecha Elaboración" se detecten igual: minusculas, sin tildes y sin separadores.
+  const norm = (s) => s.toLowerCase().replace(/\.\d+$/,"")
+   .normalize("NFD").split("").filter(ch => ch.charCodeAt(0) < 768 || ch.charCodeAt(0) > 879).join("")
+   .replace(/[^a-z0-9]/g,"");
+  const hdrs = hdrsRaw.map(norm);
 
   const col = (...names) => {
    for (const n of names) {
-    const i = hdrs.findIndex(h => h.includes(n));
+    const objetivo = norm(n);
+    const i = hdrs.findIndex(h => h.includes(objetivo));
     if (i !== -1) return i;
    }
    return -1;
@@ -396,12 +481,14 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   const iPaq   = col("paqueteria","paqueteria","carrier");
   const iDestino = col("dane_destino","destino");
   const iCajas  = col("total_cajas","cajas");
+  const iFecha  = col("fecha_elaboracion","elaboracion","fecha_documento","fecha_doc","fecha");
 
   if (iGuia === -1 || iEstado === -1 || iPedido === -1)
-   throw new Error(`Columnas requeridias no encontradias. Necesitas: Guia, Estado_Pro, Pedido_Pro. Detectadias: ${hdrs.join(", ")}`);
+   throw new Error(`Columnas requeridias no encontradias. Necesitas: Guia, Estado_Pro, Pedido_Pro. Detectadias: ${hdrsRaw.join(", ")}`);
 
   return lineas.slice(1).map(l => {
    const c = l.split(sep).map(x => x.trim().replace(/^"|"$/g,""));
+   const fechaRaw = iFecha !== -1 ? c[iFecha] || "" : "";
    return {
     guia:    c[iGuia]  || "",
     estadoRaw: c[iEstado] || "",
@@ -410,26 +497,66 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     paqueteria: iPaq   !== -1 ? c[iPaq]   || "" : "",
     destino:  iDestino !== -1 ? c[iDestino] || "" : "",
     cajas:   iCajas  !== -1 ? parseInt(c[iCajas])||0 : 0,
+    fechaRaw,
+    fechaTs:  parsearFechaCsv(fechaRaw),
    };
   }).filter(r => r.guia && r.pedidoId);
  };
 
- // Procesar filas 
+ // Procesar filas
  const procesar = (rows) => {
   const hoy = new Date().toISOString().split("T")[0];
 
-  // Detect duplicates WITHIN the CSV (same Pedido_Pro more than once)
-  const conteo = {};
-  rows.forEach(r => { conteo[r.pedidoId] = (conteo[r.pedidoId] || 0) + 1; });
-  const dupsCsv = Object.entries(conteo).filter(([,n]) => n > 1).map(([id]) => id);
-
-  // Build match list only non-duplicate rows
-  const vistos = new Set();
-  const lista = [];
+  // Duplicados dentro del CSV (mismo Pedido_Pro en varias filas):
+  // - Si las filas repiten la MISMA guia es un error del archivo: se bloquea.
+  // - Si traen guias DIFERENTES (guia reexpedida) se toma la fila con la fecha de
+  //   elaboracion mas reciente; se bloquea solo si no hay fecha para decidir o si
+  //   dos guias distintas empatan en esa fecha.
+  const grupos = new Map();
   for (const r of rows) {
-   if (dupsCsv.includes(r.pedidoId)) continue; // skip duplicates, report separately
-   if (vistos.has(r.pedidoId)) continue;
-   vistos.add(r.pedidoId);
+   if (!grupos.has(r.pedidoId)) grupos.set(r.pedidoId, []);
+   grupos.get(r.pedidoId).push(r);
+  }
+
+  const conflictos = [];
+  const resueltos = [];
+  const lista = [];
+
+  for (const [pedidoId, filas] of grupos) {
+   let r = filas[0];
+   let resueltoPorFecha = null;
+
+   if (filas.length > 1) {
+    const guiasUnicas = [...new Set(filas.map(f => f.guia))];
+    if (guiasUnicas.length === 1) {
+     conflictos.push({ pedidoId, filas: filas.length,
+      motivo: `repetido con la misma guia ${guiasUnicas[0]}` });
+     continue;
+    }
+    const conFecha = filas.filter(f => !Number.isNaN(f.fechaTs));
+    if (conFecha.length === 0) {
+     conflictos.push({ pedidoId, filas: filas.length,
+      motivo: `${guiasUnicas.length} guias distintas sin fecha de elaboracion para decidir` });
+     continue;
+    }
+    const maxTs = Math.max(...conFecha.map(f => f.fechaTs));
+    const masRecientes = conFecha.filter(f => f.fechaTs === maxTs);
+    const guiasEmpatadas = [...new Set(masRecientes.map(f => f.guia))];
+    if (guiasEmpatadas.length > 1) {
+     conflictos.push({ pedidoId, filas: filas.length,
+      motivo: `${guiasEmpatadas.length} guias distintas con la misma fecha (${masRecientes[0].fechaRaw})` });
+     continue;
+    }
+    r = masRecientes[0];
+    resueltoPorFecha = {
+     pedidoId,
+     filas: filas.length,
+     fecha: r.fechaRaw,
+     guia: r.guia,
+     descartadas: [...new Set(filas.map(f => f.guia))].filter(g => g !== r.guia),
+    };
+    resueltos.push(resueltoPorFecha);
+   }
 
    const pedido  = pedidos.find(p => String(p.id).trim() === r.pedidoId);
    const estadoN  = r.estadoRaw.toLowerCase().includes("entregado") ? "entregado" : "en_transito";
@@ -451,24 +578,27 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     mismaGuia,
     estadoCambio,
     fechaReal:  estadoN === "entregado" ? hoy : null,
+    fechaCsv:   r.fechaRaw,
+    resueltoPorFecha,
    });
   }
 
-  return { lista, dupsCsv };
+  return { lista, conflictos, resueltos };
  };
 
  // Leer archivo 
  const leerArchivo = (file) => {
   if (!file) return;
-  setArchivo(file.name); setErr(""); setMatches([]); setErrores([]); setResultado(null);
+  setArchivo(file.name); setErr(""); setMatches([]); setErrores([]); setResueltos([]); setResultado(null);
   setCargando(true);
   const reader = new FileReader();
   reader.onload = (e) => {
    try {
     const rows = parsear(e.target.result);
-    const { lista, dupsCsv } = procesar(rows);
+    const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows);
     setMatches(lista);
-    setErrores(dupsCsv);
+    setErrores(conflictos);
+    setResueltos(resueltosCsv);
    } catch(ex) { setErr(ex.message); }
    setCargando(false);
   };
@@ -487,7 +617,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   );
   if (!paraActualizar.length) { showToast("No hay pedidos para actualizar.","error"); return; }
   setAplicando(true);
-  let ok = 0; let fallos = 0;
+  let ok = 0; const fallosDetalle = [];
 
   // Fecha estimada = hoy + 2 dias
   const fechaEst = new Date();
@@ -513,14 +643,15 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
    if (m.fechaReal) cambios.fecha_real = m.fechaReal;
 
    const { error } = await supabase.from("pedidos").update(cambios).eq("id", m.pedidoId);
-   if (error) { fallos++; console.error(m.pedidoId, error.message); }
+   if (error) { fallosDetalle.push({ id: m.pedidoId, mensaje: error.message }); console.error(m.pedidoId, error.message); }
    else ok++;
   }
 
   setAplicando(false);
-  setResultado({ ok, fallos, noMatch: matches.filter(m=>!m.encontrado).length,
+  setResultado({ ok, fallos: fallosDetalle.length, fallosDetalle,
+   noMatch: matches.filter(m=>!m.encontrado).length,
    omitidos: matches.filter(m=>m.yaConGuia&&!m.estadoCambio&&!sobrescribir).length });
-  showToast(` ${ok} actualizado(s)${fallos?" "+fallos+" error(es)":""}`, ok>0?"success":"error");
+  showToast(` ${ok} actualizado(s)${fallosDetalle.length?" "+fallosDetalle.length+" error(es)":""}`, ok>0?"success":"error");
   if (ok > 0 && recargar) await recargar();
  };
 
@@ -540,6 +671,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     <div style={{ background:"#eff6ff", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#1e40af" }}>
      <strong>Regla:</strong> 1 pedido = 1 guia. Columnas requeridias: <code>Guia Estado_Pro Pedido_Pro</code>.
      <br/><span style={{fontSize:12,color:"#64748b"}}>El match se hace por <strong>Pedido_Pro = No. Pedido</strong> en el sistema. Acepta CSV con coma o punto y coma.</span>
+     <br/><span style={{fontSize:12,color:"#64748b"}}>Si un pedido viene repetido con <strong>guias diferentes</strong>, se toma la de <strong>fecha de elaboracion mas reciente</strong> (DD/MM/AAAA o AAAA-MM-DD). Repetido con la <strong>misma guia</strong> es error del archivo y no se carga.</span>
     </div>
 
     {/* Drop zone */}
@@ -561,17 +693,36 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     {/* Error de parseo */}
     {err && <div style={{background:"#fef2f2",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#dc2626",fontWeight:600}}> {err}</div>}
 
-    {/* Duplicados dentro del CSV bloquea esos registros */}
+    {/* Duplicados resueltos con la fecha de elaboracion mas reciente */}
+    {resueltos.length > 0 && (
+     <div style={{background:"#ecfdf5",border:"1px solid #86efac",borderRadius:10,padding:"12px 16px"}}>
+      <div style={{fontWeight:800,color:"#059669",marginBottom:6}}>
+       {resueltos.length} pedido(s) duplicados resueltos con la fecha de elaboracion mas reciente
+      </div>
+      <div style={{maxHeight:120,overflowY:"auto",fontSize:11,color:"#065f46",fontFamily:"monospace",lineHeight:1.6}}>
+       {resueltos.map(r => (
+        <div key={r.pedidoId}>
+         <strong>{r.pedidoId}</strong> ({r.filas} filas) usa guia {r.guia} del {r.fecha}
+         {r.descartadas.length > 0 && <span style={{color:"#78716c"}}> · descarta {r.descartadas.join(", ")}</span>}
+        </div>
+       ))}
+      </div>
+     </div>
+    )}
+
+    {/* Duplicados que no se pueden decidir por fecha: se bloquean */}
     {errores.length > 0 && (
      <div style={{background:"#fef2f2",border:"2px solid #fca5a5",borderRadius:10,padding:"12px 16px"}}>
       <div style={{fontWeight:800,color:"#dc2626",marginBottom:6}}>
-        {errores.length} pedido(s) duplicados en el CSV no se cargarn
+       {errores.length} pedido(s) duplicados en el CSV no se cargaran
       </div>
-      <div style={{fontSize:12,color:"#991b1b",fontFamily:"monospace"}}>
-       {errores.join(" ")}
+      <div style={{maxHeight:120,overflowY:"auto",fontSize:11,color:"#991b1b",fontFamily:"monospace",lineHeight:1.6}}>
+       {errores.map(c => (
+        <div key={c.pedidoId}><strong>{c.pedidoId}</strong> ({c.filas} filas): {c.motivo}</div>
+       ))}
       </div>
       <div style={{fontSize:12,color:"#64748b",marginTop:6}}>
-       El CSV tiene mas de una fila con el mismo Pedido_Pro. Corrgelo en el archivo y vuelve a cargar.
+       Deja una sola fila por Pedido_Pro (o completa la fecha de elaboracion) y vuelve a cargar.
       </div>
      </div>
     )}
@@ -589,6 +740,14 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
        {resultado.noMatch>0&&<span> <strong>{resultado.noMatch}</strong> no encontrados en el sistema</span>}
        {resultado.fallos>0&&<span> <strong>{resultado.fallos}</strong> error(es) en Supabase</span>}
       </div>
+      {resultado.fallosDetalle?.length>0&&(
+       <div style={{marginTop:10,maxHeight:160,overflowY:"auto",background:"#fff",border:"1px solid #fca5a5",
+        borderRadius:8,padding:"8px 10px",fontSize:11,fontFamily:"monospace",color:"#991b1b"}}>
+        {resultado.fallosDetalle.map(f=>(
+         <div key={f.id}><strong>{f.id}</strong>: {f.mensaje}</div>
+        ))}
+       </div>
+      )}
       <Btn size="sm" variant="secondary" style={{marginTop:12}} onClick={onClose}>Cerrar</Btn>
      </div>
     )}
@@ -660,6 +819,11 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
             <td style={{padding:"8px 12px",fontWeight:700,
              color:!m.encontrado?"#dc2626":omitir?"#d97706":"#7c3aed",fontFamily:"monospace"}}>
              {m.pedidoId}
+             {m.resueltoPorFecha&&(
+              <div style={{fontSize:10,fontWeight:600,color:"#059669",fontFamily:"inherit",marginTop:2}}>
+               mas reciente ({m.resueltoPorFecha.fecha})
+              </div>
+             )}
             </td>
             <td style={{padding:"8px 12px",color:"#334155",maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
              {m.pedido?.cliente||<span style={{color:"#dc2626",fontSize:11}}>No encontrado</span>}
@@ -691,7 +855,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
       )}
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);}}> Cambiar archivo</Btn>
+       <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);}}> Cambiar archivo</Btn>
        <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
        <Btn disabled={aplicando||encontrados.filter(m=>!m.yaConGuia||m.estadoCambio||sobrescribir).length===0} onClick={aplicar}>
         {aplicando?" Aplicando...":` Aplicar ${encontrados.filter(m=>!m.yaConGuia||m.estadoCambio||sobrescribir).length} actualizacin(es)`}
@@ -1196,7 +1360,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        </div>
       </div>
       <Field label="Tipo de Envio" value={form.tipo} onChange={f("tipo")} as="select" options={[{ value:"propio", label:"Transporte Propio" }, { value:"empresa_transporte", label:"Empresa Transportista" }, { value:"mensajeria", label:"Mensajeria" }, { value:"paqueteria", label:"Paqueteria Tercero" }]} />
-      {form.tipo === "paqueteria" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Empresa Paqueteria" value={form.paqueteria} onChange={f("paqueteria")} as="select" options={[{ value:"", label:" Seleccione " }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} /><Field label="No. Guia Paqueteria" value={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-XXXXX" /></div>}
+      {form.tipo === "paqueteria" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Paqueteria" value={form.paqueteria} onChange={f("paqueteria")} as="select" options={[{ value:"", label:"Seleccione" }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} /><Field label="No. Guia" value={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-XXXXX" /></div>}
       {form.tipo !== "paqueteria" && <Field label="Asignar Conductor (opcional)" value={form.conductor_id} onChange={v => { f("conductor_id")(v); const c = conductoresActivos.find(cx => String(cx.id) === String(v)); if (c && form.tipo === "empresa_transporte") f("empresa_transporte")(c.empresa || ""); }} as="select" options={[{ value:"", label:" Sin asignar " }, ...(form.tipo === "empresa_transporte" ? conductoresActivos.filter(c => c.empresa || c.nit_proveedor) : conductoresActivos).map(c => ({ value:c.id, label:`${c.nombre} - ${c.placa}${c.empresa ? " - " + c.empresa : ""}` }))]} />}
       <Field label="Notas / Observaciones" value={form.notas} onChange={f("notas")} as="textarea" placeholder="Instrucciones especiales..." />
       <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
@@ -1207,7 +1371,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </Modal>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
@@ -1667,7 +1831,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
          <tbody>
           {pedidosMisConductores.map(p => {
            const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-           const soportesCount = Array.isArray(p.soportes_data) ? p.soportes_data.length : 0;
+           const soportesCount = Array.isArray(p.soportes) && p.soportes.length > 0 ? p.soportes.length : (Array.isArray(p.soportes_data) ? p.soportes_data.length : 0);
            return (
             <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
              <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
@@ -1676,7 +1840,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
              <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
              <td style={{ padding:"16px" }}><div>{cond?.nombre || "Sin conductor"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond?.placa || ""}</div></td>
              <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
-             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>generarPDFSoportes(p,[])}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
+             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>verPDFSoportes(p, showToast)}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
              <td style={{ padding:"16px", textAlign:"right" }}>
               <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModSoportes(p)} disabled={soportesCount === 0}>
                Reemplazar soportes
@@ -1706,7 +1870,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
       <div style={{ ...cardStyle, padding:14 }}>
        <div style={{ fontWeight:850, color:"#111827" }}>{modSoportes.cliente}</div>
        <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Factura: {modSoportes.factura} · Estado: {ESTADOS_PEDIDO[modSoportes.estado]?.label || modSoportes.estado}</div>
-       <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Soportes actuales: {(modSoportes.soportes_data || []).length}</div>
+       <div style={{ color:"#6b7280", fontSize:13, marginTop:4 }}>Soportes actuales: {(modSoportes.soportes || modSoportes.soportes_data || []).length}</div>
       </div>
       <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"18px", textAlign:"center", cursor:guardando?"not-allowed":"pointer", color:P[600], fontWeight:800 }}>
        <input type="file" accept="image/*" multiple disabled={guardando} style={{display:"none"}} onChange={e=>reemplazarSoportesPedido(e.target.files)}/>
@@ -1970,9 +2134,13 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
   const hoy = new Date().toISOString().split("T")[0];
   const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
   const estadoFinal = conNovedad ? "novedad" : "entregado";
+  let soportesPrevios = Array.isArray(pedido.soportes_data) ? pedido.soportes_data : [];
+  if (soportesPrevios.length === 0 && (pedido.soportes||[]).length > 0) {
+   try { soportesPrevios = await cargarSoportesPedido(pedido.id); } catch(e) { soportesPrevios = []; }
+  }
   const cambios = {
    soportes: [...(pedido.soportes||[]),...nombres],
-   soportes_data: [...(Array.isArray(pedido.soportes_data)?pedido.soportes_data:[]),...fotos],
+   soportes_data: [...soportesPrevios,...fotos],
    estado: estadoFinal,
    fecha_real: hoy,
    novedad: conNovedad,
@@ -2114,9 +2282,9 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
            <td style={tdStyle}>{p.fecha_real || "Pendiente"}</td>
            <td style={tdStyle}><Badge estado={p.estado}/></td>
            <td style={{ ...tdStyle, textAlign:"right" }}>
-            {(p.soportes_data||[]).length>0 ? (
-             <Btn size="sm" variant="success" onClick={()=>generarPDFSoportes(p,[])}>
-              Soportes ({p.soportes_data.length})
+            {(p.soportes||p.soportes_data||[]).length>0 ? (
+             <Btn size="sm" variant="success" onClick={()=>verPDFSoportes(p, showToast)}>
+              Soportes ({(p.soportes||p.soportes_data||[]).length})
              </Btn>
             ) : (
              <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>
@@ -2199,9 +2367,9 @@ function MisDevolucionesConductor({ devoluciones = [], user }) {
         <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{d.unidades} uds · {d.volumen_m3} m3 · {d.peso_kg} kg</div>
         {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Motivo: {d.motivo}</div>}
        </div>
-       {d.soporte_data&&(
+       {(d.soporte_nombre||d.soporte_data)&&(
         <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
-         onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>
+         onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`)}>
          Ver Soporte
         </button>
        )}
@@ -2240,9 +2408,9 @@ function MisRecogidasConductor({ recogidas = [], user }) {
         <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{r.unidades} uds · {r.volumen_m3} m3 · {r.peso_kg} kg</div>
         {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Obs: {r.observaciones}</div>}
        </div>
-       {r.doc_data&&(
+       {(r.doc_nombre||r.doc_data)&&(
         <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
-         onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>
+         onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`)}>
          Ver Documento
         </button>
        )}
@@ -2511,7 +2679,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    dir_recogida: dev.dir_recogida||"",
    ciudad_codigo: dev.ciudad_codigo||"",
    motivo: dev.motivo||"",
-   soporte_data: dev.soporte_data||null,
+   soporte_data: null, // el archivo actual no se descarga; solo se envia si se adjunta uno nuevo
    soporte_nombre: dev.soporte_nombre||"",
   });
  };
@@ -2547,8 +2715,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     ciudad_codigo: form.ciudad_codigo,
     ciudad_nombre: ciudad?.name||"",
     motivo: form.motivo.trim(),
-    soporte_data: form.soporte_data,
-    soporte_nombre: form.soporte_nombre,
+    ...(form.soporte_data ? { soporte_data: form.soporte_data, soporte_nombre: form.soporte_nombre } : {}),
    };
    const { error } = await supabase.from('devoluciones').update(cambios).eq('id', modEditar.id);
    if (error) { showToast(mensajeError(error, "la devolucion"),"error"); return; }
@@ -2636,7 +2803,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_data).length}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_nombre||d.soporte_data).length}</div></div>
     </section>
     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
      <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
@@ -2665,7 +2832,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
            <td style={{ padding:"16px" }}><div>{d.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{d.dir_recogida}</div></td>
            <td style={{ padding:"16px", fontWeight:850 }}>{d.unidades}</td>
            <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={d.estado}/>{d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{d.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {d.fecha_real}</div>}</td>
-           <td style={{ padding:"16px" }}>{d.soporte_data ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoGuardado(d.soporte_data, d.soporte_nombre || `soporte-${d.guia}`)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
+           <td style={{ padding:"16px" }}>{(d.soporte_nombre||d.soporte_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`, showToast)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
            <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !d.conductor_id && d.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(d)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(d)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
           </tr>
          ))}
@@ -2774,9 +2941,9 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
      <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e"}}>
        Motivo: {dev.motivo}
      </div>
-     {dev.soporte_data&&(
+     {(dev.soporte_nombre||dev.soporte_data)&&(
       <Btn size="sm" variant="success" style={{marginTop:10}}
-       onClick={()=>abrirArchivoGuardado(dev.soporte_data, dev.soporte_nombre || `soporte-${dev.guia}`)}>
+       onClick={()=>abrirArchivoRemoto('devoluciones', dev.id, 'soporte_data', 'soporte_nombre', `soporte-${dev.guia}`, showToast)}>
         Ver Soporte
       </Btn>
      )}
@@ -2840,7 +3007,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
    volumen_m3: rec.volumen_m3||"",
    peso_kg: rec.peso_kg||"",
    observaciones: rec.observaciones||"",
-   doc_data: rec.doc_data||null,
+   doc_data: null, // el archivo actual no se descarga; solo se envia si se adjunta uno nuevo
    doc_nombre: rec.doc_nombre||"",
   });
  };
@@ -2878,8 +3045,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     volumen_m3: parseFloat(form.volumen_m3)||0,
     peso_kg: parseFloat(form.peso_kg)||0,
     observaciones: form.observaciones.trim(),
-    doc_data: form.doc_data,
-    doc_nombre: form.doc_nombre,
+    ...(form.doc_data ? { doc_data: form.doc_data, doc_nombre: form.doc_nombre } : {}),
    };
    const { error } = await supabase.from('recogidas').update(cambios).eq('id', modEditar.id);
    if (error) { showToast(mensajeError(error, "la recogida"),"error"); return; }
@@ -2969,7 +3135,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
     <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
      <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_data).length}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_nombre||r.doc_data).length}</div></div>
     </section>
     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
      <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
@@ -2998,7 +3164,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
            <td style={{ padding:"16px", fontWeight:850 }}>{r.unidades}</td>
            <td style={{ padding:"16px", color:"#4b5563" }}>{r.peso_kg} kg</td>
            <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={r.estado}/>{r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{r.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {r.fecha_real}</div>}</td>
-           <td style={{ padding:"16px" }}>{r.doc_data ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoGuardado(r.doc_data, r.doc_nombre || `documento-${r.guia}`)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
+           <td style={{ padding:"16px" }}>{(r.doc_nombre||r.doc_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`, showToast)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
            <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !r.conductor_id && r.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(r)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(r)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
           </tr>
          ))}
@@ -3089,9 +3255,9 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
      <span> Entrega: {rec.ciudad_entrega_nombre}</span>
      <span> {rec.unidades} uds {rec.peso_kg} kg</span>
     </div>
-    {rec.doc_data&&(
+    {(rec.doc_nombre||rec.doc_data)&&(
      <Btn size="sm" variant="success" style={{marginTop:10}}
-      onClick={()=>abrirArchivoGuardado(rec.doc_data, rec.doc_nombre || `documento-${rec.guia}`)}>
+      onClick={()=>abrirArchivoRemoto('recogidas', rec.id, 'doc_data', 'doc_nombre', `documento-${rec.guia}`, showToast)}>
        Ver Documento
      </Btn>
     )}
@@ -3224,8 +3390,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   if (!gestion.trim()) { showToast("Escribe una respuesta de gestin","error"); return; }
   const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
    fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion",
-   soporte_data: gestionSoporte.data || modGestion.soporte_data || null,
-   soporte_nombre: gestionSoporte.nombre || modGestion.soporte_nombre || "" };
+   soporte_data: gestionSoporte.data || null,
+   soporte_nombre: gestionSoporte.nombre || "" };
   const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
   if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return; }
   setModGestion(null); setGestion(""); setGestionSoporte({ data:null, nombre:"" });
@@ -3314,8 +3480,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
             <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{p.descripcion}</div></td>
             <td style={{ padding:"16px" }}><div>{p.solicitado_por}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.fecha_creacion}</div></td>
             <td style={{ padding:"16px" }}><span style={{ background:est.bg, color:est.color, border:`1px solid ${est.color}40`, borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800, whiteSpace:"nowrap" }}>{est.label}</span></td>
-            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div>{p.soporte_data&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoGuardado(p.soporte_data, p.soporte_nombre || `soporte-${p.id}`)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:p.soporte_data||null, nombre:p.soporte_nombre||"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
+            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div>{(p.soporte_nombre||p.soporte_data)&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoRemoto('pqrs', p.id, 'soporte_data', 'soporte_nombre', `soporte-${p.id}`, showToast)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
+            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:null, nombre:"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
            </tr>
           );
          })}
@@ -3532,7 +3698,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
         {pageItems.map(p=>{
          const cond = conductores.find(c=>String(c.id)===String(p.conductor_id));
          const ciudad = (ciudades||[]).find(c=>c.code===p.ciudad_codigo);
-         const soportes = p.soportes_data || [];
+         const soportes = p.soportes || p.soportes_data || [];
          return (
           <React.Fragment key={p.id}>
            <tr style={{ borderBottom:`1px solid ${border}` }}>
@@ -3543,7 +3709,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
             <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
             <td style={{ padding:"16px" }}>{p.tipo==="paqueteria" ? <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></> : cond ? <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa}</div></> : <span style={{ color:"#9ca3af" }}>Sin conductor</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>generarPDFSoportes(p,[])}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
+            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
            </tr>
            {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
           </React.Fragment>
@@ -3586,6 +3752,8 @@ export default function SomosProTracking() {
   try {
    const rolActual = perfil?.rol;
    const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
+   // Listas livianas: se excluyen las columnas base64 (soportes_data, soporte_data,
+   // doc_data) que disparaban el egress; se descargan solo al abrir cada archivo.
    const pedidosSelectCliente = [
     "id",
     "guia_interna",
@@ -3607,13 +3775,60 @@ export default function SomosProTracking() {
     "paqueteria",
     "guia_paqueteria",
     "soportes",
-    "soportes_data",
     "ciudad_origen_codigo",
     "ciudad_origen_nombre",
     "direccion_origen",
     "created_at",
    ].join(",");
-   const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : "*";
+   const pedidosSelectCompleto = [
+    "id",
+    "guia_interna",
+    "cliente",
+    "ciudad_codigo",
+    "ciudad_nombre",
+    "direccion",
+    "cajas",
+    "factura",
+    "conductor_id",
+    "placa",
+    "nit_proveedor",
+    "estado",
+    "estado_despacho",
+    "novedad",
+    "fecha_creacion",
+    "fecha_estimada",
+    "fecha_real",
+    "fecha_despacho",
+    "tipo",
+    "empresa_transporte",
+    "paqueteria",
+    "guia_paqueteria",
+    "soportes",
+    "notas",
+    "ciudad_origen_codigo",
+    "ciudad_origen_nombre",
+    "direccion_origen",
+    "created_at",
+   ].join(",");
+   const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : pedidosSelectCompleto;
+   const devolucionesSelect = [
+    "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
+    "dir_recogida","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
+    "placa","nit_proveedor","estado","novedad","paqueteria","guia_paqueteria",
+    "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
+   ].join(",");
+   const recogidasSelect = [
+    "id","guia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
+    "dir_entrega","ciudad_entrega_cod","ciudad_entrega_nombre","unidades",
+    "volumen_m3","peso_kg","observaciones","conductor_id","placa","nit_proveedor",
+    "estado","novedad","paqueteria","guia_paqueteria","doc_nombre",
+    "fecha_creacion","fecha_real","solicitado_por","created_at",
+   ].join(",");
+   const pqrsSelect = [
+    "id","factura","pedido_ref","motivo","descripcion","estado","solicitado_por",
+    "gestionado_por","respuesta","fecha_creacion","fecha_gestion",
+    "soporte_nombre","created_at",
+   ].join(",");
 
    const [
     usuRes, traRes, conRes,
@@ -3627,9 +3842,9 @@ export default function SomosProTracking() {
     supabase.from('pedidos').select(pedidosSelect).order('created_at', { ascending: false }),
     supabase.from('ciudades').select('*').order('name'),
     supabase.from('paqueterias').select('*').order('nombre'),
-    supabase.from('devoluciones').select('*').order('created_at', { ascending: false }),
-    supabase.from('recogidas').select('*').order('created_at', { ascending: false }),
-    supabase.from('pqrs').select('*').order('created_at', { ascending: false }),
+    supabase.from('devoluciones').select(devolucionesSelect).order('created_at', { ascending: false }),
+    supabase.from('recogidas').select(recogidasSelect).order('created_at', { ascending: false }),
+    supabase.from('pqrs').select(pqrsSelect).order('created_at', { ascending: false }),
     supabase.from('promesas_servicio').select('*'),
    ]);
    const results = [usuRes, traRes, conRes, pedRes, ciuRes, paqRes, devRes, recRes, pqrsRes, promRes];
@@ -3905,7 +4120,7 @@ export default function SomosProTracking() {
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={cargarTodo}/>;
-   case "usuarios":    return <Usuarios usuarios={usuarios} showToast={showToast} recargar={cargarTodo}/>;
+   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={cargarTodo}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={cargarTodo}/>;
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
