@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ROLES } from './Constants';
 import { PAQUETERIAS_INICIALES } from './DataStore';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
@@ -401,12 +401,51 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  );
 }
 
-// ModalCSVGuias 
+// ModalCSVGuias
+
+// Fecha de elaboracion del CSV. Acepta AAAA-MM-DD, DD/MM/AAAA (formato colombiano),
+// DD-MM-AAAA con hora opcional y el numero serial que exporta Excel.
+// Devuelve NaN si no se puede interpretar.
+function parsearFechaCsv(valor) {
+ const txt = String(valor || "").trim();
+ if (!txt) return NaN;
+
+ if (/^\d{5}(\.\d+)?$/.test(txt)) {           // serial de Excel (dias desde 1899-12-30)
+  return Date.UTC(1899, 11, 30) + parseFloat(txt) * 86400000;
+ }
+
+ const [fechaTxt, horaTxt] = txt.split(/[ T]/);
+ const partes = fechaTxt.split(/[/-]/).map(p => p.trim());
+ if (partes.length !== 3 || partes.some(p => !p || !/^\d+$/.test(p))) {
+  const nativo = Date.parse(txt);
+  return Number.isNaN(nativo) ? NaN : nativo;
+ }
+
+ let anio, mes, dia;
+ if (partes[0].length === 4) {
+  [anio, mes, dia] = partes.map(Number);       // AAAA-MM-DD
+ } else {
+  const [p0, p1] = partes.map(Number);
+  if (p1 > 12 && p0 <= 12) { mes = p0; dia = p1; }  // MM/DD/AAAA inequivoco
+  else { dia = p0; mes = p1; }                      // DD/MM/AAAA (por defecto)
+  anio = Number(partes[2]);
+ }
+ if (!anio || !mes || !dia || mes > 12 || dia > 31) return NaN;
+ if (anio < 100) anio += 2000;
+
+ let ts = Date.UTC(anio, mes - 1, dia);
+ if (horaTxt) {
+  const [hh, mm, ss] = horaTxt.split(":").map(n => parseInt(n, 10) || 0);
+  ts += ((hh || 0) * 3600 + (mm || 0) * 60 + (ss || 0)) * 1000;
+ }
+ return ts;
+}
 
 function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar }) {
  const [archivo,  setArchivo]  = useState("");
  const [matches,  setMatches]  = useState([]);
- const [errores,  setErrores]  = useState([]); // duplicate pedidoId in CSV
+ const [errores,  setErrores]  = useState([]); // duplicados sin fecha para resolver
+ const [resueltos, setResueltos] = useState([]); // duplicados resueltos por fecha
  const [err,    setErr]    = useState("");
  const [cargando,  setCargando] = useState(false);
  const [aplicando, setAplicando] = useState(false);
@@ -419,13 +458,18 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   const lineas = texto.trim().split(/\r?\n/).filter(l => l.trim());
   if (lineas.length < 2) throw new Error("El archivo est vaco o solo tiene encabezado.");
   const sep = lineas[0].includes(";") ? ";" : ",";
-  const hdrs = lineas[0].split(sep).map(h =>
-   h.trim().replace(/"/g,"").toLowerCase().replace(/\.\d+$/,"")
-  );
+  const hdrsRaw = lineas[0].split(sep).map(h => h.trim().replace(/"/g,""));
+  // Normaliza encabezados para que "Fecha Elaboracion", "Fecha_Elaboracion" y
+  // "Fecha Elaboración" se detecten igual: minusculas, sin tildes y sin separadores.
+  const norm = (s) => s.toLowerCase().replace(/\.\d+$/,"")
+   .normalize("NFD").split("").filter(ch => ch.charCodeAt(0) < 768 || ch.charCodeAt(0) > 879).join("")
+   .replace(/[^a-z0-9]/g,"");
+  const hdrs = hdrsRaw.map(norm);
 
   const col = (...names) => {
    for (const n of names) {
-    const i = hdrs.findIndex(h => h.includes(n));
+    const objetivo = norm(n);
+    const i = hdrs.findIndex(h => h.includes(objetivo));
     if (i !== -1) return i;
    }
    return -1;
@@ -438,12 +482,14 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   const iPaq   = col("paqueteria","paqueteria","carrier");
   const iDestino = col("dane_destino","destino");
   const iCajas  = col("total_cajas","cajas");
+  const iFecha  = col("fecha_elaboracion","elaboracion","fecha_documento","fecha_doc","fecha");
 
   if (iGuia === -1 || iEstado === -1 || iPedido === -1)
-   throw new Error(`Columnas requeridias no encontradias. Necesitas: Guia, Estado_Pro, Pedido_Pro. Detectadias: ${hdrs.join(", ")}`);
+   throw new Error(`Columnas requeridias no encontradias. Necesitas: Guia, Estado_Pro, Pedido_Pro. Detectadias: ${hdrsRaw.join(", ")}`);
 
   return lineas.slice(1).map(l => {
    const c = l.split(sep).map(x => x.trim().replace(/^"|"$/g,""));
+   const fechaRaw = iFecha !== -1 ? c[iFecha] || "" : "";
    return {
     guia:    c[iGuia]  || "",
     estadoRaw: c[iEstado] || "",
@@ -452,26 +498,66 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     paqueteria: iPaq   !== -1 ? c[iPaq]   || "" : "",
     destino:  iDestino !== -1 ? c[iDestino] || "" : "",
     cajas:   iCajas  !== -1 ? parseInt(c[iCajas])||0 : 0,
+    fechaRaw,
+    fechaTs:  parsearFechaCsv(fechaRaw),
    };
   }).filter(r => r.guia && r.pedidoId);
  };
 
- // Procesar filas 
+ // Procesar filas
  const procesar = (rows) => {
   const hoy = new Date().toISOString().split("T")[0];
 
-  // Detect duplicates WITHIN the CSV (same Pedido_Pro more than once)
-  const conteo = {};
-  rows.forEach(r => { conteo[r.pedidoId] = (conteo[r.pedidoId] || 0) + 1; });
-  const dupsCsv = Object.entries(conteo).filter(([,n]) => n > 1).map(([id]) => id);
-
-  // Build match list only non-duplicate rows
-  const vistos = new Set();
-  const lista = [];
+  // Duplicados dentro del CSV (mismo Pedido_Pro en varias filas):
+  // - Si las filas repiten la MISMA guia es un error del archivo: se bloquea.
+  // - Si traen guias DIFERENTES (guia reexpedida) se toma la fila con la fecha de
+  //   elaboracion mas reciente; se bloquea solo si no hay fecha para decidir o si
+  //   dos guias distintas empatan en esa fecha.
+  const grupos = new Map();
   for (const r of rows) {
-   if (dupsCsv.includes(r.pedidoId)) continue; // skip duplicates, report separately
-   if (vistos.has(r.pedidoId)) continue;
-   vistos.add(r.pedidoId);
+   if (!grupos.has(r.pedidoId)) grupos.set(r.pedidoId, []);
+   grupos.get(r.pedidoId).push(r);
+  }
+
+  const conflictos = [];
+  const resueltos = [];
+  const lista = [];
+
+  for (const [pedidoId, filas] of grupos) {
+   let r = filas[0];
+   let resueltoPorFecha = null;
+
+   if (filas.length > 1) {
+    const guiasUnicas = [...new Set(filas.map(f => f.guia))];
+    if (guiasUnicas.length === 1) {
+     conflictos.push({ pedidoId, filas: filas.length,
+      motivo: `repetido con la misma guia ${guiasUnicas[0]}` });
+     continue;
+    }
+    const conFecha = filas.filter(f => !Number.isNaN(f.fechaTs));
+    if (conFecha.length === 0) {
+     conflictos.push({ pedidoId, filas: filas.length,
+      motivo: `${guiasUnicas.length} guias distintas sin fecha de elaboracion para decidir` });
+     continue;
+    }
+    const maxTs = Math.max(...conFecha.map(f => f.fechaTs));
+    const masRecientes = conFecha.filter(f => f.fechaTs === maxTs);
+    const guiasEmpatadas = [...new Set(masRecientes.map(f => f.guia))];
+    if (guiasEmpatadas.length > 1) {
+     conflictos.push({ pedidoId, filas: filas.length,
+      motivo: `${guiasEmpatadas.length} guias distintas con la misma fecha (${masRecientes[0].fechaRaw})` });
+     continue;
+    }
+    r = masRecientes[0];
+    resueltoPorFecha = {
+     pedidoId,
+     filas: filas.length,
+     fecha: r.fechaRaw,
+     guia: r.guia,
+     descartadas: [...new Set(filas.map(f => f.guia))].filter(g => g !== r.guia),
+    };
+    resueltos.push(resueltoPorFecha);
+   }
 
    const pedido  = pedidos.find(p => String(p.id).trim() === r.pedidoId);
    const estadoN  = r.estadoRaw.toLowerCase().includes("entregado") ? "entregado" : "en_transito";
@@ -493,24 +579,27 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     mismaGuia,
     estadoCambio,
     fechaReal:  estadoN === "entregado" ? hoy : null,
+    fechaCsv:   r.fechaRaw,
+    resueltoPorFecha,
    });
   }
 
-  return { lista, dupsCsv };
+  return { lista, conflictos, resueltos };
  };
 
  // Leer archivo 
  const leerArchivo = (file) => {
   if (!file) return;
-  setArchivo(file.name); setErr(""); setMatches([]); setErrores([]); setResultado(null);
+  setArchivo(file.name); setErr(""); setMatches([]); setErrores([]); setResueltos([]); setResultado(null);
   setCargando(true);
   const reader = new FileReader();
   reader.onload = (e) => {
    try {
     const rows = parsear(e.target.result);
-    const { lista, dupsCsv } = procesar(rows);
+    const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows);
     setMatches(lista);
-    setErrores(dupsCsv);
+    setErrores(conflictos);
+    setResueltos(resueltosCsv);
    } catch(ex) { setErr(ex.message); }
    setCargando(false);
   };
@@ -583,6 +672,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     <div style={{ background:"#eff6ff", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#1e40af" }}>
      <strong>Regla:</strong> 1 pedido = 1 guia. Columnas requeridias: <code>Guia Estado_Pro Pedido_Pro</code>.
      <br/><span style={{fontSize:12,color:"#64748b"}}>El match se hace por <strong>Pedido_Pro = No. Pedido</strong> en el sistema. Acepta CSV con coma o punto y coma.</span>
+     <br/><span style={{fontSize:12,color:"#64748b"}}>Si un pedido viene repetido con <strong>guias diferentes</strong>, se toma la de <strong>fecha de elaboracion mas reciente</strong> (DD/MM/AAAA o AAAA-MM-DD). Repetido con la <strong>misma guia</strong> es error del archivo y no se carga.</span>
     </div>
 
     {/* Drop zone */}
@@ -604,17 +694,36 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     {/* Error de parseo */}
     {err && <div style={{background:"#fef2f2",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#dc2626",fontWeight:600}}> {err}</div>}
 
-    {/* Duplicados dentro del CSV bloquea esos registros */}
+    {/* Duplicados resueltos con la fecha de elaboracion mas reciente */}
+    {resueltos.length > 0 && (
+     <div style={{background:"#ecfdf5",border:"1px solid #86efac",borderRadius:10,padding:"12px 16px"}}>
+      <div style={{fontWeight:800,color:"#059669",marginBottom:6}}>
+       {resueltos.length} pedido(s) duplicados resueltos con la fecha de elaboracion mas reciente
+      </div>
+      <div style={{maxHeight:120,overflowY:"auto",fontSize:11,color:"#065f46",fontFamily:"monospace",lineHeight:1.6}}>
+       {resueltos.map(r => (
+        <div key={r.pedidoId}>
+         <strong>{r.pedidoId}</strong> ({r.filas} filas) usa guia {r.guia} del {r.fecha}
+         {r.descartadas.length > 0 && <span style={{color:"#78716c"}}> · descarta {r.descartadas.join(", ")}</span>}
+        </div>
+       ))}
+      </div>
+     </div>
+    )}
+
+    {/* Duplicados que no se pueden decidir por fecha: se bloquean */}
     {errores.length > 0 && (
      <div style={{background:"#fef2f2",border:"2px solid #fca5a5",borderRadius:10,padding:"12px 16px"}}>
       <div style={{fontWeight:800,color:"#dc2626",marginBottom:6}}>
-        {errores.length} pedido(s) duplicados en el CSV no se cargarn
+       {errores.length} pedido(s) duplicados en el CSV no se cargaran
       </div>
-      <div style={{fontSize:12,color:"#991b1b",fontFamily:"monospace"}}>
-       {errores.join(" ")}
+      <div style={{maxHeight:120,overflowY:"auto",fontSize:11,color:"#991b1b",fontFamily:"monospace",lineHeight:1.6}}>
+       {errores.map(c => (
+        <div key={c.pedidoId}><strong>{c.pedidoId}</strong> ({c.filas} filas): {c.motivo}</div>
+       ))}
       </div>
       <div style={{fontSize:12,color:"#64748b",marginTop:6}}>
-       El CSV tiene mas de una fila con el mismo Pedido_Pro. Corrgelo en el archivo y vuelve a cargar.
+       Deja una sola fila por Pedido_Pro (o completa la fecha de elaboracion) y vuelve a cargar.
       </div>
      </div>
     )}
@@ -711,6 +820,11 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
             <td style={{padding:"8px 12px",fontWeight:700,
              color:!m.encontrado?"#dc2626":omitir?"#d97706":"#7c3aed",fontFamily:"monospace"}}>
              {m.pedidoId}
+             {m.resueltoPorFecha&&(
+              <div style={{fontSize:10,fontWeight:600,color:"#059669",fontFamily:"inherit",marginTop:2}}>
+               mas reciente ({m.resueltoPorFecha.fecha})
+              </div>
+             )}
             </td>
             <td style={{padding:"8px 12px",color:"#334155",maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
              {m.pedido?.cliente||<span style={{color:"#dc2626",fontSize:11}}>No encontrado</span>}
@@ -742,7 +856,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
       )}
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);}}> Cambiar archivo</Btn>
+       <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);}}> Cambiar archivo</Btn>
        <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
        <Btn disabled={aplicando||encontrados.filter(m=>!m.yaConGuia||m.estadoCambio||sobrescribir).length===0} onClick={aplicar}>
         {aplicando?" Aplicando...":` Aplicar ${encontrados.filter(m=>!m.yaConGuia||m.estadoCambio||sobrescribir).length} actualizacin(es)`}
