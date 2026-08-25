@@ -23,6 +23,12 @@ const iSt = {
  width:"100%",boxSizing:"border-box",
 };
 
+// Un 0 valido debe mostrarse como "0". Con `valor || ""` el cero cae a cadena
+// vacia y el input pinta su placeholder, que se lee como si fuera un dato real.
+function numTexto(v) {
+ return v === null || v === undefined || v === "" ? "" : String(v);
+}
+
 // Las listas ya no descargan las columnas base64 (soportes_data, soporte_data, doc_data)
 // para no agotar el egress de Supabase; estos helpers las piden solo al abrir el archivo.
 async function cargarSoportesPedido(pedidoId) {
@@ -58,7 +64,7 @@ async function abrirArchivoRemoto(tabla, id, colData, colNombre, nombreFallback,
 function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
  const [direccion, setDireccion] = useState(pedido.direccion||"");
- const [cajas,   setCajas]   = useState(String(pedido.cajas||""));
+ const [cajas,   setCajas]   = useState(numTexto(pedido.cajas));
  const [estadoDesp, setEstadoDesp] = useState(pedido.estado_despacho||"despachado");
  const [novedad,  setNovedad]  = useState(pedido.novedad||false);
  const [tipoModal, setTipoModal] = useState(pedido.tipo||"propio");
@@ -248,7 +254,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
       disabled={pedidoBloqueadoEdicion}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-     <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder="10" disabled={pedidoBloqueadoEdicion}/>
+     <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder={pedidoBloqueadoEdicion ? "" : "10"} disabled={pedidoBloqueadoEdicion}/>
      <Field label="No. Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000" disabled={pedidoBloqueadoEdicion}/>
      <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date" disabled={pedidoBloqueadoEdicion}/>
     </div>
@@ -2673,9 +2679,9 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    ...vacio,
    factura: dev.factura||"",
    pedido_ref: dev.pedido_ref||"",
-   unidades: dev.unidades||"",
-   volumen_m3: dev.volumen_m3||"",
-   peso_kg: dev.peso_kg||"",
+   unidades: numTexto(dev.unidades),
+   volumen_m3: numTexto(dev.volumen_m3),
+   peso_kg: numTexto(dev.peso_kg),
    dir_recogida: dev.dir_recogida||"",
    ciudad_codigo: dev.ciudad_codigo||"",
    motivo: dev.motivo||"",
@@ -3003,9 +3009,9 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
    ciudad_recogida_cod: rec.ciudad_recogida_cod||"",
    dir_entrega: rec.dir_entrega||"",
    ciudad_entrega_cod: rec.ciudad_entrega_cod||"",
-   unidades: rec.unidades||"",
-   volumen_m3: rec.volumen_m3||"",
-   peso_kg: rec.peso_kg||"",
+   unidades: numTexto(rec.unidades),
+   volumen_m3: numTexto(rec.volumen_m3),
+   peso_kg: numTexto(rec.peso_kg),
    observaciones: rec.observaciones||"",
    doc_data: null, // el archivo actual no se descarga; solo se envia si se adjunta uno nuevo
    doc_nombre: rec.doc_nombre||"",
