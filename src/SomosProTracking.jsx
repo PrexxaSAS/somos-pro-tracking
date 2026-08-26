@@ -153,11 +153,13 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
 
   showToast("Guardando...","info");
-  const { data: upd, error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select().single();
+  // select("id") confirma que la fila existe y que RLS permitio el update, sin
+  // descargar soportes_data. La actualizacion optimista ya dejo la interfaz al dia,
+  // asi que no hace falta recargar las diez tablas ni desmontar la pantalla.
+  const { error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select("id").single();
   if (error) { showToast(mensajeError(error, "los cambios del pedido"),"error"); return; }
   showToast(" Cambios guardados Estado: "+nuevoEstado,"success");
   onClose();
-  setTimeout(()=>{ if(window._recargar) window._recargar(); }, 200);
  };
 
 
@@ -3753,8 +3755,8 @@ export default function SomosProTracking() {
 
  const showToast = (msg, type = "info") => setToast({ msg, type });
 
- const cargarTodo = async (perfil = user) => {
-  setCargando(true);
+ const cargarTodo = async (perfil = user, { silencioso = false } = {}) => {
+  if (!silencioso) setCargando(true);
   try {
    const rolActual = perfil?.rol;
    const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
@@ -3920,9 +3922,13 @@ export default function SomosProTracking() {
   setCargando(false);
  };
 
+ // Refresco en segundo plano: no muestra la pantalla de bienvenida, para no
+ // desmontar la interfaz y hacerle perder al usuario modales, formularios y filtros.
+ const refrescar = () => cargarTodo(user, { silencioso: true });
+
  const showToastYRecargar = async (msg, type = "success") => {
   showToast(msg, type);
-  await cargarTodo();
+  await refrescar();
  };
 
  const handleLogin = async (u) => {
@@ -4024,16 +4030,6 @@ export default function SomosProTracking() {
  const props = { pedidos, setPedidos, conductores, setConductores, usuarios, setUsuarios, showToast, user };
 
  // Wrappers que escriben en Supabase y recargan 
- const sbSetPedidos = async (fn) => {
-  // fn can be a new array or an updater function
-  const nuevosPedidos = typeof fn === 'function' ? fn(pedidos) : fn;
-  // Find what changed and upsert
-  for (const p of nuevosPedidos) {
-   const { error } = await supabase.from('pedidos').upsert(p, { onConflict: 'id' });
-   if (error) console.error('Error pedido:', error);
-  }
-  await cargarTodo();
- };
 
  const sbSetUsuarios = async (fn) => {
   const nuevos = typeof fn === 'function' ? fn(usuarios) : fn;
@@ -4045,7 +4041,7 @@ export default function SomosProTracking() {
     throw new Error('Actualizacion directa de usuarios deshabilitada. Usar create-system-user.');
    }
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetConductores = async (fn) => {
@@ -4054,7 +4050,7 @@ export default function SomosProTracking() {
    const { id, usuario_id, ...rest } = c;
    await supabase.from('conductores').upsert({ ...rest, ...(id && typeof id !== 'number' ? {id} : {}) }, { onConflict: 'cedula' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetTransportistas = async (fn) => {
@@ -4063,7 +4059,7 @@ export default function SomosProTracking() {
    const { id, ...rest } = t;
    await supabase.from('transportistas').upsert(rest, { onConflict: 'nit' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetCiudades = async (fn) => {
@@ -4071,7 +4067,7 @@ export default function SomosProTracking() {
   for (const c of nuevas) {
    await supabase.from('ciudades').upsert({ code: c.code, name: c.name }, { onConflict: 'code' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetPaqueterias = async (fn) => {
@@ -4081,7 +4077,7 @@ export default function SomosProTracking() {
   for (const p of nuevas) {
    await supabase.from('paqueterias').upsert({ nombre: p }, { onConflict: 'nombre' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetDevoluciones = async (fn) => {
@@ -4089,7 +4085,7 @@ export default function SomosProTracking() {
   for (const d of nuevas) {
    await supabase.from('devoluciones').upsert(d, { onConflict: 'id' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetRecogidas = async (fn) => {
@@ -4097,7 +4093,7 @@ export default function SomosProTracking() {
   for (const r of nuevas) {
    await supabase.from('recogidas').upsert(r, { onConflict: 'id' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
  const sbSetPqrs = async (fn) => {
@@ -4105,37 +4101,37 @@ export default function SomosProTracking() {
   for (const p of nuevas) {
    await supabase.from('pqrs').upsert(p, { onConflict: 'id' });
   }
-  await cargarTodo();
+  await refrescar();
  };
 
- window._recargar = cargarTodo;
+ window._recargar = refrescar;
 
  const renderContent = () => {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
    case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}/>;
-   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={sbSetPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={cargarTodo} user={user}/>;
+   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={refrescar} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
-   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={cargarTodo}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={cargarTodo}/>;
+   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={refrescar}/>;
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={refrescar}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
-    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={cargarTodo}/>
+    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={refrescar}/>
     : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
-   case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
-   case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
-   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={cargarTodo}/>;
-   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={cargarTodo}/>;
-   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={cargarTodo}/>;
-   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={cargarTodo}/>;
+   case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
+   case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
+   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={refrescar}/>;
+   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={refrescar}/>;
+   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
+   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
    case "mi_ubicacion":  return <MiUbicacion user={user}/>;
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
-   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={cargarTodo}/>;
-   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={cargarTodo}/>;
-   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={cargarTodo}/>;
+   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
+   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={refrescar}/>;
+   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={refrescar}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
  };
