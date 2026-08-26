@@ -330,11 +330,17 @@ Deno.serve(async (req) => {
 
   const callerIsAdmin = caller.rol === "admin";
   const callerIsTransportista = caller.rol === "transportista";
-  if (!callerIsAdmin && !callerIsTransportista) {
+  const callerIsOperador = caller.rol === "operador";
+  if (!callerIsAdmin && !callerIsTransportista && !callerIsOperador) {
     return json({ error: "No tienes permiso para crear usuarios." }, 403);
   }
   if (callerIsTransportista && (rol !== "conductor" || nitProveedor !== caller.nit)) {
     return json({ error: "Solo puedes crear conductores asociados a tu empresa." }, 403);
+  }
+  // El operador puede inscribir conductores, pero nada mas: sin este guardia
+  // podria enviar type "conductor" con rol "admin" y crearse un administrador.
+  if (callerIsOperador && (rol !== "conductor" || payload.type !== "conductor")) {
+    return json({ error: "El operador solo puede crear conductores." }, 403);
   }
   if (!callerIsAdmin && payload.type === "system_user") {
     return json({ error: "Solo admin puede crear usuarios de sistema." }, 403);
