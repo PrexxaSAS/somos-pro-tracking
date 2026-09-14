@@ -926,6 +926,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  const fileRef = useRef(null);
 
  const [aviso, setAviso] = useState("");
+ const [completar, setCompletar] = useState(false);
  const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen";
  const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,";
 
@@ -1038,7 +1039,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   if (prev.length === 0) { setErr("Primero carga un archivo o previsualiza el contenido."); return; }
   setCargando(true);
   try {
-   await onImportar(prev);
+   await onImportar(prev, { completarExistentes: completar });
   } catch(e) {
    setErr("Error importando: " + e.message);
   }
@@ -1108,6 +1109,14 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
       ))}
      </div>
     )}
+
+    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f5f3ff", border:`1px solid ${P[200]}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:P[800], cursor:"pointer" }}>
+     <input type="checkbox" checked={completar} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
+     <span>
+      <strong>Completar datos de pedidos existentes</strong><br/>
+      <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas y factura que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
+     </span>
+    </label>
 
     <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
      <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
@@ -1250,7 +1259,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   URL.revokeObjectURL(url);
  };
 
- const handleImportarCSV = async (rows) => {
+ const handleImportarCSV = async (rows, { completarExistentes = false } = {}) => {
   const csvHeaders = rows[0]?._csvHeaders || [];
   const erroresImportacion = [];
   const registrarError = (row, id, error) => {
@@ -1265,23 +1274,25 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const duplicadosUnicos = [...new Set(duplicadosCsv)];
 
   const existentes = [];
+  const existentesPorId = new Map();
   for (let i = 0; i < ids.length; i += 100) {
    const chunk = ids.slice(i, i + 100);
    const { data, error } = await supabase
     .from("pedidos")
-    .select("id")
+    .select(completarExistentes ? "id,estado,tipo,ciudad_codigo,ciudad_nombre,direccion,cajas,factura" : "id")
     .in("id", chunk);
    if (error) {
     const msg = `No se pudo validar si los pedidos ya existen: ${error.message}`;
     showToast(msg, "error");
     throw new Error(msg);
    }
-   existentes.push(...(data || []).map(p => p.id));
+   (data || []).forEach(p => { existentes.push(p.id); existentesPorId.set(String(p.id), p); });
   }
 
   const idsProcesadosCsv = new Set();
   const existentesSet = new Set(existentes.map(String));
   const duplicadosSet = new Set(duplicadosUnicos.map(String));
+  const paraCompletar = [];
 
   const baseGuias = [...pedidos];
   const conGuias = rows.map((r) => {
@@ -1300,7 +1311,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     return null;
    }
    if (existentesSet.has(pedidoId)) {
-    registrarError(r, pedidoId, "Ya existe en la base de datos.");
+    if (completarExistentes) paraCompletar.push({ r, actual: existentesPorId.get(pedidoId) });
+    else registrarError(r, pedidoId, "Ya existe en la base de datos. Marca \"Completar datos de pedidos existentes\" para rellenar sus campos vacios.");
     return null;
    }
    const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
@@ -1328,17 +1340,34 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    }
   }
 
+  // Completar pedidos existentes: solo llena campos vacios. Nunca sobrescribe un
+  // dato ya cargado ni toca estado, conductor, guia o soportes.
+  let completados = 0;
+  let sinCambios = 0;
+  const vacio = (v) => v === null || v === undefined || String(v).trim() === "";
+  for (const { r, actual } of paraCompletar) {
+   const cambios = {};
+   if (vacio(actual.ciudad_codigo) && !vacio(r.ciudad_codigo)) cambios.ciudad_codigo = r.ciudad_codigo;
+   if (vacio(actual.ciudad_nombre) && !vacio(r.ciudad_nombre)) cambios.ciudad_nombre = r.ciudad_nombre;
+   if (vacio(actual.direccion) && !vacio(r.direccion)) cambios.direccion = r.direccion;
+   if (!(Number(actual.cajas) > 0) && Number(r.cajas) > 0) cambios.cajas = Number(r.cajas);
+   if (vacio(actual.factura) && !vacio(r.factura)) cambios.factura = r.factura;
+   if (Object.keys(cambios).length === 0) { sinCambios += 1; continue; }
+   const { error } = await supabase.from("pedidos").update(cambios).eq("id", actual.id).select("id").single();
+   if (error) registrarError(r, actual.id, mensajeError(error, "la actualizacion del pedido"));
+   else completados += 1;
+  }
+
   setModCSV(false);
+  const resumen = `${insertados} pedido(s) creados` + (completarExistentes ? `, ${completados} completados, ${sinCambios} sin cambios` : "");
   if (erroresImportacion.length > 0) {
-   const detalle = erroresImportacion.map(e => `${e.id}: ${e.error}`).join(" | ");
-   if (pedidosInsertados.length > 0) setPedidos(prev => [...pedidosInsertados, ...prev]);
-   setReporteImportacion({ insertados, errores: erroresImportacion, headers: csvHeaders });
-   showToast(`${insertados} pedido(s) importados. ${erroresImportacion.length} con error: ${detalle}`, insertados > 0 ? "info" : "error");
+   setReporteImportacion({ insertados, completados, sinCambios, completar: completarExistentes, errores: erroresImportacion, headers: csvHeaders });
+   showToast(`${resumen}. ${erroresImportacion.length} con error.`, insertados + completados > 0 ? "info" : "error");
   } else {
    setReporteImportacion(null);
-   showToast(insertados + " pedido(s) importados", "success");
-   if (recargar) await recargar();
+   showToast(resumen, "success");
   }
+  if ((insertados > 0 || completados > 0) && recargar) await recargar();
  };
 
  const pageBg = "#fafafa";
@@ -1469,7 +1498,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     <Modal title="Resultado de importacion CSV" onClose={async () => { setReporteImportacion(null); if (recargar) await recargar(); }} wide>
      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ background:"#fffbeb", border:"1px solid #fde68a", color:"#92400e", borderRadius:12, padding:14, fontSize:14 }}>
-       <strong>{reporteImportacion.insertados}</strong> pedido(s) importados correctamente.{" "}
+       <strong>{reporteImportacion.insertados}</strong> pedido(s) creados.{" "}
+       {reporteImportacion.completar && <><strong>{reporteImportacion.completados}</strong> completados, <strong>{reporteImportacion.sinCambios}</strong> sin cambios.{" "}</>}
        <strong>{reporteImportacion.errores.length}</strong> pedido(s) quedaron con error.
       </div>
       <div style={{ maxHeight:280, overflow:"auto", border:"1px solid #e5e7eb", borderRadius:12 }}>
