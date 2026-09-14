@@ -29,6 +29,40 @@ function numTexto(v) {
  return v === null || v === undefined || v === "" ? "" : String(v);
 }
 
+// Supabase devuelve como maximo 1000 filas por consulta. Sin paginar, la app solo
+// veia los 1000 pedidos mas recientes: la lista y el dashboard quedaban incompletos
+// y el cargue de guias marcaba pedidos antiguos como "No encontrados".
+// Se pagina hasta recibir una pagina vacia, asi no depende del limite del proyecto.
+async function cargarTodosLosPedidos(columnas) {
+ const PAGINA = 1000;
+ const filas = [];
+ for (let desde = 0; ; ) {
+  const { data, error } = await supabase
+   .from('pedidos')
+   .select(columnas)
+   .order('created_at', { ascending: false })
+   .order('id', { ascending: true })
+   .range(desde, desde + PAGINA - 1);
+  if (error) return { data: null, error };
+  if (!data || data.length === 0) break;
+  filas.push(...data);
+  desde += data.length;
+ }
+ return { data: filas, error: null };
+}
+
+// Busca en la base, por bloques de 100, los pedidos de una lista de ids.
+async function buscarPedidosPorId(ids, columnas) {
+ const unicos = [...new Set(ids.map(id => String(id || "").trim()).filter(Boolean))];
+ const mapa = new Map();
+ for (let i = 0; i < unicos.length; i += 100) {
+  const { data, error } = await supabase.from('pedidos').select(columnas).in('id', unicos.slice(i, i + 100));
+  if (error) throw error;
+  (data || []).forEach(p => mapa.set(String(p.id).trim(), p));
+ }
+ return mapa;
+}
+
 // Las listas ya no descargan las columnas base64 (soportes_data, soporte_data, doc_data)
 // para no agotar el egress de Supabase; estos helpers las piden solo al abrir el archivo.
 async function cargarSoportesPedido(pedidoId) {
@@ -512,7 +546,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
  };
 
  // Procesar filas
- const procesar = (rows) => {
+ const procesar = (rows, pedidosPorId) => {
   const hoy = new Date().toISOString().split("T")[0];
 
   // Duplicados dentro del CSV (mismo Pedido_Pro en varias filas):
@@ -566,7 +600,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     resueltos.push(resueltoPorFecha);
    }
 
-   const pedido  = pedidos.find(p => String(p.id).trim() === r.pedidoId);
+   const pedido  = pedidosPorId.get(r.pedidoId);
    const estadoN  = r.estadoRaw.toLowerCase().includes("entregado") ? "entregado" : "en_transito";
    const mismaGuia = pedido?.guia_paqueteria === r.guia;
    const estadoCambio = mismaGuia && pedido?.estado !== estadoN;
@@ -600,10 +634,16 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   setArchivo(file.name); setErr(""); setMatches([]); setErrores([]); setResueltos([]); setResultado(null);
   setCargando(true);
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
    try {
     const rows = parsear(e.target.result);
-    const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows);
+    // Se consulta la base directamente: la lista en memoria puede no incluir los
+    // pedidos antiguos y los reportaria como "No encontrados" sin serlo.
+    const pedidosPorId = await buscarPedidosPorId(
+     rows.map(r => r.pedidoId),
+     "id,cliente,estado,tipo,paqueteria,guia_paqueteria,fecha_estimada"
+    );
+    const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows, pedidosPorId);
     setMatches(lista);
     setErrores(conflictos);
     setResueltos(resueltosCsv);
@@ -885,6 +925,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  const [nombreArchivo, setNombreArchivo] = useState("");
  const fileRef = useRef(null);
 
+ const [aviso, setAviso] = useState("");
  const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen";
  const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,";
 
@@ -914,12 +955,52 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   if (lineas.length < 2) throw new Error("Se necesita encabezado y al menos una fila de datos.");
   // Detect separator
   const sep = lineas[0].includes(';') ? ';' : ',';
-  const hdrs = lineas[0].split(sep).map(h => h.trim().toLowerCase().replace(/"/g,''));
+  const hdrs = lineas[0].split(sep).map(h => h.trim().replace(/"/g,''));
+  setAviso("");
+  // Acepta la plantilla (ciudad_codigo, cajas...) y tambien los nombres del plano
+  // (Pedido_Pro, DANE_Destino, Total_Cajas, Factura_Pro...). Antes una columna con
+  // otro nombre se ignoraba en silencio y el pedido se creaba sin ciudad ni cajas.
+  const norm = (v) => String(v).toLowerCase()
+   .normalize("NFD").split("").filter(ch => ch.charCodeAt(0) < 768 || ch.charCodeAt(0) > 879).join("")
+   .replace(/[^a-z0-9]/g, "");
+  const ALIAS = {
+   id: ["id", "pedidopro", "pedido", "nopedido", "numeropedido"],
+   cliente: ["cliente", "nombrecliente", "razonsocial"],
+   ciudad_codigo: ["ciudadcodigo", "danedestino", "dane", "codigodane", "codigociudad"],
+   ciudad_nombre: ["ciudadnombre", "ciudaddestino", "ciudad"],
+   direccion: ["direccion", "direccionentrega", "direcciondestino"],
+   cajas: ["cajas", "totalcajas", "cantidadcajas"],
+   factura: ["factura", "facturapro", "nofactura", "numerofactura"],
+   fecha_estimada: ["fechaestimada"],
+   tipo: ["tipo", "tipotransporte"],
+   empresa_transporte: ["empresatransporte"],
+   paqueteria: ["paqueteria", "transportadora", "carrier"],
+   guia_paqueteria: ["guiapaqueteria", "guia", "noguia"],
+   notas: ["notas", "observaciones"],
+   ciudad_origen_codigo: ["ciudadorigencodigo", "daneorigen"],
+   ciudad_origen_nombre: ["ciudadorigennombre", "ciudadorigen"],
+   direccion_origen: ["direccionorigen"],
+  };
+  const indice = {};
+  hdrs.forEach((h, i) => {
+   const n = norm(h);
+   const campo = Object.keys(ALIAS).find(k => ALIAS[k].includes(n));
+   if (campo && indice[campo] === undefined) indice[campo] = i;
+  });
+  if (indice.id === undefined || indice.cliente === undefined) {
+   throw new Error(`No se encontraron las columnas de numero de pedido y cliente. Columnas del archivo: ${hdrs.join(", ")}`);
+  }
+  const faltantes = ["ciudad_codigo", "direccion", "cajas", "factura"].filter(c => indice[c] === undefined);
+  if (faltantes.length) {
+   setAviso(`El archivo no trae estas columnas y los pedidos quedarian sin ese dato: ${faltantes.join(", ")}. Columnas detectadas: ${hdrs.join(", ")}`);
+  }
   return lineas.slice(1).map((l, idx) => {
    // Handle quoted fields
    const cols = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+   const original = {};
+   hdrs.forEach((h, i) => { original[h] = cols[i] || ""; });
    const obj = {};
-   hdrs.forEach((h, i) => { obj[h] = cols[i] || ""; });
+   Object.entries(indice).forEach(([campo, i]) => { obj[campo] = cols[i] || ""; });
    const codigoCiudad = (obj.ciudad_codigo||'').trim();
    const ciudad = codigoCiudad ? (ciudades||[]).find(c => c.code === codigoCiudad) : null;
    const ciudadOrigen = (ciudades||[]).find(c => c.code === obj.ciudad_origen_codigo);
@@ -947,7 +1028,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
    estado_despacho: "despachado", novedad: false,
    fecha_creacion: new Date().toISOString().split("T")[0],
    fecha_real: null, soportes: [], soportes_data: [],
-   _csvOriginal: obj,
+   _csvOriginal: original,
    _csvHeaders: hdrs,
    };
   });
@@ -971,6 +1052,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     {/* Info columnas */}
     <div style={{ background: "#fffbeb", borderRadius: 10, padding: 12, fontSize: 13, color: "#92400e" }}>
      <strong>Columnas requeridias:</strong> id, cliente, ciudad_codigo, direccion, cajas, factura, fecha_estimada, tipo<br/>
+     <strong>Tambien acepta los nombres del plano:</strong> Pedido_Pro, DANE_Destino, Total_Cajas, Factura_Pro, Paqueteria, Guia<br/>
      <strong>Opcionales:</strong> empresa_transporte, paqueteria, guia_paqueteria, notas, ciudad_origen_codigo, ciudad_origen_nombre, direccion_origen
     </div>
 
@@ -1013,6 +1095,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     </details>
 
     {err && <p style={{ color:"#dc2626", background:"#fef2f2", padding:"8px 12px", borderRadius:8, fontSize:13, margin:0 }}> {err}</p>}
+    {aviso && <p style={{ color:"#92400e", background:"#fffbeb", border:"1px solid #fcd34d", padding:"8px 12px", borderRadius:8, fontSize:13, margin:0 }}>{aviso}</p>}
 
     {/* Preview */}
     {prev.length > 0 && (
@@ -3847,7 +3930,7 @@ export default function SomosProTracking() {
     supabase.from('usuarios').select('*').order('created_at'),
     supabase.from('transportistas').select('*').order('created_at'),
     supabase.from('conductores').select('*').order('created_at'),
-    supabase.from('pedidos').select(pedidosSelect).order('created_at', { ascending: false }),
+    cargarTodosLosPedidos(pedidosSelect),
     supabase.from('ciudades').select('*').order('name'),
     supabase.from('paqueterias').select('*').order('nombre'),
     supabase.from('devoluciones').select(devolucionesSelect).order('created_at', { ascending: false }),
