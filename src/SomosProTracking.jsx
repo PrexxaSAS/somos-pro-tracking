@@ -602,7 +602,8 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
 
    const pedido  = pedidosPorId.get(r.pedidoId);
    const estadoN  = r.estadoRaw.toLowerCase().includes("entregado") ? "entregado" : "en_transito";
-   const mismaGuia = pedido?.guia_paqueteria === r.guia;
+   // Se comparan como texto sin espacios: "205022008549" y "205022008549 " son la misma guia.
+   const mismaGuia = !!pedido && String(pedido.guia_paqueteria ?? "").trim() === String(r.guia ?? "").trim();
    const estadoCambio = mismaGuia && pedido?.estado !== estadoN;
    lista.push({
     pedidoId:   r.pedidoId,
@@ -656,13 +657,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
 
  // Aplicar 
  const aplicar = async () => {
-  const paraActualizar = matches.filter(m =>
-   m.encontrado && (
-    !m.yaConGuia ||     // no tiene guia an siempre actualiza
-    m.estadoCambio ||    // misma guia pero estado cambi actualiza automatico
-    sobrescribir       // guia diferente y usuario marc sobreescribir
-   )
-  );
+  const paraActualizar = matches.filter(seActualiza);
   if (!paraActualizar.length) { showToast("No hay pedidos para actualizar.","error"); return; }
   setAplicando(true);
   let ok = 0; const fallosDetalle = [];
@@ -698,7 +693,8 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   setAplicando(false);
   setResultado({ ok, fallos: fallosDetalle.length, fallosDetalle,
    noMatch: matches.filter(m=>!m.encontrado).length,
-   omitidos: matches.filter(m=>m.yaConGuia&&!m.estadoCambio&&!sobrescribir).length });
+   sinCambios: matches.filter(m=>m.encontrado&&m.yaConGuia&&m.mismaGuia&&!m.estadoCambio).length,
+   omitidos: matches.filter(m=>m.encontrado&&m.yaConGuia&&!m.mismaGuia&&!sobrescribir).length });
   showToast(` ${ok} actualizado(s)${fallosDetalle.length?" "+fallosDetalle.length+" error(es)":""}`, ok>0?"success":"error");
   if (ok > 0 && recargar) await recargar();
  };
@@ -707,9 +703,17 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
  const encontrados = matches.filter(m => m.encontrado);
  const noEncontrados= matches.filter(m => !m.encontrado);
  const conGuiaYa  = encontrados.filter(m => m.yaConGuia);
- const autoUpdate = encontrados.filter(m => m.estadoCambio); // same guia, state changed
- const guiaDiferente = encontrados.filter(m => m.yaConGuia && !m.estadoCambio); // need confirm
+ const autoUpdate = encontrados.filter(m => m.estadoCambio); // misma guia, cambia el estado
+ // Antes "guia diferente" era todo pedido con guia que no cambiaba de estado, aunque la
+ // guia fuera identica: el recuadro de sobrescribir listaba cientos de pedidos ya correctos.
+ const sinCambios = encontrados.filter(m => m.yaConGuia && m.mismaGuia && !m.estadoCambio);
+ const guiaDiferente = encontrados.filter(m => m.yaConGuia && !m.mismaGuia);
  const sinGuia   = encontrados.filter(m => !m.yaConGuia);
+ // Unica regla de que se actualiza, compartida por la tabla, el boton y aplicar().
+ function seActualiza(m) {
+  return m.encontrado && (!m.yaConGuia || m.estadoCambio || (sobrescribir && !m.mismaGuia));
+ }
+ const totalAplicar = matches.filter(seActualiza).length;
 
  return (
   <Modal title=" Cargar Guias de Paqueteria" onClose={onClose} wide>
@@ -784,7 +788,8 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
       </div>
       <div style={{fontSize:13,color:"#334155",display:"flex",flexDirection:"column",gap:4}}>
        <span> <strong>{resultado.ok}</strong> pedido(s) actualizados con guia y estado</span>
-       {resultado.omitidos>0&&<span> <strong>{resultado.omitidos}</strong> omitidos (ya tenan guia, no se marc sobreescribir)</span>}
+       {resultado.sinCambios>0&&<span> <strong>{resultado.sinCambios}</strong> sin cambios (ya tenian la misma guia y el mismo estado)</span>}
+       {resultado.omitidos>0&&<span> <strong>{resultado.omitidos}</strong> con guia diferente no reemplazados (no se marco sobrescribir)</span>}
        {resultado.noMatch>0&&<span> <strong>{resultado.noMatch}</strong> no encontrados en el sistema</span>}
        {resultado.fallos>0&&<span> <strong>{resultado.fallos}</strong> error(es) en Supabase</span>}
       </div>
@@ -829,6 +834,16 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
         </div>
        </div>
       )}
+      {sinCambios.length>0&&(
+       <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px"}}>
+        <div style={{fontWeight:700,color:"#475569",fontSize:13}}>
+         {sinCambios.length} pedido(s) sin cambios
+        </div>
+        <div style={{fontSize:11,color:"#64748b",marginTop:3}}>
+         Ya tienen la misma guia y el mismo estado. No se actualizan.
+        </div>
+       </div>
+      )}
       {guiaDiferente.length>0&&(
        <div style={{display:"flex",alignItems:"center",gap:10,background:"#fffbeb",
         border:"1px solid #fcd34d",borderRadius:10,padding:"12px 16px",cursor:"pointer"}}
@@ -857,15 +872,16 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
         </thead>
         <tbody>
          {matches.map((m,i)=>{
-          const omitir = m.yaConGuia && !sobrescribir;
-          const bg = !m.encontrado?"#fef2f2":omitir?"#fffbeb":i%2?"#fafafa":"#fff";
+          const omitir = m.encontrado && !seActualiza(m);
+          const igual = omitir && m.mismaGuia;
+          const bg = !m.encontrado?"#fef2f2":igual?"#f8fafc":omitir?"#fffbeb":i%2?"#fafafa":"#fff";
           return (
            <tr key={m.pedidoId} style={{borderTop:"1px solid #f1f5f9",background:bg}}>
             <td style={{padding:"8px 12px",fontSize:15}}>
              {!m.encontrado?"":omitir?"":""}
             </td>
             <td style={{padding:"8px 12px",fontWeight:700,
-             color:!m.encontrado?"#dc2626":omitir?"#d97706":"#7c3aed",fontFamily:"monospace"}}>
+             color:!m.encontrado?"#dc2626":igual?"#94a3b8":omitir?"#d97706":"#7c3aed",fontFamily:"monospace"}}>
              {m.pedidoId}
              {m.resueltoPorFecha&&(
               <div style={{fontSize:10,fontWeight:600,color:"#059669",fontFamily:"inherit",marginTop:2}}>
@@ -905,8 +921,8 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
        <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);}}> Cambiar archivo</Btn>
        <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
-       <Btn disabled={aplicando||encontrados.filter(m=>!m.yaConGuia||m.estadoCambio||sobrescribir).length===0} onClick={aplicar}>
-        {aplicando?" Aplicando...":` Aplicar ${encontrados.filter(m=>!m.yaConGuia||m.estadoCambio||sobrescribir).length} actualizacin(es)`}
+       <Btn disabled={aplicando||totalAplicar===0} onClick={aplicar}>
+        {aplicando?" Aplicando...":` Aplicar ${totalAplicar} actualizacion(es)`}
        </Btn>
       </div>
      </>
