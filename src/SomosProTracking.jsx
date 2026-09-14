@@ -29,6 +29,10 @@ function numTexto(v) {
  return v === null || v === undefined || v === "" ? "" : String(v);
 }
 
+function esVacio(v) {
+ return v === null || v === undefined || String(v).trim() === "";
+}
+
 // Supabase devuelve como maximo 1000 filas por consulta. Sin paginar, la app solo
 // veia los 1000 pedidos mas recientes: la lista y el dashboard quedaban incompletos
 // y el cargue de guias marcaba pedidos antiguos como "No encontrados".
@@ -523,6 +527,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   const iPaq   = col("paqueteria","paqueteria","carrier");
   const iDestino = col("dane_destino","destino");
   const iCajas  = col("total_cajas","cajas");
+  const iDireccion = col("direccion_destino","direccion");
   const iFecha  = col("fecha_elaboracion","elaboracion","fecha_documento","fecha_doc","fecha");
 
   if (iGuia === -1 || iEstado === -1 || iPedido === -1)
@@ -539,6 +544,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     paqueteria: iPaq   !== -1 ? c[iPaq]   || "" : "",
     destino:  iDestino !== -1 ? c[iDestino] || "" : "",
     cajas:   iCajas  !== -1 ? parseInt(c[iCajas])||0 : 0,
+    direccion: iDireccion !== -1 ? c[iDireccion] || "" : "",
     fechaRaw,
     fechaTs:  parsearFechaCsv(fechaRaw),
    };
@@ -605,6 +611,13 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
    // Se comparan como texto sin espacios: "205022008549" y "205022008549 " son la misma guia.
    const mismaGuia = !!pedido && String(pedido.guia_paqueteria ?? "").trim() === String(r.guia ?? "").trim();
    const estadoCambio = mismaGuia && pedido?.estado !== estadoN;
+   // El plano completa datos solo si trae un valor para un campo que el pedido tiene vacio.
+   const completaDatos = !!pedido && !!(
+    (r.destino && esVacio(pedido.ciudad_codigo)) ||
+    (r.direccion && esVacio(pedido.direccion)) ||
+    (r.cajas > 0 && !(Number(pedido.cajas) > 0)) ||
+    (r.factura && esVacio(pedido.factura))
+   );
    lista.push({
     pedidoId:   r.pedidoId,
     guia:     r.guia,
@@ -614,6 +627,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     estadoActual: pedido?.estado || "",
     paqueteria:  r.paqueteria || pedido?.paqueteria || "",
     destino:   r.destino,
+    direccion:  r.direccion,
     factura:   r.factura,
     cajasCsv:   r.cajas,
     yaConGuia:  !!(pedido?.guia_paqueteria),
@@ -622,6 +636,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     estadoCambio,
     fechaReal:  estadoN === "entregado" ? hoy : null,
     fechaCsv:   r.fechaRaw,
+    completaDatos,
     resueltoPorFecha,
    });
   }
@@ -642,7 +657,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
     // pedidos antiguos y los reportaria como "No encontrados" sin serlo.
     const pedidosPorId = await buscarPedidosPorId(
      rows.map(r => r.pedidoId),
-     "id,cliente,estado,tipo,paqueteria,guia_paqueteria,fecha_estimada"
+     "id,cliente,estado,tipo,paqueteria,guia_paqueteria,fecha_estimada,fecha_real,ciudad_codigo,ciudad_nombre,direccion,cajas,factura"
     );
     const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows, pedidosPorId);
     setMatches(lista);
@@ -668,22 +683,28 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   const fechaEstStr = fechaEst.toISOString().split("T")[0];
 
   for (const m of paraActualizar) {
-   const cambios = {
+   const actual = m.pedido || {};
+   // Si no cambia la guia ni el estado, solo se completan los datos vacios del pedido.
+   const soloDatos = m.yaConGuia && !m.estadoCambio && !(sobrescribir && !m.mismaGuia);
+   const cambios = soloDatos ? {} : {
     guia_paqueteria: m.guia,
     estado:     m.estadoNuevo,
     tipo:      "paqueteria",
     paqueteria:   m.paqueteria || null,
-    fecha_estimada: m.pedido.fecha_estimada || fechaEstStr,
+    fecha_estimada: actual.fecha_estimada || fechaEstStr,
    };
-   if (m.cajasCsv > 0) cambios.cajas = m.cajasCsv;
-   if (m.destino) {
+   // Datos del pedido: el plano solo llena lo que esta vacio. Nunca reemplaza ciudad,
+   // direccion, cajas, factura ni fecha de entrega ya registrados.
+   if (m.cajasCsv > 0 && !(Number(actual.cajas) > 0)) cambios.cajas = m.cajasCsv;
+   if (m.destino && esVacio(actual.ciudad_codigo)) {
     cambios.ciudad_codigo = m.destino;
-    // Intentar resolver nombre si existe en ciudades
     const ciudad = (ciudades||[]).find(c => c.code === m.destino);
     if (ciudad) cambios.ciudad_nombre = ciudad.name;
    }
-   if (m.factura) cambios.factura = m.factura; // actualiza factura del CSV
-   if (m.fechaReal) cambios.fecha_real = m.fechaReal;
+   if (m.direccion && esVacio(actual.direccion)) cambios.direccion = m.direccion;
+   if (m.factura && esVacio(actual.factura)) cambios.factura = m.factura;
+   if (!soloDatos && m.fechaReal && esVacio(actual.fecha_real)) cambios.fecha_real = m.fechaReal;
+   if (Object.keys(cambios).length === 0) continue;
 
    const { error } = await supabase.from("pedidos").update(cambios).eq("id", m.pedidoId);
    if (error) { fallosDetalle.push({ id: m.pedidoId, mensaje: error.message }); console.error(m.pedidoId, error.message); }
@@ -693,7 +714,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   setAplicando(false);
   setResultado({ ok, fallos: fallosDetalle.length, fallosDetalle,
    noMatch: matches.filter(m=>!m.encontrado).length,
-   sinCambios: matches.filter(m=>m.encontrado&&m.yaConGuia&&m.mismaGuia&&!m.estadoCambio).length,
+   sinCambios: matches.filter(m=>m.encontrado&&m.yaConGuia&&m.mismaGuia&&!m.estadoCambio&&!m.completaDatos).length,
    omitidos: matches.filter(m=>m.encontrado&&m.yaConGuia&&!m.mismaGuia&&!sobrescribir).length });
   showToast(` ${ok} actualizado(s)${fallosDetalle.length?" "+fallosDetalle.length+" error(es)":""}`, ok>0?"success":"error");
   if (ok > 0 && recargar) await recargar();
@@ -706,12 +727,13 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
  const autoUpdate = encontrados.filter(m => m.estadoCambio); // misma guia, cambia el estado
  // Antes "guia diferente" era todo pedido con guia que no cambiaba de estado, aunque la
  // guia fuera identica: el recuadro de sobrescribir listaba cientos de pedidos ya correctos.
- const sinCambios = encontrados.filter(m => m.yaConGuia && m.mismaGuia && !m.estadoCambio);
+ const sinCambios = encontrados.filter(m => m.yaConGuia && m.mismaGuia && !m.estadoCambio && !m.completaDatos);
+ const completanDatos = encontrados.filter(m => m.yaConGuia && !m.estadoCambio && m.completaDatos && !(sobrescribir && !m.mismaGuia));
  const guiaDiferente = encontrados.filter(m => m.yaConGuia && !m.mismaGuia);
  const sinGuia   = encontrados.filter(m => !m.yaConGuia);
  // Unica regla de que se actualiza, compartida por la tabla, el boton y aplicar().
  function seActualiza(m) {
-  return m.encontrado && (!m.yaConGuia || m.estadoCambio || (sobrescribir && !m.mismaGuia));
+  return m.encontrado && (!m.yaConGuia || m.estadoCambio || m.completaDatos || (sobrescribir && !m.mismaGuia));
  }
  const totalAplicar = matches.filter(seActualiza).length;
 
@@ -831,6 +853,16 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
         </div>
         <div style={{fontSize:11,color:"#065f46",marginTop:3}}>
          Misma guia, estado cambia de {autoUpdate[0]?.estadoActual} {autoUpdate[0]?.estadoNuevo}. No requiere confirmacin.
+        </div>
+       </div>
+      )}
+      {completanDatos.length>0&&(
+       <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"12px 16px"}}>
+        <div style={{fontWeight:700,color:"#1d4ed8",fontSize:13}}>
+         {completanDatos.length} pedido(s) completan datos vacios
+        </div>
+        <div style={{fontSize:11,color:"#1e40af",marginTop:3}}>
+         Se llenan solo ciudad, direccion, cajas o factura que esten vacios. No cambia la guia ni el estado.
         </div>
        </div>
       )}
