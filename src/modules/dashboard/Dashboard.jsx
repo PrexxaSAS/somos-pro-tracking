@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { transportePedido } from '../../utils/transporte';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '../../Subcomponentes';
 
@@ -288,7 +289,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
            </td>
            <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", fontWeight: 800 }}>{p.cajas}</td>
            <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}><Badge estado={p.estado} /></td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", color: "#4b5563" }}>{p.tipo === "paqueteria" ? p.paqueteria : cond?.nombre || "Sin asignar"}</td>
+           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", color: "#4b5563" }}>{transportePedido(p, cond).principal || "Sin asignar"}</td>
           </tr>
          );
         })}
