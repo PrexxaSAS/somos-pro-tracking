@@ -41,6 +41,9 @@ export const ESTADOS_PEDIDO = {
  paqueteria: { label: "Paqueteria", color: "#0891b2", bg: "#ecfeff" },
  entregado:  { label: "Entregado",  color: "#059669", bg: "#ecfdf5" },
  novedad:   { label: "Con Novedad", color: "#dc2626", bg: "#fef2f2" },
+ // Pedidos que solo se facturan (la mercancia ya se entrego). No son despachos
+ // pendientes: no cuentan como activos, vencidos ni en riesgo.
+ solo_facturar: { label: "Solo Facturar", color: "#0f766e", bg: "#f0fdfa" },
 };
 
 export const ROLES = {
