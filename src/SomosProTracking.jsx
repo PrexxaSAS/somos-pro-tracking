@@ -103,7 +103,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
  const [direccion, setDireccion] = useState(pedido.direccion||"");
  const [cajas,   setCajas]   = useState(numTexto(pedido.cajas));
- const [estadoDesp, setEstadoDesp] = useState(pedido.estado_despacho||"despachado");
+ const [estadoDesp, setEstadoDesp] = useState(pedido.estado === "solo_facturar" ? "solo_facturar" : (pedido.estado_despacho||"despachado"));
  const [novedad,  setNovedad]  = useState(pedido.novedad||false);
  const [tipoModal, setTipoModal] = useState(pedido.tipo||"propio");
  const [facturaEdit, setFacturaEdit] = useState(pedido.factura||"");
@@ -155,6 +155,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
   if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
   if(tipoModal==="paqueteria") nuevoEstado="paqueteria";
+  // "Solo Facturar" se elige en el desplegable de despacho, pero se guarda como estado
+  // del pedido para que lo reconozcan el badge, el filtro y el dashboard.
+  if (estadoDesp === "solo_facturar") {
+   nuevoEstado = "solo_facturar";
+  } else if (pedido.estado === "solo_facturar") {
+   // Se quita Solo Facturar: el pedido vuelve al estado que le corresponde.
+   const conTransporte = c || (tipoModal === "empresa_transporte" && empTrans.trim());
+   nuevoEstado = tipoModal === "paqueteria" ? "paqueteria" : conTransporte ? "en_transito" : "sin_asignar";
+  }
   const fechaDespacho = new Date().toISOString().split("T")[0];
   const debeMarcarDespacho = nuevoEstado === "en_transito" && pedido.estado !== "en_transito" && !pedido.fecha_despacho;
   const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
@@ -180,7 +189,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
    } : {}),
    ...(canEdit ? {
-    estado_despacho: estadoDesp,
+    estado_despacho: estadoDesp === "solo_facturar" ? (pedido.estado_despacho || "despachado") : estadoDesp,
     novedad,
     tipo: tipoModal,
     empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
@@ -196,7 +205,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   // asi que no hace falta recargar las diez tablas ni desmontar la pantalla.
   const { error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select("id").single();
   if (error) { showToast(mensajeError(error, "los cambios del pedido"),"error"); return; }
-  showToast(" Cambios guardados Estado: "+nuevoEstado,"success");
+  showToast(" Cambios guardados Estado: "+(ESTADOS_PEDIDO[nuevoEstado]?.label || nuevoEstado),"success");
   onClose();
  };
 
@@ -369,6 +378,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
        {value:"despachado",label:"Despachado"},
        {value:"bloqueado",label:"Bloqueado Cartera"},
        {value:"novedad_despacho",label:"Despachado con Novedad"},
+       {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
       ]}
       disabled={pedidoBloqueadoEdicion}/>
     )}
