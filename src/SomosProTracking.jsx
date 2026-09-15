@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado } from './utils/files';
 import { mensajeError } from './utils/errors';
+import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
 import { generarPDFSoportes } from './utils/pdf';
 import { Login } from './components/auth/Login';
 import { CargadorFotos } from './components/delivery/CargadorFotos';
@@ -1079,7 +1080,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
    const ciudadOrigen = (ciudades||[]).find(c => c.code === obj.ciudad_origen_codigo);
    const esPaq = obj.tipo === "paqueteria";
    // El sistema origen marca en las notas los registros que no se despachan, solo se facturan.
-   const soloFacturar = /no\s*despachar|solo\s*facturar/i.test(obj.notas || "");
+   const soloFacturar = [obj.notas, obj.paqueteria, obj.guia_paqueteria, obj.empresa_transporte].some(esTextoSoloFacturar);
    return {
     id:      obj.id || `IMP-${Date.now()}-${idx}`,
     guia_interna: null,
@@ -1092,9 +1093,9 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     fecha_estimada:obj.fecha_estimada || null,
     notas:     obj.notas || "",
     tipo:     esPaq?"paqueteria":obj.tipo==="empresa_transporte"?"empresa_transporte":obj.tipo==="mensajeria"?"mensajeria":"propio",
-    empresa_transporte: obj.empresa_transporte || null,
-    paqueteria:  esPaq ? obj.paqueteria : null,
-    guia_paqueteria: esPaq ? obj.guia_paqueteria : null,
+    empresa_transporte: esTextoSoloFacturar(obj.empresa_transporte) ? null : (obj.empresa_transporte || null),
+    paqueteria:  esPaq && !esTextoSoloFacturar(obj.paqueteria) ? obj.paqueteria : null,
+    guia_paqueteria: esPaq && !esTextoSoloFacturar(obj.guia_paqueteria) ? obj.guia_paqueteria : null,
     ciudad_origen_codigo: obj.ciudad_origen_codigo || null,
     ciudad_origen_nombre: ciudadOrigen?.name || obj.ciudad_origen_nombre || null,
     direccion_origen: obj.direccion_origen || null,
@@ -1297,7 +1298,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   <table><thead><tr><th>#</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad / DANE</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Conductor / Paqueteria</th><th>Firma Recibido</th></tr></thead>
   <tbody>${filtrados.map((p, i) => {
    const cond = conductores.find(c => c.id === p.conductor_id);
-   const trans = p.tipo === "paqueteria" ? `${p.paqueteria || ""} ${p.guia_paqueteria || ""}` : (cond ? `${cond.nombre} ${p.placa || ""}` : "Sin asignar");
+   const tr = transportePedido(p, cond);
+   const trans = tr.principal ? `${tr.principal} ${tr.detalle || ""}`.trim() : "Sin asignar";
    return `<tr><td>${i+1}</td><td><strong>${p.guia_interna || p.id}</strong></td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}<br/><small>${p.ciudad_codigo}</small></td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${trans}</td><td></td></tr>`;
   }).join("")}</tbody></table>
   <div class="footer">Somos PRO Tracking Documento generado automaticamente</div></body></html>`);
@@ -1511,11 +1513,12 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
            <td style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>{p.cajas}</td>
            <td style={{ padding:"16px" }}><Badge estado={p.estado} /></td>
            <td style={{ padding:"16px" }}>
-            {p.tipo === "paqueteria" ? (
-             <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></>
-            ) : cond ? (
-             <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond.placa}</div></>
-            ) : <span style={{ color:"#ef4444" }}>Sin asignar</span>}
+            {(() => {
+             const tr = transportePedido(p, cond);
+             if (tr.noAplica) return <span style={{ color:"#9ca3af" }}>No aplica</span>;
+             if (!tr.principal) return <span style={{ color:"#ef4444" }}>Sin asignar</span>;
+             return <><div>{tr.principal}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{tr.detalle}</div></>;
+            })()}
            </td>
            <td style={{ padding:"16px", textAlign:"right" }}>
             <div style={{ display:"inline-flex", gap:8 }}>
@@ -3904,7 +3907,7 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
             <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
             <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
-            <td style={{ padding:"16px" }}>{p.tipo==="paqueteria" ? <><div>{p.paqueteria || "Paqueteria"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.guia_paqueteria}</div></> : cond ? <><div>{cond.nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa}</div></> : <span style={{ color:"#9ca3af" }}>Sin conductor</span>}</td>
+            <td style={{ padding:"16px" }}>{(() => { const tr = transportePedido(p, cond); if (tr.noAplica) return <span style={{ color:"#9ca3af" }}>No aplica</span>; if (!tr.principal) return <span style={{ color:"#9ca3af" }}>Sin conductor</span>; return <><div>{tr.principal}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{tr.detalle}</div></>; })()}</td>
             <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
            </tr>
            {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
