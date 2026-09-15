@@ -372,6 +372,20 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
      </div>
     )}
 
+    {/* El operador no ve el desplegable de despacho (la base le bloquea estado_despacho),
+        pero puede marcar Solo Facturar: guardar() solo cambia el estado del pedido. */}
+    {!canEdit&&canAssign&&(
+     <label style={{display:"flex",alignItems:"center",gap:10,
+      background:estadoDesp==="solo_facturar"?"#f0fdfa":P[50],
+      border:`1px solid ${estadoDesp==="solo_facturar"?"#99f6e4":P[200]}`,
+      borderRadius:10,padding:"10px 14px",fontSize:13,color:P[800],
+      cursor:pedidoBloqueadoEdicion?"not-allowed":"pointer",opacity:pedidoBloqueadoEdicion?0.65:1}}>
+      <input type="checkbox" checked={estadoDesp==="solo_facturar"} disabled={pedidoBloqueadoEdicion}
+       onChange={e=>setEstadoDesp(e.target.checked ? "solo_facturar" : (pedido.estado_despacho||"despachado"))}/>
+      <span><strong>Solo Facturar</strong> <span style={{color:"#64748b"}}>· el pedido no se despacha</span></span>
+     </label>
+    )}
+
     {canEdit&&(
      <Field label="Estado de Despacho" value={estadoDesp} onChange={setEstadoDesp} as="select"
       options={[
