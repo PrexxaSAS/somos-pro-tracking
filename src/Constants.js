@@ -44,7 +44,12 @@ export const ESTADOS_PEDIDO = {
  // Pedidos que solo se facturan (la mercancia ya se entrego). No son despachos
  // pendientes: no cuentan como activos, vencidos ni en riesgo.
  solo_facturar: { label: "Solo Facturar", color: "#0f766e", bg: "#f0fdfa" },
+ cliente_recoge: { label: "Cliente Recoge", color: "#0369a1", bg: "#f0f9ff" },
 };
+
+// Estados que no son despachos pendientes: el pedido no sale con conductor ni
+// transportadora, asi que no cuentan como activos, vencidos ni en riesgo.
+export const ESTADOS_SIN_DESPACHO = ["solo_facturar", "cliente_recoge"];
 
 export const ROLES = {
  admin:     "Administrador",
