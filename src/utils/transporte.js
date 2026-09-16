@@ -1,3 +1,5 @@
+import { ESTADOS_SIN_DESPACHO } from "../Constants";
+
 // "Solo facturar" llego a guardarse como si fuera una transportadora o una guia.
 // No es un transporte real: se trata como vacio al mostrar la columna de conductor.
 export function esTextoSoloFacturar(valor) {
@@ -20,7 +22,7 @@ export function transportePedido(pedido, conductor) {
   if (conductor) {
     return { principal: conductor.nombre, detalle: p.placa || conductor.placa || "", noAplica: false };
   }
-  if (p.estado === "solo_facturar") {
+  if (ESTADOS_SIN_DESPACHO.includes(p.estado)) {
     return { principal: "No aplica", detalle: "", noAplica: true };
   }
   if (p.tipo === "paqueteria") {

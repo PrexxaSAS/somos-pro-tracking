@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ROLES } from './Constants';
+import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
@@ -104,7 +104,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
  const [direccion, setDireccion] = useState(pedido.direccion||"");
  const [cajas,   setCajas]   = useState(numTexto(pedido.cajas));
- const [estadoDesp, setEstadoDesp] = useState(pedido.estado === "solo_facturar" ? "solo_facturar" : (pedido.estado_despacho||"despachado"));
+ const [estadoDesp, setEstadoDesp] = useState(ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : (pedido.estado_despacho||"despachado"));
  const [novedad,  setNovedad]  = useState(pedido.novedad||false);
  const [tipoModal, setTipoModal] = useState(pedido.tipo||"propio");
  const [facturaEdit, setFacturaEdit] = useState(pedido.factura||"");
@@ -156,12 +156,12 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
   if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
   if(tipoModal==="paqueteria") nuevoEstado="paqueteria";
-  // "Solo Facturar" se elige en el desplegable de despacho, pero se guarda como estado
-  // del pedido para que lo reconozcan el badge, el filtro y el dashboard.
-  if (estadoDesp === "solo_facturar") {
-   nuevoEstado = "solo_facturar";
-  } else if (pedido.estado === "solo_facturar") {
-   // Se quita Solo Facturar: el pedido vuelve al estado que le corresponde.
+  // "Solo Facturar" y "Cliente Recoge" se eligen en el desplegable de despacho, pero se
+  // guardan como estado del pedido para que los reconozcan el badge, el filtro y el dashboard.
+  if (ESTADOS_SIN_DESPACHO.includes(estadoDesp)) {
+   nuevoEstado = estadoDesp;
+  } else if (ESTADOS_SIN_DESPACHO.includes(pedido.estado)) {
+   // Se quita: el pedido vuelve al estado que le corresponde.
    const conTransporte = c || (tipoModal === "empresa_transporte" && empTrans.trim());
    nuevoEstado = tipoModal === "paqueteria" ? "paqueteria" : conTransporte ? "en_transito" : "sin_asignar";
   }
@@ -190,7 +190,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
    } : {}),
    ...(canEdit ? {
-    estado_despacho: estadoDesp === "solo_facturar" ? (pedido.estado_despacho || "despachado") : estadoDesp,
+    estado_despacho: ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? (pedido.estado_despacho || "despachado") : estadoDesp,
     novedad,
     tipo: tipoModal,
     empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
@@ -376,15 +376,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     {/* El operador no ve el desplegable de despacho (la base le bloquea estado_despacho),
         pero puede marcar Solo Facturar: guardar() solo cambia el estado del pedido. */}
     {!canEdit&&canAssign&&(
-     <label style={{display:"flex",alignItems:"center",gap:10,
-      background:estadoDesp==="solo_facturar"?"#f0fdfa":P[50],
-      border:`1px solid ${estadoDesp==="solo_facturar"?"#99f6e4":P[200]}`,
-      borderRadius:10,padding:"10px 14px",fontSize:13,color:P[800],
-      cursor:pedidoBloqueadoEdicion?"not-allowed":"pointer",opacity:pedidoBloqueadoEdicion?0.65:1}}>
-      <input type="checkbox" checked={estadoDesp==="solo_facturar"} disabled={pedidoBloqueadoEdicion}
-       onChange={e=>setEstadoDesp(e.target.checked ? "solo_facturar" : (pedido.estado_despacho||"despachado"))}/>
-      <span><strong>Solo Facturar</strong> <span style={{color:"#64748b"}}>· el pedido no se despacha</span></span>
-     </label>
+     <Field label="Marcar pedido" as="select"
+      value={ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp : ""}
+      onChange={v=>setEstadoDesp(v || (pedido.estado_despacho||"despachado"))}
+      options={[
+       {value:"",label:"Normal (se despacha)"},
+       {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
+       {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
+      ]}
+      disabled={pedidoBloqueadoEdicion}/>
     )}
 
     {canEdit&&(
@@ -394,6 +394,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
        {value:"bloqueado",label:"Bloqueado Cartera"},
        {value:"novedad_despacho",label:"Despachado con Novedad"},
        {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
+       {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
       ]}
       disabled={pedidoBloqueadoEdicion}/>
     )}

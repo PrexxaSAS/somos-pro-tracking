@@ -93,6 +93,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
   { key: "entregado", label: "Entregado", color: "#6d42d8" },
   { key: "novedad", label: "Con Novedad", color: "#ef2d2d" },
   { key: "solo_facturar", label: "Solo Facturar", color: "#0f766e" },
+  { key: "cliente_recoge", label: "Cliente Recoge", color: "#0369a1" },
  ];
 
  const stats = [
