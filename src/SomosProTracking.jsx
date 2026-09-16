@@ -3162,7 +3162,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
 
 // ModuloRecogidas 
 
-function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, showToast, user, recargar }) {
+function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -3272,13 +3272,23 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
   if (recargar) await recargar();
  };
 
- const asignar = async (id, condId, novedad) => {
-  const cond = conductores.find(c=>String(c.id)===String(condId));
-  const cambios = { conductor_id:cond?cond.id:null, placa:cond?cond.placa:null,
-   nit_proveedor:cond?cond.nit_proveedor:null,
-   estado:cond?"en_transito":"sin_asignar",
-   novedad:novedad!==undefined?novedad:false };
-  await supabase.from('recogidas').update(cambios).eq('id',id);
+ // Acepta conductor de una empresa transportista o asignacion a una paqueteria,
+ // igual que el modal de pedidos.
+ const asignar = async (id, datos) => {
+  const { conductorId = "", paqueteria = "", guiaPaqueteria = "", novedad = false } = datos || {};
+  const cond = conductores.find(c=>String(c.id)===String(conductorId));
+  const esPaq = Boolean(paqueteria);
+  const cambios = {
+   conductor_id: esPaq ? null : (cond ? cond.id : null),
+   placa: esPaq ? null : (cond ? cond.placa : null),
+   nit_proveedor: esPaq ? null : (cond ? cond.nit_proveedor : null),
+   paqueteria: esPaq ? paqueteria : null,
+   guia_paqueteria: esPaq ? (guiaPaqueteria || null) : null,
+   estado: (esPaq || cond) ? "en_transito" : "sin_asignar",
+   novedad: Boolean(novedad),
+  };
+  const { error } = await supabase.from('recogidas').update(cambios).eq('id',id).select("id").single();
+  if (error) { showToast(mensajeError(error, "la recogida"),"error"); return; }
   if (recargar) await recargar();
  };
 
@@ -3408,6 +3418,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
    {modDet&&(
     <Modal title={`Recogida ${modDet.guia}`} onClose={()=>setModDet(null)} wide>
      <ModalDetalleRC rec={modDet} conductores={conductores} ciudades={ciudades}
+      transportistas={transportistas} paqueterias={paqueterias}
       onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
       showToast={showToast} canEdit={user.rol!=="cliente"}/>
     </Modal>
@@ -3416,14 +3427,34 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
  );
 }
 
-function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntregado, showToast, canEdit }) {
+function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paqueterias = [], onClose, onAsignar, onEntregado, showToast, canEdit }) {
+ const [tipoEnvio, setTipoEnvio] = useState(rec.paqueteria ? "paqueteria" : "empresa_transporte");
+ const [empresa, setEmpresa] = useState(rec.nit_proveedor||"");
  const [condId, setCondId] = useState(rec.conductor_id||"");
+ const [paqSel, setPaqSel] = useState(rec.paqueteria||"");
+ const [guiaPaq, setGuiaPaq] = useState(rec.guia_paqueteria||"");
  const [novedad, setNovedad] = useState(rec.novedad||false);
  const cond = conductores.find(c=>String(c.id)===String(condId||rec.conductor_id||""));
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
+ // Primero se elige la empresa y despues solo se listan SUS conductores.
+ const conductoresEmpresa = empresa ? conductoresActivos.filter(c=>c.nit_proveedor===empresa) : [];
+ const empresasOpciones = (transportistas||[]).filter(e=>e?.nit).map(e=>({value:e.nit,label:e.nombre||e.empresa||e.nit}));
+
+ const cambiarEmpresa = (nit) => { setEmpresa(nit); setCondId(""); };
+ const cambiarTipo = (valor) => {
+  setTipoEnvio(valor);
+  if (valor==="paqueteria") { setEmpresa(""); setCondId(""); }
+  else { setPaqSel(""); setGuiaPaq(""); }
+ };
 
  const guardar = async () => {
-  await onAsignar(rec.id, condId, novedad);
+  if (tipoEnvio==="paqueteria" && !paqSel) { showToast("Selecciona la paqueteria","error"); return; }
+  await onAsignar(rec.id, {
+   conductorId:    tipoEnvio==="paqueteria" ? "" : condId,
+   paqueteria:     tipoEnvio==="paqueteria" ? paqSel : "",
+   guiaPaqueteria: tipoEnvio==="paqueteria" ? guiaPaq : "",
+   novedad,
+  });
   showToast(" Recogida actualizada","success");
   onClose();
  };
@@ -3457,10 +3488,35 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
    <Badge estado={rec.estado}/>
    {canEdit&&rec.estado!=="entregado"&&rec.estado!=="novedad"&&(
     <>
-     {!rec.paqueteria&&(
-      <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-       options={[{value:"",label:"Sin asignar"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} ${c.placa}`}))]}/>
-     )}
+     <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
+       options={[
+        {value:"empresa_transporte",label:" Empresa Transportista"},
+        {value:"paqueteria",label:" Paqueteria Tercero"},
+       ]}/>
+      {tipoEnvio==="paqueteria"?(
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Field label="Paqueteria" value={paqSel} onChange={setPaqSel} as="select"
+         options={[{value:"",label:"Seleccione"},...(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({value:x,label:x}))]}/>
+        <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
+       </div>
+      ):(
+       <>
+        <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
+         options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
+        <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select" disabled={!empresa}
+         options={[
+          {value:"",label:empresa?"Sin asignar":"Selecciona primero la empresa"},
+          ...conductoresEmpresa.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}`}))
+         ]}/>
+        {empresa&&conductoresEmpresa.length===0&&(
+         <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
+          Esa empresa no tiene conductores activos registrados.
+         </p>
+        )}
+       </>
+      )}
+     </div>
      <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
       onClick={()=>setNovedad(!novedad)}>
       <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -3469,7 +3525,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
       <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>Marcar con Novedad</span>
      </div>
      <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
-      {!rec.paqueteria&&<Btn onClick={guardar}> Guardar Conductor</Btn>}
+      <Btn onClick={guardar}> Guardar Asignacion</Btn>
       <Btn variant="success" onClick={marcar}> Marcar Recogida Completada</Btn>
      </div>
     </>
@@ -4332,7 +4388,7 @@ export default function SomosProTracking() {
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={refrescar}/>;
-   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={refrescar}/>;
+   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={refrescar}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
  };
