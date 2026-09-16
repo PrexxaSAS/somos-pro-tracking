@@ -2562,7 +2562,7 @@ function MisDevolucionesConductor({ devoluciones = [], user }) {
         <div style={{ color:"#4b5563", fontSize:13 }}>Factura: <strong>{d.factura}</strong> · Pedido: <strong>{d.pedido_ref}</strong></div>
         <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>Recogida: {d.dir_recogida} · {d.ciudad_nombre}</div>
         <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{d.unidades} uds · {d.volumen_m3} m3 · {d.peso_kg} kg</div>
-        {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Motivo: {d.motivo}</div>}
+        {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>Motivo: {d.motivo}</div>}
        </div>
        {(d.soporte_nombre||d.soporte_data)&&(
         <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
@@ -2603,7 +2603,7 @@ function MisRecogidasConductor({ recogidas = [], user }) {
         <div style={{ color:"#4b5563", fontSize:13 }}>Recogida: <strong>{r.ciudad_recogida_nombre}</strong> · Entrega: <strong>{r.ciudad_entrega_nombre}</strong></div>
         <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>{r.dir_recogida} → {r.dir_entrega}</div>
         <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{r.unidades} uds · {r.volumen_m3} m3 · {r.peso_kg} kg</div>
-        {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>Obs: {r.observaciones}</div>}
+        {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>Obs: {r.observaciones}</div>}
        </div>
        {(r.doc_nombre||r.doc_data)&&(
         <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
@@ -3135,7 +3135,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
       <span> {dev.ciudad_nombre}</span>
       <span> {dev.dir_recogida}</span>
      </div>
-     <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e"}}>
+     <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e",whiteSpace:"pre-wrap"}}>
        Motivo: {dev.motivo}
      </div>
      {(dev.soporte_nombre||dev.soporte_data)&&(
@@ -3453,7 +3453,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
      <span> {rec.unidades} uds {rec.peso_kg} kg</span>
     </div>
     {rec.observaciones&&(
-     <div style={{marginTop:8,padding:"8px 12px",background:"#f8fafc",borderRadius:8,fontSize:13,color:"#334155"}}>
+     <div style={{marginTop:8,padding:"8px 12px",background:"#f8fafc",borderRadius:8,fontSize:13,color:"#334155",whiteSpace:"pre-wrap"}}>
       Observaciones: {rec.observaciones}
      </div>
     )}
@@ -3679,10 +3679,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
             <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850, fontFamily:"monospace" }}>{p.id}</td>
             <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
             <td style={{ padding:"16px", fontWeight:750 }}>{p.pedido_ref}</td>
-            <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{p.descripcion}</div></td>
+            <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>{p.descripcion}</div></td>
             <td style={{ padding:"16px" }}><div>{p.solicitado_por}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.fecha_creacion}</div></td>
             <td style={{ padding:"16px" }}><span style={{ background:est.bg, color:est.color, border:`1px solid ${est.color}40`, borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800, whiteSpace:"nowrap" }}>{est.label}</span></td>
-            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4 }}>{p.respuesta}</div>{(p.soporte_nombre||p.soporte_data)&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoRemoto('pqrs', p.id, 'soporte_data', 'soporte_nombre', `soporte-${p.id}`, showToast)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
+            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4, whiteSpace:"pre-wrap" }}>{p.respuesta}</div>{(p.soporte_nombre||p.soporte_data)&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoRemoto('pqrs', p.id, 'soporte_data', 'soporte_nombre', `soporte-${p.id}`, showToast)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
             <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:null, nombre:"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
            </tr>
           );
