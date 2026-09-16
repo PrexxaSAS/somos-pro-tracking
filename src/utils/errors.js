@@ -28,3 +28,19 @@ export function mensajeError(error, contexto = "operacion") {
 
   return `No se pudo completar ${contexto}: ${raw}`;
 }
+
+// Una Edge Function que responde con error entrega un mensaje generico
+// ("Edge Function returned a non-2xx status code"): el motivo real viaja en el
+// cuerpo de la respuesta. Se lee de ahi y se traduce con mensajeError, para que
+// el usuario vea "Sesion invalida" o "Ese usuario ya existe" en vez de un aviso
+// de configuracion que no le dice nada.
+export async function mensajeErrorFuncion(error, contexto = "la operacion") {
+  let detalle = error?.message;
+  try {
+    const cuerpo = await error?.context?.json?.();
+    if (cuerpo?.error) detalle = cuerpo.error;
+  } catch {
+    // la respuesta no traia JSON: se usa el mensaje generico
+  }
+  return mensajeError(detalle, contexto);
+}

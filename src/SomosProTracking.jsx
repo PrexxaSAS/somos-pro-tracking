@@ -4,7 +4,7 @@ import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado } from './utils/files';
-import { mensajeError } from './utils/errors';
+import { mensajeError, mensajeErrorFuncion } from './utils/errors';
 import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
 import { generarPDFSoportes } from './utils/pdf';
 import { Login } from './components/auth/Login';
@@ -1714,7 +1714,7 @@ function Conductores({ conductores, pedidos, showToast, transportistas, recargar
      empresa: form.empresa.trim(),
     },
    });
-   if (error) { showToast(mensajeError(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
+   if (error) { showToast(await mensajeErrorFuncion(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
    if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
    setModal(false); setForm(vacio);
    showToast("Conductor y usuario creados", "success");
@@ -1836,7 +1836,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
   setGuardando(true);
   try {
    const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'system_user', nombre:formE.nombre.trim(), rol:'transportista', user_login:formE.user_login.trim(), pass_login:formE.pass_login.trim(), nit:formE.nit.trim(), empresa:formE.nombre.trim() } });
-   if (error) { showToast(mensajeError(error, "la empresa transportista"), "error"); setGuardando(false); return; }
+   if (error) { showToast(await mensajeErrorFuncion(error, "la empresa transportista"), "error"); setGuardando(false); return; }
    if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
    const { error: tErr } = await supabase.from('transportistas').update({ contacto:formE.contacto.trim(), tel:formE.tel.trim() }).eq('nit', formE.nit.trim());
    if (tErr) { showToast("Empresa creada, pero fallo contacto: " + tErr.message, "warning"); setGuardando(false); return; }
@@ -1857,7 +1857,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
    if (uLoadErr) { showToast(mensajeError(uLoadErr, "el usuario transportista"), "error"); setGuardando(false); return; }
    if (usuarioEmp.auth_user_id || formE.pass_login.trim()) {
     const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'update_system_user', user_id:modEditEmp.usuario_id, nombre:formE.nombre.trim(), rol:'transportista', user_login:usuarioEmp.user, pass_login:formE.pass_login.trim(), nit:modEditEmp.nit, empresa:formE.nombre.trim() } });
-    if (error) { showToast(mensajeError(error, "el acceso transportista"), "error"); setGuardando(false); return; }
+    if (error) { showToast(await mensajeErrorFuncion(error, "el acceso transportista"), "error"); setGuardando(false); return; }
     if (data?.error) { showToast("Error actualizando acceso: " + data.error, "error"); setGuardando(false); return; }
    }
   }
@@ -1875,7 +1875,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
   setGuardando(true);
   try {
    const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'conductor', nombre:formC.nombre.trim(), cedula:formC.cedula.trim(), placa:formC.placa.trim(), celular:formC.celular.trim(), user_login:formC.user_login.trim(), pass_login:formC.pass_login.trim(), nit_proveedor:emp.nit, empresa:emp.nombre } });
-   if (error) { showToast(mensajeError(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
+   if (error) { showToast(await mensajeErrorFuncion(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
    if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
    setModCond(null); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
    showToast(`Conductor inscrito en ${emp.nombre}`, "success");
@@ -4118,6 +4118,22 @@ export default function SomosProTracking() {
  // desmontar la interfaz y hacerle perder al usuario modales, formularios y filtros.
  const refrescar = () => cargarTodo(user, { silencioso: true });
 
+ // Refresco dirigido del modulo de Usuarios: crear, editar o eliminar un usuario no
+ // necesita recargar las diez tablas (con miles de pedidos), que era lo que hacia que
+ // el usuario eliminado tardara en desaparecer. Se recargan solo las tres tablas que
+ // ese flujo puede cambiar: un usuario con rol conductor o transportista tambien crea
+ // o desvincula filas en conductores y transportistas.
+ const recargarUsuarios = async () => {
+  const [usuRes, conRes, traRes] = await Promise.all([
+   supabase.from('usuarios').select('*').order('created_at'),
+   supabase.from('conductores').select('*').order('created_at'),
+   supabase.from('transportistas').select('*').order('created_at'),
+  ]);
+  if (!usuRes.error && usuRes.data) setUsuarios(usuRes.data);
+  if (!conRes.error && conRes.data) setConductores(conRes.data);
+  if (!traRes.error && traRes.data) setTransportistas(traRes.data);
+ };
+
  const showToastYRecargar = async (msg, type = "success") => {
   showToast(msg, type);
   await refrescar();
@@ -4314,7 +4330,7 @@ export default function SomosProTracking() {
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={refrescar}/>;
-   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={refrescar}/>;
+   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
