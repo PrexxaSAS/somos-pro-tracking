@@ -2,7 +2,7 @@
 import { P, ROLES } from '../../Constants';
 import { Btn, Card, Field, Modal } from '../../Subcomponentes';
 import { supabase } from '../../supabase';
-import { mensajeError } from '../../utils/errors';
+import { mensajeErrorFuncion } from '../../utils/errors';
 
 export function Usuarios({ usuarios, transportistas = [], showToast, recargar }) {
  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
@@ -50,7 +50,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
     nit_proveedor: form.nit_proveedor.trim(),
    },
   });
-  if (error) { showToast(mensajeError(error, "el acceso"),"error"); setGuardando(false); return; }
+  if (error) { showToast(await mensajeErrorFuncion(error, "el acceso"),"error"); setGuardando(false); return; }
   if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
   setModal(false); setForm(vacio);
   showToast(" Usuario creado","success");
@@ -85,16 +85,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
     nit_proveedor: form.nit_proveedor.trim(),
    },
   });
-  if (error) {
-   let detalle = error.message;
-   try {
-    const body = await error.context?.json?.();
-    if (body?.error) detalle = body.error;
-   } catch {}
-   showToast(mensajeError(detalle, "el usuario"),"error");
-   setGuardando(false);
-   return;
-  }
+  if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); setGuardando(false); return; }
   if (data?.error) { showToast("Error actualizando usuario: "+data.error,"error"); setGuardando(false); return; }
   setModEditar(null);
   showToast(form.pass.trim()?" Usuario y contrasea actualizados":" Usuario actualizado","success");
@@ -110,15 +101,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
     user_id: uid,
    },
   });
-  if (error) {
-   let detalle = error.message;
-   try {
-    const body = await error.context?.json?.();
-    if (body?.error) detalle = body.error;
-   } catch {}
-   showToast(mensajeError(detalle, "el usuario"),"error");
-   return;
-  }
+  if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); return; }
   if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); return; }
   showToast("Usuario eliminado","info");
   if (recargar) await recargar();
