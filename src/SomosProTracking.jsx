@@ -4118,6 +4118,22 @@ export default function SomosProTracking() {
  // desmontar la interfaz y hacerle perder al usuario modales, formularios y filtros.
  const refrescar = () => cargarTodo(user, { silencioso: true });
 
+ // Refresco dirigido del modulo de Usuarios: crear, editar o eliminar un usuario no
+ // necesita recargar las diez tablas (con miles de pedidos), que era lo que hacia que
+ // el usuario eliminado tardara en desaparecer. Se recargan solo las tres tablas que
+ // ese flujo puede cambiar: un usuario con rol conductor o transportista tambien crea
+ // o desvincula filas en conductores y transportistas.
+ const recargarUsuarios = async () => {
+  const [usuRes, conRes, traRes] = await Promise.all([
+   supabase.from('usuarios').select('*').order('created_at'),
+   supabase.from('conductores').select('*').order('created_at'),
+   supabase.from('transportistas').select('*').order('created_at'),
+  ]);
+  if (!usuRes.error && usuRes.data) setUsuarios(usuRes.data);
+  if (!conRes.error && conRes.data) setConductores(conRes.data);
+  if (!traRes.error && traRes.data) setTransportistas(traRes.data);
+ };
+
  const showToastYRecargar = async (msg, type = "success") => {
   showToast(msg, type);
   await refrescar();
@@ -4314,7 +4330,7 @@ export default function SomosProTracking() {
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={refrescar}/>;
-   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={refrescar}/>;
+   case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;

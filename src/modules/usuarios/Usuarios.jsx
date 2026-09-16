@@ -10,6 +10,8 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  const [modEditar, setModEditar] = useState(null);
  const [form,   setForm]   = useState(vacio);
  const [guardando, setGuardando] = useState(false);
+ const [eliminando, setEliminando] = useState(null);
+ const [ocultos,  setOcultos]  = useState([]);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const roleColors = {admin:P[600],operador:P[400],transportista:"#0891b2",conductor:"#059669",cliente:"#d97706"};
  const border = "#e5e7eb";
@@ -95,14 +97,18 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  const eliminar = async (uid, uname) => {
   if (uname==="admin") { showToast("No se puede eliminar el admin principal","error"); return; }
   if (!window.confirm("Eliminar este usuario?")) return;
+  setEliminando(uid);
   const { data, error } = await supabase.functions.invoke('create-system-user', {
    body: {
     type: "delete_system_user",
     user_id: uid,
    },
   });
-  if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); return; }
-  if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); return; }
+  if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); setEliminando(null); return; }
+  if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); setEliminando(null); return; }
+  // La tarjeta desaparece de inmediato; el refresco ocurre despues sin hacer esperar.
+  setOcultos(prev=>[...prev, uid]);
+  setEliminando(null);
   showToast("Usuario eliminado","info");
   if (recargar) await recargar();
  };
@@ -167,7 +173,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
      ))}
     </section>
     <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-    {usuarios.map(u=>(
+    {usuarios.filter(u=>!ocultos.includes(u.id)).map(u=>(
      <article key={u.id} style={{ ...cardStyle, padding:18, borderTop:`3px solid ${roleColors[u.rol]||P[400]}` }}>
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
        <div style={{width:42,height:42,borderRadius:14,background:`${roleColors[u.rol] || "#6d42d8"}18`,display:"flex",alignItems:"center",justifyContent:"center",color:roleColors[u.rol] || "#6d42d8",fontWeight:900,fontSize:16}}>
@@ -186,7 +192,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
       {u.empresa&&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>{u.empresa}</p>}
       <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
        <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditar(u)}>Editar</button>
-       {u.user!=="admin"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>eliminar(u.id,u.user)}>Eliminar</button>}
+       {u.user!=="admin"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626", opacity:eliminando===u.id?0.6:1, cursor:eliminando===u.id?"not-allowed":"pointer" }} disabled={eliminando===u.id} onClick={()=>eliminar(u.id,u.user)}>{eliminando===u.id?"Eliminando...":"Eliminar"}</button>}
       </div>
      </article>
     ))}
