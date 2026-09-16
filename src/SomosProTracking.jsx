@@ -3257,6 +3257,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
    placa: cond?cond.placa:null,
    nit_proveedor: cond?cond.nit_proveedor:null,
    estado: cond?"en_transito":"sin_asignar",
+   tipo: form.tipo_envio==="conductor" ? "propio" : (form.tipo_envio||"propio"),
    paqueteria: form.tipo_envio==="paqueteria"?form.paqueteria:null,
    guia_paqueteria: form.tipo_envio==="paqueteria"?form.guia_paqueteria:null,
    doc_data: form.doc_data,
@@ -3275,13 +3276,14 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
  // Acepta conductor de una empresa transportista o asignacion a una paqueteria,
  // igual que el modal de pedidos.
  const asignar = async (id, datos) => {
-  const { conductorId = "", paqueteria = "", guiaPaqueteria = "", novedad = false } = datos || {};
+  const { tipo = "propio", conductorId = "", paqueteria = "", guiaPaqueteria = "", novedad = false } = datos || {};
   const cond = conductores.find(c=>String(c.id)===String(conductorId));
   const esPaq = Boolean(paqueteria);
   const cambios = {
    conductor_id: esPaq ? null : (cond ? cond.id : null),
    placa: esPaq ? null : (cond ? cond.placa : null),
    nit_proveedor: esPaq ? null : (cond ? cond.nit_proveedor : null),
+   tipo: esPaq ? "paqueteria" : tipo,
    paqueteria: esPaq ? paqueteria : null,
    guia_paqueteria: esPaq ? (guiaPaqueteria || null) : null,
    estado: (esPaq || cond) ? "en_transito" : "sin_asignar",
@@ -3428,7 +3430,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
 }
 
 function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paqueterias = [], onClose, onAsignar, onEntregado, showToast, canEdit }) {
- const [tipoEnvio, setTipoEnvio] = useState(rec.paqueteria ? "paqueteria" : "empresa_transporte");
+ const [tipoEnvio, setTipoEnvio] = useState(rec.tipo || (rec.paqueteria ? "paqueteria" : "propio"));
  const [empresa, setEmpresa] = useState(rec.nit_proveedor||"");
  const [condId, setCondId] = useState(rec.conductor_id||"");
  const [paqSel, setPaqSel] = useState(rec.paqueteria||"");
@@ -3436,20 +3438,24 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
  const [novedad, setNovedad] = useState(rec.novedad||false);
  const cond = conductores.find(c=>String(c.id)===String(condId||rec.conductor_id||""));
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
- // Primero se elige la empresa y despues solo se listan SUS conductores.
- const conductoresEmpresa = empresa ? conductoresActivos.filter(c=>c.nit_proveedor===empresa) : [];
+ // Con empresa transportista: primero la empresa y despues solo SUS conductores.
+ // Con transporte propio o mensajeria: todos los conductores activos.
+ const conductoresElegibles = tipoEnvio==="empresa_transporte"
+  ? (empresa ? conductoresActivos.filter(c=>c.nit_proveedor===empresa) : [])
+  : conductoresActivos;
  const empresasOpciones = (transportistas||[]).filter(e=>e?.nit).map(e=>({value:e.nit,label:e.nombre||e.empresa||e.nit}));
 
  const cambiarEmpresa = (nit) => { setEmpresa(nit); setCondId(""); };
  const cambiarTipo = (valor) => {
   setTipoEnvio(valor);
   if (valor==="paqueteria") { setEmpresa(""); setCondId(""); }
-  else { setPaqSel(""); setGuiaPaq(""); }
+  else { setPaqSel(""); setGuiaPaq(""); if (valor!=="empresa_transporte") setEmpresa(""); }
  };
 
  const guardar = async () => {
   if (tipoEnvio==="paqueteria" && !paqSel) { showToast("Selecciona la paqueteria","error"); return; }
   await onAsignar(rec.id, {
+   tipo:           tipoEnvio,
    conductorId:    tipoEnvio==="paqueteria" ? "" : condId,
    paqueteria:     tipoEnvio==="paqueteria" ? paqSel : "",
    guiaPaqueteria: tipoEnvio==="paqueteria" ? guiaPaq : "",
@@ -3491,7 +3497,9 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
      <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
        options={[
+        {value:"propio",label:" Transporte Propio"},
         {value:"empresa_transporte",label:" Empresa Transportista"},
+        {value:"mensajeria",label:" Mensajeria"},
         {value:"paqueteria",label:" Paqueteria Tercero"},
        ]}/>
       {tipoEnvio==="paqueteria"?(
@@ -3502,14 +3510,17 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
        </div>
       ):(
        <>
-        <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
-         options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
-        <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select" disabled={!empresa}
+        {tipoEnvio==="empresa_transporte"&&(
+         <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
+          options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
+        )}
+        <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
+         disabled={tipoEnvio==="empresa_transporte" && !empresa}
          options={[
-          {value:"",label:empresa?"Sin asignar":"Selecciona primero la empresa"},
-          ...conductoresEmpresa.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}`}))
+          {value:"",label:(tipoEnvio==="empresa_transporte"&&!empresa)?"Selecciona primero la empresa":"Sin asignar"},
+          ...conductoresElegibles.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}${c.empresa?" - "+c.empresa:""}`}))
          ]}/>
-        {empresa&&conductoresEmpresa.length===0&&(
+        {tipoEnvio==="empresa_transporte"&&empresa&&conductoresElegibles.length===0&&(
          <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
           Esa empresa no tiene conductores activos registrados.
          </p>
@@ -4070,7 +4081,7 @@ export default function SomosProTracking() {
     "id","guia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
     "dir_entrega","ciudad_entrega_cod","ciudad_entrega_nombre","unidades",
     "volumen_m3","peso_kg","observaciones","conductor_id","placa","nit_proveedor",
-    "estado","novedad","paqueteria","guia_paqueteria","doc_nombre",
+    "estado","novedad","tipo","paqueteria","guia_paqueteria","doc_nombre",
     "fecha_creacion","fecha_real","solicitado_por","created_at",
    ].join(",");
    const pqrsSelect = [
