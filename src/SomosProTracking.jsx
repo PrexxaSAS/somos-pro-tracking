@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
-import { generarGuia, generarGuiaDV, generarGuiaRC } from './utils/guides';
+import { generarGuia } from './utils/guides';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado } from './utils/files';
 import { mensajeError, mensajeErrorFuncion } from './utils/errors';
 import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
@@ -2899,7 +2899,8 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
   for (const k of req) {
    if (!form[k].toString().trim()) { showToast("Todos los campos son obligatorios","error"); return; }
   }
-  const guia = generarGuiaDV(devoluciones);
+  // La guia la asigna la base: el cliente solo ve sus propias solicitudes y
+  // calcularla aqui producia numeros repetidos.
   const ciudad = (ciudades||[]).find(c=>c.code===form.ciudad_codigo);
   const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
   if (modEditar) {
@@ -2922,7 +2923,6 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    return;
   }
   const nueva = {
-   id: guia, guia,
    factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
    unidades: parseInt(form.unidades)||0,
    volumen_m3: parseFloat(form.volumen_m3)||0,
@@ -2943,10 +2943,10 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    fecha_real: null, novedad: false,
    solicitado_por: user.nombre||user.user,
   };
-  const { error: devErr } = await supabase.from('devoluciones').insert(nueva);
+  const { data: creada, error: devErr } = await supabase.from('devoluciones').insert(nueva).select("id,guia").single();
   if (devErr) { showToast(mensajeError(devErr, "la devolucion"),"error"); return; }
   setModNueva(false); setForm(vacio);
-  showToast(` Devolucion creada Guia: ${guia}`,"success");
+  showToast(` Devolucion creada Guia: ${creada?.guia || ""}`,"success");
   if (recargar) await recargar();
  };
 
@@ -3226,7 +3226,8 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
   for (const k of req) {
    if (!form[k].toString().trim()) { showToast("Todos los campos son obligatorios","error"); return; }
   }
-  const guia = generarGuiaRC(recogidas);
+  // La guia la asigna la base: el cliente solo ve sus propias solicitudes y
+  // calcularla aqui producia numeros repetidos.
   const crec = (ciudades||[]).find(c=>c.code===form.ciudad_recogida_cod);
   const cent = (ciudades||[]).find(c=>c.code===form.ciudad_entrega_cod);
   const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
@@ -3252,7 +3253,6 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
    return;
   }
   const nueva = {
-   id: guia, guia,
    dir_recogida: form.dir_recogida.trim(),
    ciudad_recogida_cod: form.ciudad_recogida_cod,
    ciudad_recogida_nombre: crec?.name||"",
@@ -3275,10 +3275,10 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, sho
    fecha_real: null, novedad: false,
    solicitado_por: user.nombre||user.user,
   };
-  const { error: recErr } = await supabase.from('recogidas').insert(nueva);
+  const { data: creada, error: recErr } = await supabase.from('recogidas').insert(nueva).select("id,guia").single();
   if (recErr) { showToast(mensajeError(recErr, "la recogida"),"error"); return; }
   setModNueva(false); setForm(vacio);
-  showToast(` Recogida creada Guia: ${guia}`,"success");
+  showToast(` Recogida creada Guia: ${creada?.guia || ""}`,"success");
   if (recargar) await recargar();
  };
 
