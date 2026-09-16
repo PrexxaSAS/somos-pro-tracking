@@ -4,6 +4,27 @@ export function descargarCSV(nombre,cabecera,ejemplo){
   const a=document.createElement("a");a.href=url;a.download=nombre;a.click();URL.revokeObjectURL(url);
 }
 
+// Los planos se exportan a veces en ANSI (Windows-1252). Leerlos como UTF-8 dana
+// las tildes y la enie: aparecen textos como "V?A AL MAGDALENA". Se intenta UTF-8
+// estricto y, si el archivo no lo es, se relee como Windows-1252.
+export function leerTextoCsv(file){
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onerror = () => reject(new Error("Error leyendo el archivo."));
+    lector.onload = () => {
+      const bytes = new Uint8Array(lector.result);
+      let texto;
+      try {
+        texto = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      } catch {
+        texto = new TextDecoder("windows-1252").decode(bytes);
+      }
+      resolve(texto.replace(/^\uFEFF/, ""));
+    };
+    lector.readAsArrayBuffer(file);
+  });
+}
+
 export function fileToBase64(file){
   return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
 }

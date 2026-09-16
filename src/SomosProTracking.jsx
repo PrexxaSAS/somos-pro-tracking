@@ -3,7 +3,7 @@ import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROL
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia } from './utils/guides';
-import { descargarCSV, fileToBase64, abrirArchivoGuardado } from './utils/files';
+import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv } from './utils/files';
 import { mensajeError, mensajeErrorFuncion } from './utils/errors';
 import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
 import { generarPDFSoportes } from './utils/pdf';
@@ -671,29 +671,24 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
  };
 
  // Leer archivo 
- const leerArchivo = (file) => {
+ const leerArchivo = async (file) => {
   if (!file) return;
   setArchivo(file.name); setErr(""); setMatches([]); setErrores([]); setResueltos([]); setResultado(null);
   setCargando(true);
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-   try {
-    const rows = parsear(e.target.result);
-    // Se consulta la base directamente: la lista en memoria puede no incluir los
-    // pedidos antiguos y los reportaria como "No encontrados" sin serlo.
-    const pedidosPorId = await buscarPedidosPorId(
-     rows.map(r => r.pedidoId),
-     "id,cliente,estado,tipo,paqueteria,guia_paqueteria,fecha_estimada,fecha_real,ciudad_codigo,ciudad_nombre,direccion,cajas,factura"
-    );
-    const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows, pedidosPorId);
-    setMatches(lista);
-    setErrores(conflictos);
-    setResueltos(resueltosCsv);
-   } catch(ex) { setErr(ex.message); }
-   setCargando(false);
-  };
-  reader.onerror = () => { setErr("Error leyendo el archivo."); setCargando(false); };
-  reader.readAsText(file, "UTF-8");
+  try {
+   const rows = parsear(await leerTextoCsv(file));
+   // Se consulta la base directamente: la lista en memoria puede no incluir los
+   // pedidos antiguos y los reportaria como "No encontrados" sin serlo.
+   const pedidosPorId = await buscarPedidosPorId(
+    rows.map(r => r.pedidoId),
+    "id,cliente,estado,tipo,paqueteria,guia_paqueteria,fecha_estimada,fecha_real,ciudad_codigo,ciudad_nombre,direccion,cajas,factura"
+   );
+   const { lista, conflictos, resueltos: resueltosCsv } = procesar(rows, pedidosPorId);
+   setMatches(lista);
+   setErrores(conflictos);
+   setResueltos(resueltosCsv);
+  } catch(ex) { setErr(ex.message); }
+  setCargando(false);
  };
 
  // Aplicar 
@@ -1006,22 +1001,18 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
 
 
  // Leer archivo CSV desde el disco
- const leerArchivo = (file) => {
+ const leerArchivo = async (file) => {
   if (!file) return;
   if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
    setErr("Solo se aceptan archivos .CSV"); return;
   }
   setNombreArchivo(file.name);
-  const reader = new FileReader();
-  reader.onload = (e) => {
-   const texto = e.target.result;
+  try {
+   const texto = await leerTextoCsv(file);
    setTxt(texto);
    setErr("");
-   // Auto-previsualizar
-   try { setPrev(parsear(texto)); }
-   catch(ex) { setErr(ex.message); setPrev([]); }
-  };
-  reader.readAsText(file, 'UTF-8');
+   setPrev(parsear(texto));
+  } catch(ex) { setErr(ex.message); setPrev([]); }
  };
 
  const parsear = (texto) => {
@@ -1228,7 +1219,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    (p.guia_interna || "").toLowerCase().includes(q) ||
    (p.cliente || "").toLowerCase().includes(q) ||
    (p.factura || "").toLowerCase().includes(q) ||
-   (p.ciudad_nombre || "").toLowerCase().includes(q);
+   (p.ciudad_nombre || "").toLowerCase().includes(q) ||
+   (p.guia_paqueteria || "").toLowerCase().includes(q);
   return okF && okB;
  });
  const totalCajas = filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
@@ -2226,17 +2218,15 @@ function ModalCSVCiudades({ onClose, onImportar }) {
  const CABECERA = "code,name";
  const EJEMPLO = "05001,Medelln\n76001,Cali\n11001,Bogot D.C.";
 
- const leerArchivo = (file) => {
+ const leerArchivo = async (file) => {
   if (!file) return;
   setNombreArchivo(file.name);
-  const reader = new FileReader();
-  reader.onload = (e) => {
-   const texto = e.target.result;
+  try {
+   const texto = await leerTextoCsv(file);
    setTxt(texto);
-   try { setPrev(parsear(texto)); setErr(""); }
-   catch(ex) { setErr(ex.message); setPrev([]); }
-  };
-  reader.readAsText(file, "UTF-8");
+   setPrev(parsear(texto));
+   setErr("");
+  } catch(ex) { setErr(ex.message); setPrev([]); }
  };
 
  const parsear = (texto) => {
@@ -3827,7 +3817,8 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
    (p.cliente || "").toLowerCase().includes(q) ||
    (p.factura || "").toLowerCase().includes(q) ||
    (p.ciudad_nombre || "").toLowerCase().includes(q) ||
-   (p.guia_interna || "").toLowerCase().includes(q);
+   (p.guia_interna || "").toLowerCase().includes(q) ||
+   (p.guia_paqueteria || "").toLowerCase().includes(q);
  });
  const pageItems = filtP.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
