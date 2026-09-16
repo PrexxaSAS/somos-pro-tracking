@@ -1080,8 +1080,6 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
    const ciudad = codigoCiudad ? (ciudades||[]).find(c => c.code === codigoCiudad) : null;
    const ciudadOrigen = (ciudades||[]).find(c => c.code === obj.ciudad_origen_codigo);
    const esPaq = obj.tipo === "paqueteria";
-   // El sistema origen marca en las notas los registros que no se despachan, solo se facturan.
-   const soloFacturar = [obj.notas, obj.paqueteria, obj.guia_paqueteria, obj.empresa_transporte].some(esTextoSoloFacturar);
    return {
     id:      obj.id || `IMP-${Date.now()}-${idx}`,
     guia_interna: null,
@@ -1101,7 +1099,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     ciudad_origen_nombre: ciudadOrigen?.name || obj.ciudad_origen_nombre || null,
     direccion_origen: obj.direccion_origen || null,
     conductor_id: null, placa: null, nit_proveedor: null,
-   estado:    soloFacturar ? "solo_facturar" : esPaq ? "paqueteria" : "sin_asignar",
+   estado:    esPaq ? "paqueteria" : "sin_asignar",
    estado_despacho: "despachado", novedad: false,
    fecha_creacion: new Date().toISOString().split("T")[0],
    fecha_real: null, soportes: [], soportes_data: [],
@@ -1181,7 +1179,6 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
       {prev.map((p,i) => (
        <div key={i} style={{ fontSize:12, color:"#334155", padding:"2px 0", borderBottom:"1px solid #dcfce7" }}>
         <strong>{p.id}</strong> {p.cliente} {p.ciudad_nombre} {p.cajas} cajas {p.factura}
-        {p.estado === "solo_facturar" && <span style={{ color:"#0f766e", fontWeight:700 }}> · Solo facturar</span>}
        </div>
       ))}
      </div>
