@@ -3452,6 +3452,11 @@ function ModalDetalleRC({ rec, conductores, ciudades, onClose, onAsignar, onEntr
      <span> Entrega: {rec.ciudad_entrega_nombre}</span>
      <span> {rec.unidades} uds {rec.peso_kg} kg</span>
     </div>
+    {rec.observaciones&&(
+     <div style={{marginTop:8,padding:"8px 12px",background:"#f8fafc",borderRadius:8,fontSize:13,color:"#334155"}}>
+      Observaciones: {rec.observaciones}
+     </div>
+    )}
     {(rec.doc_nombre||rec.doc_data)&&(
      <Btn size="sm" variant="success" style={{marginTop:10}}
       onClick={()=>abrirArchivoRemoto('recogidas', rec.id, 'doc_data', 'doc_nombre', `documento-${rec.guia}`, showToast)}>
