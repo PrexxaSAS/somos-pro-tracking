@@ -38,6 +38,62 @@ function esVacio(v) {
 // veia los 1000 pedidos mas recientes: la lista y el dashboard quedaban incompletos
 // y el cargue de guias marcaba pedidos antiguos como "No encontrados".
 // Se pagina hasta recibir una pagina vacia, asi no depende del limite del proyecto.
+// Listas de columnas de las consultas. Se excluyen las columnas base64
+// (soportes_data, soporte_data, doc_data) que disparaban el egress: se descargan
+// solo al abrir cada archivo. Estan a nivel de modulo para que los refrescos
+// dirigidos pidan exactamente lo mismo que la carga inicial.
+const COLUMNAS_PEDIDOS_CLIENTE = [
+ "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
+ "factura","conductor_id","placa","estado","estado_despacho","novedad","fecha_creacion",
+ "fecha_estimada","fecha_real","tipo","paqueteria","guia_paqueteria","soportes",
+ "ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","created_at",
+].join(",");
+const COLUMNAS_PEDIDOS = [
+ "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
+ "factura","conductor_id","placa","nit_proveedor","estado","estado_despacho","novedad",
+ "fecha_creacion","fecha_estimada","fecha_real","fecha_despacho","tipo","empresa_transporte",
+ "paqueteria","guia_paqueteria","soportes","notas","ciudad_origen_codigo",
+ "ciudad_origen_nombre","direccion_origen","created_at",
+].join(",");
+const COLUMNAS_DEVOLUCIONES = [
+ "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
+ "dir_recogida","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
+ "placa","nit_proveedor","estado","novedad","tipo","paqueteria","guia_paqueteria",
+ "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
+].join(",");
+const COLUMNAS_RECOGIDAS = [
+ "id","guia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
+ "dir_entrega","ciudad_entrega_cod","ciudad_entrega_nombre","unidades",
+ "volumen_m3","peso_kg","observaciones","conductor_id","placa","nit_proveedor",
+ "estado","novedad","tipo","paqueteria","guia_paqueteria","doc_nombre",
+ "fecha_creacion","fecha_real","solicitado_por","created_at",
+].join(",");
+const COLUMNAS_PQRS = [
+ "id","factura","pedido_ref","motivo","descripcion","estado","solicitado_por",
+ "gestionado_por","respuesta","fecha_creacion","fecha_gestion",
+ "soporte_nombre","created_at",
+].join(",");
+
+// El cliente ve menos columnas que el personal interno.
+const columnasPedidos = (rol) => rol === "cliente" ? COLUMNAS_PEDIDOS_CLIENTE : COLUMNAS_PEDIDOS;
+
+// Facturas con sus guias. Se consulta en dos pasos porque el join anidado de
+// PostgREST no funciona con las politicas RLS actuales.
+async function obtenerFacturasConGuias() {
+ const { data: facturas, error } = await supabase
+  .from('facturas_proveedor').select('*').order('created_at', { ascending: false });
+ if (error) throw error;
+ const { data: guias } = await supabase
+  .from('factura_guias')
+  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)');
+ const porFactura = {};
+ (guias || []).forEach(g => {
+  if (!porFactura[g.factura_id]) porFactura[g.factura_id] = [];
+  porFactura[g.factura_id].push(g);
+ });
+ return (facturas || []).map(f => ({ ...f, factura_guias: porFactura[f.id] || [] }));
+}
+
 async function cargarTodosLosPedidos(columnas) {
  const PAGINA = 1000;
  const filas = [];
@@ -247,7 +303,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   } catch(e) {
    showToast("Error de conexion al guardar soportes. Revisa tu internet.", "error");
   }
-  if(window._recargar) await window._recargar();
+  const refrescarPedidos = window._recargarPedidos || window._recargar;
+  if (refrescarPedidos) await refrescarPedidos();
   setVerCamara(false);
   onClose();
  };
@@ -4079,83 +4136,10 @@ export default function SomosProTracking() {
   try {
    const rolActual = perfil?.rol;
    const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
-   // Listas livianas: se excluyen las columnas base64 (soportes_data, soporte_data,
-   // doc_data) que disparaban el egress; se descargan solo al abrir cada archivo.
-   const pedidosSelectCliente = [
-    "id",
-    "guia_interna",
-    "cliente",
-    "ciudad_codigo",
-    "ciudad_nombre",
-    "direccion",
-    "cajas",
-    "factura",
-    "conductor_id",
-    "placa",
-    "estado",
-    "estado_despacho",
-    "novedad",
-    "fecha_creacion",
-    "fecha_estimada",
-    "fecha_real",
-    "tipo",
-    "paqueteria",
-    "guia_paqueteria",
-    "soportes",
-    "ciudad_origen_codigo",
-    "ciudad_origen_nombre",
-    "direccion_origen",
-    "created_at",
-   ].join(",");
-   const pedidosSelectCompleto = [
-    "id",
-    "guia_interna",
-    "cliente",
-    "ciudad_codigo",
-    "ciudad_nombre",
-    "direccion",
-    "cajas",
-    "factura",
-    "conductor_id",
-    "placa",
-    "nit_proveedor",
-    "estado",
-    "estado_despacho",
-    "novedad",
-    "fecha_creacion",
-    "fecha_estimada",
-    "fecha_real",
-    "fecha_despacho",
-    "tipo",
-    "empresa_transporte",
-    "paqueteria",
-    "guia_paqueteria",
-    "soportes",
-    "notas",
-    "ciudad_origen_codigo",
-    "ciudad_origen_nombre",
-    "direccion_origen",
-    "created_at",
-   ].join(",");
-   const pedidosSelect = rolActual === "cliente" ? pedidosSelectCliente : pedidosSelectCompleto;
-   const devolucionesSelect = [
-    "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
-    "dir_recogida","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
-    "placa","nit_proveedor","estado","novedad","tipo","paqueteria","guia_paqueteria",
-    "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
-   ].join(",");
-   const recogidasSelect = [
-    "id","guia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
-    "dir_entrega","ciudad_entrega_cod","ciudad_entrega_nombre","unidades",
-    "volumen_m3","peso_kg","observaciones","conductor_id","placa","nit_proveedor",
-    "estado","novedad","tipo","paqueteria","guia_paqueteria","doc_nombre",
-    "fecha_creacion","fecha_real","solicitado_por","created_at",
-   ].join(",");
-   const pqrsSelect = [
-    "id","factura","pedido_ref","motivo","descripcion","estado","solicitado_por",
-    "gestionado_por","respuesta","fecha_creacion","fecha_gestion",
-    "soporte_nombre","created_at",
-   ].join(",");
+   const pedidosSelect = columnasPedidos(rolActual);
+   const devolucionesSelect = COLUMNAS_DEVOLUCIONES;
+   const recogidasSelect = COLUMNAS_RECOGIDAS;
+   const pqrsSelect = COLUMNAS_PQRS;
 
    const [
     usuRes, traRes, conRes,
@@ -4208,29 +4192,8 @@ export default function SomosProTracking() {
    setPromesas(prom || []);
    // Cargar facturas por separado - sin join anidado
    if (puedeVerFacturas) {
-    try {
-     const { data: factData, error: factErr } = await supabase
-      .from('facturas_proveedor')
-      .select('*')
-      .order('created_at', { ascending: false });
-     if (factErr) { setFacturas([]); }
-     else {
-      // Load factura_guias separately and merge
-      const { data: guiasData } = await supabase
-       .from('factura_guias')
-       .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)');
-      const guiasByFact = {};
-      (guiasData||[]).forEach(g => {
-       if (!guiasByFact[g.factura_id]) guiasByFact[g.factura_id] = [];
-       guiasByFact[g.factura_id].push(g);
-      });
-      const merged = (factData||[]).map(f => ({
-       ...f,
-       factura_guias: guiasByFact[f.id] || [],
-      }));
-      setFacturas(merged);
-     }
-    } catch(e) { console.error('facturas load error:', e); setFacturas([]); }
+    try { setFacturas(await obtenerFacturasConGuias()); }
+    catch(e) { console.error('facturas load error:', e); setFacturas([]); }
    } else {
     setFacturas([]);
    }
@@ -4245,21 +4208,71 @@ export default function SomosProTracking() {
  // desmontar la interfaz y hacerle perder al usuario modales, formularios y filtros.
  const refrescar = () => cargarTodo(user, { silencioso: true });
 
- // Refresco dirigido del modulo de Usuarios: crear, editar o eliminar un usuario no
- // necesita recargar las diez tablas (con miles de pedidos), que era lo que hacia que
- // el usuario eliminado tardara en desaparecer. Se recargan solo las tres tablas que
- // ese flujo puede cambiar: un usuario con rol conductor o transportista tambien crea
- // o desvincula filas en conductores y transportistas.
- const recargarUsuarios = async () => {
-  const [usuRes, conRes, traRes] = await Promise.all([
-   supabase.from('usuarios').select('*').order('created_at'),
-   supabase.from('conductores').select('*').order('created_at'),
-   supabase.from('transportistas').select('*').order('created_at'),
-  ]);
-  if (!usuRes.error && usuRes.data) setUsuarios(usuRes.data);
-  if (!conRes.error && conRes.data) setConductores(conRes.data);
-  if (!traRes.error && traRes.data) setTransportistas(traRes.data);
+ // Refresco dirigido: despues de guardar, cada modulo recarga solo las tablas que
+ // sus propias acciones pueden cambiar, en lugar de las diez de cargarTodo() (que
+ // incluyen los miles de pedidos). Es lo que se hizo primero en Usuarios, donde el
+ // usuario eliminado tardaba en desaparecer: ademas de responder al instante, evita
+ // volver a descargar toda la base en cada guardado, el otro foco de egress.
+ const recargadores = {
+  usuarios: async () => {
+   const { data, error } = await supabase.from('usuarios').select('*').order('created_at');
+   if (!error && data) setUsuarios(data);
+  },
+  conductores: async () => {
+   const { data, error } = await supabase.from('conductores').select('*').order('created_at');
+   if (!error && data) setConductores(data);
+  },
+  transportistas: async () => {
+   const { data, error } = await supabase.from('transportistas').select('*').order('created_at');
+   if (!error && data) setTransportistas(data);
+  },
+  pedidos: async () => {
+   const { data, error } = await cargarTodosLosPedidos(columnasPedidos(user?.rol));
+   if (!error && data) setPedidos(data);
+  },
+  ciudades: async () => {
+   const { data, error } = await supabase.from('ciudades').select('*').order('name');
+   if (!error && data && data.length > 0) setCiudades(data);
+  },
+  paqueterias: async () => {
+   const { data, error } = await supabase.from('paqueterias').select('*').order('nombre');
+   if (!error && data) setPaqueterias(data.map(x => x.nombre));
+  },
+  promesas: async () => {
+   const { data, error } = await supabase.from('promesas_servicio').select('*');
+   if (!error && data) setPromesas(data);
+  },
+  devoluciones: async () => {
+   const { data, error } = await supabase.from('devoluciones').select(COLUMNAS_DEVOLUCIONES).order('created_at', { ascending: false });
+   if (!error && data) setDevoluciones(data);
+  },
+  recogidas: async () => {
+   const { data, error } = await supabase.from('recogidas').select(COLUMNAS_RECOGIDAS).order('created_at', { ascending: false });
+   if (!error && data) setRecogidas(data);
+  },
+  pqrs: async () => {
+   const { data, error } = await supabase.from('pqrs').select(COLUMNAS_PQRS).order('created_at', { ascending: false });
+   if (!error && data) setPqrs(data);
+  },
+  facturas: async () => {
+   try { setFacturas(await obtenerFacturasConGuias()); } catch (e) { console.error('facturas refresh error:', e); }
+  },
  };
+ const refrescarTablas = (...nombres) => Promise.all(nombres.map(n => recargadores[n]()));
+
+ // Un usuario con rol conductor o transportista tambien crea o desvincula filas en
+ // esas dos tablas, por eso Usuarios y Conductores recargan las tres juntas.
+ const recargarUsuarios = () => refrescarTablas("usuarios", "conductores", "transportistas");
+ const recargarConductores = () => refrescarTablas("conductores", "usuarios");
+ const recargarTransportistas = () => refrescarTablas("transportistas", "conductores", "usuarios");
+ const recargarPedidos = () => refrescarTablas("pedidos");
+ const recargarCiudades = () => refrescarTablas("ciudades");
+ const recargarPaqueterias = () => refrescarTablas("paqueterias");
+ const recargarPromesas = () => refrescarTablas("promesas");
+ const recargarDevoluciones = () => refrescarTablas("devoluciones");
+ const recargarRecogidas = () => refrescarTablas("recogidas");
+ const recargarPqrs = () => refrescarTablas("pqrs");
+ const recargarFacturas = () => refrescarTablas("facturas");
 
  const showToastYRecargar = async (msg, type = "success") => {
   showToast(msg, type);
@@ -4364,109 +4377,36 @@ export default function SomosProTracking() {
 
  const props = { pedidos, setPedidos, conductores, setConductores, usuarios, setUsuarios, showToast, user };
 
- // Wrappers que escriben en Supabase y recargan 
-
- const sbSetUsuarios = async (fn) => {
-  const nuevos = typeof fn === 'function' ? fn(usuarios) : fn;
-  for (const u of nuevos) {
-   if (!u.id || typeof u.id === 'number') {
-    const { id, ...rest } = u;
-    throw new Error('Actualizacion directa de usuarios deshabilitada. Usar create-system-user.');
-   } else {
-    throw new Error('Actualizacion directa de usuarios deshabilitada. Usar create-system-user.');
-   }
-  }
-  await refrescar();
- };
-
- const sbSetConductores = async (fn) => {
-  const nuevos = typeof fn === 'function' ? fn(conductores) : fn;
-  for (const c of nuevos) {
-   const { id, usuario_id, ...rest } = c;
-   await supabase.from('conductores').upsert({ ...rest, ...(id && typeof id !== 'number' ? {id} : {}) }, { onConflict: 'cedula' });
-  }
-  await refrescar();
- };
-
- const sbSetTransportistas = async (fn) => {
-  const nuevos = typeof fn === 'function' ? fn(transportistas) : fn;
-  for (const t of nuevos) {
-   const { id, ...rest } = t;
-   await supabase.from('transportistas').upsert(rest, { onConflict: 'nit' });
-  }
-  await refrescar();
- };
-
- const sbSetCiudades = async (fn) => {
-  const nuevas = typeof fn === 'function' ? fn(ciudades) : fn;
-  for (const c of nuevas) {
-   await supabase.from('ciudades').upsert({ code: c.code, name: c.name }, { onConflict: 'code' });
-  }
-  await refrescar();
- };
-
- const sbSetPaqueterias = async (fn) => {
-  const nuevas = typeof fn === 'function' ? fn(paqueterias) : fn;
-  // Delete all and re-insert (simple approach for small table)
-  await supabase.from('paqueterias').delete().neq('nombre', '___never___');
-  for (const p of nuevas) {
-   await supabase.from('paqueterias').upsert({ nombre: p }, { onConflict: 'nombre' });
-  }
-  await refrescar();
- };
-
- const sbSetDevoluciones = async (fn) => {
-  const nuevas = typeof fn === 'function' ? fn(devoluciones) : fn;
-  for (const d of nuevas) {
-   await supabase.from('devoluciones').upsert(d, { onConflict: 'id' });
-  }
-  await refrescar();
- };
-
- const sbSetRecogidas = async (fn) => {
-  const nuevas = typeof fn === 'function' ? fn(recogidas) : fn;
-  for (const r of nuevas) {
-   await supabase.from('recogidas').upsert(r, { onConflict: 'id' });
-  }
-  await refrescar();
- };
-
- const sbSetPqrs = async (fn) => {
-  const nuevas = typeof fn === 'function' ? fn(pqrs) : fn;
-  for (const p of nuevas) {
-   await supabase.from('pqrs').upsert(p, { onConflict: 'id' });
-  }
-  await refrescar();
- };
-
  window._recargar = refrescar;
+ // Para los flujos que solo tocan pedidos (subir soportes desde el detalle).
+ window._recargarPedidos = recargarPedidos;
 
  const renderContent = () => {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
    case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}/>;
-   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={refrescar} user={user}/>;
+   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
-   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={refrescar}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={refrescar}/>;
+   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}/>;
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
-    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={refrescar}/>
+    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
     : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
-   case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
-   case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
-   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={refrescar}/>;
+   case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
+   case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={recargarCiudades}/>;
+   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={recargarPaqueterias}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
-   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
-   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={refrescar}/>;
+   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}/>;
+   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={recargarPedidos}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
    case "mi_ubicacion":  return <MiUbicacion user={user}/>;
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
-   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
-   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={refrescar}/>;
-   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={refrescar}/>;
+   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}/>;
+   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
+   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
  };
