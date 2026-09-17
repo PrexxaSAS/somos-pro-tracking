@@ -321,6 +321,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
       {pedido.ciudad_origen_nombre&&<span> Origen: <strong>{pedido.ciudad_origen_nombre}</strong>{pedido.direccion_origen&&` ${pedido.direccion_origen}`}</span>}
       <span>Ciudad destino: {ciudad?.name} ({pedido.ciudad_codigo})</span>
       <span>Factura: {pedido.factura}</span>
+      {(pedido.fecha_pedido||pedido.hora_pedido)&&(
+       <span>Pedido: {pedido.fecha_pedido||"sin fecha"}{pedido.hora_pedido?" "+pedido.hora_pedido:""}</span>
+      )}
       <span>Estimado: {pedido.fecha_estimada||""}</span>
       {fechaLimitePromesa&&<span>Limite promesa: {fechaLimitePromesa} ({promesa.dias_plazo} dia(s))</span>}
       <span>Fuente riesgo: {fuenteRiesgo}</span>
@@ -351,12 +354,6 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
      <div style={{background:"#ecfeff",borderRadius:10,padding:14,border:"1px solid #67e8f9"}}>
       <span style={{fontWeight:700,color:"#0891b2"}}>{pedido.paqueteria}</span>
       <span style={{marginLeft:14,color:"#0e7490"}}>Guia: <strong style={{fontFamily:"monospace"}}>{pedido.guia_paqueteria}</strong></span>
-     </div>
-    )}
-
-    {(pedido.fecha_pedido||pedido.hora_pedido)&&(
-     <div style={{fontSize:12,color:"#64748b"}}>
-      Pedido generado: <strong style={{color:P[800]}}>{pedido.fecha_pedido||"sin fecha"}{pedido.hora_pedido?" "+pedido.hora_pedido:""}</strong>
      </div>
     )}
 
