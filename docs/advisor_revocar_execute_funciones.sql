@@ -117,3 +117,24 @@ order by p.proname;
 -- Si algo falla con "permission denied for function", se revierte al instante con:
 --   grant execute on function public.<nombre>(<tipos>) to authenticated;
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 5) AJUSTE FINAL: audit_current_profile()
+--
+-- Supabase otorga EXECUTE a anon y authenticated de forma explicita a las funciones
+-- nuevas del esquema public (default privileges), ademas del permiso heredado de
+-- PUBLIC. Por eso esta funcion siguio apareciendo: se le quito PUBLIC, pero conservaba
+-- el permiso propio del rol authenticated.
+--
+-- Solo la usa audit_row_change() desde dentro del trigger, que corre como SECURITY
+-- DEFINER, asi que nadie necesita llamarla desde la API.
+-- ---------------------------------------------------------------------------
+revoke execute on function public.audit_current_profile() from authenticated;
+
+-- Comprobar: ambas columnas deben quedar en false.
+select
+  has_function_privilege('anon', 'public.audit_current_profile()', 'EXECUTE') as puede_anon,
+  has_function_privilege('authenticated', 'public.audit_current_profile()', 'EXECUTE') as puede_autenticado;
+
+-- Despues de esto, revisa que la auditoria siga registrando: edita cualquier pedido
+-- y confirma que aparece una fila nueva en audit_events.
