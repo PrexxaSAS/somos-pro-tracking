@@ -2834,7 +2834,7 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
 
 // ModuloDevoluciones 
 
-function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, showToast, user, recargar }) {
+function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -2925,6 +2925,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    placa: cond?cond.placa:null,
    nit_proveedor: cond?cond.nit_proveedor:null,
    estado: cond?"en_transito":"sin_asignar",
+   tipo: form.tipo_envio==="conductor" ? "propio" : (form.tipo_envio||"propio"),
    paqueteria: form.tipo_envio==="paqueteria" ? form.paqueteria : null,
    guia_paqueteria: form.tipo_envio==="paqueteria" ? form.guia_paqueteria : null,
    soporte_data: form.soporte_data,
@@ -2940,13 +2941,24 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
   if (recargar) await recargar();
  };
 
- const asignar = async (id, condId, novedad) => {
-  const cond = conductores.find(c=>String(c.id)===String(condId));
-  const cambios = { conductor_id:cond?cond.id:null, placa:cond?cond.placa:null,
-   nit_proveedor:cond?cond.nit_proveedor:null,
-   estado:cond?"en_transito":"sin_asignar",
-   novedad:novedad!==undefined?novedad:false };
-  await supabase.from('devoluciones').update(cambios).eq('id',id);
+ // Acepta conductor de una empresa transportista o asignacion a una paqueteria,
+ // igual que el modal de pedidos y el de recogidas.
+ const asignar = async (id, datos) => {
+  const { tipo = "propio", conductorId = "", paqueteria = "", guiaPaqueteria = "", novedad = false } = datos || {};
+  const cond = conductores.find(c=>String(c.id)===String(conductorId));
+  const esPaq = Boolean(paqueteria);
+  const cambios = {
+   conductor_id: esPaq ? null : (cond ? cond.id : null),
+   placa: esPaq ? null : (cond ? cond.placa : null),
+   nit_proveedor: esPaq ? null : (cond ? cond.nit_proveedor : null),
+   tipo: esPaq ? "paqueteria" : tipo,
+   paqueteria: esPaq ? paqueteria : null,
+   guia_paqueteria: esPaq ? (guiaPaqueteria || null) : null,
+   estado: (esPaq || cond) ? "en_transito" : "sin_asignar",
+   novedad: Boolean(novedad),
+  };
+  const { error } = await supabase.from('devoluciones').update(cambios).eq('id',id).select("id").single();
+  if (error) { showToast(mensajeError(error, "la devolucion"),"error"); return; }
   if (recargar) await recargar();
  };
 
@@ -3087,6 +3099,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    )}
    {modDet&&(
     <ModalDetalleDV dev={modDet} conductores={conductores} ciudades={ciudades}
+     transportistas={transportistas} paqueterias={paqueterias}
      onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
      showToast={showToast} canEdit={user.rol!=="cliente"}/>
    )}
@@ -3094,15 +3107,39 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  );
 }
 
-function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntregado, showToast, canEdit }) {
+function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paqueterias = [], onClose, onAsignar, onEntregado, showToast, canEdit }) {
+ const [tipoEnvio, setTipoEnvio] = useState(dev.tipo || (dev.paqueteria ? "paqueteria" : "propio"));
+ const [empresa, setEmpresa] = useState(dev.nit_proveedor||"");
  const [condId, setCondId] = useState(dev.conductor_id||"");
+ const [paqSel, setPaqSel] = useState(dev.paqueteria||"");
+ const [guiaPaq, setGuiaPaq] = useState(dev.guia_paqueteria||"");
  const [novedad, setNovedad] = useState(dev.novedad||false);
  const ciudad = ciudades.find(c=>c.code===dev.ciudad_codigo);
  const cond  = conductores.find(c=>String(c.id)===String(condId||dev.conductor_id||""));
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
+ // Con empresa transportista: primero la empresa y despues solo SUS conductores.
+ // Con transporte propio o mensajeria: todos los conductores activos.
+ const conductoresElegibles = tipoEnvio==="empresa_transporte"
+  ? (empresa ? conductoresActivos.filter(c=>c.nit_proveedor===empresa) : [])
+  : conductoresActivos;
+ const empresasOpciones = (transportistas||[]).filter(e=>e?.nit).map(e=>({value:e.nit,label:e.nombre||e.empresa||e.nit}));
+
+ const cambiarEmpresa = (nit) => { setEmpresa(nit); setCondId(""); };
+ const cambiarTipo = (valor) => {
+  setTipoEnvio(valor);
+  if (valor==="paqueteria") { setEmpresa(""); setCondId(""); }
+  else { setPaqSel(""); setGuiaPaq(""); if (valor!=="empresa_transporte") setEmpresa(""); }
+ };
 
  const guardar = async () => {
-  await onAsignar(dev.id, condId, novedad);
+  if (tipoEnvio==="paqueteria" && !paqSel) { showToast("Selecciona la paqueteria","error"); return; }
+  await onAsignar(dev.id, {
+   tipo:           tipoEnvio,
+   conductorId:    tipoEnvio==="paqueteria" ? "" : condId,
+   paqueteria:     tipoEnvio==="paqueteria" ? paqSel : "",
+   guiaPaqueteria: tipoEnvio==="paqueteria" ? guiaPaq : "",
+   novedad,
+  });
   showToast(" Devolucion actualizada","success");
   onClose();
  };
@@ -3138,10 +3175,40 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
     <Badge estado={dev.estado}/>
     {canEdit&&dev.estado!=="entregado"&&dev.estado!=="novedad"&&(
      <>
-      {!dev.paqueteria&&(
-       <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-        options={[{value:"",label:"Sin asignar"},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} ${c.placa}`}))]}/>
-      )}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+       <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
+        options={[
+         {value:"propio",label:" Transporte Propio"},
+         {value:"empresa_transporte",label:" Empresa Transportista"},
+         {value:"mensajeria",label:" Mensajeria"},
+         {value:"paqueteria",label:" Paqueteria Tercero"},
+        ]}/>
+       {tipoEnvio==="paqueteria"?(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+         <Field label="Paqueteria" value={paqSel} onChange={setPaqSel} as="select"
+          options={[{value:"",label:"Seleccione"},...(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({value:x,label:x}))]}/>
+         <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
+        </div>
+       ):(
+        <>
+         {tipoEnvio==="empresa_transporte"&&(
+          <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
+           options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
+         )}
+         <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
+          disabled={tipoEnvio==="empresa_transporte" && !empresa}
+          options={[
+           {value:"",label:(tipoEnvio==="empresa_transporte"&&!empresa)?"Selecciona primero la empresa":"Sin asignar"},
+           ...conductoresElegibles.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}${c.empresa?" - "+c.empresa:""}`}))
+          ]}/>
+         {tipoEnvio==="empresa_transporte"&&empresa&&conductoresElegibles.length===0&&(
+          <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
+           Esa empresa no tiene conductores activos registrados.
+          </p>
+         )}
+        </>
+       )}
+      </div>
       <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
        onClick={()=>setNovedad(!novedad)}>
        <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -3150,8 +3217,8 @@ function ModalDetalleDV({ dev, conductores, ciudades, onClose, onAsignar, onEntr
        <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>Marcar con Novedad</span>
       </div>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
-       {!dev.paqueteria&&<Btn onClick={guardar}> Guardar Conductor</Btn>}
-       <Btn variant="success" onClick={marcar}> Marcar Recogida Completada</Btn>
+       <Btn onClick={guardar}> Guardar Asignacion</Btn>
+       <Btn variant="success" onClick={marcar}> Marcar Devolucion Completada</Btn>
       </div>
      </>
     )}
@@ -4074,7 +4141,7 @@ export default function SomosProTracking() {
    const devolucionesSelect = [
     "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
     "dir_recogida","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
-    "placa","nit_proveedor","estado","novedad","paqueteria","guia_paqueteria",
+    "placa","nit_proveedor","estado","novedad","tipo","paqueteria","guia_paqueteria",
     "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
    ].join(",");
    const recogidasSelect = [
@@ -4398,7 +4465,7 @@ export default function SomosProTracking() {
    case "mi_ubicacion":  return <MiUbicacion user={user}/>;
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={refrescar}/>;
-   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} showToast={showToast} user={user} recargar={refrescar}/>;
+   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={refrescar}/>;
    case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={refrescar}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
