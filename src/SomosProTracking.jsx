@@ -1089,6 +1089,9 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  // Modo estricto para recargar el plano sobre pedidos que ya existen: escribe
  // unicamente fecha_pedido y hora_pedido. No crea pedidos ni toca ningun otro campo.
  const [soloFechaHora, setSoloFechaHora] = useState(false);
+ // Modo reparacion: el parser viejo cortaba las observaciones que traian una coma o
+ // un salto de linea. Este modo las vuelve a escribir desde el plano original.
+ const [actualizarNotas, setActualizarNotas] = useState(false);
  const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen,fecha_pedido,hora_pedido";
  const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal,2026-05-08,08:30\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,,2026-05-11,14:05";
 
@@ -1201,7 +1204,11 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   if (prev.length === 0) { setErr("Primero carga un archivo o previsualiza el contenido."); return; }
   setCargando(true);
   try {
-   await onImportar(prev, { completarExistentes: completar || soloFechaHora, soloFechaHora });
+   await onImportar(prev, {
+    completarExistentes: completar || soloFechaHora || actualizarNotas,
+    soloFechaHora,
+    actualizarNotas,
+   });
   } catch(e) {
    setErr("Error importando: " + e.message);
   }
@@ -1274,7 +1281,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     )}
 
     <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f5f3ff", border:`1px solid ${P[200]}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:P[800], cursor:"pointer" }}>
-     <input type="checkbox" checked={completar && !soloFechaHora} disabled={soloFechaHora} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
+     <input type="checkbox" checked={completar && !soloFechaHora && !actualizarNotas} disabled={soloFechaHora || actualizarNotas} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
      <span>
       <strong>Completar datos de pedidos existentes</strong><br/>
       <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas, factura y la fecha y hora del pedido que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
@@ -1282,7 +1289,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     </label>
 
     <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
-     <input type="checkbox" checked={soloFechaHora} onChange={e=>setSoloFechaHora(e.target.checked)} style={{ marginTop:2 }}/>
+     <input type="checkbox" checked={soloFechaHora && !actualizarNotas} disabled={actualizarNotas} onChange={e=>setSoloFechaHora(e.target.checked)} style={{ marginTop:2 }}/>
      <span>
       <strong>Cargar unicamente Fecha y Hora del pedido</strong><br/>
       <span style={{ color:"#64748b" }}>Para recargar el plano sobre pedidos que ya existen. Escribe solo la fecha y la hora que esten vacias:
@@ -1290,10 +1297,22 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
      </span>
     </label>
 
+    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#fff7ed", border:"1px solid #fdba74", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
+     <input type="checkbox" checked={actualizarNotas} onChange={e=>setActualizarNotas(e.target.checked)} style={{ marginTop:2 }}/>
+     <span>
+      <strong>Actualizar notas desde el plano</strong><br/>
+      <span style={{ color:"#64748b" }}>Para reparar las observaciones que quedaron cortadas. Reemplaza el texto de las notas
+      aunque ya tengan contenido, y no escribe ninguna otra columna ni crea pedidos.</span>
+     </span>
+    </label>
+
     <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
      <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
      <Btn disabled={prev.length===0||cargando} onClick={importar}>
-      {cargando ? " Importando..." : soloFechaHora ? ` Cargar fecha y hora (${prev.length})` : ` Importar (${prev.length})`}
+      {cargando ? " Importando..."
+       : actualizarNotas ? ` Actualizar notas (${prev.length})`
+       : soloFechaHora ? ` Cargar fecha y hora (${prev.length})`
+       : ` Importar (${prev.length})`}
      </Btn>
     </div>
    </div>
@@ -1433,7 +1452,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   URL.revokeObjectURL(url);
  };
 
- const handleImportarCSV = async (rows, { completarExistentes = false, soloFechaHora = false } = {}) => {
+ const handleImportarCSV = async (rows, { completarExistentes = false, soloFechaHora = false, actualizarNotas = false } = {}) => {
   const csvHeaders = rows[0]?._csvHeaders || [];
   const erroresImportacion = [];
   const registrarError = (row, id, error) => {
@@ -1453,7 +1472,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    const chunk = ids.slice(i, i + 100);
    const { data, error } = await supabase
     .from("pedidos")
-    .select(completarExistentes ? "id,estado,tipo,ciudad_codigo,ciudad_nombre,direccion,cajas,factura,fecha_pedido,hora_pedido" : "id")
+    .select(completarExistentes ? "id,estado,tipo,ciudad_codigo,ciudad_nombre,direccion,cajas,factura,fecha_pedido,hora_pedido,notas" : "id")
     .in("id", chunk);
    if (error) {
     const msg = `No se pudo validar si los pedidos ya existen: ${error.message}`;
@@ -1489,9 +1508,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     else registrarError(r, pedidoId, "Ya existe en la base de datos. Marca \"Completar datos de pedidos existentes\" para rellenar sus campos vacios.");
     return null;
    }
-   // Modo "solo fecha y hora": el plano no puede crear pedidos.
-   if (soloFechaHora) {
-    registrarError(r, pedidoId, "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada.");
+   // Modos acotados: el plano no puede crear pedidos.
+   if (soloFechaHora || actualizarNotas) {
+    registrarError(r, pedidoId, actualizarNotas
+     ? "No existe en la base de datos y la carga es solo de notas: no se creo nada."
+     : "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada.");
     return null;
    }
    const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
@@ -1526,16 +1547,22 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const vacio = (v) => v === null || v === undefined || String(v).trim() === "";
   for (const { r, actual } of paraCompletar) {
    const cambios = {};
-   // En modo estricto se escriben unicamente las dos columnas del plano.
-   if (!soloFechaHora) {
-    if (vacio(actual.ciudad_codigo) && !vacio(r.ciudad_codigo)) cambios.ciudad_codigo = r.ciudad_codigo;
-    if (vacio(actual.ciudad_nombre) && !vacio(r.ciudad_nombre)) cambios.ciudad_nombre = r.ciudad_nombre;
-    if (vacio(actual.direccion) && !vacio(r.direccion)) cambios.direccion = r.direccion;
-    if (!(Number(actual.cajas) > 0) && Number(r.cajas) > 0) cambios.cajas = Number(r.cajas);
-    if (vacio(actual.factura) && !vacio(r.factura)) cambios.factura = r.factura;
+   if (actualizarNotas) {
+    // Reparacion: aqui SI se reemplaza el texto existente, porque lo que hay quedo
+    // cortado por el parser viejo. Es el unico campo que se toca.
+    if (!vacio(r.notas) && String(r.notas) !== String(actual.notas ?? "")) cambios.notas = r.notas;
+   } else {
+    // En modo estricto se escriben unicamente las dos columnas del plano.
+    if (!soloFechaHora) {
+     if (vacio(actual.ciudad_codigo) && !vacio(r.ciudad_codigo)) cambios.ciudad_codigo = r.ciudad_codigo;
+     if (vacio(actual.ciudad_nombre) && !vacio(r.ciudad_nombre)) cambios.ciudad_nombre = r.ciudad_nombre;
+     if (vacio(actual.direccion) && !vacio(r.direccion)) cambios.direccion = r.direccion;
+     if (!(Number(actual.cajas) > 0) && Number(r.cajas) > 0) cambios.cajas = Number(r.cajas);
+     if (vacio(actual.factura) && !vacio(r.factura)) cambios.factura = r.factura;
+    }
+    if (vacio(actual.fecha_pedido) && !vacio(r.fecha_pedido)) cambios.fecha_pedido = r.fecha_pedido;
+    if (vacio(actual.hora_pedido) && !vacio(r.hora_pedido)) cambios.hora_pedido = r.hora_pedido;
    }
-   if (vacio(actual.fecha_pedido) && !vacio(r.fecha_pedido)) cambios.fecha_pedido = r.fecha_pedido;
-   if (vacio(actual.hora_pedido) && !vacio(r.hora_pedido)) cambios.hora_pedido = r.hora_pedido;
    if (Object.keys(cambios).length === 0) { sinCambios += 1; continue; }
    const { error } = await supabase.from("pedidos").update(cambios).eq("id", actual.id).select("id").single();
    if (error) registrarError(r, actual.id, mensajeError(error, "la actualizacion del pedido"));
@@ -1543,7 +1570,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   }
 
   setModCSV(false);
-  const resumen = soloFechaHora
+  const resumen = actualizarNotas
+   ? `${completados} nota(s) actualizadas, ${sinCambios} sin cambios`
+   : soloFechaHora
    ? `${completados} pedido(s) con fecha y hora, ${sinCambios} sin cambios`
    : `${insertados} pedido(s) creados` + (completarExistentes ? `, ${completados} completados, ${sinCambios} sin cambios` : "");
   if (erroresImportacion.length > 0) {
