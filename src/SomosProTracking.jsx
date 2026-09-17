@@ -45,13 +45,13 @@ function esVacio(v) {
 const COLUMNAS_PEDIDOS_CLIENTE = [
  "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
  "factura","conductor_id","placa","estado","estado_despacho","novedad","fecha_creacion",
- "fecha_estimada","fecha_real","tipo","paqueteria","guia_paqueteria","soportes",
+ "fecha_estimada","fecha_real","fecha_pedido","hora_pedido","tipo","paqueteria","guia_paqueteria","soportes",
  "ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","created_at",
 ].join(",");
 const COLUMNAS_PEDIDOS = [
  "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
  "factura","conductor_id","placa","nit_proveedor","estado","estado_despacho","novedad",
- "fecha_creacion","fecha_estimada","fecha_real","fecha_despacho","tipo","empresa_transporte",
+ "fecha_creacion","fecha_estimada","fecha_real","fecha_despacho","fecha_pedido","hora_pedido","tipo","empresa_transporte",
  "paqueteria","guia_paqueteria","soportes","notas","ciudad_origen_codigo",
  "ciudad_origen_nombre","direccion_origen","created_at",
 ].join(",");
@@ -354,6 +354,12 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
      </div>
     )}
 
+    {(pedido.fecha_pedido||pedido.hora_pedido)&&(
+     <div style={{fontSize:12,color:"#64748b"}}>
+      Pedido generado: <strong style={{color:P[800]}}>{pedido.fecha_pedido||"sin fecha"}{pedido.hora_pedido?" "+pedido.hora_pedido:""}</strong>
+     </div>
+    )}
+
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
      <Field label="Direccion de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47" disabled={pedidoBloqueadoEdicion}/>
      <Field label="Ciudad destino" value={ciudadEdit} onChange={setCiudadEdit} as="select"
@@ -534,6 +540,35 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
 // Fecha de elaboracion del CSV. Acepta AAAA-MM-DD, DD/MM/AAAA (formato colombiano),
 // DD-MM-AAAA con hora opcional y el numero serial que exporta Excel.
 // Devuelve NaN si no se puede interpretar.
+// "12/05/2026", "2026-05-12" o un serial de Excel -> "2026-05-12".
+// Devuelve null si la columna viene vacia o no se entiende: es un dato opcional.
+function fechaIsoCsv(valor) {
+ const ts = parsearFechaCsv(valor);
+ if (Number.isNaN(ts)) return null;
+ return new Date(ts).toISOString().split("T")[0];
+}
+
+// "8:5", "08:05:30", "8:05 p. m." o la fraccion de dia de Excel -> "08:05".
+function horaCsv(valor) {
+ const txt = String(valor || "").trim();
+ if (!txt) return null;
+ // Excel exporta la hora suelta como fraccion de dia: 0.5 = 12:00.
+ if (/^0?[.,]\d+$/.test(txt)) {
+  const minutos = Math.round(parseFloat(txt.replace(",", ".")) * 1440);
+  return String(Math.floor(minutos / 60) % 24).padStart(2, "0") + ":" + String(minutos % 60).padStart(2, "0");
+ }
+ const m = txt.match(/^(\d{1,2})[:.](\d{1,2})/);
+ if (!m) return null;
+ let hh = parseInt(m[1], 10);
+ const mm = parseInt(m[2], 10);
+ if (Number.isNaN(hh) || Number.isNaN(mm) || mm > 59) return null;
+ const sufijo = txt.toLowerCase().replace(/[.\s]/g, "");
+ if (sufijo.includes("pm") && hh < 12) hh += 12;
+ if (sufijo.includes("am") && hh === 12) hh = 0;
+ if (hh > 23) return null;
+ return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+}
+
 function parsearFechaCsv(valor) {
  const txt = String(valor || "").trim();
  if (!txt) return NaN;
@@ -1053,8 +1088,8 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
 
  const [aviso, setAviso] = useState("");
  const [completar, setCompletar] = useState(false);
- const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen";
- const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,";
+ const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen,fecha_pedido,hora_pedido";
+ const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal,2026-05-08,08:30\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,,2026-05-11,14:05";
 
 
  // Leer archivo CSV desde el disco
@@ -1100,6 +1135,10 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
    paqueteria: ["paqueteria", "transportadora", "carrier"],
    guia_paqueteria: ["guiapaqueteria", "guia", "noguia"],
    notas: ["notas", "observaciones"],
+   // Columnas opcionales del plano: cuando se genero el pedido en el ERP. No se
+   // confunden con fecha_estimada porque el encabezado se compara completo.
+   fecha_pedido: ["fecha", "fechapedido", "fechacreacion", "fechaelaboracion", "fechadocumento", "fechadoc"],
+   hora_pedido: ["hora", "horapedido", "horacreacion"],
    ciudad_origen_codigo: ["ciudadorigencodigo", "daneorigen"],
    ciudad_origen_nombre: ["ciudadorigennombre", "ciudadorigen"],
    direccion_origen: ["direccionorigen"],
@@ -1138,6 +1177,10 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     cajas:     parseInt((obj.cajas||'').trim()) || 0,
     factura:    obj.factura || "",
     fecha_estimada:obj.fecha_estimada || null,
+    fecha_pedido:  fechaIsoCsv(obj.fecha_pedido),
+    // Si el plano trae la hora dentro de la columna Fecha ("12/05/2026 14:30") y no
+    // hay columna Hora aparte, se aprovecha esa.
+    hora_pedido:   horaCsv(obj.hora_pedido) || horaCsv(String(obj.fecha_pedido || "").split(/[ T]/)[1] || ""),
     notas:     obj.notas || "",
     tipo:     esPaq?"paqueteria":obj.tipo==="empresa_transporte"?"empresa_transporte":obj.tipo==="mensajeria"?"mensajeria":"propio",
     empresa_transporte: esTextoSoloFacturar(obj.empresa_transporte) ? null : (obj.empresa_transporte || null),
@@ -1176,7 +1219,8 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     <div style={{ background: "#fffbeb", borderRadius: 10, padding: 12, fontSize: 13, color: "#92400e" }}>
      <strong>Columnas requeridias:</strong> id, cliente, ciudad_codigo, direccion, cajas, factura, fecha_estimada, tipo<br/>
      <strong>Tambien acepta los nombres del plano:</strong> Pedido_Pro, DANE_Destino, Total_Cajas, Factura_Pro, Paqueteria, Guia<br/>
-     <strong>Opcionales:</strong> empresa_transporte, paqueteria, guia_paqueteria, notas, ciudad_origen_codigo, ciudad_origen_nombre, direccion_origen
+     <strong>Opcionales:</strong> empresa_transporte, paqueteria, guia_paqueteria, notas, ciudad_origen_codigo, ciudad_origen_nombre, direccion_origen<br/>
+     <strong>Fecha y Hora</strong> (cuando se genero el pedido) son opcionales: si el plano las trae se guardan, y si no, el pedido se importa igual.
     </div>
 
     {/* Descargar plantilla */}
@@ -1236,7 +1280,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
      <input type="checkbox" checked={completar} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
      <span>
       <strong>Completar datos de pedidos existentes</strong><br/>
-      <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas y factura que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
+      <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas, factura y la fecha y hora del pedido que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
      </span>
     </label>
 
@@ -1403,7 +1447,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    const chunk = ids.slice(i, i + 100);
    const { data, error } = await supabase
     .from("pedidos")
-    .select(completarExistentes ? "id,estado,tipo,ciudad_codigo,ciudad_nombre,direccion,cajas,factura" : "id")
+    .select(completarExistentes ? "id,estado,tipo,ciudad_codigo,ciudad_nombre,direccion,cajas,factura,fecha_pedido,hora_pedido" : "id")
     .in("id", chunk);
    if (error) {
     const msg = `No se pudo validar si los pedidos ya existen: ${error.message}`;
@@ -1476,6 +1520,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    if (vacio(actual.direccion) && !vacio(r.direccion)) cambios.direccion = r.direccion;
    if (!(Number(actual.cajas) > 0) && Number(r.cajas) > 0) cambios.cajas = Number(r.cajas);
    if (vacio(actual.factura) && !vacio(r.factura)) cambios.factura = r.factura;
+   if (vacio(actual.fecha_pedido) && !vacio(r.fecha_pedido)) cambios.fecha_pedido = r.fecha_pedido;
+   if (vacio(actual.hora_pedido) && !vacio(r.hora_pedido)) cambios.hora_pedido = r.hora_pedido;
    if (Object.keys(cambios).length === 0) { sinCambios += 1; continue; }
    const { error } = await supabase.from("pedidos").update(cambios).eq("id", actual.id).select("id").single();
    if (error) registrarError(r, actual.id, mensajeError(error, "la actualizacion del pedido"));
