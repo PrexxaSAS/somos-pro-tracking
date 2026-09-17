@@ -1088,6 +1088,9 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
 
  const [aviso, setAviso] = useState("");
  const [completar, setCompletar] = useState(false);
+ // Modo estricto para recargar el plano sobre pedidos que ya existen: escribe
+ // unicamente fecha_pedido y hora_pedido. No crea pedidos ni toca ningun otro campo.
+ const [soloFechaHora, setSoloFechaHora] = useState(false);
  const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen,fecha_pedido,hora_pedido";
  const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal,2026-05-08,08:30\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,,2026-05-11,14:05";
 
@@ -1204,7 +1207,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   if (prev.length === 0) { setErr("Primero carga un archivo o previsualiza el contenido."); return; }
   setCargando(true);
   try {
-   await onImportar(prev, { completarExistentes: completar });
+   await onImportar(prev, { completarExistentes: completar || soloFechaHora, soloFechaHora });
   } catch(e) {
    setErr("Error importando: " + e.message);
   }
@@ -1277,17 +1280,26 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     )}
 
     <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f5f3ff", border:`1px solid ${P[200]}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:P[800], cursor:"pointer" }}>
-     <input type="checkbox" checked={completar} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
+     <input type="checkbox" checked={completar && !soloFechaHora} disabled={soloFechaHora} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
      <span>
       <strong>Completar datos de pedidos existentes</strong><br/>
       <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas, factura y la fecha y hora del pedido que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
      </span>
     </label>
 
+    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
+     <input type="checkbox" checked={soloFechaHora} onChange={e=>setSoloFechaHora(e.target.checked)} style={{ marginTop:2 }}/>
+     <span>
+      <strong>Cargar unicamente Fecha y Hora del pedido</strong><br/>
+      <span style={{ color:"#64748b" }}>Para recargar el plano sobre pedidos que ya existen. Escribe solo la fecha y la hora que esten vacias:
+      no crea pedidos nuevos y no modifica ninguna otra columna.</span>
+     </span>
+    </label>
+
     <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
      <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
      <Btn disabled={prev.length===0||cargando} onClick={importar}>
-      {cargando ? " Importando..." : ` Importar (${prev.length})`}
+      {cargando ? " Importando..." : soloFechaHora ? ` Cargar fecha y hora (${prev.length})` : ` Importar (${prev.length})`}
      </Btn>
     </div>
    </div>
@@ -1427,7 +1439,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   URL.revokeObjectURL(url);
  };
 
- const handleImportarCSV = async (rows, { completarExistentes = false } = {}) => {
+ const handleImportarCSV = async (rows, { completarExistentes = false, soloFechaHora = false } = {}) => {
   const csvHeaders = rows[0]?._csvHeaders || [];
   const erroresImportacion = [];
   const registrarError = (row, id, error) => {
@@ -1483,6 +1495,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     else registrarError(r, pedidoId, "Ya existe en la base de datos. Marca \"Completar datos de pedidos existentes\" para rellenar sus campos vacios.");
     return null;
    }
+   // Modo "solo fecha y hora": el plano no puede crear pedidos.
+   if (soloFechaHora) {
+    registrarError(r, pedidoId, "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada.");
+    return null;
+   }
    const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
    const pedidoConGuia = {
     ...limpiarFilaPedidoCSV(r),
@@ -1515,11 +1532,14 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const vacio = (v) => v === null || v === undefined || String(v).trim() === "";
   for (const { r, actual } of paraCompletar) {
    const cambios = {};
-   if (vacio(actual.ciudad_codigo) && !vacio(r.ciudad_codigo)) cambios.ciudad_codigo = r.ciudad_codigo;
-   if (vacio(actual.ciudad_nombre) && !vacio(r.ciudad_nombre)) cambios.ciudad_nombre = r.ciudad_nombre;
-   if (vacio(actual.direccion) && !vacio(r.direccion)) cambios.direccion = r.direccion;
-   if (!(Number(actual.cajas) > 0) && Number(r.cajas) > 0) cambios.cajas = Number(r.cajas);
-   if (vacio(actual.factura) && !vacio(r.factura)) cambios.factura = r.factura;
+   // En modo estricto se escriben unicamente las dos columnas del plano.
+   if (!soloFechaHora) {
+    if (vacio(actual.ciudad_codigo) && !vacio(r.ciudad_codigo)) cambios.ciudad_codigo = r.ciudad_codigo;
+    if (vacio(actual.ciudad_nombre) && !vacio(r.ciudad_nombre)) cambios.ciudad_nombre = r.ciudad_nombre;
+    if (vacio(actual.direccion) && !vacio(r.direccion)) cambios.direccion = r.direccion;
+    if (!(Number(actual.cajas) > 0) && Number(r.cajas) > 0) cambios.cajas = Number(r.cajas);
+    if (vacio(actual.factura) && !vacio(r.factura)) cambios.factura = r.factura;
+   }
    if (vacio(actual.fecha_pedido) && !vacio(r.fecha_pedido)) cambios.fecha_pedido = r.fecha_pedido;
    if (vacio(actual.hora_pedido) && !vacio(r.hora_pedido)) cambios.hora_pedido = r.hora_pedido;
    if (Object.keys(cambios).length === 0) { sinCambios += 1; continue; }
@@ -1529,7 +1549,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   }
 
   setModCSV(false);
-  const resumen = `${insertados} pedido(s) creados` + (completarExistentes ? `, ${completados} completados, ${sinCambios} sin cambios` : "");
+  const resumen = soloFechaHora
+   ? `${completados} pedido(s) con fecha y hora, ${sinCambios} sin cambios`
+   : `${insertados} pedido(s) creados` + (completarExistentes ? `, ${completados} completados, ${sinCambios} sin cambios` : "");
   if (erroresImportacion.length > 0) {
    setReporteImportacion({ insertados, completados, sinCambios, completar: completarExistentes, errores: erroresImportacion, headers: csvHeaders });
    showToast(`${resumen}. ${erroresImportacion.length} con error.`, insertados + completados > 0 ? "info" : "error");
