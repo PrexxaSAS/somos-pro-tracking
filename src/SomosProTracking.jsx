@@ -3,7 +3,7 @@ import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROL
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia } from './utils/guides';
-import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv } from './utils/files';
+import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv, filasCsv } from './utils/files';
 import { mensajeError, mensajeErrorFuncion } from './utils/errors';
 import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
 import { generarPDFSoportes } from './utils/pdf';
@@ -618,10 +618,9 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
 
  // Parsear CSV 
  const parsear = (texto) => {
-  const lineas = texto.trim().split(/\r?\n/).filter(l => l.trim());
-  if (lineas.length < 2) throw new Error("El archivo est vaco o solo tiene encabezado.");
-  const sep = lineas[0].includes(";") ? ";" : ",";
-  const hdrsRaw = lineas[0].split(sep).map(h => h.trim().replace(/"/g,""));
+  const filas = filasCsv(texto);
+  if (filas.length < 2) throw new Error("El archivo esta vacio o solo tiene encabezado.");
+  const hdrsRaw = filas[0];
   // Normaliza encabezados para que "Fecha Elaboracion", "Fecha_Elaboracion" y
   // "Fecha Elaboración" se detecten igual: minusculas, sin tildes y sin separadores.
   const norm = (s) => s.toLowerCase().replace(/\.\d+$/,"")
@@ -651,8 +650,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   if (iGuia === -1 || iEstado === -1 || iPedido === -1)
    throw new Error(`Columnas requeridias no encontradias. Necesitas: Guia, Estado_Pro, Pedido_Pro. Detectadias: ${hdrsRaw.join(", ")}`);
 
-  return lineas.slice(1).map(l => {
-   const c = l.split(sep).map(x => x.trim().replace(/^"|"$/g,""));
+  return filas.slice(1).map(c => {
    const fechaRaw = iFecha !== -1 ? c[iFecha] || "" : "";
    return {
     guia:    c[iGuia]  || "",
@@ -1111,12 +1109,10 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  };
 
  const parsear = (texto) => {
-  // Handle both comma and semicolon separators
-  const lineas = texto.trim().split("\n").filter(l => l.trim());
-  if (lineas.length < 2) throw new Error("Se necesita encabezado y al menos una fila de datos.");
-  // Detect separator
-  const sep = lineas[0].includes(';') ? ';' : ',';
-  const hdrs = lineas[0].split(sep).map(h => h.trim().replace(/"/g,''));
+  // Acepta coma, punto y coma o tabulador, y respeta los campos entre comillas.
+  const filas = filasCsv(texto);
+  if (filas.length < 2) throw new Error("Se necesita encabezado y al menos una fila de datos.");
+  const hdrs = filas[0];
   setAviso("");
   // Acepta la plantilla (ciudad_codigo, cajas...) y tambien los nombres del plano
   // (Pedido_Pro, DANE_Destino, Total_Cajas, Factura_Pro...). Antes una columna con
@@ -1159,9 +1155,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   if (faltantes.length) {
    setAviso(`El archivo no trae estas columnas y los pedidos quedarian sin ese dato: ${faltantes.join(", ")}. Columnas detectadas: ${hdrs.join(", ")}`);
   }
-  return lineas.slice(1).map((l, idx) => {
-   // Handle quoted fields
-   const cols = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+  return filas.slice(1).map((cols, idx) => {
    const original = {};
    hdrs.forEach((h, i) => { original[h] = cols[i] || ""; });
    const obj = {};
@@ -2355,15 +2349,13 @@ function ModalCSVCiudades({ onClose, onImportar }) {
  };
 
  const parsear = (texto) => {
-  const sep = texto.includes(";") ? ";" : ",";
-  const lineas = texto.trim().split("\n").filter(l => l.trim());
-  if (lineas.length < 2) throw new Error("Se necesitan encabezado y al menos una fila.");
-  const hdrs = lineas[0].split(sep).map(h => h.trim().toLowerCase().replace(/"/g,""));
+  const filas = filasCsv(texto);
+  if (filas.length < 2) throw new Error("Se necesitan encabezado y al menos una fila.");
+  const hdrs = filas[0].map(h => h.toLowerCase());
   const codeIdx = hdrs.indexOf("code");
   const nameIdx = hdrs.indexOf("name");
   if (codeIdx === -1 || nameIdx === -1) throw new Error("El CSV debe tener columnas 'code' y 'name'.");
-  return lineas.slice(1).map(l => {
-   const cols = l.split(sep).map(c => c.trim().replace(/^"|"$/g,""));
+  return filas.slice(1).map(cols => {
    return { code: cols[codeIdx]||"", name: cols[nameIdx]||"" };
   }).filter(c => c.code && c.name);
  };
