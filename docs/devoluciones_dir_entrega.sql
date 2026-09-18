@@ -4,7 +4,8 @@
 -- mercancia). Se agrega a donde hay que llevarla, igual que ya lo tienen las
 -- recogidas con dir_entrega.
 --
--- Es opcional y aditivo: las devoluciones existentes quedan con null.
+-- Es aditivo: las devoluciones existentes quedan con null. La app la exige al crear
+-- o editar una devolucion, pero en la base es nullable para no romper las viejas.
 --
 -- Ejecutar en el SQL Editor ANTES de desplegar la nueva version: la app pide esta
 -- columna al cargar las devoluciones y, si no existe, la consulta falla completa.
