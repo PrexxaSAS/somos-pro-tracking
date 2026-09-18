@@ -3029,7 +3029,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  };
 
  const crear = async () => {
-  const req = ["factura","pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","ciudad_codigo","motivo"];
+  const req = ["factura","pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
   for (const k of req) {
    if (!form[k].toString().trim()) { showToast("Todos los campos son obligatorios","error"); return; }
   }
@@ -3044,7 +3044,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     volumen_m3: parseFloat(form.volumen_m3)||0,
     peso_kg: parseFloat(form.peso_kg)||0,
     dir_recogida: form.dir_recogida.trim(),
-    dir_entrega: form.dir_entrega.trim() || null,
+    dir_entrega: form.dir_entrega.trim(),
     ciudad_codigo: form.ciudad_codigo,
     ciudad_nombre: ciudad?.name||"",
     motivo: form.motivo.trim(),
@@ -3063,7 +3063,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    volumen_m3: parseFloat(form.volumen_m3)||0,
    peso_kg: parseFloat(form.peso_kg)||0,
    dir_recogida: form.dir_recogida.trim(),
-   dir_entrega: form.dir_entrega.trim() || null,
+   dir_entrega: form.dir_entrega.trim(),
    ciudad_codigo: form.ciudad_codigo,
    ciudad_nombre: ciudad?.name||"",
    motivo: form.motivo.trim(),
@@ -3206,7 +3206,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
       <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
       <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
-      <Field label="Direccion de Entrega" value={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Bodega Principal - Cl 60 Sur #48-62"/>
+      <Field label="Direccion de Entrega *" value={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Bodega Principal - Cl 60 Sur #48-62"/>
       <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolucin..."/>
       {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
        options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
