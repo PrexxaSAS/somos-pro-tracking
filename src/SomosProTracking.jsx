@@ -57,7 +57,7 @@ const COLUMNAS_PEDIDOS = [
 ].join(",");
 const COLUMNAS_DEVOLUCIONES = [
  "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
- "dir_recogida","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
+ "dir_recogida","dir_entrega","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
  "placa","nit_proveedor","estado","novedad","tipo","paqueteria","guia_paqueteria",
  "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
 ].join(",");
@@ -2988,7 +2988,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
 
  const vacio = {
   factura:"", pedido_ref:"", unidades:"", volumen_m3:"", peso_kg:"",
-  dir_recogida:"", ciudad_codigo:"", motivo:"",
+  dir_recogida:"", dir_entrega:"", ciudad_codigo:"", motivo:"",
   tipo_envio:"conductor", conductor_id:"", paqueteria:"", guia_paqueteria:"",
   soporte_data:null, soporte_nombre:"",
  };
@@ -3007,6 +3007,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    volumen_m3: numTexto(dev.volumen_m3),
    peso_kg: numTexto(dev.peso_kg),
    dir_recogida: dev.dir_recogida||"",
+   dir_entrega: dev.dir_entrega||"",
    ciudad_codigo: dev.ciudad_codigo||"",
    motivo: dev.motivo||"",
    soporte_data: null, // el archivo actual no se descarga; solo se envia si se adjunta uno nuevo
@@ -3043,6 +3044,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
     volumen_m3: parseFloat(form.volumen_m3)||0,
     peso_kg: parseFloat(form.peso_kg)||0,
     dir_recogida: form.dir_recogida.trim(),
+    dir_entrega: form.dir_entrega.trim() || null,
     ciudad_codigo: form.ciudad_codigo,
     ciudad_nombre: ciudad?.name||"",
     motivo: form.motivo.trim(),
@@ -3061,6 +3063,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    volumen_m3: parseFloat(form.volumen_m3)||0,
    peso_kg: parseFloat(form.peso_kg)||0,
    dir_recogida: form.dir_recogida.trim(),
+   dir_entrega: form.dir_entrega.trim() || null,
    ciudad_codigo: form.ciudad_codigo,
    ciudad_nombre: ciudad?.name||"",
    motivo: form.motivo.trim(),
@@ -3203,6 +3206,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
       <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
       <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
+      <Field label="Direccion de Entrega" value={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Bodega Principal - Cl 60 Sur #48-62"/>
       <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolucin..."/>
       {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
        options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
@@ -3302,8 +3306,9 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
       <span> Pedido: <strong>{dev.pedido_ref}</strong></span>
       <span> Unidades: <strong>{dev.unidades}</strong></span>
       <span> Peso: <strong>{dev.peso_kg} kg</strong></span>
-      <span> {dev.ciudad_nombre}</span>
-      <span> {dev.dir_recogida}</span>
+      <span> Ciudad: <strong>{dev.ciudad_nombre}</strong></span>
+      <span> Recogida: <strong>{dev.dir_recogida}</strong></span>
+      <span> Entrega: <strong>{dev.dir_entrega||"Sin registrar"}</strong></span>
      </div>
      <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e",whiteSpace:"pre-wrap"}}>
        Motivo: {dev.motivo}
