@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES } from './Constants';
+import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, SEDES_DESTINO } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia } from './utils/guides';
@@ -3206,7 +3206,14 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
       <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
       <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
-      <Field label="Direccion de Entrega *" value={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Bodega Principal - Cl 60 Sur #48-62"/>
+      <Field label="Sede destino *" value={form.dir_entrega} onChange={f("dir_entrega")} as="select"
+       options={[
+        {value:"",label:" Seleccione "},
+        ...SEDES_DESTINO.map(x=>({value:x,label:x})),
+        // Si la devolucion ya tenia un valor que no esta en la lista, se conserva
+        // como opcion para no borrarlo al editar.
+        ...(form.dir_entrega && !SEDES_DESTINO.includes(form.dir_entrega) ? [{value:form.dir_entrega,label:form.dir_entrega}] : []),
+       ]}/>
       <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolucin..."/>
       {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
        options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
@@ -3308,7 +3315,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
       <span> Peso: <strong>{dev.peso_kg} kg</strong></span>
       <span> Ciudad: <strong>{dev.ciudad_nombre}</strong></span>
       <span> Recogida: <strong>{dev.dir_recogida}</strong></span>
-      <span> Entrega: <strong>{dev.dir_entrega||"Sin registrar"}</strong></span>
+      <span> Sede destino: <strong>{dev.dir_entrega||"Sin registrar"}</strong></span>
      </div>
      <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e",whiteSpace:"pre-wrap"}}>
        Motivo: {dev.motivo}

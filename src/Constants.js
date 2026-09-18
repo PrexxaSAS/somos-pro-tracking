@@ -59,4 +59,12 @@ export const ROLES = {
  cliente:    "Cliente Interno",
 };
 
-
+// Sedes a donde se lleva la mercancia de una devolucion. Se guarda el texto
+// completo en devoluciones.dir_entrega. Para agregar una sede basta con sumarla aqui.
+export const SEDES_DESTINO = [
+ "01 - PLANTA ETIQUETAS - SABANETA",
+ "02 - PLANTA VASOS - LA ESTRELLA",
+ "03 - PRINTIA - LA ESTRELLA",
+ "20 - CEDI - LA ESTRELLA",
+ "22 - CEDI MATERIAS PRIMAS - CALDAS",
+];

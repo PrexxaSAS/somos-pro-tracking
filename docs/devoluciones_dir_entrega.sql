@@ -15,7 +15,7 @@ alter table public.devoluciones
   add column if not exists dir_entrega text;
 
 comment on column public.devoluciones.dir_entrega is
-  'Direccion a donde se entrega la mercancia devuelta. La de origen es dir_recogida.';
+  'Sede destino de la devolucion (ej. 20 - CEDI - LA ESTRELLA). La app la elige de SEDES_DESTINO en Constants.js. El origen es dir_recogida.';
 
 -- Verificacion: debe devolver una fila
 select column_name, data_type, is_nullable
