@@ -149,7 +149,7 @@ export function Toast({ msg, type, onDone }) {
 
 export function Sidebar({ user, activeTab, setActiveTab, onLogout, collapsed, setCollapsed }) {
  const menus = {
-  admin:    [["dashboard","","Dashboard"],["pedidos","","Pedidos"],["rastreo","","Rastreo GPS"],["conductores","","Conductores"],["transportistas","","Transportistas"],["usuarios","","Usuarios"]],
+  admin:    [["dashboard","","Dashboard"],["pedidos","","Pedidos"],["rastreo","","Rastreo GPS"],["conductores","","Conductores"],["transportistas","","Transportistas"],["usuarios","","Usuarios"],["cartera_sedes","","Sedes y Cortes"],["cartera_asesores","","Asesores"],["cartera_pedidos","","Cartera"]],
   operador:   [["dashboard","","Dashboard"],["pedidos","","Pedidos"],["rastreo","","Rastreo GPS"],["conductores","","Conductores"]],
   transportista:[["mi_empresa","","Mi Empresa"]],
   conductor:  [["mis_pedidos","","Mis Pedidos"],["mi_ubicacion","","Mi Ubicacion GPS"]],
