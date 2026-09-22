@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, SEDES_DESTINO } from './Constants';
+import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { generarGuia } from './utils/guides';
@@ -15,6 +15,7 @@ import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
+import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
 
@@ -4233,6 +4234,10 @@ export default function SomosProTracking() {
   if (!silencioso) setCargando(true);
   try {
    const rolActual = perfil?.rol;
+   // Los roles del modulo de cartera no usan ninguna de estas tablas. Cargarlas
+   // gastaria egress para nada y, ademas, la verificacion de usuarios de mas abajo
+   // los sacaria de la aplicacion: sus politicas RLS no les dejan ver la tabla.
+   if (ROLES_CARTERA.includes(rolActual)) { setCargando(false); return; }
    const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
    const pedidosSelect = columnasPedidos(rolActual);
    const devolucionesSelect = COLUMNAS_DEVOLUCIONES;
@@ -4391,7 +4396,8 @@ export default function SomosProTracking() {
    }
   }
   setUser(userWithConductorId);
-  const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas" };
+  const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas",
+   cartera: "cartera_cargar", logistica: "cartera_logistica", consultas: "cartera_consultas" };
   setTab(def[u.rol] || "dashboard");
   await cargarTodo(userWithConductorId);
  };
@@ -4505,6 +4511,15 @@ export default function SomosProTracking() {
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
    case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
+   // Modulo de cartera: todas sus vistas entran por el mismo despachador.
+   case "cartera_sedes":
+   case "cartera_asesores":
+   case "cartera_vencida":
+   case "cartera_cargar":
+   case "cartera_pedidos":
+   case "cartera_logistica":
+   case "cartera_consultas":
+    return <ModuloCartera tab={tab} user={user} showToast={showToast} setTab={setTab}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
  };
