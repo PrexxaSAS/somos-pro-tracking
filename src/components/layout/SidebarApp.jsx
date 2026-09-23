@@ -12,253 +12,242 @@ import {
   LogOut,
   MapPin,
   PackageCheck,
+  Printer,
   RotateCcw,
+  Search,
   Share2,
   Truck,
   User,
   Users,
-  Warehouse,
   Wallet,
-  Printer,
-  Search,
+  Warehouse,
 } from 'lucide-react';
 import { ROLES } from '../../Constants';
+import { T } from '../../design/tokens';
 
+// El menu va agrupado por secciones: con quince opciones seguidas nadie encuentra
+// nada. Cada rol ve solo sus grupos, y un grupo sin opciones no se dibuja.
 const MENUS = {
   admin: [
-    ["dashboard", "Dashboard", BarChart3],
-    ["pedidos", "Pedidos", Box],
-    ["rastreo", "Rastreo GPS", MapPin],
-    ["conductores", "Conductores", Users],
-    ["transportistas", "Transportistas", Truck],
-    ["resumen", "Resumen Transportador", ClipboardList],
-    ["devoluciones", "Devoluciones", RotateCcw],
-    ["recogidas", "Recogidas", PackageCheck],
-    ["pqrs", "PQRS", HelpCircle],
-    ["ciudades", "Ciudades / DANE", Building2],
-    ["paqueterias", "Paqueterias", Warehouse],
-    ["promesas", "Promesas de Servicio", CalendarClock],
-    ["facturas", "Facturas Proveedor", FileText],
-    ["usuarios", "Usuarios", User],
-    ["cartera_pedidos", "Cartera", Wallet],
-    ["cartera_sedes", "Sedes y Cortes", Warehouse],
-    ["cartera_asesores", "Asesores", Users],
+    ["Operacion", [
+      ["dashboard", "Dashboard", BarChart3],
+      ["pedidos", "Pedidos", Box],
+      ["rastreo", "Rastreo GPS", MapPin],
+      ["recogidas", "Recogidas", PackageCheck],
+      ["devoluciones", "Devoluciones", RotateCcw],
+      ["pqrs", "PQRS", HelpCircle],
+    ]],
+    ["Red de transporte", [
+      ["conductores", "Conductores", Users],
+      ["transportistas", "Transportistas", Truck],
+      ["resumen", "Resumen transportador", ClipboardList],
+      ["paqueterias", "Paqueterias", Warehouse],
+    ]],
+    ["Cartera", [
+      ["cartera_pedidos", "Pedidos en cartera", Wallet],
+      ["cartera_sedes", "Sedes y cortes", Warehouse],
+      ["cartera_asesores", "Asesores", Users],
+    ]],
+    ["Configuracion", [
+      ["ciudades", "Ciudades / DANE", Building2],
+      ["promesas", "Promesas de servicio", CalendarClock],
+      ["facturas", "Facturas proveedor", FileText],
+      ["usuarios", "Usuarios", User],
+    ]],
   ],
   operador: [
-    ["dashboard", "Dashboard", BarChart3],
-    ["pedidos", "Pedidos", Box],
-    ["rastreo", "Rastreo GPS", MapPin],
-    ["conductores", "Conductores", Users],
-    ["resumen", "Resumen Transportador", ClipboardList],
-    ["devoluciones", "Devoluciones", RotateCcw],
-    ["recogidas", "Recogidas", PackageCheck],
-    ["pqrs", "PQRS", HelpCircle],
-    ["promesas", "Promesas de Servicio", CalendarClock],
-    ["facturas", "Facturas Proveedor", FileText],
-    ["cartera_logistica", "Logistica Cartera", Printer],
-    ["cartera_pedidos", "Cartera", Wallet],
+    ["Operacion", [
+      ["dashboard", "Dashboard", BarChart3],
+      ["pedidos", "Pedidos", Box],
+      ["rastreo", "Rastreo GPS", MapPin],
+      ["recogidas", "Recogidas", PackageCheck],
+      ["devoluciones", "Devoluciones", RotateCcw],
+      ["pqrs", "PQRS", HelpCircle],
+    ]],
+    ["Red de transporte", [
+      ["conductores", "Conductores", Users],
+      ["resumen", "Resumen transportador", ClipboardList],
+    ]],
+    ["Cartera", [
+      ["cartera_logistica", "Logistica cartera", Printer],
+      ["cartera_pedidos", "Pedidos en cartera", Wallet],
+    ]],
+    ["Configuracion", [
+      ["promesas", "Promesas de servicio", CalendarClock],
+      ["facturas", "Facturas proveedor", FileText],
+    ]],
   ],
-  // Modulo de cartera. Las pestanas llevan prefijo para no chocar con las de arriba:
-  // "consultas", por ejemplo, ya la usa el rol cliente para ver sus pedidos.
   cartera: [
-    ["cartera_cargar", "Cargar Pedidos", Box],
-    ["cartera_pedidos", "Gestion de Pedidos", Wallet],
-    ["cartera_vencida", "Cartera Vencida", FileText],
+    ["Cartera", [
+      ["cartera_cargar", "Cargar pedidos", Box],
+      ["cartera_pedidos", "Gestion de pedidos", Wallet],
+      ["cartera_vencida", "Cartera vencida", FileText],
+    ]],
   ],
-  transportista: [["mi_empresa", "Mi Empresa", Truck]],
-  conductor: [["mis_pedidos", "Mis Pedidos", Box], ["mis_devoluciones", "Mis Devoluciones", RotateCcw], ["mis_recogidas", "Mis Recogidas", PackageCheck], ["mi_ubicacion", "Mi Ubicacion GPS", MapPin]],
-  cliente: [["consultas", "Estado Pedidos", Box], ["devoluciones", "Mis Devoluciones", RotateCcw], ["recogidas", "Mis Recogidas", PackageCheck], ["pqrs", "PQRS", HelpCircle], ["cartera_consultas", "Consultas Cartera", Search]],
+  transportista: [
+    ["Mi operacion", [["mi_empresa", "Mi empresa", Truck]]],
+  ],
+  conductor: [
+    ["Mi operacion", [
+      ["mis_pedidos", "Mis pedidos", Box],
+      ["mis_devoluciones", "Mis devoluciones", RotateCcw],
+      ["mis_recogidas", "Mis recogidas", PackageCheck],
+      ["mi_ubicacion", "Mi ubicacion GPS", MapPin],
+    ]],
+  ],
+  cliente: [
+    ["Mis solicitudes", [
+      ["consultas", "Estado pedidos", Box],
+      ["devoluciones", "Mis devoluciones", RotateCcw],
+      ["recogidas", "Mis recogidas", PackageCheck],
+      ["pqrs", "PQRS", HelpCircle],
+      ["cartera_consultas", "Consultas cartera", Search],
+    ]],
+  ],
 };
 
-export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed, pqrs = [] }) {
-  const items = MENUS[user.rol] || [];
-  const width = collapsed ? 72 : 246;
-  const canShareApp = ["admin", "operador", "transportista"].includes(user.rol);
+function Marca({ colapsado }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+        background: `linear-gradient(135deg,${T.color.marca},${T.color.marcaFuerte})`,
+        color: "#fff", display: "grid", placeItems: "center",
+        fontWeight: 800, fontSize: 12, letterSpacing: "-0.02em",
+      }}>PRO</div>
+      {!colapsado && (
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.color.tinta, lineHeight: 1.1 }}>Somos PRO</div>
+          <div style={{ fontSize: 11, color: T.color.tinta3 }}>Tracking</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed }) {
+  const grupos = MENUS[user.rol] || [];
+  const inicial = (user.nombre || "?").trim().charAt(0).toUpperCase();
 
   return (
     <aside style={{
-      width,
-      height: "100vh",
-      background: "#fff",
-      borderRight: "1px solid #e5e7eb",
-      display: "flex",
-      flexDirection: "column",
+      width: collapsed ? 72 : 264,
+      minHeight: "100vh",
+      background: T.color.superficie,
+      borderRight: `1px solid ${T.color.borde}`,
+      display: "flex", flexDirection: "column",
       transition: "width .2s ease",
       flexShrink: 0,
-      position: "sticky",
-      top: 0,
-      zIndex: 20,
-      color: "#111827",
     }}>
-      <div style={{ padding: collapsed ? "16px 10px" : "18px 12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: "#6d42d8",
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 900,
-          fontSize: 13,
-          flexShrink: 0,
-        }}>
-          PRO
-        </div>
-        {!collapsed && (
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>Somos PRO</div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3 }}>Tracking</div>
-          </div>
-        )}
+      <div style={{
+        padding: collapsed ? "18px 14px" : "18px 16px",
+        display: "flex", alignItems: "center",
+        justifyContent: collapsed ? "center" : "space-between", gap: 8,
+      }}>
+        <Marca colapsado={collapsed} />
         <button
           onClick={() => setCollapsed(!collapsed)}
           title={collapsed ? "Expandir menu" : "Contraer menu"}
           style={{
-            width: 28,
-            height: 28,
-            border: "none",
-            background: "transparent",
-            color: "#6b7280",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-            borderRadius: 8,
-            flexShrink: 0,
-          }}
-        >
-          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+            border: "none", background: "transparent", cursor: "pointer",
+            color: T.color.tinta3, padding: 4, borderRadius: 8,
+            display: collapsed ? "none" : "grid", placeItems: "center",
+          }}>
+          <ChevronLeft size={16} />
         </button>
       </div>
 
-      {!collapsed && (
-        <div style={{ padding: "12px 12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 38,
-            height: 38,
-            borderRadius: 19,
-            background: "#f1f0f8",
-            display: "grid",
-            placeItems: "center",
-            color: "#4f2ca8",
-            fontWeight: 800,
+      {collapsed && (
+        <button
+          onClick={() => setCollapsed(false)}
+          title="Expandir menu"
+          style={{
+            border: "none", background: "transparent", cursor: "pointer",
+            color: T.color.tinta3, margin: "0 auto 6px", padding: 4,
+            borderRadius: 8, display: "grid", placeItems: "center",
           }}>
-            {user.nombre?.[0]?.toUpperCase() || "U"}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.nombre}</div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{ROLES[user.rol] || user.rol}</div>
-          </div>
-        </div>
+          <ChevronRight size={16} />
+        </button>
       )}
 
-      <nav style={{ flex: 1, overflowY: "auto", padding: "6px 8px 12px" }}>
-        {items.map(([id, label, Icon]) => {
-          const active = activeTab === id;
-          const badgeCount = id === "pqrs" ? (pqrs || []).filter(p => p.estado === "abierta").length : 0;
-          return (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              title={collapsed ? label : undefined}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                minHeight: 36,
-                padding: collapsed ? "9px 0" : "9px 12px",
-                marginBottom: 3,
-                background: active ? "#f0eef9" : "transparent",
-                border: "none",
-                borderRadius: 10,
-                cursor: "pointer",
-                color: active ? "#3f2386" : "#374151",
-                fontWeight: active ? 700 : 500,
-                fontSize: 14,
-                textAlign: "left",
-                justifyContent: collapsed ? "center" : "flex-start",
-                position: "relative",
-              }}
-            >
-              <Icon size={17} strokeWidth={active ? 2.4 : 1.9} />
-              {!collapsed && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
-              {badgeCount > 0 && (
-                <span style={{
-                  background: "#ef4444",
-                  color: "#fff",
-                  borderRadius: 99,
-                  minWidth: 18,
-                  height: 18,
-                  padding: "0 5px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  fontWeight: 800,
-                  position: collapsed ? "absolute" : "static",
-                  top: 2,
-                  right: 8,
-                }}>
-                  {badgeCount > 9 ? "9+" : badgeCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <nav style={{ flex: 1, overflowY: "auto", padding: collapsed ? "4px 10px 16px" : "4px 12px 16px" }}>
+        {grupos.map(([titulo, items]) => (
+          <div key={titulo} style={{ marginBottom: 18 }}>
+            {!collapsed && (
+              <div style={{ ...T.texto.seccion, color: T.color.tinta3, padding: "0 10px 8px" }}>{titulo}</div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {items.map(([tab, label, Icono]) => {
+                const activo = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    title={collapsed ? label : undefined}
+                    style={{
+                      width: "100%",
+                      display: "flex", alignItems: "center", gap: 10,
+                      justifyContent: collapsed ? "center" : "flex-start",
+                      padding: collapsed ? "10px" : "9px 10px",
+                      borderRadius: T.radio.control,
+                      border: "none", cursor: "pointer", fontFamily: "inherit",
+                      textAlign: "left", fontSize: 13.5,
+                      fontWeight: activo ? 700 : 500,
+                      color: activo ? T.color.marca : T.color.tinta2,
+                      background: activo ? T.color.marcaSuave : "transparent",
+                      transition: "background .12s, color .12s",
+                    }}>
+                    <Icono size={17} strokeWidth={activo ? 2.3 : 1.9} style={{ flexShrink: 0 }} />
+                    {!collapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div style={{ flexShrink: 0, borderTop: "1px solid #e5e7eb", padding: "10px 8px 14px", background: "#fff" }}>
-        {canShareApp && onShareApp && (
-          <button
-            onClick={onShareApp}
-            title="Compartir App"
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: collapsed ? "center" : "flex-start",
-              gap: 12,
-              minHeight: 38,
-              padding: collapsed ? "9px 0" : "9px 12px",
-              border: "none",
-              background: "transparent",
-              borderRadius: 10,
-              color: "#374151",
-              cursor: "pointer",
-              fontSize: 14,
-              fontWeight: 500,
-            }}
-          >
-            <Share2 size={17} />
-            {!collapsed && "Compartir App"}
-          </button>
+      <div style={{
+        borderTop: `1px solid ${T.color.borde}`,
+        padding: collapsed ? "12px 10px" : "12px",
+        display: "flex", alignItems: "center", gap: 10,
+        justifyContent: collapsed ? "center" : "space-between",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: T.radio.pastilla, flexShrink: 0,
+            background: T.color.marcaSuave, color: T.color.marca,
+            display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13,
+          }}>{inicial}</div>
+          {!collapsed && (
+            <div style={{ minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 700, color: T.color.tinta, lineHeight: 1.2,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{user.nombre}</div>
+              <div style={{ fontSize: 11.5, color: T.color.tinta3 }}>{ROLES[user.rol] || user.rol}</div>
+            </div>
+          )}
+        </div>
+        {!collapsed && (
+          <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+            {onShareApp && (
+              <button onClick={onShareApp} title="Compartir app" style={botonIcono}>
+                <Share2 size={16} />
+              </button>
+            )}
+            <button onClick={onLogout} title="Cerrar sesion" style={{ ...botonIcono, color: T.color.mal }}>
+              <LogOut size={16} />
+            </button>
+          </div>
         )}
-        <button
-          onClick={onLogout}
-          title="Cerrar Sesion"
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 12,
-            minHeight: 38,
-            padding: collapsed ? "9px 0" : "9px 12px",
-            border: "none",
-            background: "transparent",
-            borderRadius: 10,
-            color: "#ef4444",
-            cursor: "pointer",
-            fontSize: 14,
-            fontWeight: 500,
-          }}
-        >
-          <LogOut size={17} />
-          {!collapsed && "Cerrar Sesion"}
-        </button>
       </div>
     </aside>
   );
 }
+
+const botonIcono = {
+  border: "none", background: "transparent", cursor: "pointer",
+  color: T.color.tinta3, padding: 7, borderRadius: 8,
+  display: "grid", placeItems: "center",
+};

@@ -1382,9 +1382,11 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  );
 }
 
-function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], recargar, user }) {
+function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], busquedaInicial = "", recargar, user }) {
  const [filtro, setFiltro] = useState("todos");
- const [busq, setBusq] = useState("");
+ const [busq, setBusq] = useState(busquedaInicial || "");
+ // Cuando el dashboard manda una consulta, se aplica aunque el modulo ya estuviera montado.
+ useEffect(() => { if (busquedaInicial) setBusq(busquedaInicial); }, [busquedaInicial]);
  const [modNuevo, setModNuevo] = useState(false);
  const [modDet, setModDet] = useState(null);
  const [modGuia, setModGuia] = useState(null);
@@ -4290,6 +4292,9 @@ export default function SomosProTracking() {
  const [facturas,    setFacturas]    = useState([]);
  const [collapsed,   setCollapsed]   = useState(false);
  const [modCompartir,  setModCompartir]  = useState(false);
+ // Lo que se elige en el buscador del dashboard: Pedidos se abre con esa consulta
+ // ya aplicada, en vez de dejar al usuario buscando otra vez.
+ const [busquedaPedidos, setBusquedaPedidos] = useState("");
  const [toast,     setToast]     = useState(null);
 
  const showToast = (msg, type = "info") => setToast({ msg, type });
@@ -4552,8 +4557,9 @@ export default function SomosProTracking() {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
-   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}/>;
-   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={recargarPedidos} user={user}/>;
+   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}
+    onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setTab("pedidos"); }}/>;
+   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}/>;
    case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas}/>;

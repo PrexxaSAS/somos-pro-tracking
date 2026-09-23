@@ -1,303 +1,558 @@
-import React, { useEffect, useState } from 'react';
-import { transportePedido } from '../../utils/transporte';
-import { AlertTriangle } from 'lucide-react';
-import { Badge } from '../../Subcomponentes';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { AlertTriangle, Bell, CalendarDays, ChevronRight, Search } from 'lucide-react';
+import { T, tarjeta } from '../../design/tokens';
+import { ESTADOS_PEDIDO } from '../../Constants';
 
-const card = {
- background: "#fff",
- border: "1px solid #e5e7eb",
- borderRadius: 16,
- boxShadow: "0 1px 2px rgba(15, 23, 42, 0.03)",
+// Rangos del filtro de fecha. Se compara contra fecha_creacion del pedido.
+const RANGOS = [
+ { id: "7",   label: "Ultimos 7 dias",  dias: 7 },
+ { id: "30",  label: "Ultimos 30 dias", dias: 30 },
+ { id: "90",  label: "Ultimos 90 dias", dias: 90 },
+ { id: "todo", label: "Todo el historico", dias: null },
+];
+
+// Orden de los estados en la barra apilada y en la leyenda. La secuencia de colores
+// esta validada en este orden (ver T.estado): no reordenar sin volver a comprobarla.
+const ORDEN_ESTADOS = [
+ "sin_asignar", "pendiente", "en_transito", "paqueteria",
+ "entregado", "novedad", "solo_facturar", "cliente_recoge",
+];
+
+const hoyISO = () => new Date().toISOString().split("T")[0];
+const restarDias = (n) => {
+ const d = new Date();
+ d.setDate(d.getDate() - n);
+ return d.toISOString().split("T")[0];
 };
+const diasEntre = (desde, hasta) =>
+ Math.round((new Date(hasta) - new Date(desde)) / 86400000);
 
-const fmtPct = (value) => `${Math.round(value)}%`;
-
-export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [], promesas = [], ciudades = [], setActiveTab }) {
- const [gpsTick, setGpsTick] = useState(0);
+// Cierra un desplegable al hacer clic fuera de el.
+function useCerrarAlClicFuera(abierto, cerrar) {
+ const ref = useRef(null);
  useEffect(() => {
-  const t = setInterval(() => setGpsTick(n => n + 1), 15000);
-  return () => clearInterval(t);
- }, []);
+  if (!abierto) return;
+  const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) cerrar(); };
+  document.addEventListener("mousedown", fuera);
+  return () => document.removeEventListener("mousedown", fuera);
+ }, [abierto, cerrar]);
+ return ref;
+}
 
- const hoy = new Date().toISOString().split("T")[0];
- const entregados = pedidos.filter(p => p.estado === "entregado" || p.estado === "novedad");
- const activos = pedidos.filter(p => ["en_transito", "pendiente", "sin_asignar"].includes(p.estado));
+function Tarjeta({ children, style = {} }) {
+ return <section style={{ ...tarjeta, padding: 20, ...style }}>{children}</section>;
+}
 
- const promMap = Object.fromEntries((promesas || []).map(p => [p.ciudad_codigo, Number(p.dias_plazo || 0)]));
- const tienePromesa = (p) => promMap[p.ciudad_codigo] !== undefined;
- const fechaLimite = (p) => {
-  if (!p.fecha_creacion || promMap[p.ciudad_codigo] === undefined) return null;
-  const d = new Date(p.fecha_creacion);
-  d.setDate(d.getDate() + promMap[p.ciudad_codigo]);
-  return d.toISOString().split("T")[0];
+function TituloTarjeta({ children, accion }) {
+ return (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 12 }}>
+   <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.color.tinta }}>{children}</h2>
+   {accion}
+  </div>
+ );
+}
+
+function Enlace({ children, onClick }) {
+ return (
+  <button onClick={onClick} style={{
+   border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+   color: T.color.marca, fontSize: 13, fontWeight: 600, padding: 0,
+   display: "inline-flex", alignItems: "center", gap: 4,
+  }}>{children}</button>
+ );
+}
+
+// ── Controles del encabezado ────────────────────────────────────────────────
+
+function Buscador({ pedidos, onAbrirPedido }) {
+ const [texto, setTexto] = useState("");
+ const [abierto, setAbierto] = useState(false);
+ const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
+
+ const consulta = texto.trim().toLowerCase();
+ const resultados = useMemo(() => {
+  if (consulta.length < 2) return [];
+  return pedidos.filter(p =>
+   String(p.id || "").toLowerCase().includes(consulta) ||
+   String(p.guia_interna || "").toLowerCase().includes(consulta) ||
+   String(p.guia_paqueteria || "").toLowerCase().includes(consulta) ||
+   String(p.cliente || "").toLowerCase().includes(consulta)
+  ).slice(0, 6);
+ }, [pedidos, consulta]);
+
+ const elegir = (valor) => {
+  setTexto("");
+  setAbierto(false);
+  onAbrirPedido(valor);
  };
- const fechaRiesgoInfo = (p) => {
-  const limitePromesa = fechaLimite(p);
-  if (limitePromesa) return { fecha: limitePromesa, fuente: "promesa" };
-  return { fecha: p.fecha_estimada || "", fuente: "fecha estimada" };
- };
-
- const vencidos = activos.filter(p => {
-  const lim = fechaLimite(p);
-  if (!lim) return p.fecha_estimada && p.fecha_estimada < hoy;
-  return lim < hoy;
- });
-
- const manana = new Date();
- manana.setDate(manana.getDate() + 1);
- const mananaStr = manana.toISOString().split("T")[0];
- const enRiesgo = activos
-  .filter(p => {
-   const info = fechaRiesgoInfo(p);
-   return info.fecha && info.fecha >= hoy && info.fecha <= mananaStr;
-  })
-  .filter(p => !vencidos.includes(p));
-
- const tiemposEntrega = entregados
-  .filter(p => p.fecha_creacion && p.fecha_real)
-  .map(p => Math.round((new Date(p.fecha_real) - new Date(p.fecha_creacion)) / 86400000))
-  .filter(d => d >= 0);
- const promedioEntrega = tiemposEntrega.length
-  ? (tiemposEntrega.reduce((a, b) => a + b, 0) / tiemposEntrega.length).toFixed(1)
-  : "0.0";
- const diasPromPromedio = promesas.length
-  ? (promesas.reduce((a, p) => a + Number(p.dias_plazo || 0), 0) / promesas.length).toFixed(1)
-  : "0.0";
-
- const entregadosConPromesa = entregados.filter(p => tienePromesa(p) && p.fecha_real && p.fecha_creacion);
- const cumplidos = entregadosConPromesa.filter(p => p.fecha_real <= fechaLimite(p));
- const noCumplidos = entregadosConPromesa.length - cumplidos.length;
- const sinPromesaEntregados = entregados.filter(p => !tienePromesa(p) && p.fecha_real && p.fecha_estimada);
- const aTiempoFallback = sinPromesaEntregados.filter(p => p.fecha_real <= p.fecha_estimada).length;
- const tardeFallback = sinPromesaEntregados.length - aTiempoFallback;
- const totalParaCumpl = entregadosConPromesa.length + sinPromesaEntregados.length;
- const aTiempo = cumplidos.length + aTiempoFallback;
- const tarde = noCumplidos + tardeFallback;
- const pctCumpl = totalParaCumpl > 0 ? Math.round((aTiempo / totalParaCumpl) * 100) : 0;
-
- const condActivos = [...new Set(activos.filter(p => p.conductor_id).map(p => String(p.conductor_id)))]
-  .map(id => {
-   const cond = conductores.find(c => String(c.id) === id);
-   const gps = window._gpsData && window._gpsData[id];
-   const gpsOk = gps && (Date.now() - gps.ts) < 300000;
-   return { cond, gpsOk, id };
-  })
-  .filter(x => x.cond);
- const sinGPS = condActivos.filter(x => !x.gpsOk);
-
- const estadoOrden = [
-  { key: "sin_asignar", label: "Sin Asignar", color: "#94a3b8" },
-  { key: "pendiente", label: "Pendiente", color: "#d97706" },
-  { key: "en_transito", label: "En Transito", color: "#6d42d8" },
-  { key: "paqueteria", label: "Paqueteria", color: "#6d42d8" },
-  { key: "entregado", label: "Entregado", color: "#6d42d8" },
-  { key: "novedad", label: "Con Novedad", color: "#ef2d2d" },
-  { key: "solo_facturar", label: "Solo Facturar", color: "#0f766e" },
-  { key: "cliente_recoge", label: "Cliente Recoge", color: "#0369a1" },
- ];
-
- const stats = [
-  { label: "Total Pedidos", value: pedidos.length, color: "#111827" },
-  { label: "Activos", value: activos.length, color: "#111827" },
-  { label: "Entregados", value: entregados.length, color: "#111827" },
-  { label: "En Riesgo", value: enRiesgo.length, color: enRiesgo.length ? "#d97706" : "#6b7280" },
-  { label: "Vencidos", value: vencidos.length, color: vencidos.length ? "#ef2d2d" : "#111827" },
-  { label: "Devoluciones", value: devoluciones.length, color: "#111827" },
- ];
-
- const pqrsRows = [
-  { label: "Abiertas", value: pqrs.filter(p => p.estado === "abierta").length, color: "#ef2d2d" },
-  { label: "En Gestion", value: pqrs.filter(p => p.estado === "en_gestion").length, color: "#d97706" },
-  { label: "Cerradas", value: pqrs.filter(p => p.estado === "cerrada").length, color: "#08a66a" },
- ];
-
- const alerta = vencidos.length > 0 ? {
-  items: vencidos,
-  title: `${vencidos.length} pedidos fuera de promesa`,
-  color: "#ef2d2d",
-  bg: "#fff5f5",
-  border: "#f6b0b0",
- } : enRiesgo.length > 0 ? {
-  items: enRiesgo,
-  title: `${enRiesgo.length} pedidos en riesgo de vencer hoy o manana`,
-  color: "#d97706",
-  bg: "#fffbeb",
-  border: "#f8cf76",
- } : null;
- const pedidosRecientes = pedidos.slice(0, 10);
 
  return (
-  <div style={{ minHeight: "100%", background: "#fafafa", margin: "-28px -24px", color: "#111827" }}>
-   <header style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "18px 32px" }}>
-    <h1 style={{ margin: 0, fontSize: 22, lineHeight: 1.15, fontWeight: 800 }}>Dashboard</h1>
-    <p style={{ margin: "5px 0 0", color: "#6b7280", fontSize: 14 }}>Resumen operativo de seguimiento y entregas</p>
-   </header>
-
-   <div style={{ maxWidth: 1216, margin: "0 auto", padding: "24px 24px 40px", display: "flex", flexDirection: "column", gap: 24 }}>
-    {alerta && (
-     <div style={{
-      ...card,
-      borderColor: alerta.border,
-      background: alerta.bg,
-      padding: "16px 18px",
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-     }}>
-      <span style={{ width: 24, height: 24, borderRadius: 12, display: "grid", placeItems: "center", background: "#fff", color: alerta.color, flexShrink: 0 }}>
-       <AlertTriangle size={16} />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-       <div style={{ color: alerta.color, fontWeight: 800, fontSize: 15 }}>{alerta.title}</div>
-       <div style={{ marginTop: 8, display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13, color: "#4b5563" }}>
-        {alerta.items.slice(0, 4).map(p => {
-         const info = fechaRiesgoInfo(p);
-         return <span key={p.id}><strong>{p.id}</strong> vencio {info.fecha}</span>;
-        })}
+  <div ref={ref} style={{ position: "relative", width: 300 }}>
+   <Search size={15} style={{ position: "absolute", left: 12, top: 11, color: T.color.tinta3 }} />
+   <input
+    value={texto}
+    onChange={e => { setTexto(e.target.value); setAbierto(true); }}
+    onFocus={() => setAbierto(true)}
+    onKeyDown={e => { if (e.key === "Enter" && consulta) elegir(texto.trim()); }}
+    placeholder="Buscar pedido, guia o cliente"
+    style={{
+     width: "100%", boxSizing: "border-box",
+     padding: "9px 12px 9px 34px",
+     border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
+     fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
+     background: T.color.superficie, outline: "none",
+    }}/>
+   {abierto && consulta.length >= 2 && (
+    <div style={{
+     position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 40,
+     ...tarjeta, boxShadow: T.sombra.flotante, padding: 6, maxHeight: 320, overflowY: "auto",
+    }}>
+     {resultados.length === 0 ? (
+      <div style={{ padding: "10px 12px", fontSize: 13, color: T.color.tinta3 }}>Sin resultados</div>
+     ) : resultados.map(p => (
+      <button key={p.id} onClick={() => elegir(p.id)} style={{
+       width: "100%", textAlign: "left", border: "none", background: "transparent",
+       cursor: "pointer", fontFamily: "inherit", padding: "8px 10px",
+       borderRadius: T.radio.chico, display: "block",
+      }}>
+       <div style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{p.id}</div>
+       <div style={{ fontSize: 12, color: T.color.tinta3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {p.cliente}{p.guia_interna ? ` · ${p.guia_interna}` : ""}
        </div>
-      </div>
-      <span style={{ background: alerta.color, color: "#fff", borderRadius: 18, minWidth: 32, height: 32, display: "grid", placeItems: "center", fontWeight: 900 }}>{alerta.items.length}</span>
-     </div>
-    )}
-
-    <section style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(140px, 1fr))", gap: 12 }}>
-     {stats.map(s => (
-      <div key={s.label} style={{ ...card, padding: "18px 16px" }}>
-       <div style={{ fontSize: 32, lineHeight: 1, fontWeight: 850, color: s.color }}>{s.value}</div>
-       <div style={{ color: "#4b5563", fontSize: 13, marginTop: 9 }}>{s.label}</div>
-      </div>
+      </button>
      ))}
-    </section>
+    </div>
+   )}
+  </div>
+ );
+}
 
-    <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-     <div style={{ ...card, padding: 22, minHeight: 152 }}>
-      <div style={{ color: "#6b7280", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>Tiempo Medio Entrega</div>
-      <div style={{ color: "#9ca3af", fontSize: 13, marginTop: 5 }}>Promesa promedio: {diasPromPromedio} dias</div>
-      <div style={{ marginTop: 36, display: "flex", alignItems: "flex-end", gap: 6 }}>
-       <span style={{ fontSize: 36, lineHeight: 1, fontWeight: 900 }}>{promedioEntrega}</span>
-       <span style={{ fontSize: 13, color: "#4b5563", paddingBottom: 4 }}>dias</span>
-      </div>
-      <div style={{ color: "#6b7280", fontSize: 13, marginTop: 12 }}>Calculado sobre {tiemposEntrega.length} pedidos</div>
+function SelectorRango({ rango, setRango }) {
+ const [abierto, setAbierto] = useState(false);
+ const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
+ const actual = RANGOS.find(r => r.id === rango) || RANGOS[1];
+
+ return (
+  <div ref={ref} style={{ position: "relative" }}>
+   <button onClick={() => setAbierto(!abierto)} style={{
+    display: "inline-flex", alignItems: "center", gap: 8,
+    padding: "9px 12px", border: `1px solid ${T.color.borde2}`,
+    borderRadius: T.radio.control, background: T.color.superficie,
+    cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+    fontWeight: 600, color: T.color.tinta,
+   }}>
+    <CalendarDays size={15} style={{ color: T.color.tinta3 }} />
+    {actual.label}
+   </button>
+   {abierto && (
+    <div style={{
+     position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, minWidth: 190,
+     ...tarjeta, boxShadow: T.sombra.flotante, padding: 6,
+    }}>
+     {RANGOS.map(r => (
+      <button key={r.id} onClick={() => { setRango(r.id); setAbierto(false); }} style={{
+       width: "100%", textAlign: "left", border: "none", cursor: "pointer",
+       fontFamily: "inherit", padding: "8px 10px", borderRadius: T.radio.chico,
+       fontSize: 13, fontWeight: r.id === rango ? 700 : 500,
+       color: r.id === rango ? T.color.marca : T.color.tinta2,
+       background: r.id === rango ? T.color.marcaSuave : "transparent",
+      }}>{r.label}</button>
+     ))}
+    </div>
+   )}
+  </div>
+ );
+}
+
+function Campana({ avisos, onIr }) {
+ const [abierto, setAbierto] = useState(false);
+ const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
+ const total = avisos.reduce((s, a) => s + a.cantidad, 0);
+
+ return (
+  <div ref={ref} style={{ position: "relative" }}>
+   <button onClick={() => setAbierto(!abierto)} title="Avisos" style={{
+    position: "relative", padding: 9, border: `1px solid ${T.color.borde2}`,
+    borderRadius: T.radio.control, background: T.color.superficie,
+    cursor: "pointer", display: "grid", placeItems: "center", color: T.color.tinta2,
+   }}>
+    <Bell size={16} />
+    {total > 0 && (
+     <span style={{
+      position: "absolute", top: -6, right: -6, minWidth: 18, height: 18, padding: "0 5px",
+      borderRadius: T.radio.pastilla, background: T.color.mal, color: "#fff",
+      fontSize: 11, fontWeight: 800, display: "grid", placeItems: "center",
+     }}>{total > 99 ? "99+" : total}</span>
+    )}
+   </button>
+   {abierto && (
+    <div style={{
+     position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, width: 280,
+     ...tarjeta, boxShadow: T.sombra.flotante, padding: 6,
+    }}>
+     <div style={{ ...T.texto.seccion, color: T.color.tinta3, padding: "8px 10px 6px" }}>Avisos</div>
+     {total === 0 ? (
+      <div style={{ padding: "10px", fontSize: 13, color: T.color.tinta3 }}>Nada pendiente por ahora.</div>
+     ) : avisos.filter(a => a.cantidad > 0).map(a => (
+      <button key={a.id} onClick={() => { setAbierto(false); onIr(a.tab); }} style={{
+       width: "100%", display: "flex", alignItems: "center", gap: 10,
+       border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+       padding: "9px 10px", borderRadius: T.radio.chico, textAlign: "left",
+      }}>
+       <span style={{ width: 8, height: 8, borderRadius: 4, background: a.color, flexShrink: 0 }} />
+       <span style={{ flex: 1, fontSize: 13, color: T.color.tinta2 }}>{a.texto}</span>
+       <span style={{ fontSize: 13, fontWeight: 800, color: T.color.tinta }}>{a.cantidad}</span>
+      </button>
+     ))}
+    </div>
+   )}
+  </div>
+ );
+}
+
+// ── Graficas ────────────────────────────────────────────────────────────────
+
+// Donut de cumplimiento. Dos segmentos separados por un hueco del color de la
+// superficie, con el porcentaje como cifra central y la leyenda al lado: el color
+// nunca es el unico portador del dato.
+function DonutCumplimiento({ pct, aTiempo, tarde }) {
+ const total = aTiempo + tarde;
+ const r = 52, grosor = 14, C = 2 * Math.PI * r;
+ const hueco = total > 0 && aTiempo > 0 && tarde > 0 ? 6 : 0;
+ const largoATiempo = total > 0 ? (aTiempo / total) * C : 0;
+ const [sobre, setSobre] = useState(null);
+
+ const arco = (color, largo, desfase, clave, etiqueta, valor) => (
+  <circle
+   cx="70" cy="70" r={r} fill="none" stroke={color} strokeWidth={grosor}
+   strokeDasharray={`${Math.max(largo - hueco, 0)} ${C}`}
+   strokeDashoffset={-desfase}
+   strokeLinecap={hueco ? "round" : "butt"}
+   onMouseEnter={() => setSobre({ etiqueta, valor })}
+   onMouseLeave={() => setSobre(null)}
+   style={{ cursor: "default", transition: "stroke-width .12s" }}
+  />
+ );
+
+ return (
+  <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 18 }}>
+   <svg viewBox="0 0 140 140" style={{ width: 128, height: 128, flexShrink: 0, transform: "rotate(-90deg)" }}>
+    <circle cx="70" cy="70" r={r} fill="none" stroke={T.color.borde} strokeWidth={grosor} />
+    {total > 0 && arco(T.color.bien, largoATiempo, 0, "aTiempo", "A tiempo", aTiempo)}
+    {total > 0 && arco(T.color.ojo, C - largoATiempo, largoATiempo, "tarde", "Tarde", tarde)}
+    <text x="70" y="64" textAnchor="middle" fontSize="24" fontWeight="800"
+     fill={T.color.tinta} transform="rotate(90 70 70)">{pct}%</text>
+    <text x="70" y="82" textAnchor="middle" fontSize="11"
+     fill={T.color.tinta3} transform="rotate(90 70 70)">a tiempo</text>
+   </svg>
+
+   <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+    {[["A tiempo", aTiempo, T.color.bien], ["Tarde", tarde, T.color.ojo]].map(([etiqueta, valor, color]) => (
+     <div key={etiqueta} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ width: 9, height: 9, borderRadius: 3, background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 13, color: T.color.tinta2, flex: 1 }}>{etiqueta}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{valor.toLocaleString("es-CO")}</span>
      </div>
+    ))}
+    <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 8, borderTop: `1px solid ${T.color.borde}` }}>
+     <span style={{ fontSize: 13, color: T.color.tinta3, flex: 1 }}>Entregados</span>
+     <span style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{total.toLocaleString("es-CO")}</span>
+    </div>
+   </div>
 
-     <div style={{ ...card, padding: 22, minHeight: 152 }}>
-      <div style={{ color: "#6b7280", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>Cumplimiento</div>
-      <div style={{ color: "#9ca3af", fontSize: 13, marginTop: 5 }}>Basado en promesas de servicio</div>
-      <div style={{ display: "flex", justifyContent: "center", marginTop: 22 }}>
-       <svg viewBox="0 0 140 84" style={{ width: 140, height: 84 }}>
-        <path d="M20,70 A50,50 0 0,1 120,70" fill="none" stroke="#eef0f3" strokeWidth="14" strokeLinecap="round" />
-        <path
-         d="M20,70 A50,50 0 0,1 120,70"
-         fill="none"
-         stroke="#08a66a"
-         strokeWidth="14"
-         strokeLinecap="round"
-         strokeDasharray={`${pctCumpl * 1.57} 157`}
-        />
-        <text x="70" y="69" textAnchor="middle" fontSize="20" fontWeight="900" fill="#111827">{pctCumpl}%</text>
-       </svg>
+   {sobre && (
+    <div style={{
+     position: "absolute", top: -6, left: 0, zIndex: 20,
+     background: T.color.tinta, color: "#fff", fontSize: 12, fontWeight: 600,
+     padding: "5px 9px", borderRadius: T.radio.chico, pointerEvents: "none",
+    }}>{sobre.etiqueta}: {sobre.valor.toLocaleString("es-CO")}</div>
+   )}
+  </div>
+ );
+}
+
+// Barra apilada de pedidos por estado. Los segmentos se separan con 2px de la
+// superficie para que se distingan aunque dos colores queden pegados, y cada uno
+// aparece ademas en la leyenda con su nombre y su cifra.
+function BarraEstados({ conteos, total, onIrAEstado }) {
+ const [sobre, setSobre] = useState(null);
+ const visibles = ORDEN_ESTADOS.filter(k => conteos[k] > 0);
+
+ return (
+  <div>
+   <div style={{ position: "relative", display: "flex", gap: 2, height: 14, marginBottom: 18 }}
+    onMouseLeave={() => setSobre(null)}>
+    {total === 0 ? (
+     <div style={{ flex: 1, background: T.color.borde, borderRadius: T.radio.pastilla }} />
+    ) : visibles.map((k, i) => {
+     const pct = (conteos[k] / total) * 100;
+     const primero = i === 0, ultimo = i === visibles.length - 1;
+     return (
+      <div
+       key={k}
+       onMouseEnter={() => setSobre(k)}
+       onClick={() => onIrAEstado && onIrAEstado(k)}
+       title={`${ESTADOS_PEDIDO[k]?.label || k}: ${conteos[k]}`}
+       style={{
+        width: `${pct}%`, minWidth: 4, background: T.estado[k],
+        borderTopLeftRadius: primero ? 7 : 2, borderBottomLeftRadius: primero ? 7 : 2,
+        borderTopRightRadius: ultimo ? 7 : 2, borderBottomRightRadius: ultimo ? 7 : 2,
+        cursor: onIrAEstado ? "pointer" : "default",
+        outline: sobre === k ? `2px solid ${T.color.tinta}` : "none",
+        outlineOffset: 2,
+       }}/>
+     );
+    })}
+   </div>
+
+   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: "12px 20px" }}>
+    {ORDEN_ESTADOS.map(k => {
+     const n = conteos[k] || 0;
+     const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+     return (
+      <div key={k}
+       onMouseEnter={() => setSobre(k)}
+       onMouseLeave={() => setSobre(null)}
+       style={{ display: "flex", alignItems: "center", gap: 8, opacity: n === 0 ? 0.45 : 1 }}>
+       <span style={{ width: 9, height: 9, borderRadius: 3, background: T.estado[k], flexShrink: 0 }} />
+       <span style={{ fontSize: 13, color: T.color.tinta2, flex: 1, whiteSpace: "nowrap" }}>
+        {ESTADOS_PEDIDO[k]?.label || k}
+       </span>
+       <span style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{n.toLocaleString("es-CO")}</span>
+       <span style={{ fontSize: 12, color: T.color.tinta3, width: 34, textAlign: "right" }}>{pct}%</span>
       </div>
-      <div style={{ textAlign: "center", color: "#6b7280", fontSize: 13 }}>{aTiempo} a tiempo {tarde} tarde de {totalParaCumpl || entregados.length} entregados</div>
-     </div>
+     );
+    })}
+   </div>
+  </div>
+ );
+}
 
-     <div style={{ ...card, padding: 22, minHeight: 152 }}>
-      <div style={{ color: "#6b7280", fontWeight: 800, fontSize: 12, textTransform: "uppercase", marginBottom: 22 }}>PQRS</div>
-      {pqrsRows.map(row => (
-       <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e5e7eb", padding: "10px 0" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-         <span style={{ width: 8, height: 8, borderRadius: 4, background: row.color }} />
-         <span>{row.label}</span>
-        </span>
-        <strong>{row.value}</strong>
+// ── Dashboard ───────────────────────────────────────────────────────────────
+
+export function Dashboard({
+ pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [],
+ promesas = [], ciudades = [], setActiveTab, onBuscarPedido,
+}) {
+ const [rango, setRango] = useState("30");
+
+ const irA = (tab) => { if (setActiveTab) setActiveTab(tab); };
+ const abrirPedido = (texto) => {
+  if (onBuscarPedido) onBuscarPedido(texto);
+  else irA("pedidos");
+ };
+
+ const m = useMemo(() => {
+  const dias = (RANGOS.find(r => r.id === rango) || RANGOS[1]).dias;
+  const desde = dias ? restarDias(dias) : null;
+  const enRango = desde
+   ? pedidos.filter(p => (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde)
+   : pedidos;
+
+  const hoy = hoyISO();
+  const promMap = Object.fromEntries((promesas || []).map(p => [p.ciudad_codigo, Number(p.dias_plazo || 0)]));
+  const tienePromesa = (p) => promMap[p.ciudad_codigo] !== undefined;
+  const fechaLimite = (p) => {
+   if (!tienePromesa(p) || !p.fecha_creacion) return p.fecha_estimada || null;
+   const d = new Date(p.fecha_creacion);
+   d.setDate(d.getDate() + promMap[p.ciudad_codigo]);
+   return d.toISOString().split("T")[0];
+  };
+
+  const entregados = enRango.filter(p => p.estado === "entregado" || p.estado === "novedad");
+  const activos = enRango.filter(p => ["en_transito", "pendiente", "sin_asignar"].includes(p.estado));
+
+  const vencidos = activos
+   .filter(p => { const l = fechaLimite(p); return l && l < hoy; })
+   .map(p => ({ ...p, limite: fechaLimite(p) }))
+   .sort((a, b) => a.limite.localeCompare(b.limite));
+
+  const manana = restarDias(-1);
+  const enRiesgo = activos.filter(p => {
+   const l = fechaLimite(p);
+   return l && (l === hoy || l === manana);
+  });
+
+  const tiempos = entregados
+   .filter(p => p.fecha_real && p.fecha_creacion)
+   .map(p => diasEntre(p.fecha_creacion, p.fecha_real))
+   .filter(d => d >= 0);
+  const promedio = tiempos.length ? (tiempos.reduce((a, b) => a + b, 0) / tiempos.length).toFixed(1) : "0.0";
+  const promesaProm = promesas.length
+   ? (promesas.reduce((s, p) => s + Number(p.dias_plazo || 0), 0) / promesas.length).toFixed(1)
+   : "0.0";
+
+  const conPromesa = entregados.filter(p => tienePromesa(p) && p.fecha_real && p.fecha_creacion);
+  const sinPromesa = entregados.filter(p => !tienePromesa(p) && p.fecha_real && p.fecha_estimada);
+  const aTiempo = conPromesa.filter(p => p.fecha_real <= fechaLimite(p)).length
+   + sinPromesa.filter(p => p.fecha_real <= p.fecha_estimada).length;
+  const totalCumpl = conPromesa.length + sinPromesa.length;
+  const tarde = totalCumpl - aTiempo;
+  const pctCumpl = totalCumpl > 0 ? Math.round((aTiempo / totalCumpl) * 100) : 0;
+
+  const conteos = {};
+  ORDEN_ESTADOS.forEach(k => { conteos[k] = 0; });
+  enRango.forEach(p => { if (conteos[p.estado] !== undefined) conteos[p.estado] += 1; });
+
+  return {
+   enRango, entregados, activos, vencidos, enRiesgo,
+   promedio, promesaProm, aTiempo, tarde, pctCumpl, totalCumpl, conteos,
+  };
+ }, [pedidos, promesas, rango]);
+
+ const pqrsAbiertas = pqrs.filter(p => p.estado === "abierta").length;
+ const pqrsGestion = pqrs.filter(p => p.estado === "en_gestion").length;
+ const pqrsCerradas = pqrs.filter(p => p.estado === "cerrada").length;
+
+ const avisos = [
+  { id: "venc", texto: "Pedidos fuera de promesa", cantidad: m.vencidos.length, color: T.color.mal, tab: "pedidos" },
+  { id: "riesgo", texto: "En riesgo de vencer", cantidad: m.enRiesgo.length, color: T.color.ojo, tab: "pedidos" },
+  { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs" },
+ ];
+
+ const kpis = [
+  { label: "Total pedidos", valor: m.enRango.length, color: T.color.tinta3 },
+  { label: "Activos", valor: m.activos.length, color: T.color.marca, destacado: true },
+  { label: "Entregados", valor: m.entregados.length, color: T.color.bien },
+  { label: "En riesgo", valor: m.enRiesgo.length, color: T.color.ojo },
+  { label: "Vencidos", valor: m.vencidos.length, color: T.color.mal },
+  { label: "Devoluciones", valor: devoluciones.length, color: T.color.tinta3 },
+ ];
+
+ return (
+  <div style={{ minHeight: "100%", background: T.color.fondo, margin: "-28px -24px", padding: "24px 28px 40px", color: T.color.tinta }}>
+   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
+
+    <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+     <div>
+      <h1 style={{ margin: 0, ...T.texto.titulo }}>Dashboard</h1>
+      <p style={{ margin: "4px 0 0", color: T.color.tinta3, fontSize: 13.5 }}>
+       Resumen operativo de seguimiento y entregas
+      </p>
+     </div>
+     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <Buscador pedidos={pedidos} onAbrirPedido={abrirPedido} />
+      <SelectorRango rango={rango} setRango={setRango} />
+      <Campana avisos={avisos} onIr={irA} />
+     </div>
+    </header>
+
+    <Tarjeta style={{ padding: 0 }}>
+     <div style={{ display: "grid", gridTemplateColumns: `repeat(${kpis.length},1fr)` }}>
+      {kpis.map((k, i) => (
+       <div key={k.label} style={{
+        padding: "18px 22px",
+        borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}`,
+       }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+         <span style={{ width: 7, height: 7, borderRadius: 4, background: k.color, flexShrink: 0 }} />
+         <span style={{ fontSize: 12.5, color: T.color.tinta2, whiteSpace: "nowrap" }}>{k.label}</span>
+        </div>
+        <div style={{ ...T.texto.cifra, color: k.destacado ? T.color.marca : T.color.tinta }}>
+         {k.valor.toLocaleString("es-CO")}
+        </div>
        </div>
       ))}
      </div>
-    </section>
+    </Tarjeta>
 
-    <section style={{ ...card, padding: "22px 28px" }}>
-     <h2 style={{ margin: "0 0 22px", fontSize: 16 }}>Pedidos por Estado</h2>
-     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {estadoOrden.map(e => {
-       const count = pedidos.filter(p => p.estado === e.key).length;
-       const pct = pedidos.length ? (count / pedidos.length) * 100 : 0;
-       return (
-        <div key={e.key} style={{ display: "grid", gridTemplateColumns: "110px 1fr 42px", alignItems: "center", gap: 14 }}>
-         <div style={{ textAlign: "right", color: "#6b7280", fontSize: 13 }}>{e.label}</div>
-         <div style={{ height: 24, background: "#f0f0f2", borderRadius: 8, overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, minWidth: count ? 32 : 0, height: "100%", background: e.color, borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", paddingLeft: count ? 10 : 0, boxSizing: "border-box" }}>
-           {count || ""}
-          </div>
-         </div>
-         <div style={{ color: "#6b7280", fontSize: 13, textAlign: "right" }}>{fmtPct(pct)}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr 0.85fr", gap: 18, alignItems: "start" }}>
+
+     <Tarjeta>
+      <TituloTarjeta accion={
+       <span style={{
+        background: m.vencidos.length ? T.color.malSuave : T.color.bienSuave,
+        color: m.vencidos.length ? T.color.mal : T.color.bien,
+        borderRadius: T.radio.pastilla, padding: "2px 10px", fontSize: 12.5, fontWeight: 800,
+       }}>{m.vencidos.length}</span>
+      }>
+       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <AlertTriangle size={16} style={{ color: m.vencidos.length ? T.color.mal : T.color.tinta3 }} />
+        Fuera de promesa
+       </span>
+      </TituloTarjeta>
+
+      {m.vencidos.length === 0 ? (
+       <p style={{ margin: 0, fontSize: 13, color: T.color.tinta3 }}>
+        Ningun pedido activo paso su fecha limite en este rango.
+       </p>
+      ) : (
+       <>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+         {m.vencidos.slice(0, 5).map((p, i) => {
+          const dias = diasEntre(p.limite, hoyISO());
+          return (
+           <button key={p.id} onClick={() => abrirPedido(p.id)} style={{
+            display: "flex", alignItems: "center", gap: 12,
+            border: "none", borderTop: i === 0 ? "none" : `1px solid ${T.color.borde}`,
+            background: "transparent", cursor: "pointer", fontFamily: "inherit",
+            padding: "11px 0", textAlign: "left", width: "100%",
+           }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta, minWidth: 108 }}>{p.id}</span>
+            <span style={{ fontSize: 12.5, color: T.color.tinta3, flex: 1, whiteSpace: "nowrap" }}>
+             vencio {p.limite}
+            </span>
+            <span style={{
+             background: T.color.malSuave, color: T.color.mal, borderRadius: T.radio.pastilla,
+             padding: "2px 9px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap",
+            }}>{dias} {dias === 1 ? "dia" : "dias"}</span>
+            <ChevronRight size={15} style={{ color: T.color.tinta3, flexShrink: 0 }} />
+           </button>
+          );
+         })}
         </div>
-       );
-      })}
-     </div>
-    </section>
-
-    {condActivos.length > 0 && (
-     <section style={{ ...card, padding: 22 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-       <h2 style={{ margin: 0, fontSize: 16 }}>GPS Conductores Activos</h2>
-       {sinGPS.length > 0 && <span style={{ background: "#fee2e2", color: "#ef2d2d", borderRadius: 14, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>{sinGPS.length} sin GPS</span>}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-       {condActivos.slice(0, 6).map(({ cond, gpsOk }) => (
-        <div key={cond.id} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-         <span style={{ width: 40, height: 40, borderRadius: 20, background: "#f6f6f7", display: "grid", placeItems: "center", color: "#6b7280" }}>
-          <AlertTriangle size={18} />
-         </span>
-         <div>
-          <div style={{ fontWeight: 800 }}>{cond.nombre}</div>
-          <div style={{ color: "#6b7280", fontSize: 13 }}>{gpsOk ? "GPS activo" : `${cond.placa || "Sin placa"}`}</div>
+        {m.vencidos.length > 5 && (
+         <div style={{ marginTop: 14 }}>
+          <Enlace onClick={() => irA("pedidos")}>Ver los {m.vencidos.length} pedidos <ChevronRight size={14} /></Enlace>
          </div>
+        )}
+       </>
+      )}
+     </Tarjeta>
+
+     <Tarjeta>
+      <TituloTarjeta accion={
+       <span style={{ fontSize: 12, color: T.color.tinta3 }}>Segun promesas</span>
+      }>Cumplimiento</TituloTarjeta>
+      <DonutCumplimiento pct={m.pctCumpl} aTiempo={m.aTiempo} tarde={m.tarde} />
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.color.borde}`, fontSize: 13, color: T.color.tinta2 }}>
+       Tiempo medio de entrega{" "}
+       <strong style={{ color: T.color.tinta, fontSize: 15 }}>{m.promedio} d</strong>
+       <span style={{ color: T.color.tinta3 }}> / {m.promesaProm} prom.</span>
+      </div>
+     </Tarjeta>
+
+     <Tarjeta>
+      <TituloTarjeta accion={<Enlace onClick={() => irA("pqrs")}>Abrir</Enlace>}>PQRS</TituloTarjeta>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+       {[
+        { label: "Abiertas", valor: pqrsAbiertas, color: T.color.mal, fondo: T.color.malSuave },
+        { label: "En gestion", valor: pqrsGestion, color: T.color.ojo, fondo: T.color.ojoSuave },
+        { label: "Cerradas", valor: pqrsCerradas, color: T.color.bien, fondo: T.color.bienSuave },
+       ].map(f => (
+        <div key={f.label} style={{
+         display: "flex", alignItems: "center", gap: 10,
+         padding: "11px 14px", borderRadius: T.radio.control,
+         background: f.valor > 0 ? f.fondo : T.color.superficie2,
+        }}>
+         <span style={{ width: 8, height: 8, borderRadius: 4, background: f.color, flexShrink: 0 }} />
+         <span style={{ flex: 1, fontSize: 13, color: T.color.tinta2 }}>{f.label}</span>
+         <span style={{ fontSize: 15, fontWeight: 800, color: T.color.tinta }}>{f.valor}</span>
         </div>
        ))}
       </div>
-     </section>
-    )}
+     </Tarjeta>
+    </div>
 
-    <section style={{ ...card, padding: 0, overflow: "hidden" }}>
-     <div style={{ padding: "18px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <h2 style={{ margin: 0, fontSize: 16 }}>Pedidos Recientes</h2>
-      <button onClick={() => setActiveTab?.("pedidos")} style={{ border:"none", background:"transparent", color:"#6d42d8", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Ver todos</button>
-     </div>
-     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-       <thead>
-        <tr style={{ color: "#6b7280", fontSize: 12, textTransform: "uppercase" }}>
-         {["No. Pedido", "Factura", "Cliente", "Ciudad", "Cajas", "Estado", "Conductor"].map(h => (
-          <th key={h} style={{ textAlign: "left", padding: "14px 20px", borderBottom: "1px solid #e5e7eb" }}>{h}</th>
-         ))}
-        </tr>
-       </thead>
-       <tbody>
-        {pedidosRecientes.map(p => {
-         const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-         return (
-          <tr key={p.id}>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
-            <div style={{ color: "#5b33d6", fontWeight: 800 }}>{p.guia_interna || p.id}</div>
-            {p.tipo !== "paqueteria" && p.guia_interna && p.guia_interna !== p.id && (
-             <div style={{ color: "#6b7280", fontSize: 12, fontFamily: "monospace", marginTop: 3 }}>{p.id}</div>
-            )}
-           </td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", color: "#4b5563" }}>{p.factura}</td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>{p.cliente}</td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
-            <div>{p.ciudad_nombre}</div>
-            {p.ciudad_origen_nombre && <div style={{ color: "#6b7280", fontSize: 12 }}>Origen: {p.ciudad_origen_nombre}</div>}
-           </td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", fontWeight: 800 }}>{p.cajas}</td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}><Badge estado={p.estado} /></td>
-           <td style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", color: "#4b5563" }}>{transportePedido(p, cond).principal || "Sin asignar"}</td>
-          </tr>
-         );
-        })}
-       </tbody>
-     </table>
-     </div>
-    </section>
+    <Tarjeta>
+     <TituloTarjeta accion={
+      <span style={{ fontSize: 12.5, color: T.color.tinta3 }}>
+       {m.enRango.length.toLocaleString("es-CO")} pedidos
+      </span>
+     }>Pedidos por estado</TituloTarjeta>
+     <BarraEstados conteos={m.conteos} total={m.enRango.length} onIrAEstado={() => irA("pedidos")} />
+    </Tarjeta>
+
    </div>
   </div>
  );

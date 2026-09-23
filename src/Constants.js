@@ -39,12 +39,12 @@ export const ESTADOS_PEDIDO = {
  pendiente:  { label: "Pendiente",  color: "#d97706", bg: "#fffbeb" },
  en_transito: { label: "En Transito", color: "#7c3aed", bg: "#f5f3ff" },
  paqueteria: { label: "Paqueteria", color: "#0891b2", bg: "#ecfeff" },
- entregado:  { label: "Entregado",  color: "#059669", bg: "#ecfdf5" },
+ entregado:  { label: "Entregado",  color: "#15803d", bg: "#ecfdf5" },
  novedad:   { label: "Con Novedad", color: "#dc2626", bg: "#fef2f2" },
  // Pedidos que solo se facturan (la mercancia ya se entrego). No son despachos
  // pendientes: no cuentan como activos, vencidos ni en riesgo.
- solo_facturar: { label: "Solo Facturar", color: "#0f766e", bg: "#f0fdfa" },
- cliente_recoge: { label: "Cliente Recoge", color: "#0369a1", bg: "#f0f9ff" },
+ solo_facturar: { label: "Solo Facturar", color: "#0d9488", bg: "#f0fdfa" },
+ cliente_recoge: { label: "Cliente Recoge", color: "#a21caf", bg: "#fdf4ff" },
 };
 
 // Estados que no son despachos pendientes: el pedido no sale con conductor ni
