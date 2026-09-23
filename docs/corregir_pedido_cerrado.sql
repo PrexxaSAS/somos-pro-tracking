@@ -28,16 +28,30 @@ where id = 'PT000010660';
 alter table public.pedidos disable trigger trg_prevent_closed_pedido_changes;
 
 -- ---------------------------------------------------------------------------
--- 3) Corregir. Deja solo las columnas que necesites y ajusta los valores.
---    ciudad_nombre se toma de la tabla de ciudades para que coincidan.
+-- 3) Corregir
+--
+-- Caso real de PT000010660: cajas 2, factura PT12225, fecha estimada hoy y la
+-- modalidad "Cliente Recoge".
+--
+-- Esa modalidad se guarda en estado_despacho y NO en estado, porque en estado
+-- vive "entregado": si se reemplazara, el pedido dejaria de contar como entregado
+-- en el dashboard y perderia el cierre, aunque tenga su soporte y su fecha real.
+-- El detalle del pedido muestra el badge "Entregado" y el desplegable de despacho
+-- en "Cliente Recoge", que es justo lo que se quiere ver.
+--
+-- Para otro pedido, cambia el id y los valores; borra las columnas que no aplican.
 -- ---------------------------------------------------------------------------
-update public.pedidos p
-set cajas         = 3,                       -- <-- el numero real de cajas
-    factura       = 'FAC-XXXX',              -- <-- la factura real
-    ciudad_codigo = '05001',                 -- <-- el codigo DANE
-    ciudad_nombre = coalesce((select c.name from public.ciudades c
-                              where c.code = '05001'), p.ciudad_nombre)
-where p.id = 'PT000010660';
+update public.pedidos
+set cajas           = 2,
+    factura         = 'PT12225',
+    fecha_estimada  = current_date,
+    estado_despacho = 'cliente_recoge'
+where id = 'PT000010660';
+
+-- Si ademas hay que corregir la ciudad, agrega estas dos lineas al update de
+-- arriba con el codigo DANE que corresponda:
+--     ciudad_codigo = '05001',
+--     ciudad_nombre = (select c.name from public.ciudades c where c.code = '05001')
 
 -- ---------------------------------------------------------------------------
 -- 4) Cerrar la ventana (no omitir)
