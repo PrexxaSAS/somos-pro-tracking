@@ -179,14 +179,14 @@ begin
   end loop;
 end $$;
 
-drop policy if exists cartera_logistica_update;
+drop policy if exists cartera_logistica_update on public.pedidos_cartera;
 drop policy if exists cartera_operador_update on public.pedidos_cartera;
 create policy cartera_operador_update on public.pedidos_cartera
   for update to authenticated
   using (public.current_user_role() = 'operador')
   with check (public.current_user_role() = 'operador');
 
-drop policy if exists cartera_logistica_cortes;
+drop policy if exists cartera_logistica_cortes on public.cortes_programados;
 drop policy if exists cartera_operador_cortes on public.cortes_programados;
 create policy cartera_operador_cortes on public.cortes_programados
   for update to authenticated
