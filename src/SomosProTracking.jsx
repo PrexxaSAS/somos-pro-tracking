@@ -207,6 +207,13 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
    showToast(pedidoCerrado ? "No se puede modificar un pedido que ya fue entregado" : "No se puede editar un pedido en transito","error");
    return;
   }
+  // Cliente Recoge saca el pedido de los despachos pendientes, asi que no se puede
+  // marcar sin la prueba de que el cliente se lo llevo. Como subir el soporte guarda
+  // todo de una vez (incluida esta modalidad), el camino correcto es adjuntarlo.
+  if (estadoDesp === "cliente_recoge" && !tieneSoportes) {
+   showToast("Para marcar Cliente Recoge adjunta primero el soporte de entrega: al subirlo se guardan tambien los datos del formulario","error");
+   return;
+  }
   const c = conductores.find(c=>String(c.id)===String(condId));
   let nuevoEstado = pedido.estado;
   if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
@@ -492,6 +499,11 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
        {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
       ]}
       disabled={pedidoBloqueadoEdicion}/>
+    )}
+    {estadoDesp==="cliente_recoge"&&!tieneSoportes&&(
+     <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
+      Cliente Recoge necesita el soporte de entrega. Adjuntalo con el boton de soportes: al subirlo se guarda todo junto.
+     </p>
     )}
 
     <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:puedeMarcarNovedadEntrega?"pointer":"not-allowed",opacity:puedeMarcarNovedadEntrega?1:0.65}}
