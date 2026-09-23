@@ -15,6 +15,7 @@ import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
+import { Conductores } from './modules/conductores/Conductores';
 import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
@@ -1412,7 +1413,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    (p.cliente || "").toLowerCase().includes(q) ||
    (p.factura || "").toLowerCase().includes(q) ||
    (p.ciudad_nombre || "").toLowerCase().includes(q) ||
-   (p.guia_paqueteria || "").toLowerCase().includes(q);
+   (p.guia_paqueteria || "").toLowerCase().includes(q) ||
+   (p.placa || "").toLowerCase().includes(q);
   return okF && okB;
  });
  const totalCajas = filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
@@ -1879,136 +1881,6 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  );
 }
 
-function Conductores({ conductores, pedidos, showToast, transportistas, recargar }) {
- const [modal, setModal] = useState(false);
- const [guardando, setGuardando] = useState(false);
- const vacio = { nombre:"", cedula:"", placa:"", celular:"", nit_proveedor:"", empresa:"", user_login:"", pass_login:"" };
- const [form, setForm] = useState(vacio);
- const f = k => v => setForm(p => ({ ...p, [k]: v }));
- const conductoresActivos = conductores.filter(c => c.activo !== false);
- const border = "#e5e7eb";
- const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
- const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
- const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
-
- const guardar = async () => {
-  if (!form.nombre.trim() || !form.cedula.trim() || !form.placa.trim()) {
-   showToast("Nombre, cedula y placa son obligatorios", "error"); return;
-  }
-  if (!form.user_login.trim() || !form.pass_login.trim()) {
-   showToast("Usuario y contrasena son obligatorios", "error"); return;
-  }
-  if (form.nit_proveedor.trim()) {
-   const existe = (transportistas || []).find(t => t.nit === form.nit_proveedor.trim());
-   if (!existe) { showToast("El NIT no corresponde a ninguna empresa registrada", "error"); return; }
-  }
-  setGuardando(true);
-  try {
-   const { data, error } = await supabase.functions.invoke('create-system-user', {
-    body: {
-     type: 'conductor',
-     nombre: form.nombre.trim(),
-     cedula: form.cedula.trim(),
-     placa: form.placa.trim(),
-     celular: form.celular.trim(),
-     user_login: form.user_login.trim(),
-     pass_login: form.pass_login.trim(),
-     nit_proveedor: form.nit_proveedor.trim(),
-     empresa: form.empresa.trim(),
-    },
-   });
-   if (error) { showToast(await mensajeErrorFuncion(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
-   if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
-   setModal(false); setForm(vacio);
-   showToast("Conductor y usuario creados", "success");
-   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
-  } catch(e) {
-   showToast("Error inesperado: " + e.message, "error");
-  }
-  setGuardando(false);
- };
-
- return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Conductores</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion de conductores, placas y disponibilidad operativa</p>
-    </div>
-    <button style={primaryButton} onClick={() => setModal(true)}>+ Registrar Conductor</button>
-   </header>
-
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:14 }}>
-     {conductoresActivos.map(c => {
-      const asignados = pedidos.filter(p => String(p.conductor_id) === String(c.id)).length;
-      const transito = pedidos.filter(p => String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
-      return (
-       <article key={c.id} style={{ ...cardStyle, padding:18 }}>
-        <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
-         <div style={{ width:46, height:46, borderRadius:23, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900, fontSize:15, flexShrink:0 }}>
-          {c.nombre?.split(/\s+/).slice(0,2).map(x => x[0]).join("").toUpperCase() || "C"}
-         </div>
-         <div style={{ minWidth:0 }}>
-          <div style={{ fontWeight:850, fontSize:16, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nombre}</div>
-          <div style={{ color:"#6b7280", fontSize:13, marginTop:3 }}>Placa: <span style={{ fontFamily:"monospace", color:"#111827" }}>{c.placa}</span></div>
-         </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-         <div style={{ background:"#fafafa", border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px" }}>
-          <div style={{ color:"#6b7280", fontSize:11, fontWeight:800, textTransform:"uppercase" }}>Asignados</div>
-          <div style={{ marginTop:4, fontSize:22, fontWeight:900 }}>{asignados}</div>
-         </div>
-         <div style={{ background:"#fafafa", border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px" }}>
-          <div style={{ color:"#6b7280", fontSize:11, fontWeight:800, textTransform:"uppercase" }}>En Transito</div>
-          <div style={{ marginTop:4, fontSize:22, fontWeight:900, color:transito ? "#6d42d8" : "#111827" }}>{transito}</div>
-         </div>
-        </div>
-        <div style={{ color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
-         {c.cedula && <span>CC: {c.cedula}</span>}
-         {c.celular && <span>Tel: {c.celular}</span>}
-         {c.empresa && <span>{c.empresa}</span>}
-        </div>
-       </article>
-      );
-     })}
-     {conductoresActivos.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores registrados.</div>}
-    </section>
-   </main>
-
-   {modal && (
-    <Modal title="Registrar Conductor" onClose={() => setModal(false)}>
-     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      <div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>
-       Se creara automaticamente el usuario de acceso al sistema.
-      </div>
-      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required placeholder="Juan Perez" />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-       <Field label="Cedula *" value={form.cedula} onChange={f("cedula")} required placeholder="1012345678" />
-       <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567" />
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-       <Field label="Placa *" value={form.placa} onChange={f("placa")} required placeholder="ABC-123" />
-       <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1" />
-      </div>
-      <Field label="Empresa de transporte" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S" />
-      <div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}>
-       <p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p>
-       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-        <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" data-lpignore="true" />
-        <Field label="Contrasena *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="" name="spt_driver_password" autoComplete="new-password" data-lpignore="true" />
-       </div>
-      </div>
-      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-       <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
-       <Btn onClick={guardar} disabled={guardando}>{guardando ? "Guardando..." : "Guardar y Crear Usuario"}</Btn>
-      </div>
-     </div>
-    </Modal>
-   )}
-  </div>
- );
-}
 function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar }) {
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
@@ -4569,7 +4441,8 @@ export default function SomosProTracking() {
     onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
-   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}/>;
+   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}
+    onVerPedidos={(c)=>{ setEstadoPedidos(""); setBusquedaPedidos(c.placa || c.nombre || ""); setTab("pedidos"); }}/>;
    case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
