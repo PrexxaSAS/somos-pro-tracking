@@ -309,8 +309,14 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   // escritura. Antes se perdia en silencio y el pedido quedaba cerrado sin cajas
   // ni factura, sin forma de corregirlo desde la aplicacion.
   const pendientes = cambiosPendientesDelFormulario();
+  // "Cliente Recoge" y "Solo Facturar" viven en la columna estado, que al subir el
+  // soporte pasa a "entregado". Para no perder como se entrego el pedido, la
+  // modalidad se guarda en estado_despacho antes de que el estado la reemplace.
+  const modalidad = ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp
+   : ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : null;
   const cambios = {
    ...pendientes,
+   ...(modalidad ? { estado_despacho: modalidad } : {}),
    soportes: nuevosSoportes,
    soportes_data: nuevosSoportesData,
    estado: estadoFinal,
