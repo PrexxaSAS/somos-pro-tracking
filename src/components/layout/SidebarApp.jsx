@@ -132,7 +132,12 @@ export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp
   return (
     <aside style={{
       width: collapsed ? 72 : 264,
-      minHeight: "100vh",
+      // Altura fija a la ventana y pegado arriba: el menu se desplaza por dentro y el
+      // bloque del usuario queda siempre visible, sin tener que bajar la pagina.
+      height: "100vh",
+      position: "sticky",
+      top: 0,
+      alignSelf: "flex-start",
       background: T.color.superficie,
       borderRight: `1px solid ${T.color.borde}`,
       display: "flex", flexDirection: "column",
