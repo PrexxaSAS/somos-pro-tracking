@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Camera, Check, Eye, EyeOff, MessageSquare, X } from 'lucide-react';
 import { T } from '../../design/tokens';
 
 // Piezas de los modulos de creacion, segun docs/systemdesign.md seccion 3.
@@ -265,5 +265,205 @@ export function Adjunto({ label, nombre, onArchivo, acepta = "image/*,.pdf", opc
    <input ref={ref} type="file" accept={acepta} style={{ display: "none" }}
     onChange={e => { const f = e.target.files?.[0]; if (f) onArchivo(f); }}/>
   </Campo>
+ );
+}
+
+
+// ── Modulos de gestion (editar, asignar, cerrar) ────────────────────────────
+
+// Encabezado con el identificador y el estado, cuerpo con el resumen y las
+// secciones editables, y un pie donde la accion que cierra el estado (entregar,
+// completar, cerrar) va siempre de ultima y en verde.
+export function ModalGestion({
+ titulo, id, estado, descripcion, ancho = "M", onClose, children,
+ enlaces, textoGuardar = "Guardar", onGuardar, guardando = false,
+ textoCierre, onCierre, cierreDeshabilitado = false,
+}) {
+ return (
+  <div
+   onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+   style={{
+    position: "fixed", inset: 0, background: "rgba(23,20,31,.45)", zIndex: 1000,
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+   }}>
+   <div style={{
+    background: T.color.superficie, borderRadius: 16,
+    width: "100%", maxWidth: ancho === "M" ? 640 : 480,
+    maxHeight: "90vh", display: "flex", flexDirection: "column",
+    boxShadow: "0 24px 64px rgba(23,20,31,.22)",
+   }}>
+    <header style={{
+     display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+     gap: 16, padding: "22px 24px 16px",
+    }}>
+     <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+       <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: T.color.tinta, letterSpacing: "-0.01em" }}>
+        {titulo}
+       </h3>
+       {id && <span style={{ fontFamily: T.fuente.mono, fontSize: 13, color: T.color.marca }}>{id}</span>}
+       {estado}
+      </div>
+      {descripcion && (
+       <p style={{ margin: "4px 0 0", fontSize: 13, color: T.color.tinta3 }}>{descripcion}</p>
+      )}
+     </div>
+     <button onClick={onClose} title="Cerrar" style={{
+      border: "none", background: "transparent", cursor: "pointer",
+      color: T.color.tinta4, padding: 4, borderRadius: 8,
+      display: "grid", placeItems: "center", flexShrink: 0,
+     }}><X size={18} /></button>
+    </header>
+
+    <div style={{
+     padding: "0 24px 20px", overflowY: "auto",
+     display: "flex", flexDirection: "column", gap: 16,
+    }}>
+     {children}
+    </div>
+
+    <footer style={{
+     display: "flex", alignItems: "center", justifyContent: "space-between",
+     gap: 12, padding: "14px 24px", borderTop: `1px solid ${T.color.borde}`,
+     flexShrink: 0, flexWrap: "wrap",
+    }}>
+     <div style={{ display: "flex", gap: 14 }}>{enlaces}</div>
+     <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+      <button onClick={onClose} disabled={guardando} style={{
+       height: 38, padding: "0 16px", borderRadius: T.radio.boton,
+       border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
+       color: T.color.tinta2, fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+       cursor: guardando ? "not-allowed" : "pointer",
+      }}>Cancelar</button>
+      {onGuardar && (
+       <button onClick={onGuardar} disabled={guardando} style={{
+        height: 38, padding: "0 18px", borderRadius: T.radio.boton, border: "none",
+        background: T.color.marca, color: "#fff", fontFamily: "inherit",
+        fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer",
+        opacity: guardando ? 0.6 : 1,
+       }}>{guardando ? "Guardando..." : textoGuardar}</button>
+      )}
+      {onCierre && (
+       <button onClick={onCierre} disabled={guardando || cierreDeshabilitado} style={{
+        display: "inline-flex", alignItems: "center", gap: 7,
+        height: 38, padding: "0 18px", borderRadius: T.radio.boton, border: "none",
+        background: T.color.bienPunto, color: "#fff", fontFamily: "inherit",
+        fontSize: 13, fontWeight: 600,
+        cursor: (guardando || cierreDeshabilitado) ? "not-allowed" : "pointer",
+        opacity: (guardando || cierreDeshabilitado) ? 0.5 : 1,
+       }}><Check size={15} /> {textoCierre}</button>
+      )}
+     </div>
+    </footer>
+   </div>
+  </div>
+ );
+}
+
+// Enlace terciario del pie (Ver guia, Ver mapa).
+export function EnlacePie({ icono, children, onClick }) {
+ return (
+  <button onClick={onClick} style={{
+   display: "inline-flex", alignItems: "center", gap: 6,
+   border: "none", background: "transparent", cursor: "pointer",
+   fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: T.color.marca, padding: 0,
+  }}>{icono}{children}</button>
+ );
+}
+
+// Tarjeta de resumen: los datos que no se editan, en tres columnas.
+export function Resumen({ titulo, datos = [], children }) {
+ return (
+  <div style={{
+   background: T.color.superficie2, border: `1px solid ${T.color.borde}`,
+   borderRadius: T.radio.tarjeta, padding: 16,
+   display: "flex", flexDirection: "column", gap: 14,
+  }}>
+   {titulo && (
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.color.tinta }}>{titulo}</div>
+   )}
+   {datos.length > 0 && (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px 16px" }}>
+     {datos.map(d => (
+      <div key={d.label} style={{ minWidth: 0 }}>
+       <div style={{ fontSize: 12, color: T.color.tinta3, marginBottom: 3 }}>{d.label}</div>
+       <div style={{
+        fontSize: 13, fontWeight: 600,
+        color: d.falta ? T.color.malPunto : T.color.tinta,
+        fontFamily: d.mono ? T.fuente.mono : "inherit",
+        overflow: "hidden", textOverflow: "ellipsis",
+       }}>{d.valor}</div>
+      </div>
+     ))}
+    </div>
+   )}
+   {children}
+  </div>
+ );
+}
+
+// Franja ambar para el motivo o la novedad, dentro del resumen.
+export function FranjaAviso({ etiqueta, children }) {
+ return (
+  <div style={{
+   display: "flex", alignItems: "flex-start", gap: 8,
+   background: T.color.ojoSuave, border: "1px solid #f0dfc0",
+   borderRadius: T.radio.control, padding: "9px 12px",
+   fontSize: 13, color: T.color.ojo,
+  }}>
+   <MessageSquare size={14} style={{ marginTop: 2, flexShrink: 0 }} />
+   <span>{etiqueta && <strong>{etiqueta}: </strong>}{children}</span>
+  </div>
+ );
+}
+
+// Casilla de una linea, para marcar la novedad dentro de su seccion.
+export function CasillaNovedad({ marcada, onChange, children, deshabilitada }) {
+ return (
+  <label style={{
+   display: "flex", alignItems: "center", gap: 10,
+   padding: "11px 13px", borderRadius: T.radio.control,
+   border: `1px solid ${marcada ? T.color.malBorde : T.color.borde2}`,
+   background: marcada ? T.color.malSuave : T.color.superficie,
+   cursor: deshabilitada ? "not-allowed" : "pointer",
+   fontSize: 13, color: marcada ? T.color.mal : T.color.tinta2,
+   opacity: deshabilitada ? 0.6 : 1,
+  }}>
+   <input type="checkbox" checked={marcada} disabled={deshabilitada}
+    onChange={e => onChange(e.target.checked)}
+    style={{ width: 15, height: 15, accentColor: T.color.malPunto, cursor: "inherit" }}/>
+   {children}
+  </label>
+ );
+}
+
+// Zona de carga de fotos con contador.
+export function ZonaFotos({ actuales = 0, maximo = 3, onClick, deshabilitada, ayuda }) {
+ return (
+  <button onClick={onClick} disabled={deshabilitada} style={{
+   display: "flex", alignItems: "center", gap: 12, width: "100%",
+   padding: "12px 14px", borderRadius: T.radio.control,
+   border: `1px ${actuales ? "solid" : "dashed"} ${T.color.borde2}`,
+   background: T.color.superficie, fontFamily: "inherit",
+   cursor: deshabilitada ? "not-allowed" : "pointer", textAlign: "left",
+   opacity: deshabilitada ? 0.6 : 1,
+  }}>
+   <span style={{
+    width: 34, height: 34, borderRadius: T.radio.chico, flexShrink: 0,
+    background: T.color.marcaSuave, color: T.color.marca,
+    display: "grid", placeItems: "center",
+   }}><Camera size={16} /></span>
+   <span style={{ flex: 1, minWidth: 0 }}>
+    <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: T.color.tinta }}>
+     Cargar fotos de entrega
+    </span>
+    <span style={{ display: "block", fontSize: 12, color: T.color.tinta3 }}>
+     {ayuda || `${actuales === 0 ? "Sin soportes aun" : actuales + " cargada(s)"} · maximo ${maximo} · JPG o PNG`}
+    </span>
+   </span>
+   <span style={{ fontSize: 12.5, fontWeight: 700, color: T.color.tinta3, fontVariantNumeric: "tabular-nums" }}>
+    {actuales}/{maximo}
+   </span>
+  </button>
  );
 }

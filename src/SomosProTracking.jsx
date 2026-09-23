@@ -20,9 +20,10 @@ import {
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
- ModalForm, Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
+ ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
+ Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
-import { ChevronDown, ChevronRight, ClipboardList, Download, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardList, Download, FileText, MapPin, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -391,241 +392,181 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  const caPrev = condId!==(pedido.conductor_id?.toString()||"") && condId!=="";
 
  return (
-  <Modal title={`Pedido ${pedido.id}${pedido.guia_interna?" - "+pedido.guia_interna:""}`} onClose={onClose} wide>
-   <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-    <div style={{background:P[50],borderRadius:12,padding:16}}>
-     <div style={{fontWeight:800,fontSize:16,color:P[800],marginBottom:10}}>{pedido.cliente}</div>
-     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8,fontSize:13,color:"#64748b"}}>
-      {pedido.ciudad_origen_nombre&&<span> Origen: <strong>{pedido.ciudad_origen_nombre}</strong>{pedido.direccion_origen&&` ${pedido.direccion_origen}`}</span>}
-      <span>Ciudad destino: {ciudad?.name} ({pedido.ciudad_codigo})</span>
-      <span>Factura: {pedido.factura}</span>
-      {(pedido.fecha_pedido||pedido.hora_pedido)&&(
-       <span>Pedido: {pedido.fecha_pedido||"sin fecha"}{pedido.hora_pedido?" "+pedido.hora_pedido:""}</span>
-      )}
-      <span>Estimado: {pedido.fecha_estimada||""}</span>
-      {fechaLimitePromesa&&<span>Limite promesa: {fechaLimitePromesa} ({promesa.dias_plazo} dia(s))</span>}
-      <span>Fuente riesgo: {fuenteRiesgo}</span>
-      <span>Real: {pedido.fecha_real||"Pendiente"}</span>
-      {pedido.guia_interna&&<span style={{fontFamily:"monospace",color:P[600],fontWeight:700}}>{pedido.guia_interna}</span>}
-     </div>
-     {pedido.notas&&<p style={{margin:"8px 0 0",fontSize:12,color:"#94a3b8"}}>{pedido.notas}</p>}
-    </div>
-
-    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-     <span style={{fontSize:13,fontWeight:700,color:P[800]}}>Estado actual:</span>
-     <Badge estado={pedido.estado}/>
-     {pedido.novedad&&<span style={{fontSize:12,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
-     <span style={{fontSize:11,color:"#94a3b8"}}>(automatico)</span>
-    </div>
-    {pedidoCerrado&&(
-     <div style={{background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:12,color:"#475569",fontSize:13,fontWeight:700}}>
-      Pedido cerrado: no se permiten modificaciones despues de la entrega.
-     </div>
+  <ModalGestion
+   titulo="Pedido"
+   id={pedido.guia_interna || pedido.id}
+   estado={<ChipEstado estado={pedido.estado} novedad={pedido.novedad} />}
+   descripcion={`${pedido.id} · estado calculado automaticamente`}
+   onClose={onClose}
+   onGuardar={(canEdit || canBasicEdit || fotosPendientes.length > 0) && !pedidoBloqueadoEdicion ? guardar : null}
+   textoGuardar={fotosPendientes.length > 0 ? "Guardar y registrar entrega" : "Guardar"}
+   enlaces={<>
+    <EnlacePie icono={<FileText size={15} />} onClick={()=>setVerGuia(true)}>Guia</EnlacePie>
+    <EnlacePie icono={<MapPin size={15} />} onClick={()=>setVerMapa(!verMapa)}>
+     {verMapa ? "Ocultar mapa" : "Mapa"}
+    </EnlacePie>
+    {tieneSoportes && (
+     <EnlacePie icono={<FileText size={15} />}
+      onClick={()=>verPDFSoportes({ ...pedido, soportes_data:soportesData }, showToast)}>
+      Soportes
+     </EnlacePie>
     )}
-    {!pedidoCerrado&&pedidoEnTransito&&!canDeliver&&(
-     <div style={{background:"#fff7ed",border:"1px solid #fdba74",borderRadius:10,padding:12,color:"#9a3412",fontSize:13,fontWeight:700}}>
-      Pedido en transito: solo el conductor asignado puede registrar soporte de entrega y novedad.
-     </div>
-    )}
-
-    {pedido.tipo==="paqueteria"&&(
-     <div style={{background:"#ecfeff",borderRadius:10,padding:14,border:"1px solid #67e8f9"}}>
-      <span style={{fontWeight:700,color:"#0891b2"}}>{pedido.paqueteria}</span>
-      <span style={{marginLeft:14,color:"#0e7490"}}>Guia: <strong style={{fontFamily:"monospace"}}>{pedido.guia_paqueteria}</strong></span>
+   </>}
+  >
+   <Resumen titulo={pedido.cliente} datos={[
+    { label:"Ciudad destino", valor:ciudad?.name || pedido.ciudad_nombre || "Sin definir", falta:!pedido.ciudad_codigo },
+    { label:"Factura", valor:pedido.factura || "Sin registrar", falta:!pedido.factura, mono:!!pedido.factura },
+    { label:"Estimado", valor:pedido.fecha_estimada || "Sin fecha", falta:!pedido.fecha_estimada },
+    { label:"Real", valor:pedido.fecha_real || "Pendiente", falta:!pedido.fecha_real },
+    { label:"Fuente de riesgo", valor:fuenteRiesgo },
+    { label:"Cajas", valor:pedido.cajas || 0 },
+   ]}>
+    {(pedido.fecha_pedido || pedido.hora_pedido) && (
+     <div style={{ fontSize:12.5, color:T.color.tinta3 }}>
+      Pedido generado: <strong style={{ color:T.color.tinta2 }}>
+       {pedido.fecha_pedido || "sin fecha"}{pedido.hora_pedido ? " " + pedido.hora_pedido : ""}
+      </strong>
      </div>
     )}
-
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-     <Field label="Direccion de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47" disabled={pedidoBloqueadoEdicion}/>
-     <Field label="Ciudad destino" value={ciudadEdit} onChange={setCiudadEdit} as="select"
-      options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}
-      disabled={pedidoBloqueadoEdicion}/>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-     <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder={pedidoBloqueadoEdicion ? "" : "10"} disabled={pedidoBloqueadoEdicion}/>
-     <Field label="No. Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000" disabled={pedidoBloqueadoEdicion}/>
-     <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date" disabled={pedidoBloqueadoEdicion}/>
-    </div>
-
-    {canEdit&&sinTransporte&&(
-     <p style={{fontSize:12,color:P[700],background:P[50],border:`1px solid ${P[200]}`,borderRadius:8,padding:"8px 12px",margin:0}}>
-      {estadoDesp==="cliente_recoge"?"Recoge el cliente:":"Solo se factura:"} este pedido no lleva conductor ni transportadora. Si tenia uno asignado, se quita al guardar.
-     </p>
-    )}
-
-    {canEdit&&!sinTransporte&&(
-     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <Field label="Tipo de Transporte" value={tipoModal} onChange={setTipoModal} as="select"
-       options={[
-        {value:"propio",label:" Transporte Propio"},
-        {value:"empresa_transporte",label:" Empresa Transportista"},
-        {value:"mensajeria",label:" Mensajeria"},
-        {value:"paqueteria",label:" Paqueteria Tercero"},
-       ]}
-       disabled={pedidoBloqueadoEdicion}/>
-      {tipoModal==="paqueteria"?(
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <Field label="Paqueteria" value={paqModal} onChange={setPaqModal} as="select" options={[{ value:"", label:"Seleccione" }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} disabled={pedidoBloqueadoEdicion}/>
-        <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX" disabled={pedidoBloqueadoEdicion}/>
-       </div>
-      ):(
-       <div>
-        <Field label="Asignar Conductor" value={condId} onChange={v=>{
-         setCondId(v);
-         // Auto-fill empresa from conductor
-         const c = conductores.find(cx=>String(cx.id)===String(v));
-         if(c && tipoModal==="empresa_transporte") setEmpTrans(c.empresa||c.nit_proveedor||"");
-        }} as="select"
-         options={[
-          {value:"",label:"Sin asignar"},
-          ...(tipoModal==="empresa_transporte"
-           ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
-           : conductoresOpciones
-          ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
-         ]}
-         disabled={pedidoBloqueadoEdicion}/>
-        {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiar a En Transito.</p>}
-       </div>
-      )}
+    {fechaLimitePromesa && (
+     <div style={{ fontSize:12.5, color:T.color.tinta3 }}>
+      Limite de promesa: <strong style={{ color:T.color.tinta2 }}>{fechaLimitePromesa}</strong>
+      {" "}({promesa.dias_plazo} dia(s))
      </div>
     )}
-
-    {canAssign&&!sinTransporte&&tipoModal!=="paqueteria"&&(
-     <div>
-      <Field label="Asignar Conductor" value={condId} onChange={v=>{
-       setCondId(v);
-       const c = conductores.find(cx=>String(cx.id)===String(v));
-       if(c && tipoModal==="empresa_transporte") setEmpTrans(c.empresa||c.nit_proveedor||"");
-      }} as="select"
-       options={[
-        {value:"",label:"Sin asignar"},
-        ...(tipoModal==="empresa_transporte"
-         ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
-         : conductoresOpciones
-        ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
-       ]}
-       disabled={pedidoBloqueadoEdicion}/>
-      {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiara a En Transito.</p>}
-     </div>
+    {pedido.notas && <FranjaAviso etiqueta="Notas">{pedido.notas}</FranjaAviso>}
+    {pedido.tipo === "paqueteria" && pedido.guia_paqueteria && (
+     <FranjaInfo>{pedido.paqueteria} · guia {pedido.guia_paqueteria}</FranjaInfo>
     )}
+   </Resumen>
 
-    {!canEdit&&!canAssign&&cond&&(
-     <div style={{background:"#eff6ff",borderRadius:10,padding:12}}>
-      <span style={{fontSize:13,color:"#1e40af"}}>
-       {cond.nombre} - Placa: {pedido.placa}{cond.cedula&&` - CC: ${cond.cedula}`}{cond.celular&&` - Tel: ${cond.celular}`}
-      </span>
-     </div>
-    )}
+   {pedidoCerrado && (
+    <FranjaInfo>Pedido cerrado: no se permiten modificaciones despues de la entrega.</FranjaInfo>
+   )}
+   {!pedidoCerrado && pedidoEnTransito && !canDeliver && (
+    <FranjaInfo>En transito: solo el conductor asignado puede registrar la entrega.</FranjaInfo>
+   )}
 
-    {/* El operador no ve el desplegable de despacho (la base le bloquea estado_despacho),
-        pero puede marcar Solo Facturar: guardar() solo cambia el estado del pedido. */}
-    {!canEdit&&canAssign&&(
-     <Field label="Marcar pedido" as="select"
-      value={ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp : ""}
-      onChange={v=>setEstadoDesp(v || (pedido.estado_despacho||"despachado"))}
-      options={[
-       {value:"",label:"Normal (se despacha)"},
-       {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
-       {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
-      ]}
-      disabled={pedidoBloqueadoEdicion}/>
-    )}
+   {(canEdit || canBasicEdit) && (
+    <>
+     <Seccion titulo="Datos del pedido" />
+     <Fila>
+      <Texto label="Direccion de entrega" valor={direccion} onChange={setDireccion}
+       placeholder="Cra 15 #93-47" deshabilitado={pedidoBloqueadoEdicion} />
+      <Selector label="Ciudad destino (DANE)" valor={ciudadEdit} onChange={setCiudadEdit}
+       placeholder="Seleccione" deshabilitado={pedidoBloqueadoEdicion}
+       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
+     </Fila>
+     <Fila>
+      <Texto label="Cajas" tipo="number" valor={cajas} onChange={setCajas} deshabilitado={pedidoBloqueadoEdicion} />
+      <Texto label="N de factura" mono valor={facturaEdit} onChange={setFacturaEdit}
+       placeholder="FAC-3000" deshabilitado={pedidoBloqueadoEdicion} />
+     </Fila>
+     <Texto label="Fecha estimada" tipo="date" valor={fechaEdit} onChange={setFechaEdit}
+      deshabilitado={pedidoBloqueadoEdicion} style={{ maxWidth:"50%" }} />
+    </>
+   )}
 
-    {canEdit&&(
-     <Field label="Estado de Despacho" value={estadoDesp} onChange={setEstadoDesp} as="select"
-      options={[
-       {value:"despachado",label:"Despachado"},
-       {value:"bloqueado",label:"Bloqueado Cartera"},
-       {value:"novedad_despacho",label:"Despachado con Novedad"},
-       {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
-       {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
-      ]}
-      disabled={pedidoBloqueadoEdicion}/>
-    )}
-    {estadoDesp==="cliente_recoge"&&!tieneSoportes&&(
-     <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
-      Cliente Recoge necesita el soporte de entrega. Adjuntalo con el boton de soportes: al subirlo se guardan tambien las cajas, la factura y los demas datos, y el pedido queda como Entregado con esta modalidad.
-     </p>
-    )}
-
-    <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:puedeMarcarNovedadEntrega?"pointer":"not-allowed",opacity:puedeMarcarNovedadEntrega?1:0.65}}
-     onClick={()=>{ if (puedeMarcarNovedadEntrega) setNovedad(!novedad); }}>
-     <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>v</span>}
-     </div>
-     <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>
-      {pedidoCerrado&&tieneSoportes ? "Entrega con Novedad" : "Entregar con Novedad al cargar soporte"}
-     </span>
-     {novedad&&<span style={{fontSize:11,color:"#dc2626",marginLeft:4}}>
-      {pedidoCerrado&&tieneSoportes ? "Guardar Cambios actualizara la novedad." : "La novedad se aplicara al cargar fotos y marcar entregado."}
-     </span>}
-    </div>
-
-    <div>
-     <div style={{fontWeight:700,fontSize:13,color:P[800],marginBottom:10}}>Soportes Fotograficos de Entrega</div>
-     {fotosPendientes.length>0&&(
-      <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:"0 0 10px"}}>
-       {fotosPendientes.length} soporte(s) adjuntos sin guardar. Presiona <strong>Guardar Cambios</strong> para registrar la entrega.
-      </p>
+   {canEdit && (
+    <>
+     <Seccion titulo="Transporte" />
+     {sinTransporte ? (
+      <FranjaInfo>
+       {estadoDesp === "cliente_recoge" ? "Recoge el cliente:" : "Solo se factura:"} este pedido no lleva
+       conductor ni transportadora. Si tenia uno asignado, se quita al guardar.
+      </FranjaInfo>
+     ) : (
+      <Fila>
+       <Selector label="Tipo de transporte" valor={tipoModal} onChange={setTipoModal}
+        deshabilitado={pedidoBloqueadoEdicion}
+        opciones={[
+         { value:"propio", label:"Transporte propio" },
+         { value:"empresa_transporte", label:"Empresa transportista" },
+         { value:"mensajeria", label:"Mensajeria" },
+         { value:"paqueteria", label:"Paqueteria tercero" },
+        ]} />
+       {tipoModal === "paqueteria" ? (
+        <Selector label="Paqueteria" valor={paqModal} onChange={setPaqModal}
+         placeholder="Seleccione" deshabilitado={pedidoBloqueadoEdicion}
+         opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
+       ) : (
+        <Selector label="Asignar conductor" valor={condId}
+         onChange={v => {
+          setCondId(v);
+          const c = conductores.find(cx => String(cx.id) === String(v));
+          if (c && tipoModal === "empresa_transporte") setEmpTrans(c.empresa || c.nit_proveedor || "");
+         }}
+         placeholder="Sin asignar" deshabilitado={pedidoBloqueadoEdicion}
+         opciones={conductoresOpciones.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+       )}
+      </Fila>
      )}
-     {[...soportesData, ...fotosPendientes].length>0?(
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:12}}>
-       {[...soportesData, ...fotosPendientes].map((s,i)=>(
-        <div key={i} style={{borderRadius:8,overflow:"hidden",border:`2px solid ${P[200]}`}}>
-         <img src={s.data} alt={"s"+i} style={{width:"100%",height:90,objectFit:"cover",display:"block"}} />
-         <div style={{fontSize:10,color:P[700],padding:"4px 8px",fontWeight:600,background:P[50]}}>Soporte {i+1}</div>
-        </div>
-       ))}
-      </div>
-     ):(pedido.soportes||[]).length>0?(
-      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
-       {(pedido.soportes||[]).map((s,i)=>(
-        <div key={i} style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"5px 12px",fontSize:12,color:"#15803d"}}>{s}</div>
-       ))}
-      </div>
-     ):(
-      <p style={{color:"#94a3b8",fontSize:13,margin:"0 0 10px"}}>Sin soportes fotograficos.</p>
+     {tipoModal === "paqueteria" && !sinTransporte && (
+      <Texto label="No. guia de paqueteria" mono valor={guiaPaq} onChange={setGuiaPaq}
+       placeholder="SRV-2026-0001" deshabilitado={pedidoBloqueadoEdicion} />
      )}
-     <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-      {!pedidoCerrado&&(!pedidoEnTransito||canDeliver)&&(pedido.soportes||[]).length<3&&(
-     <Btn variant="success" onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}>
-        Cargar Fotos (max 3) y Marcar Entregado
-       </Btn>
-      )}
-      {tieneSoportes&&(
-       <Btn variant="secondary" onClick={()=>verPDFSoportes({...pedido, soportes_data:soportesData}, showToast)}>Ver PDF Soportes</Btn>
-      )}
-     </div>
-    </div>
-
-    <div>
-     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <span style={{fontWeight:700,fontSize:13,color:P[800]}}>Mapa de destino</span>
-      <Btn size="sm" variant={verMapa?"danger":"secondary"} onClick={()=>setVerMapa(!verMapa)}>{verMapa?"Ocultar":"Ver Mapa"}</Btn>
-     </div>
-     {verMapa&&(
-      <div style={{borderRadius:12,overflow:"hidden",border:`2px solid ${P[200]}`}}>
-       <iframe title="mapa" width="100%" height="240" style={{border:"none",display:"block"}}
-        src={`https://maps.google.com/maps?q=${encodeURIComponent(direccion+", "+(ciudad?.name||"")+", Colombia")}&output=embed&z=14`}
-        allowFullScreen loading="lazy"/>
-      </div>
+     {caPrev && !sinTransporte && (
+      <FranjaInfo>Al guardar, el pedido pasa a En transito.</FranjaInfo>
      )}
-    </div>
+     <Selector label="Estado de despacho" valor={estadoDesp} onChange={setEstadoDesp}
+      deshabilitado={pedidoBloqueadoEdicion}
+      opciones={[
+       { value:"despachado", label:"Despachado" },
+       { value:"bloqueado", label:"Bloqueado cartera" },
+       { value:"novedad_despacho", label:"Despachado con novedad" },
+       { value:"solo_facturar", label:"Solo facturar (no se despacha)" },
+       { value:"cliente_recoge", label:"Cliente recoge (no se despacha)" },
+      ]} />
+    </>
+   )}
 
-    <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-     <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
-     <div style={{display:"flex",gap:10}}>
-      <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-      {(canEdit||canBasicEdit||fotosPendientes.length>0)&&!pedidoBloqueadoEdicion&&(
-       <Btn onClick={guardar}>{fotosPendientes.length>0?"Guardar y Registrar Entrega":"Guardar Cambios"}</Btn>
-      )}
-     </div>
+   {canAssign && !canEdit && !sinTransporte && tipoModal !== "paqueteria" && (
+    <>
+     <Seccion titulo="Transporte" />
+     <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
+      placeholder="Sin asignar" deshabilitado={pedidoBloqueadoEdicion}
+      opciones={conductoresOpciones.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+    </>
+   )}
+
+   <Seccion titulo="Entrega" />
+   {(soportesData.length > 0 || fotosPendientes.length > 0) && (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))", gap:10 }}>
+     {[...soportesData, ...fotosPendientes].map((f, i) => (
+      <div key={i} style={{ borderRadius:T.radio.chico, overflow:"hidden", border:`1px solid ${T.color.borde}` }}>
+       <img src={f.data || f} alt={"soporte " + (i+1)} style={{ width:"100%", height:78, objectFit:"cover", display:"block" }} />
+      </div>
+     ))}
     </div>
-   </div>
-   {verGuia&&<GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)}/>}
-   {verCamara&&<CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast}/>}
-  </Modal>
+   )}
+   {fotosPendientes.length > 0 && (
+    <FranjaAviso>
+     {fotosPendientes.length} soporte(s) adjuntos sin guardar. Presiona
+     <strong> Guardar y registrar entrega</strong> para cerrar el pedido.
+    </FranjaAviso>
+   )}
+   <ZonaFotos
+    actuales={(pedido.soportes||[]).length + fotosPendientes.length}
+    maximo={3}
+    deshabilitada={pedidoCerrado || (pedidoEnTransito && !canDeliver) || (pedido.soportes||[]).length >= 3}
+    onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}
+   />
+   <CasillaNovedad marcada={novedadEntrega} onChange={setNovedadEntrega}
+    deshabilitada={!puedeMarcarNovedadEntrega}>
+    Entregar con novedad al cargar soporte
+   </CasillaNovedad>
+
+   {verMapa && (
+    <iframe
+     title="Mapa del destino"
+     src={`https://maps.google.com/maps?q=${encodeURIComponent((pedido.direccion||"") + ", " + (ciudad?.name||"") + ", Colombia")}&output=embed`}
+     style={{ width:"100%", height:240, border:"none", borderRadius:T.radio.control }}
+     loading="lazy" />
+   )}
+
+   {verGuia && <GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)} />}
+   {verCamara && <CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast} />}
+  </ModalGestion>
  );
 }
 
@@ -3821,81 +3762,72 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
  };
 
  return (
-  <Modal title={`Devolucion ${dev.guia}`} onClose={onClose} wide>
-   <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{background:"#fef2f2",borderRadius:12,padding:16,border:"1px solid #fca5a5"}}>
-     <div style={{fontWeight:800,fontSize:15,color:"#dc2626",marginBottom:8}}> {dev.guia}</div>
-     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:13,color:"#64748b"}}>
-      <span> Factura: <strong>{dev.factura}</strong></span>
-      <span> Pedido: <strong>{dev.pedido_ref}</strong></span>
-      <span> Unidades: <strong>{dev.unidades}</strong></span>
-      <span> Peso: <strong>{dev.peso_kg} kg</strong></span>
-      <span> Ciudad: <strong>{dev.ciudad_nombre}</strong></span>
-      <span> Recogida: <strong>{dev.dir_recogida}</strong></span>
-      <span> Sede destino: <strong>{dev.dir_entrega||"Sin registrar"}</strong></span>
-     </div>
-     <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e",whiteSpace:"pre-wrap"}}>
-       Motivo: {dev.motivo}
-     </div>
-     {(dev.soporte_nombre||dev.soporte_data)&&(
-      <Btn size="sm" variant="success" style={{marginTop:10}}
-       onClick={()=>abrirArchivoRemoto('devoluciones', dev.id, 'soporte_data', 'soporte_nombre', `soporte-${dev.guia}`, showToast)}>
-        Ver Soporte
-      </Btn>
+  <ModalGestion
+   titulo="Devolucion"
+   id={dev.guia}
+   estado={<ChipEstado estado={dev.estado} novedad={dev.novedad} />}
+   descripcion={canEdit ? "Asigna transporte o cierra la devolucion" : "Detalle de la devolucion"}
+   onClose={onClose}
+   onGuardar={canEdit ? guardar : null}
+   textoGuardar="Guardar asignacion"
+   textoCierre="Marcar completada"
+   onCierre={canEdit ? marcar : null}
+  >
+   <Resumen datos={[
+    { label:"Factura", valor:dev.factura || "-", mono:true },
+    { label:"Pedido", valor:dev.pedido_ref || "-", mono:true },
+    { label:"Unidades · peso", valor:`${dev.unidades} uds · ${dev.peso_kg} kg` },
+    { label:"Ciudad", valor:ciudad?.name || dev.ciudad_nombre || "Sin definir", falta:!dev.ciudad_nombre },
+    { label:"Recogida", valor:dev.dir_recogida || "Sin registrar", falta:!dev.dir_recogida },
+    { label:"Sede destino", valor:dev.dir_entrega || "Sin registrar", falta:!dev.dir_entrega },
+   ]}>
+    {dev.motivo && <FranjaAviso etiqueta="Motivo">{dev.motivo}</FranjaAviso>}
+   </Resumen>
+
+   {canEdit && (
+    <>
+     <Seccion titulo="Transporte" />
+     <Fila>
+      <Selector label="Tipo de transporte" valor={tipoEnvio} onChange={cambiarTipo}
+       opciones={[
+        { value:"propio", label:"Transporte propio" },
+        { value:"empresa_transporte", label:"Empresa transportista" },
+        { value:"mensajeria", label:"Mensajeria" },
+        { value:"paqueteria", label:"Paqueteria tercero" },
+       ]} />
+      {tipoEnvio === "paqueteria" ? (
+       <Selector label="Paqueteria" valor={paqSel} onChange={setPaqSel}
+        placeholder="Seleccione"
+        opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
+      ) : tipoEnvio === "empresa_transporte" ? (
+       <Selector label="Empresa transportista" valor={empresa} onChange={cambiarEmpresa}
+        placeholder="Seleccione la empresa" opciones={empresasOpciones} />
+      ) : (
+       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
+        placeholder="Sin asignar"
+        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+      )}
+     </Fila>
+     {tipoEnvio === "paqueteria" && (
+      <Texto label="No. guia de paqueteria" mono valor={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-0001" />
      )}
-    </div>
-    <Badge estado={dev.estado}/>
-    {canEdit&&dev.estado!=="entregado"&&dev.estado!=="novedad"&&(
-     <>
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-       <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
-        options={[
-         {value:"propio",label:" Transporte Propio"},
-         {value:"empresa_transporte",label:" Empresa Transportista"},
-         {value:"mensajeria",label:" Mensajeria"},
-         {value:"paqueteria",label:" Paqueteria Tercero"},
-        ]}/>
-       {tipoEnvio==="paqueteria"?(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-         <Field label="Paqueteria" value={paqSel} onChange={setPaqSel} as="select"
-          options={[{value:"",label:"Seleccione"},...(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({value:x,label:x}))]}/>
-         <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
-        </div>
-       ):(
-        <>
-         {tipoEnvio==="empresa_transporte"&&(
-          <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
-           options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
-         )}
-         <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-          disabled={tipoEnvio==="empresa_transporte" && !empresa}
-          options={[
-           {value:"",label:(tipoEnvio==="empresa_transporte"&&!empresa)?"Selecciona primero la empresa":"Sin asignar"},
-           ...conductoresElegibles.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}${c.empresa?" - "+c.empresa:""}`}))
-          ]}/>
-         {tipoEnvio==="empresa_transporte"&&empresa&&conductoresElegibles.length===0&&(
-          <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
-           Esa empresa no tiene conductores activos registrados.
-          </p>
-         )}
-        </>
+     {tipoEnvio === "empresa_transporte" && (
+      <>
+       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
+        deshabilitado={!empresa}
+        placeholder={empresa ? "Sin asignar" : "Selecciona primero la empresa"}
+        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+       {empresa && conductoresElegibles.length === 0 && (
+        <FranjaInfo>Esa empresa no tiene conductores activos registrados.</FranjaInfo>
        )}
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
-       onClick={()=>setNovedad(!novedad)}>
-       <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}></span>}
-       </div>
-       <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>Marcar con Novedad</span>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
-       <Btn onClick={guardar}> Guardar Asignacion</Btn>
-       <Btn variant="success" onClick={marcar}> Marcar Devolucion Completada</Btn>
-      </div>
-     </>
-    )}
-   </div>
-  </Modal>
+      </>
+     )}
+     <CasillaNovedad marcada={novedad} onChange={setNovedad}>
+      Marcar con novedad
+     </CasillaNovedad>
+    </>
+   )}
+  </ModalGestion>
  );
 }
 
@@ -4257,77 +4189,72 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
  };
 
  return (
-  <div style={{display:"flex",flexDirection:"column",gap:16}}>
-   <div style={{background:"#ecfeff",borderRadius:12,padding:16,border:"1px solid #67e8f9"}}>
-    <div style={{fontWeight:800,fontSize:15,color:"#0891b2",marginBottom:8}}> {rec.guia}</div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:13,color:"#64748b"}}>
-     <span> Recogida: {rec.ciudad_recogida_nombre}</span>
-     <span> Entrega: {rec.ciudad_entrega_nombre}</span>
-     <span> {rec.unidades} uds {rec.peso_kg} kg</span>
-    </div>
-    {rec.observaciones&&(
-     <div style={{marginTop:8,padding:"8px 12px",background:"#f8fafc",borderRadius:8,fontSize:13,color:"#334155",whiteSpace:"pre-wrap"}}>
-      Observaciones: {rec.observaciones}
-     </div>
-    )}
-    {(rec.doc_nombre||rec.doc_data)&&(
-     <Btn size="sm" variant="success" style={{marginTop:10}}
-      onClick={()=>abrirArchivoRemoto('recogidas', rec.id, 'doc_data', 'doc_nombre', `documento-${rec.guia}`, showToast)}>
-       Ver Documento
-     </Btn>
-    )}
-   </div>
-   <Badge estado={rec.estado}/>
-   {canEdit&&rec.estado!=="entregado"&&rec.estado!=="novedad"&&(
+  <ModalGestion
+   titulo="Recogida"
+   id={rec.guia}
+   estado={<ChipEstado estado={rec.estado} novedad={rec.novedad} />}
+   descripcion={canEdit ? "Asigna transporte o cierra la recogida" : "Detalle de la recogida"}
+   onClose={onClose}
+   onGuardar={canEdit ? guardar : null}
+   textoGuardar="Guardar asignacion"
+   textoCierre="Marcar completada"
+   onCierre={canEdit ? marcar : null}
+  >
+   <Resumen datos={[
+    { label:"Recogida", valor:rec.ciudad_recogida_nombre || "Sin definir", falta:!rec.ciudad_recogida_nombre },
+    { label:"Entrega", valor:rec.ciudad_entrega_nombre || "Sin definir", falta:!rec.ciudad_entrega_nombre },
+    { label:"Carga", valor:`${rec.unidades} uds · ${rec.peso_kg} kg` },
+    { label:"Direccion de recogida", valor:rec.dir_recogida || "Sin registrar", falta:!rec.dir_recogida },
+    { label:"Direccion de entrega", valor:rec.dir_entrega || "Sin registrar", falta:!rec.dir_entrega },
+    { label:"Volumen", valor:`${rec.volumen_m3} m3` },
+   ]}>
+    {rec.observaciones && <FranjaAviso etiqueta="Observaciones">{rec.observaciones}</FranjaAviso>}
+   </Resumen>
+
+   {canEdit && (
     <>
-     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
-       options={[
-        {value:"propio",label:" Transporte Propio"},
-        {value:"empresa_transporte",label:" Empresa Transportista"},
-        {value:"mensajeria",label:" Mensajeria"},
-        {value:"paqueteria",label:" Paqueteria Tercero"},
-       ]}/>
-      {tipoEnvio==="paqueteria"?(
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <Field label="Paqueteria" value={paqSel} onChange={setPaqSel} as="select"
-         options={[{value:"",label:"Seleccione"},...(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({value:x,label:x}))]}/>
-        <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
-       </div>
-      ):(
-       <>
-        {tipoEnvio==="empresa_transporte"&&(
-         <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
-          options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
-        )}
-        <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
-         disabled={tipoEnvio==="empresa_transporte" && !empresa}
-         options={[
-          {value:"",label:(tipoEnvio==="empresa_transporte"&&!empresa)?"Selecciona primero la empresa":"Sin asignar"},
-          ...conductoresElegibles.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}${c.empresa?" - "+c.empresa:""}`}))
-         ]}/>
-        {tipoEnvio==="empresa_transporte"&&empresa&&conductoresElegibles.length===0&&(
-         <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
-          Esa empresa no tiene conductores activos registrados.
-         </p>
-        )}
-       </>
+     <Seccion titulo="Transporte" />
+     <Fila>
+      <Selector label="Tipo de transporte" valor={tipoEnvio} onChange={cambiarTipo}
+       opciones={[
+        { value:"propio", label:"Transporte propio" },
+        { value:"empresa_transporte", label:"Empresa transportista" },
+        { value:"mensajeria", label:"Mensajeria" },
+        { value:"paqueteria", label:"Paqueteria tercero" },
+       ]} />
+      {tipoEnvio === "paqueteria" ? (
+       <Selector label="Paqueteria" valor={paqSel} onChange={setPaqSel}
+        placeholder="Seleccione"
+        opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
+      ) : tipoEnvio === "empresa_transporte" ? (
+       <Selector label="Empresa transportista" valor={empresa} onChange={cambiarEmpresa}
+        placeholder="Seleccione la empresa" opciones={empresasOpciones} />
+      ) : (
+       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
+        placeholder="Sin asignar"
+        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
       )}
-     </div>
-     <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
-      onClick={()=>setNovedad(!novedad)}>
-      <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
-       {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}></span>}
-      </div>
-      <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>Marcar con Novedad</span>
-     </div>
-     <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
-      <Btn onClick={guardar}> Guardar Asignacion</Btn>
-      <Btn variant="success" onClick={marcar}> Marcar Recogida Completada</Btn>
-     </div>
+     </Fila>
+     {tipoEnvio === "paqueteria" && (
+      <Texto label="No. guia de paqueteria" mono valor={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-0001" />
+     )}
+     {tipoEnvio === "empresa_transporte" && (
+      <>
+       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
+        deshabilitado={!empresa}
+        placeholder={empresa ? "Sin asignar" : "Selecciona primero la empresa"}
+        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+       {empresa && conductoresElegibles.length === 0 && (
+        <FranjaInfo>Esa empresa no tiene conductores activos registrados.</FranjaInfo>
+       )}
+      </>
+     )}
+     <CasillaNovedad marcada={novedad} onChange={setNovedad}>
+      Marcar con novedad
+     </CasillaNovedad>
     </>
    )}
-  </div>
+  </ModalGestion>
  );
 }
 
@@ -4611,36 +4538,48 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
     </ModalForm>
    )}
    {modGestion&&(
-   <Modal title={`Gestionar PQRS ${modGestion.id}`} onClose={()=>setModGestion(null)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{background:"#f8fafc",borderRadius:10,padding:14}}>
-       <div style={{fontWeight:700,color:P[800],marginBottom:6}}>Motivo: {modGestion.motivo}</div>
-       <div style={{fontSize:13,color:"#334155"}}>{modGestion.descripcion}</div>
-       <div style={{fontSize:12,color:"#94a3b8",marginTop:6}}>Factura: {modGestion.factura} Pedido: {modGestion.pedido_ref} Por: {modGestion.solicitado_por}</div>
-      </div>
-      <Field label="Respuesta / Gestion realizada *" value={gestion} onChange={setGestion} as="textarea"
-       placeholder="Describe las acciones tomadias, compensaciones, compromisos..."/>
-      <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"14px", textAlign:"center", cursor:"pointer", color:gestionSoporte.nombre?"#059669":P[600], fontWeight:700 }}>
-       <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>cargarSoporteGestion(e.target.files)}/>
-       {gestionSoporte.nombre ? "Cambiar soporte" : "Adjuntar soporte de gestion (opcional)"}
-      </label>
-      {gestionSoporte.data&&(
-       <div style={{ display:"flex", alignItems:"center", gap:8, border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px", background:"#f8fafc" }}>
-        <span style={{ flex:1, minWidth:0, color:"#059669", fontWeight:800, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{gestionSoporte.nombre || `soporte-${modGestion.id}`}</span>
-        <button type="button" style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669" }} onClick={()=>abrirArchivoGuardado(gestionSoporte.data, gestionSoporte.nombre || `soporte-${modGestion.id}`)}>
-         Ver
-        </button>
-        <button type="button" title="Quitar soporte" style={{ width:32, height:32, border:`1px solid #fecaca`, background:"#fff", color:"#dc2626", borderRadius:10, cursor:"pointer", fontWeight:900, fontSize:18, lineHeight:1 }} onClick={()=>setGestionSoporte({ data:null, nombre:"" })}>
-         x
-        </button>
-       </div>
-      )}
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModGestion(null)}>Cancelar</Btn>
-       <Btn onClick={guardarGestion}> Registrar Gestion</Btn>
-      </div>
-     </div>
-    </Modal>
+   <ModalGestion
+    titulo="PQRS"
+    id={modGestion.id}
+    estado={
+     <span style={{
+      display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+      borderRadius:T.radio.pastilla,
+      background: modGestion.estado==="abierta" ? T.color.malSuave : T.color.ojoSuave,
+      color: modGestion.estado==="abierta" ? T.color.mal : T.color.ojo,
+      fontSize:12, fontWeight:600,
+     }}>
+      <span style={{ width:6, height:6, borderRadius:3,
+       background: modGestion.estado==="abierta" ? T.color.malPunto : T.color.ojoPunto }}/>
+      {modGestion.estado==="abierta" ? "Abierta" : "En gestion"}
+     </span>
+    }
+    descripcion="Registra la respuesta al cliente"
+    ancho="S"
+    onClose={()=>setModGestion(null)}
+    onGuardar={guardarGestion}
+    textoGuardar="Registrar gestion"
+    textoCierre="Cerrar PQRS"
+    onCierre={()=>cerrar(modGestion.id, "cerrada")}
+    cierreDeshabilitado={!gestion.trim() && !modGestion.respuesta}
+   >
+    <Resumen titulo={modGestion.descripcion} datos={[
+     { label:"Tipo", valor:modGestion.motivo },
+     { label:"Factura", valor:modGestion.factura || "-", mono:true },
+     { label:"Pedido", valor:modGestion.pedido_ref || "-", mono:true },
+     { label:"Reportado por", valor:modGestion.solicitado_por || "-" },
+     { label:"Fecha", valor:modGestion.fecha_creacion || "-" },
+     { label:"Estado", valor:modGestion.estado==="abierta" ? "Abierta" : "En gestion" },
+    ]}/>
+
+    <AreaTexto label="Respuesta / gestion realizada" obligatorio filas={4}
+     valor={gestion} onChange={setGestion}
+     placeholder="Describe la gestion realizada..." />
+
+    <Adjunto label="Soporte de gestion" nombre={gestionSoporte.nombre}
+     acepta="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+     onArchivo={(file)=>cargarSoporteGestion([file])} />
+   </ModalGestion>
    )}
   </Pagina>
  );
