@@ -267,6 +267,27 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  };
 
 
+ // Lo que el usuario escribio en el formulario y aun no ha guardado. Solo incluye
+ // los campos que de verdad cambiaron: el trigger de la base exige que el conductor
+ // cierre un pedido en transito sin tocar ningun otro dato, asi que mandar un campo
+ // con su mismo valor esta bien, pero mandarlo cambiado haria fallar la entrega.
+ const cambiosPendientesDelFormulario = () => {
+  const cambios = {};
+  const dir = direccion.trim();
+  if (dir && dir !== (pedido.direccion || "")) cambios.direccion = dir;
+  const nCajas = parseInt(cajas);
+  if (!Number.isNaN(nCajas) && nCajas !== Number(pedido.cajas || 0)) cambios.cajas = nCajas;
+  const fac = facturaEdit.trim();
+  if (fac && fac !== (pedido.factura || "")) cambios.factura = fac;
+  if (ciudadEdit && ciudadEdit !== (pedido.ciudad_codigo || "")) {
+   cambios.ciudad_codigo = ciudadEdit;
+   const ciu = (ciudades || []).find(c => c.code === ciudadEdit);
+   if (ciu) cambios.ciudad_nombre = ciu.name;
+  }
+  if (fechaEdit && fechaEdit !== (pedido.fecha_estimada || "")) cambios.fecha_estimada = fechaEdit;
+  return cambios;
+ };
+
  const subirFotos = async (fotos) => {
   if (pedidoCerrado) {
    showToast("No se puede modificar un pedido que ya fue entregado","error");
@@ -282,7 +303,13 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   const estadoFinal = conNovedad ? "novedad" : "entregado";
   const nuevosSoportes = [...(pedido.soportes||[]),...nombres];
   const nuevosSoportesData = [...soportesData,...fotos];
+  // Subir el soporte cierra el pedido, y despues la base ya no deja modificarlo:
+  // por eso lo que este escrito en el formulario tiene que viajar en esta misma
+  // escritura. Antes se perdia en silencio y el pedido quedaba cerrado sin cajas
+  // ni factura, sin forma de corregirlo desde la aplicacion.
+  const pendientes = cambiosPendientesDelFormulario();
   const cambios = {
+   ...pendientes,
    soportes: nuevosSoportes,
    soportes_data: nuevosSoportesData,
    estado: estadoFinal,
@@ -294,6 +321,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
    const { error: sErr } = await supabase.from('pedidos').update(cambios).eq('id', pedido.id);
    if (sErr) {
     await supabase.from('pedidos').update({
+     ...pendientes,
      estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes
     }).eq('id', pedido.id);
     showToast(" Estado guardado. Fotos muy pesadas usa imagenes mas pequenas", "warning");
