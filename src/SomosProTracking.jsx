@@ -13,6 +13,7 @@ import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
+import { T, tarjeta } from './design/tokens';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -156,6 +157,68 @@ async function abrirArchivoRemoto(tabla, id, colData, colNombre, nombreFallback,
   console.error('archivo:', e);
   if (showToast) showToast('No se pudo abrir el archivo: ' + (e.message || e), 'error');
  }
+}
+
+// Rangos del filtro de fecha del modulo de Pedidos.
+const RANGOS_PEDIDOS = [
+ { id: "todo", label: "Todo el historico", dias: null },
+ { id: "7",   label: "Ultimos 7 dias",   dias: 7 },
+ { id: "30",  label: "Ultimos 30 dias",  dias: 30 },
+ { id: "90",  label: "Ultimos 90 dias",  dias: 90 },
+];
+
+// Orden de las pestanas por estado.
+const ORDEN_ESTADOS_PEDIDO = [
+ "sin_asignar", "pendiente", "en_transito", "paqueteria",
+ "novedad", "entregado", "solo_facturar", "cliente_recoge",
+];
+
+const selectFiltro = {
+ padding: "9px 12px", border: `1px solid ${T.color.borde2}`,
+ borderRadius: T.radio.control, background: T.color.superficie,
+ fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
+ cursor: "pointer", outline: "none", maxWidth: 210,
+};
+
+// Paginador con numeros: con 2.300 pedidos en paginas de 100 son 23 paginas, y
+// saltar a una concreta es mas util que avanzar de una en una.
+function Paginador({ total, page, setPage, pageSize }) {
+ const paginas = Math.max(1, Math.ceil(total / pageSize));
+ if (paginas <= 1) return null;
+
+ const numeros = [];
+ const agregar = (n) => { if (!numeros.includes(n)) numeros.push(n); };
+ agregar(1);
+ for (let n = page - 1; n <= page + 1; n++) if (n > 1 && n < paginas) agregar(n);
+ agregar(paginas);
+ numeros.sort((a, b) => a - b);
+
+ const boton = (contenido, alPulsar, activo, inactivo) => (
+  <button key={contenido + String(activo)} onClick={alPulsar} disabled={inactivo} style={{
+   minWidth: 30, height: 30, padding: "0 8px", borderRadius: T.radio.chico,
+   border: activo ? "none" : `1px solid ${T.color.borde2}`,
+   background: activo ? T.color.marca : T.color.superficie,
+   color: activo ? "#fff" : inactivo ? T.color.borde2 : T.color.tinta2,
+   cursor: inactivo ? "not-allowed" : "pointer", fontFamily: "inherit",
+   fontSize: 13, fontWeight: activo ? 700 : 500,
+  }}>{contenido}</button>
+ );
+
+ const piezas = [];
+ numeros.forEach((n, i) => {
+  if (i > 0 && n - numeros[i - 1] > 1) {
+   piezas.push(<span key={"e" + n} style={{ color: T.color.tinta3, padding: "0 4px" }}>...</span>);
+  }
+  piezas.push(boton(String(n), () => setPage(n), n === page, false));
+ });
+
+ return (
+  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+   {boton("<", () => setPage(Math.max(1, page - 1)), false, page === 1)}
+   {piezas}
+   {boton(">", () => setPage(Math.min(paginas, page + 1)), false, page === paginas)}
+  </div>
+ );
 }
 
 function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
@@ -1397,15 +1460,34 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [modGuias, setModGuias] = useState(false);
  const [reporteImportacion, setReporteImportacion] = useState(null);
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
+ const [rango, setRango] = useState("todo");
+ const [ciudadF, setCiudadF] = useState("");
+ const [conductorF, setConductorF] = useState("");
+ // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
+ // sin seleccion, la planilla sale con todo lo que este filtrado.
+ const [seleccion, setSeleccion] = useState(() => new Set());
 
  const vacio = { id: "", cliente: "", ciudad_codigo: "", direccion: "", cajas: "", factura: "", fecha_estimada: "", notas: "", conductor_id: "", tipo: "propio", paqueteria: "", guia_paqueteria: "" };
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const conductoresActivos = conductores.filter(c => c.activo !== false);
 
+ const desdeRango = (() => {
+  const r = RANGOS_PEDIDOS.find(x => x.id === rango);
+  if (!r || !r.dias) return null;
+  const d = new Date();
+  d.setDate(d.getDate() - r.dias);
+  return d.toISOString().split("T")[0];
+ })();
+
  const filtrados = pedidos.filter(p => {
   const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria");
+  const okFecha = !desdeRango || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeRango;
+  const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
+  const okCond = !conductorF
+   || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
+  if (!okFecha || !okCiudad || !okCond) return false;
   const q = busq.toLowerCase();
   const okB = !busq ||
    (p.id || "").toLowerCase().includes(q) ||
@@ -1471,6 +1553,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  };
 
  const imprimirPlanilla = () => {
+  // Con casillas marcadas se imprime solo eso; sin ellas, todo lo filtrado.
+  const paraPlanilla = seleccion.size > 0 ? filtrados.filter(x => seleccion.has(x.id)) : filtrados;
   const win = window.open('', '_blank');
   if (!win) { showToast("Permite ventanas emergentes para imprimir", "error"); return; }
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Planilla Somos PRO Tracking</title>
@@ -1478,9 +1562,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}
   td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.footer{margin-top:30px;font-size:10px;color:#94a3b8;text-align:center}</style></head>
   <body><h1>Planilla de Despachos Somos PRO Tracking</h1>
-  <p>Fecha de impresion: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })} Total pedidos: ${filtrados.length}</p>
+  <p>Fecha de impresion: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })} Total pedidos: ${paraPlanilla.length}</p>
   <table><thead><tr><th>#</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad / DANE</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Conductor / Paqueteria</th><th>Firma Recibido</th></tr></thead>
-  <tbody>${filtrados.map((p, i) => {
+  <tbody>${paraPlanilla.map((p, i) => {
    const cond = conductores.find(c => c.id === p.conductor_id);
    const tr = transportePedido(p, cond);
    const trans = tr.principal ? `${tr.principal} ${tr.detalle || ""}`.trim() : "Sin asignar";
@@ -1659,88 +1743,210 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
+ const conteoPorEstado = (clave) => clave === "todos"
+  ? pedidos.length
+  : pedidos.filter(x => x.estado === clave).length;
+
+ const alternarSeleccion = (id) => setSeleccion(prev => {
+  const s = new Set(prev);
+  if (s.has(id)) s.delete(id); else s.add(id);
+  return s;
+ });
+ const todosVisiblesMarcados = pageItems.length > 0 && pageItems.every(x => seleccion.has(x.id));
+ const alternarPagina = () => setSeleccion(prev => {
+  const s = new Set(prev);
+  if (todosVisiblesMarcados) pageItems.forEach(x => s.delete(x.id));
+  else pageItems.forEach(x => s.add(x.id));
+  return s;
+ });
+
+ const th2 = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5 };
+ const td2 = { padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
+ const botonBarra = {
+  display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 14px",
+  border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
+  background: T.color.superficie, cursor: "pointer", fontFamily: "inherit",
+  fontSize: 13.5, fontWeight: 600, color: T.color.tinta, whiteSpace: "nowrap",
+ };
+
  return (
-  <div style={{ minHeight:"100%", background:pageBg, margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Pedidos</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de todos los pedidos</p>
-    </div>
-    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-     <button style={buttonBase} onClick={imprimirPlanilla}>Planilla</button>
-     <button style={buttonBase} onClick={() => setModCSV(true)}>CSV Pedidos</button>
-     <button style={buttonBase} onClick={() => setModGuias(true)}>Cargar Guias Paqueteria</button>
-     <button style={primaryButton} onClick={() => setModNuevo(true)}>+ Nuevo Pedido</button>
-    </div>
-   </header>
+  <div style={{ minHeight:"100%", background:T.color.fondo, margin:"-28px -24px", padding:"24px 28px 40px", color:T.color.tinta }}>
+   <div style={{ maxWidth:1320, margin:"0 auto", display:"flex", flexDirection:"column", gap:16 }}>
 
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
-    <section style={{ ...cardStyle, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr 180px", gap:12, borderBottom:`1px solid ${border}` }}>
-      <div style={{ position:"relative" }}>
-       <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#6b7280", fontSize:18 }}>⌕</span>
-       <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar por N pedido, factura, cliente o ciudad..." style={{ width:"100%", height:38, border:`1px solid ${border}`, borderRadius:12, padding:"0 14px 0 38px", boxSizing:"border-box", fontSize:14, fontFamily:"inherit", outline:"none", background:"#fff" }} />
-      </div>
-      <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width:"100%", height:38, border:`1px solid ${border}`, borderRadius:12, padding:"0 12px", fontSize:14, fontFamily:"inherit", outline:"none", background:"#fff" }}>
-       <option value="todos">Todos los estados</option>
-       {Object.entries(ESTADOS_PEDIDO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-       <option value="paqueteria_tipo">Solo Paqueteria</option>
-      </select>
+    <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
+     <div>
+      <h1 style={{ margin:0, ...T.texto.titulo }}>Pedidos</h1>
+      <p style={{ margin:"4px 0 0", color:T.color.tinta3, fontSize:13.5 }}>Gestion y seguimiento de todos los pedidos</p>
      </div>
+     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+      <button style={botonBarra} onClick={imprimirPlanilla}>
+       Planilla{seleccion.size > 0 ? ` (${seleccion.size})` : ""}
+      </button>
+      <button style={botonBarra} onClick={() => setModCSV(true)}>CSV pedidos</button>
+      <button style={botonBarra} onClick={() => setModGuias(true)}>Cargar guias paqueteria</button>
+      <button onClick={() => setModNuevo(true)} style={{
+       ...botonBarra, background:T.color.marca, border:"none", color:"#fff", fontWeight:700,
+      }}>+ Nuevo pedido</button>
+     </div>
+    </header>
 
-     <div style={{ padding:"12px 16px", color:"#6b7280", fontSize:13, borderBottom:`1px solid ${border}` }}>
-      Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
+    {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
+        para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
+    <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:`1px solid ${T.color.borde}` }}>
+     {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k])].map(([clave,label]) => {
+      const activo = filtro === clave;
+      const n = conteoPorEstado(clave);
+      return (
+       <button key={clave} onClick={() => { setFiltro(clave); setPage(1); }} style={{
+        display:"inline-flex", alignItems:"center", gap:8, padding:"10px 12px",
+        border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
+        fontSize:13.5, fontWeight: activo ? 700 : 500,
+        color: activo ? T.color.marca : T.color.tinta2,
+        borderBottom: `2px solid ${activo ? T.color.marca : "transparent"}`,
+        marginBottom:-1,
+       }}>
+        {label}
+        <span style={{
+         fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
+         background: activo ? T.color.marcaSuave : T.color.superficie2,
+         color: activo ? T.color.marca : T.color.tinta3,
+        }}>{n}</span>
+       </button>
+      );
+     })}
+    </div>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:14, borderBottom:`1px solid ${T.color.borde}` }}>
+      <div style={{ position:"relative", flex:"1 1 260px", minWidth:220 }}>
+       <input value={busq} onChange={e => { setBusq(e.target.value); setPage(1); }}
+        placeholder="Buscar por N pedido, factura, cliente o ciudad"
+        style={{
+         width:"100%", boxSizing:"border-box", padding:"9px 12px",
+         border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
+         fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
+        }}/>
+      </div>
+
+      <select value={rango} onChange={e => { setRango(e.target.value); setPage(1); }} style={selectFiltro}>
+       {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+      </select>
+
+      <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
+       <option value="">Todas las ciudades</option>
+       {[...new Set(pedidos.map(x => x.ciudad_codigo).filter(Boolean))]
+        .map(code => [code, (ciudades || []).find(c => c.code === code)?.name || code])
+        .sort((a,b) => a[1].localeCompare(b[1], "es"))
+        .map(([code,nombre]) => <option key={code} value={code}>{nombre}</option>)}
+      </select>
+
+      <select value={conductorF} onChange={e => { setConductorF(e.target.value); setPage(1); }} style={selectFiltro}>
+       <option value="">Todos los conductores</option>
+       <option value="sin">Sin asignar</option>
+       {conductoresActivos.slice().sort((a,b) => (a.nombre||"").localeCompare(b.nombre||"", "es"))
+        .map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+      </select>
+
+      <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
+       {seleccion.size > 0 ? `${seleccion.size} seleccionados` : `${pageItems.length} en esta pagina`}
+      </div>
      </div>
 
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
        <thead>
-        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-         {[
-          ["No. Pedido", "left"], ["Factura", "left"], ["Cliente", "left"], ["Ciudad / DANE", "left"], ["Cajas", "right"], ["Estado", "left"], ["Conductor", "left"], ["Acciones", "right"]
-         ].map(([h, align]) => <th key={h} style={{ textAlign:align, padding:"14px 16px", borderBottom:`1px solid ${border}`, fontWeight:800 }}>{h}</th>)}
+        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+         <th style={{ ...th2, width:42 }}>
+          <input type="checkbox" checked={todosVisiblesMarcados} onChange={alternarPagina}
+           title="Seleccionar los de esta pagina" style={{ cursor:"pointer" }}/>
+         </th>
+         <th style={th2}>N pedido</th>
+         <th style={th2}>Factura</th>
+         <th style={th2}>Cliente</th>
+         <th style={th2}>Ciudad / DANE</th>
+         <th style={{ ...th2, textAlign:"right" }}>Cajas</th>
+         <th style={th2}>Estado</th>
+         <th style={th2}>Conductor</th>
+         <th style={{ ...th2, textAlign:"right" }}>Acciones</th>
         </tr>
        </thead>
        <tbody>
-        {filtrados.length === 0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin pedidos</td></tr>}
+        {filtrados.length === 0 && (
+         <tr><td colSpan={9} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
+          Ningun pedido coincide con los filtros.
+         </td></tr>
+        )}
         {pageItems.map(p => {
          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+         const tr = transportePedido(p, cond);
+         const marcado = seleccion.has(p.id);
          return (
-          <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
-           <td style={{ padding:"16px" }}>
-            <div style={{ color:"#5b33d6", fontWeight:850 }}>{p.guia_interna || p.id}</div>
-            {p.tipo !== "paqueteria" && p.guia_interna && p.guia_interna !== p.id && (
-             <div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div>
+          <tr key={p.id} style={{ borderBottom:`1px solid ${T.color.borde}`, background: marcado ? T.color.marcaSuave : "transparent" }}>
+           <td style={td2}>
+            <input type="checkbox" checked={marcado} onChange={() => alternarSeleccion(p.id)} style={{ cursor:"pointer" }}/>
+           </td>
+           <td style={td2}>
+            <button onClick={() => setModDet(p)} style={{
+             border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
+             padding:0, textAlign:"left", color:T.color.marca, fontWeight:700, fontSize:13.5,
+            }}>{p.guia_interna || p.id}</button>
+            {p.guia_interna && p.guia_interna !== p.id && (
+             <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</div>
             )}
            </td>
-           <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace", fontSize:13 }}>{p.factura}</td>
-           <td style={{ padding:"16px", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
-           <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.ciudad_codigo}</div></td>
-           <td style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>{p.cajas}</td>
-           <td style={{ padding:"16px" }}><Badge estado={p.estado} /></td>
-           <td style={{ padding:"16px" }}>
-            {(() => {
-             const tr = transportePedido(p, cond);
-             if (tr.noAplica) return <span style={{ color:"#9ca3af" }}>No aplica</span>;
-             if (!tr.principal) return <span style={{ color:"#ef4444" }}>Sin asignar</span>;
-             return <><div>{tr.principal}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{tr.detalle}</div></>;
-            })()}
+           <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>
+            {p.factura || <span style={{ color:T.color.tinta3 }}>-</span>}
            </td>
-           <td style={{ padding:"16px", textAlign:"right" }}>
-            <div style={{ display:"inline-flex", gap:8 }}>
-             <button onClick={() => setModDet(p)} style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }}>Ver</button>
-             <button onClick={() => setModGuia(p)} style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }}>Guia</button>
+           <td style={{ ...td2, maxWidth:210, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
+           <td style={td2}>
+            {p.ciudad_nombre
+             ? <><div>{p.ciudad_nombre}</div><div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.ciudad_codigo}</div></>
+             : <span style={{ color:T.color.tinta3 }}>-</span>}
+           </td>
+           <td style={{ ...td2, textAlign:"right", fontWeight:700, color:T.color.tinta }}>{p.cajas || 0}</td>
+           <td style={td2}>
+            <span style={{
+             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+             borderRadius:T.radio.pastilla, background:T.color.superficie2,
+             fontSize:12, fontWeight:600, color:T.color.tinta2, whiteSpace:"nowrap",
+            }}>
+             <span style={{ width:7, height:7, borderRadius:4, background:T.estado[p.estado] || T.color.tinta3 }} />
+             {ESTADOS_PEDIDO[p.estado]?.label || p.estado}
+            </span>
+           </td>
+           <td style={td2}>
+            {tr.noAplica ? <span style={{ color:T.color.tinta3 }}>No aplica</span>
+             : !tr.principal ? (
+              <button onClick={() => setModDet(p)} style={{
+               border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
+               padding:0, color:T.color.ojo, fontWeight:600, fontSize:13.5,
+              }}>Asignar</button>
+             ) : (
+              <><div>{tr.principal}</div>
+               {tr.detalle && <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{tr.detalle}</div>}</>
+             )}
+           </td>
+           <td style={{ ...td2, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:6 }}>
+             <button onClick={() => setModDet(p)} style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}>Ver</button>
+             <button onClick={() => setModGuia(p)} style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}>Guia</button>
             </div>
            </td>
           </tr>
          );
         })}
        </tbody>
-     </table>
+      </table>
      </div>
-     <PaginationControls total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+
+     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderTop:`1px solid ${T.color.borde}` }}>
+      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
+       Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
+      </span>
+      <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
+     </div>
     </section>
-   </main>
+   </div>
 
    {modNuevo && (
     <Modal title="Nuevo Pedido" onClose={() => setModNuevo(false)}>
