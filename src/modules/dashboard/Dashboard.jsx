@@ -194,15 +194,33 @@ function Campana({ avisos, onIr }) {
      {total === 0 ? (
       <div style={{ padding: "10px", fontSize: 13, color: T.color.tinta3 }}>Nada pendiente por ahora.</div>
      ) : avisos.filter(a => a.cantidad > 0).map(a => (
-      <button key={a.id} onClick={() => { setAbierto(false); onIr(a.tab); }} style={{
-       width: "100%", display: "flex", alignItems: "center", gap: 10,
-       border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
-       padding: "9px 10px", borderRadius: T.radio.chico, textAlign: "left",
-      }}>
-       <span style={{ width: 8, height: 8, borderRadius: 4, background: a.color, flexShrink: 0 }} />
-       <span style={{ flex: 1, fontSize: 13, color: T.color.tinta2 }}>{a.texto}</span>
-       <span style={{ fontSize: 13, fontWeight: 800, color: T.color.tinta }}>{a.cantidad}</span>
-      </button>
+      <div key={a.id} style={{ marginBottom: 4 }}>
+       <button onClick={() => { setAbierto(false); onIr(a.tab); }} style={{
+        width: "100%", display: "flex", alignItems: "center", gap: 10,
+        border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+        padding: "9px 10px", borderRadius: T.radio.chico, textAlign: "left",
+       }}>
+        <span style={{ width: 8, height: 8, borderRadius: 4, background: a.color, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 13, color: T.color.tinta2 }}>{a.texto}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.color.tinta }}>{a.cantidad}</span>
+       </button>
+       {/* Los pedidos concretos del aviso: se abre el que se toca, no la lista entera. */}
+       {(a.items || []).map(it => (
+        <button key={it.id} onClick={() => { setAbierto(false); a.onItem(it.id); }} style={{
+         width: "100%", display: "flex", alignItems: "baseline", gap: 8,
+         border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+         padding: "5px 10px 5px 28px", borderRadius: T.radio.chico, textAlign: "left",
+        }}>
+         <span style={{ fontSize: 12.5, fontWeight: 700, color: T.color.tinta }}>{it.id}</span>
+         <span style={{ fontSize: 12, color: T.color.tinta3 }}>{it.detalle}</span>
+        </button>
+       ))}
+       {a.cantidad > (a.items || []).length && (
+        <div style={{ padding: "2px 10px 6px 28px", fontSize: 12, color: T.color.tinta3 }}>
+         y {a.cantidad - (a.items || []).length} mas
+        </div>
+       )}
+      </div>
      ))}
     </div>
    )}
@@ -406,9 +424,19 @@ export function Dashboard({
  const pqrsGestion = pqrs.filter(p => p.estado === "en_gestion").length;
  const pqrsCerradas = pqrs.filter(p => p.estado === "cerrada").length;
 
+ // Cada aviso lista sus primeros pedidos para poder abrir uno directamente; el
+ // titulo del grupo sigue llevando a la vista completa.
  const avisos = [
-  { id: "venc", texto: "Pedidos fuera de promesa", cantidad: m.vencidos.length, color: T.color.mal, tab: "pedidos" },
-  { id: "riesgo", texto: "En riesgo de vencer", cantidad: m.enRiesgo.length, color: T.color.ojo, tab: "pedidos" },
+  {
+   id: "venc", texto: "Pedidos fuera de promesa", cantidad: m.vencidos.length,
+   color: T.color.mal, tab: "pedidos", onItem: abrirPedido,
+   items: m.vencidos.slice(0, 4).map(p => ({ id: p.id, detalle: `vencio ${p.limite}` })),
+  },
+  {
+   id: "riesgo", texto: "En riesgo de vencer", cantidad: m.enRiesgo.length,
+   color: T.color.ojo, tab: "pedidos", onItem: abrirPedido,
+   items: m.enRiesgo.slice(0, 4).map(p => ({ id: p.id, detalle: p.fecha_estimada || "" })),
+  },
   { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs" },
  ];
 
