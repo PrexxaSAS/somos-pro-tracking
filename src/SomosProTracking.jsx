@@ -206,13 +206,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
    showToast(pedidoCerrado ? "No se puede modificar un pedido que ya fue entregado" : "No se puede editar un pedido en transito","error");
    return;
   }
-  // Cliente Recoge saca el pedido de los despachos pendientes, asi que no se puede
-  // marcar sin la prueba de que el cliente se lo llevo. Como subir el soporte guarda
-  // todo de una vez (incluida esta modalidad), el camino correcto es adjuntarlo.
-  if (estadoDesp === "cliente_recoge" && !tieneSoportes) {
-   showToast("Para marcar Cliente Recoge adjunta primero el soporte de entrega: al subirlo se guardan tambien los datos del formulario","error");
-   return;
-  }
+  // Cliente Recoge se puede marcar sin soporte: el pedido queda a la espera de que el
+  // cliente pase por la mercancia y sus datos se siguen pudiendo corregir. El soporte es
+  // lo que lo cierra como entregado, no lo que habilita la modalidad.
   const c = conductores.find(c=>String(c.id)===String(condId));
   let nuevoEstado = pedido.estado;
   if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
