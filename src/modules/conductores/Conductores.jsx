@@ -1,14 +1,17 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import {
- ChevronLeft, ChevronRight, Download, MoreHorizontal, Plus, Search, Truck,
-} from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Download, Plus } from 'lucide-react';
 import { supabase } from '../../supabase';
 import { T, tarjeta } from '../../design/tokens';
 import { Modal, Field, Btn } from '../../Subcomponentes';
 import { descargarCSV } from '../../utils/files';
 import { mensajeErrorFuncion } from '../../utils/errors';
+import {
+ Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
+ Segmentado, Casilla, MenuFila, Paginador, PieTabla, useSeleccion,
+ th, td, mono, botonBarra, botonPrincipal,
+} from '../../components/ui/listas';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = 50;
 
 const iniciales = (nombre) => (nombre || "?")
  .trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
@@ -18,53 +21,10 @@ const iniciales = (nombre) => (nombre || "?")
 const porNombre = (a, b) =>
  (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" });
 
-function Chip({ children, color = T.color.tinta2, fondo = T.color.superficie2, mono = false }) {
- return (
-  <span style={{
-   display: "inline-flex", alignItems: "center", justifyContent: "center",
-   minWidth: 26, padding: "3px 9px", borderRadius: T.radio.chico,
-   background: fondo, color, fontSize: 12, fontWeight: 700,
-   fontFamily: mono ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit",
-   letterSpacing: mono ? "0.02em" : 0,
-  }}>{children}</span>
- );
-}
-
-function MenuFila({ opciones }) {
- const [abierto, setAbierto] = useState(false);
- const ref = useRef(null);
- useEffect(() => {
-  if (!abierto) return;
-  const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
-  document.addEventListener("mousedown", fuera);
-  return () => document.removeEventListener("mousedown", fuera);
- }, [abierto]);
-
- return (
-  <div ref={ref} style={{ position: "relative", display: "flex", justifyContent: "flex-end" }}>
-   <button onClick={() => setAbierto(!abierto)} title="Acciones" style={{
-    border: "none", background: "transparent", cursor: "pointer",
-    color: T.color.tinta3, padding: 6, borderRadius: T.radio.chico,
-    display: "grid", placeItems: "center",
-   }}><MoreHorizontal size={17} /></button>
-   {abierto && (
-    <div style={{
-     position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 30, minWidth: 190,
-     ...tarjeta, boxShadow: T.sombra.flotante, padding: 6,
-    }}>
-     {opciones.map(o => (
-      <button key={o.texto} onClick={() => { setAbierto(false); o.accion(); }} disabled={o.inactivo} style={{
-       width: "100%", textAlign: "left", border: "none", background: "transparent",
-       cursor: o.inactivo ? "not-allowed" : "pointer", fontFamily: "inherit",
-       padding: "8px 10px", borderRadius: T.radio.chico, fontSize: 13,
-       color: o.inactivo ? T.color.tinta3 : T.color.tinta2, opacity: o.inactivo ? 0.6 : 1,
-      }}>{o.texto}</button>
-     ))}
-    </div>
-   )}
-  </div>
- );
-}
+const escaparCsv = (v) => {
+ const t = String(v ?? "");
+ return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
 
 export function Conductores({ conductores, pedidos, showToast, transportistas = [], recargar, onVerPedidos }) {
  const [modal, setModal] = useState(false);
@@ -117,35 +77,42 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
 
  const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
  const visibles = filtradas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+ const sel = useSeleccion(visibles.map(c => c.id));
+ const marcados = filas.filter(c => sel.seleccion.has(c.id));
 
  const kpis = [
-  { label: "Conductores", valor: filas.length, color: T.color.tinta3 },
+  { label: "Conductores", valor: filas.length },
   { label: "En ruta", valor: filas.filter(c => c.transito > 0).length, color: T.color.marca, destacado: true },
   { label: "Pedidos asignados", valor: filas.reduce((s, c) => s + c.asignados, 0), color: T.color.bien },
   { label: "En transito", valor: filas.reduce((s, c) => s + c.transito, 0), color: T.color.ojo },
  ];
 
+ // Con conductores marcados se exportan esos; si no, lo que este filtrado.
  const exportar = () => {
-  const escapar = (v) => {
-   const t = String(v ?? "");
-   return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-  };
-  const filasCsv = filtradas.map(c => [
+  const lista = marcados.length > 0 ? marcados : filtradas;
+  const filasCsv = lista.map(c => [
    c.nombre, c.cedula, c.placa, c.transportista, c.celular, c.asignados, c.transito,
-  ].map(escapar).join(","));
+  ].map(escaparCsv).join(","));
   descargarCSV(
    `conductores_${new Date().toISOString().slice(0, 10)}.csv`,
    "nombre,cedula,placa,transportista,celular,asignados,en_transito",
    filasCsv.join("\n"),
   );
+  showToast(`${lista.length} conductor(es) exportados`, "success");
  };
 
  const copiar = async (valor, que) => {
-  if (!valor) { showToast(`Este conductor no tiene ${que} registrado`, "error"); return; }
+  if (!valor) { showToast(`No hay ${que} para copiar`, "error"); return; }
   try {
    await navigator.clipboard.writeText(valor);
-   showToast(`${que} copiado: ${valor}`, "success");
+   showToast(`${que} copiado`, "success");
   } catch { showToast("El navegador no permitio copiar", "error"); }
+ };
+
+ const copiarCelularesMarcados = () => {
+  const nums = marcados.map(c => c.celular).filter(Boolean);
+  if (nums.length === 0) { showToast("Ninguno de los seleccionados tiene celular", "error"); return; }
+  copiar(nums.join(", "), `${nums.length} celular(es)`);
  };
 
  const guardar = async () => {
@@ -185,126 +152,74 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
   setGuardando(false);
  };
 
- const th = {
-  ...T.texto.seccion, color: T.color.tinta3, textAlign: "left",
-  padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5,
- };
- const td = { padding: "12px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
-
  return (
-  <div style={{ minHeight: "100%", background: T.color.fondo, margin: "-28px -24px", padding: "24px 28px 40px", color: T.color.tinta }}>
-   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
+  <Pagina>
+   <Encabezado
+    titulo="Conductores"
+    descripcion="Gestion de conductores, placas y disponibilidad operativa"
+    acciones={<>
+     <button onClick={exportar} style={botonBarra}>
+      <Download size={15} /> Exportar{marcados.length > 0 ? ` (${marcados.length})` : ""}
+     </button>
+     <button onClick={() => setModal(true)} style={botonPrincipal}>
+      <Plus size={16} /> Registrar conductor
+     </button>
+    </>}
+   />
 
-    <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-     <div>
-      <h1 style={{ margin: 0, ...T.texto.titulo }}>Conductores</h1>
-      <p style={{ margin: "4px 0 0", color: T.color.tinta3, fontSize: 13.5 }}>
-       Gestion de conductores, placas y disponibilidad operativa
-      </p>
-     </div>
-     <div style={{ display: "flex", gap: 10 }}>
-      <button onClick={exportar} style={{
-       display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px",
-       border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
-       background: T.color.superficie, cursor: "pointer", fontFamily: "inherit",
-       fontSize: 13.5, fontWeight: 600, color: T.color.tinta,
-      }}><Download size={15} /> Exportar</button>
-      <button onClick={() => setModal(true)} style={{
-       display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px",
-       border: "none", borderRadius: T.radio.control, background: T.color.marca,
-       cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, color: "#fff",
-      }}><Plus size={16} /> Registrar conductor</button>
-     </div>
-    </header>
+   <Indicadores items={kpis} />
 
-    <section style={{ ...tarjeta, display: "grid", gridTemplateColumns: `repeat(${kpis.length},1fr)` }}>
-     {kpis.map((k, i) => (
-      <div key={k.label} style={{ padding: "18px 22px", borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}` }}>
-       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 4, background: k.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, color: T.color.tinta2, whiteSpace: "nowrap" }}>{k.label}</span>
-       </div>
-       <div style={{ ...T.texto.cifra, color: k.destacado ? T.color.marca : T.color.tinta }}>
-        {k.valor.toLocaleString("es-CO")}
-       </div>
-      </div>
-     ))}
-    </section>
-
-    <section style={{ ...tarjeta, overflow: "hidden" }}>
-     <div style={{
-      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-      padding: 14, borderBottom: `1px solid ${T.color.borde}`,
-     }}>
-      <div style={{ position: "relative", width: 270 }}>
-       <Search size={15} style={{ position: "absolute", left: 12, top: 11, color: T.color.tinta3 }} />
-       <input value={busq} onChange={e => setBusq(e.target.value)}
-        placeholder="Buscar nombre, cedula o placa"
-        style={{
-         width: "100%", boxSizing: "border-box", padding: "9px 12px 9px 34px",
-         border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
-         fontSize: 13, fontFamily: "inherit", color: T.color.tinta, outline: "none",
-        }}/>
-      </div>
-
-      <div style={{ position: "relative" }}>
-       <Truck size={15} style={{ position: "absolute", left: 12, top: 11, color: T.color.tinta3, pointerEvents: "none" }} />
-       <select value={empresa} onChange={e => setEmpresa(e.target.value)} style={{
-        appearance: "none", padding: "9px 32px 9px 34px", minWidth: 230,
-        border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
-        background: T.color.superficie, fontSize: 13, fontFamily: "inherit",
-        color: T.color.tinta, cursor: "pointer", outline: "none",
-       }}>
-        <option value="">Todos los transportistas</option>
-        {(transportistas || []).filter(t => t?.nit).map(t => (
-         <option key={t.nit} value={t.nit}>{t.nombre || t.empresa || t.nit}</option>
-        ))}
-       </select>
-      </div>
-
-      <div style={{
-       display: "inline-flex", padding: 3, gap: 2,
-       background: T.color.superficie2, borderRadius: T.radio.control,
-       border: `1px solid ${T.color.borde}`,
-      }}>
-       {[["todos", "Todos"], ["ruta", "En ruta"], ["libres", "Disponibles"]].map(([id, label]) => (
-        <button key={id} onClick={() => setVista(id)} style={{
-         border: "none", cursor: "pointer", fontFamily: "inherit",
-         padding: "6px 14px", borderRadius: 8, fontSize: 13,
-         fontWeight: vista === id ? 700 : 500,
-         color: vista === id ? T.color.tinta : T.color.tinta2,
-         background: vista === id ? T.color.superficie : "transparent",
-         boxShadow: vista === id ? T.sombra.tarjeta : "none",
-        }}>{label}</button>
+   <section style={{ ...tarjeta, overflow: "hidden" }}>
+    {sel.seleccion.size > 0 ? (
+     <BarraSeleccion
+      cantidad={sel.seleccion.size}
+      onLimpiar={sel.limpiar}
+      acciones={<>
+       <button onClick={copiarCelularesMarcados} style={botonBarra}>Copiar celulares</button>
+       <button onClick={exportar} style={botonBarra}><Download size={15} /> Exportar CSV</button>
+      </>}
+     />
+    ) : (
+     <BarraFiltros derecha={`${filtradas.length} ${filtradas.length === 1 ? "conductor" : "conductores"} · orden A-Z`}>
+      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar nombre, cedula o placa" ancho={270} />
+      <SelectFiltro valor={empresa} onChange={setEmpresa} ancho={230}>
+       <option value="">Todos los transportistas</option>
+       {(transportistas || []).filter(t => t?.nit).map(t => (
+        <option key={t.nit} value={t.nit}>{t.nombre || t.empresa || t.nit}</option>
        ))}
-      </div>
+      </SelectFiltro>
+      <Segmentado valor={vista} onChange={setVista}
+       opciones={[["todos", "Todos"], ["ruta", "En ruta"], ["libres", "Disponibles"]]} />
+     </BarraFiltros>
+    )}
 
-      <div style={{ marginLeft: "auto", fontSize: 12.5, color: T.color.tinta3, whiteSpace: "nowrap" }}>
-       {filtradas.length} {filtradas.length === 1 ? "conductor" : "conductores"} · orden A-Z
-      </div>
-     </div>
-
-     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-       <thead>
-        <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
-         <th style={th}>Conductor</th>
-         <th style={th}>Placa</th>
-         <th style={th}>Transportista</th>
-         <th style={th}>Telefono</th>
-         <th style={{ ...th, textAlign: "right" }}>Asignados</th>
-         <th style={{ ...th, textAlign: "right" }}>En transito</th>
-         <th style={{ ...th, width: 44 }} />
-        </tr>
-       </thead>
-       <tbody>
-        {visibles.length === 0 && (
-         <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: 40, color: T.color.tinta3 }}>
-          {filas.length === 0 ? "Sin conductores registrados." : "Ningun conductor coincide con el filtro."}
-         </td></tr>
-        )}
-        {visibles.map(c => (
-         <tr key={c.id} style={{ borderBottom: `1px solid ${T.color.borde}` }}>
+    <div style={{ overflowX: "auto" }}>
+     <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead>
+       <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
+        <th style={{ ...th, width: 42 }}>
+         <Casilla marcada={sel.todosMarcados} onChange={sel.alternarPagina} titulo="Seleccionar los de esta pagina" />
+        </th>
+        <th style={th}>Conductor</th>
+        <th style={th}>Placa</th>
+        <th style={th}>Transportista</th>
+        <th style={th}>Telefono</th>
+        <th style={{ ...th, textAlign: "right" }}>Asignados</th>
+        <th style={{ ...th, textAlign: "right" }}>En transito</th>
+        <th style={{ ...th, width: 44 }} />
+       </tr>
+      </thead>
+      <tbody>
+       {visibles.length === 0 && (
+        <tr><td colSpan={8} style={{ ...td, textAlign: "center", padding: 40, color: T.color.tinta3 }}>
+         {filas.length === 0 ? "Sin conductores registrados." : "Ningun conductor coincide con el filtro."}
+        </td></tr>
+       )}
+       {visibles.map(c => {
+        const marcado = sel.seleccion.has(c.id);
+        return (
+         <tr key={c.id} style={{ borderBottom: `1px solid ${T.color.borde}`, background: marcado ? T.color.marcaSuave : "transparent" }}>
+          <td style={td}><Casilla marcada={marcado} onChange={() => sel.alternar(c.id)} /></td>
           <td style={td}>
            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{
@@ -314,53 +229,45 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
             }}>{iniciales(c.nombre)}</span>
             <div style={{ minWidth: 0 }}>
              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.color.tinta }}>{c.nombre}</div>
-             {c.cedula && <div style={{ fontSize: 12, color: T.color.tinta3 }}>CC {c.cedula}</div>}
+             {c.cedula && <div style={mono}>CC {c.cedula}</div>}
             </div>
            </div>
           </td>
-          <td style={td}>{c.placa ? <Chip mono>{c.placa}</Chip> : <span style={{ color: T.color.tinta3 }}>-</span>}</td>
+          <td style={td}>
+           {c.placa
+            ? <span style={{ ...mono, color: T.color.tinta2, background: T.color.superficie2, padding: "3px 9px", borderRadius: T.radio.chico }}>{c.placa}</span>
+            : <span style={{ color: T.color.tinta3 }}>-</span>}
+          </td>
           <td style={td}>{c.transportista || <span style={{ color: T.color.tinta3 }}>Sin asignar</span>}</td>
           <td style={td}>{c.celular || <span style={{ color: T.color.tinta3 }}>-</span>}</td>
           <td style={{ ...td, textAlign: "right", fontWeight: 700, color: T.color.tinta }}>{c.asignados}</td>
           <td style={{ ...td, textAlign: "right" }}>
-           <Chip color={c.transito ? T.color.marca : T.color.tinta3}
-            fondo={c.transito ? T.color.marcaSuave : T.color.superficie2}>{c.transito}</Chip>
+           <span style={{
+            display: "inline-flex", minWidth: 26, justifyContent: "center", padding: "3px 9px",
+            borderRadius: T.radio.chico, fontSize: 12, fontWeight: 700,
+            background: c.transito ? T.color.marcaSuave : T.color.superficie2,
+            color: c.transito ? T.color.marca : T.color.tinta3,
+           }}>{c.transito}</span>
           </td>
           <td style={td}>
            <MenuFila opciones={[
             { texto: "Ver sus pedidos", accion: () => onVerPedidos && onVerPedidos(c), inactivo: !onVerPedidos || !c.placa },
-            { texto: "Copiar celular", accion: () => copiar(c.celular, "celular") },
-            { texto: "Copiar placa", accion: () => copiar(c.placa, "placa") },
+            { texto: "Copiar celular", accion: () => copiar(c.celular, "Celular") },
+            { texto: "Copiar placa", accion: () => copiar(c.placa, "Placa") },
            ]}/>
           </td>
          </tr>
-        ))}
-       </tbody>
-      </table>
-     </div>
+        );
+       })}
+      </tbody>
+     </table>
+    </div>
 
-     <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      gap: 12, padding: "12px 16px", borderTop: `1px solid ${T.color.borde}`,
-     }}>
-      <span style={{ fontSize: 12.5, color: T.color.tinta3 }}>
-       {filtradas.length} {filtradas.length === 1 ? "conductor" : "conductores"}
-      </span>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-       <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={pagina === 1} style={botonPagina(pagina === 1)}>
-        <ChevronLeft size={15} />
-       </button>
-       <span style={{
-        minWidth: 30, height: 30, borderRadius: T.radio.chico, display: "grid", placeItems: "center",
-        background: T.color.marca, color: "#fff", fontSize: 13, fontWeight: 700,
-       }}>{pagina}</span>
-       <button onClick={() => setPagina(p => Math.min(paginas, p + 1))} disabled={pagina === paginas} style={botonPagina(pagina === paginas)}>
-        <ChevronRight size={15} />
-       </button>
-      </div>
-     </div>
-    </section>
-   </div>
+    <PieTabla
+     izquierda={`${filtradas.length} ${filtradas.length === 1 ? "conductor" : "conductores"}`}
+     derecha={<Paginador total={filtradas.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA} />}
+    />
+   </section>
 
    {modal && (
     <Modal title="Registrar conductor" onClose={() => setModal(false)}>
@@ -397,14 +304,6 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
      </div>
     </Modal>
    )}
-  </div>
+  </Pagina>
  );
 }
-
-const botonPagina = (inactivo) => ({
- width: 30, height: 30, borderRadius: T.radio.chico,
- border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
- color: inactivo ? T.color.borde2 : T.color.tinta2,
- cursor: inactivo ? "not-allowed" : "pointer",
- display: "grid", placeItems: "center",
-});

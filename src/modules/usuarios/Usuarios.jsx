@@ -1,10 +1,17 @@
-﻿import React, { useState, useMemo } from 'react';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { P, ROLES } from '../../Constants';
 import { Btn, Card, Field, Modal } from '../../Subcomponentes';
 import { T, tarjeta } from '../../design/tokens';
 import { supabase } from '../../supabase';
 import { mensajeErrorFuncion } from '../../utils/errors';
+import {
+ Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
+ Segmentado, Casilla, Paginador, PieTabla, useSeleccion,
+ th, td, mono, botonBarra, botonPrincipal, iconoAccion,
+} from '../../components/ui/listas';
+
+const POR_PAGINA = 50;
 
 // Color por rol, para el punto de la pastilla y la inicial del avatar.
 const COLOR_ROL = {
@@ -32,6 +39,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  // "Acceso" no es lo mismo que activo/inactivo: mira si el usuario tiene cuenta en
  // Supabase Auth (auth_user_id). Sin ella no puede entrar al sistema.
  const [acceso, setAcceso] = useState("todos");
+ const [pagina, setPagina] = useState(1);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const roleColors = {admin:P[600],operador:P[400],transportista:"#0891b2",conductor:"#059669",cliente:"#d97706"};
  const border = "#e5e7eb";
@@ -112,6 +120,31 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   setModEditar(null);
   showToast(form.pass.trim()?" Usuario y contrasea actualizados":" Usuario actualizado","success");
   if(recargar) await recargar(); setGuardando(false);
+ };
+
+ // Borrado masivo: se confirma una sola vez y se van eliminando uno a uno, porque
+ // la Edge Function recibe un usuario por llamada. El admin principal nunca entra.
+ const eliminarSeleccionados = async (ids) => {
+  const objetivo = usuarios.filter(u => ids.has(u.id) && u.user !== "admin");
+  if (objetivo.length === 0) { showToast("La seleccion solo tiene al admin principal", "error"); return; }
+  if (!window.confirm(`Eliminar ${objetivo.length} usuario(s)? Esta accion no se puede deshacer.`)) return;
+
+  let ok = 0;
+  const fallos = [];
+  for (const u of objetivo) {
+   const { data, error } = await supabase.functions.invoke('create-system-user', {
+    body: { type: "delete_system_user", user_id: u.id },
+   });
+   if (error || data?.error) fallos.push(u.user);
+   else { ok += 1; setOcultos(prev => [...prev, u.id]); }
+  }
+  showToast(
+   fallos.length === 0
+    ? `${ok} usuario(s) eliminados`
+    : `${ok} eliminados. Fallaron: ${fallos.join(", ")}`,
+   fallos.length === 0 ? "success" : "error",
+  );
+  if (recargar) await recargar();
  };
 
  const eliminar = async (uid, uname) => {
@@ -202,173 +235,158 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   });
  }, [listaBase, busq, rolFiltro, acceso]);
 
- const th = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5 };
- const td = { padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
- const mono = { fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, color: T.color.tinta3 };
-
  const tarjetasRol = [["todos", "Todos"], ...Object.entries(ROLES)];
 
+ useEffect(() => { setPagina(1); }, [busq, rolFiltro, acceso]);
+ const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+ const sel = useSeleccion(visibles.map(u => u.id));
+
  return (
-  <div style={{ minHeight:"100%", background:T.color.fondo, margin:"-28px -24px", padding:"24px 28px 40px", color:T.color.tinta }}>
-   <div style={{ maxWidth:1320, margin:"0 auto", display:"flex", flexDirection:"column", gap:18 }}>
+  <Pagina>
+   <Encabezado
+    titulo="Usuarios"
+    descripcion="Administracion de accesos, roles y perfiles del sistema"
+    acciones={
+     <button onClick={abrirNuevo} style={botonPrincipal}>
+      <Plus size={16} /> Nuevo usuario
+     </button>
+    }
+   />
 
-    <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
-     <div>
-      <h1 style={{ margin:0, ...T.texto.titulo }}>Usuarios</h1>
-      <p style={{ margin:"4px 0 0", color:T.color.tinta3, fontSize:13.5 }}>
-       Administracion de accesos, roles y perfiles del sistema
-      </p>
-     </div>
-     <button onClick={abrirNuevo} style={{
-      display:"inline-flex", alignItems:"center", gap:8, padding:"10px 16px",
-      border:"none", borderRadius:T.radio.control, background:T.color.marca,
-      cursor:"pointer", fontFamily:"inherit", fontSize:13.5, fontWeight:700, color:"#fff",
-     }}><Plus size={16} /> Nuevo usuario</button>
-    </header>
+   {/* Cada tarjeta es tambien el filtro por rol. */}
+   <Indicadores items={tarjetasRol.map(([rol, label]) => ({
+    label,
+    valor: porRol(rol),
+    color: rol === "todos" ? T.color.tinta : (COLOR_ROL[rol] || T.color.tinta3),
+    activo: rolFiltro === rol,
+    onClick: () => setRolFiltro(rol),
+   }))} />
 
-    {/* Cada tarjeta es tambien el filtro por rol. */}
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
-     {tarjetasRol.map(([rol, label]) => {
-      const activo = rolFiltro === rol;
-      return (
-       <button key={rol} onClick={() => setRolFiltro(rol)} style={{
-        ...tarjeta, padding:"14px 16px", textAlign:"left", cursor:"pointer",
-        fontFamily:"inherit",
-        border:`1px solid ${activo ? T.color.marca : T.color.borde}`,
-        boxShadow: activo ? `0 0 0 3px ${T.color.marcaSuave}` : T.sombra.tarjeta,
-       }}>
-        <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:6 }}>
-         <span style={{ width:7, height:7, borderRadius:4, flexShrink:0,
-          background: rol === "todos" ? T.color.tinta : (COLOR_ROL[rol] || T.color.tinta3) }} />
-         <span style={{ fontSize:12.5, color:T.color.tinta2, lineHeight:1.2 }}>{label}</span>
-        </div>
-        <div style={{ ...T.texto.cifra, color: activo ? T.color.marca : T.color.tinta }}>{porRol(rol)}</div>
+   <section style={{ ...tarjeta, overflow: "hidden" }}>
+    {sel.seleccion.size > 0 ? (
+     <BarraSeleccion
+      cantidad={sel.seleccion.size}
+      onLimpiar={sel.limpiar}
+      acciones={
+       <button
+        onClick={async () => { await eliminarSeleccionados(sel.seleccion); sel.limpiar(); }}
+        style={{ ...botonBarra, color: T.color.mal, borderColor: "#fca5a5" }}>
+        <Trash2 size={15} /> Eliminar seleccionados
        </button>
-      );
-     })}
-    </section>
-
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", padding:14, borderBottom:`1px solid ${T.color.borde}` }}>
-      <div style={{ position:"relative", width:300 }}>
-       <Search size={15} style={{ position:"absolute", left:12, top:11, color:T.color.tinta3 }} />
-       <input value={busq} onChange={e => setBusq(e.target.value)}
-        placeholder="Buscar nombre, usuario, cedula o NIT"
-        style={{
-         width:"100%", boxSizing:"border-box", padding:"9px 12px 9px 34px",
-         border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
-         fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
-        }}/>
-      </div>
-
-      <div style={{ display:"inline-flex", padding:3, gap:2, background:T.color.superficie2,
-       borderRadius:T.radio.control, border:`1px solid ${T.color.borde}` }}>
-       {[["todos","Todos"], ["con","Con acceso"], ["sin","Sin acceso"]].map(([id,label]) => (
-        <button key={id} onClick={() => setAcceso(id)} style={{
-         border:"none", cursor:"pointer", fontFamily:"inherit", padding:"6px 14px",
-         borderRadius:8, fontSize:13, fontWeight: acceso === id ? 700 : 500,
-         color: acceso === id ? T.color.tinta : T.color.tinta2,
-         background: acceso === id ? T.color.superficie : "transparent",
-         boxShadow: acceso === id ? T.sombra.tarjeta : "none",
-        }}>{label}</button>
+      }
+     />
+    ) : (
+     <BarraFiltros derecha={`${filtrados.length} ${filtrados.length === 1 ? "usuario" : "usuarios"} · orden A-Z`}>
+      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar nombre, usuario, cedula o NIT" ancho={300} />
+      <SelectFiltro valor={rolFiltro} onChange={setRolFiltro} ancho={190}>
+       <option value="todos">Todos los roles</option>
+       {Object.entries(ROLES).map(([rol, label]) => (
+        <option key={rol} value={rol}>{label}</option>
        ))}
-      </div>
+      </SelectFiltro>
+      <Segmentado valor={acceso} onChange={setAcceso}
+       opciones={[["todos", "Todos"], ["con", "Con acceso"], ["sin", "Sin acceso"]]} />
+     </BarraFiltros>
+    )}
 
-      <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
-       {filtrados.length} {filtrados.length === 1 ? "usuario" : "usuarios"} · orden A-Z
-      </div>
-     </div>
-
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead>
-        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-         <th style={th}>Usuario</th>
-         <th style={th}>Rol</th>
-         <th style={th}>Vinculacion</th>
-         <th style={th}>Acceso</th>
-         <th style={{ ...th, textAlign:"right" }}>Acciones</th>
-        </tr>
-       </thead>
-       <tbody>
-        {filtrados.length === 0 && (
-         <tr><td colSpan={5} style={{ ...td, textAlign:"center", padding:40, color:T.color.tinta3 }}>
-          Ningun usuario coincide con el filtro.
-         </td></tr>
-        )}
-        {filtrados.map(u => {
-         const color = COLOR_ROL[u.rol] || T.color.tinta3;
-         const conAcceso = Boolean(u.auth_user_id);
-         return (
-          <tr key={u.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-           <td style={td}>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-             <span style={{
-              width:34, height:34, borderRadius:T.radio.pastilla, flexShrink:0,
-              background:`${color}18`, color, display:"grid", placeItems:"center",
-              fontSize:12, fontWeight:800,
-             }}>{inicialesUsuario(u.nombre)}</span>
-             <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>{u.nombre}</div>
-              <div style={mono}>@{u.user}</div>
-             </div>
-            </div>
-           </td>
-           <td style={td}>
+    <div style={{ overflowX: "auto" }}>
+     <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead>
+       <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
+        <th style={{ ...th, width: 42 }}>
+         <Casilla marcada={sel.todosMarcados} onChange={sel.alternarPagina} titulo="Seleccionar los de esta pagina" />
+        </th>
+        <th style={th}>Usuario</th>
+        <th style={th}>Rol</th>
+        <th style={th}>Vinculacion</th>
+        <th style={th}>Acceso</th>
+        <th style={{ ...th, textAlign: "right" }}>Acciones</th>
+       </tr>
+      </thead>
+      <tbody>
+       {visibles.length === 0 && (
+        <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: 40, color: T.color.tinta3 }}>
+         Ningun usuario coincide con el filtro.
+        </td></tr>
+       )}
+       {visibles.map(u => {
+        const color = COLOR_ROL[u.rol] || T.color.tinta3;
+        const conAcceso = Boolean(u.auth_user_id);
+        const marcado = sel.seleccion.has(u.id);
+        return (
+         <tr key={u.id} style={{ borderBottom: `1px solid ${T.color.borde}`, background: marcado ? T.color.marcaSuave : "transparent" }}>
+          <td style={td}>
+           <Casilla marcada={marcado} onChange={() => sel.alternar(u.id)}
+            titulo={u.user === "admin" ? "El admin principal no se puede eliminar" : undefined} />
+          </td>
+          <td style={td}>
+           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{
-             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-             borderRadius:T.radio.pastilla, background:`${color}14`, color,
-             fontSize:12, fontWeight:700, whiteSpace:"nowrap",
-            }}>
-             <span style={{ width:6, height:6, borderRadius:3, background:color }} />
-             {ROLES[u.rol] || u.rol}
-            </span>
-           </td>
-           <td style={td}>
-            {u.empresa || u.nit || u.cedula || u.placa ? (
-             <>
-              <div>{u.empresa || "Somos PRO"}</div>
-              <div style={mono}>
-               {[u.nit && `NIT ${u.nit}`, u.cedula && `CC ${u.cedula}`, u.placa]
-                .filter(Boolean).join("  ·  ")}
-              </div>
-             </>
-            ) : <span style={{ color:T.color.tinta3 }}>-</span>}
-           </td>
-           <td style={td}>
-            <span style={{ display:"inline-flex", alignItems:"center", gap:7, whiteSpace:"nowrap" }}>
-             <span style={{ width:7, height:7, borderRadius:4, background: conAcceso ? T.color.bien : T.color.borde2 }} />
-             <span style={{ color: conAcceso ? T.color.tinta2 : T.color.tinta3 }}>
-              {conAcceso ? "Con acceso" : "Sin acceso"}
-             </span>
-            </span>
-           </td>
-           <td style={{ ...td, textAlign:"right" }}>
-            <div style={{ display:"inline-flex", gap:4 }}>
-             <button onClick={() => abrirEditar(u)} title="Editar" style={iconoAccion}>
-              <Pencil size={15} />
-             </button>
-             {u.user !== "admin" && (
-              <button onClick={() => eliminar(u.id, u.user)} title="Eliminar"
-               disabled={eliminando === u.id}
-               style={{ ...iconoAccion, color:T.color.mal, opacity: eliminando === u.id ? 0.5 : 1 }}>
-               <Trash2 size={15} />
-              </button>
-             )}
+             width: 34, height: 34, borderRadius: T.radio.pastilla, flexShrink: 0,
+             background: `${color}18`, color, display: "grid", placeItems: "center",
+             fontSize: 12, fontWeight: 800,
+            }}>{inicialesUsuario(u.nombre)}</span>
+            <div style={{ minWidth: 0 }}>
+             <div style={{ fontSize: 13.5, fontWeight: 700, color: T.color.tinta }}>{u.nombre}</div>
+             <div style={mono}>@{u.user}</div>
             </div>
-           </td>
-          </tr>
-         );
-        })}
-       </tbody>
-      </table>
-     </div>
+           </div>
+          </td>
+          <td style={td}>
+           <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px",
+            borderRadius: T.radio.pastilla, background: `${color}14`, color,
+            fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+           }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: color }} />
+            {ROLES[u.rol] || u.rol}
+           </span>
+          </td>
+          <td style={td}>
+           {u.empresa || u.nit || u.cedula || u.placa ? (
+            <>
+             <div>{u.empresa || "Somos PRO"}</div>
+             <div style={mono}>
+              {[u.nit && `NIT ${u.nit}`, u.cedula && `CC ${u.cedula}`, u.placa]
+               .filter(Boolean).join("  ·  ")}
+             </div>
+            </>
+           ) : <span style={{ color: T.color.tinta3 }}>-</span>}
+          </td>
+          <td style={td}>
+           <span style={{ display: "inline-flex", alignItems: "center", gap: 7, whiteSpace: "nowrap" }}>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: conAcceso ? T.color.bien : T.color.borde2 }} />
+            <span style={{ color: conAcceso ? T.color.tinta2 : T.color.tinta3 }}>
+             {conAcceso ? "Con acceso" : "Sin acceso"}
+            </span>
+           </span>
+          </td>
+          <td style={{ ...td, textAlign: "right" }}>
+           <div style={{ display: "inline-flex", gap: 4 }}>
+            <button onClick={() => abrirEditar(u)} title="Editar" style={iconoAccion}>
+             <Pencil size={15} />
+            </button>
+            {u.user !== "admin" && (
+             <button onClick={() => eliminar(u.id, u.user)} title="Eliminar"
+              disabled={eliminando === u.id}
+              style={{ ...iconoAccion, color: T.color.mal, opacity: eliminando === u.id ? 0.5 : 1 }}>
+              <Trash2 size={15} />
+             </button>
+            )}
+           </div>
+          </td>
+         </tr>
+        );
+       })}
+      </tbody>
+     </table>
+    </div>
 
-     <div style={{ padding:"12px 16px", borderTop:`1px solid ${T.color.borde}`, fontSize:12.5, color:T.color.tinta3 }}>
-      {filtrados.length} {filtrados.length === 1 ? "usuario" : "usuarios"}
-     </div>
-    </section>
-   </div>
+    <PieTabla
+     izquierda={`${filtrados.length} ${filtrados.length === 1 ? "usuario" : "usuarios"}`}
+     derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA} />}
+    />
+   </section>
 
    {modal&&(
     <Modal title="Nuevo Usuario" onClose={()=>setModal(false)}>
@@ -405,12 +423,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
      </div>
     </Modal>
    )}
-  </div>
+  </Pagina>
  );
 }
 
-const iconoAccion = {
- border: "none", background: "transparent", cursor: "pointer",
- color: T.color.tinta3, padding: 7, borderRadius: T.radio.chico,
- display: "grid", placeItems: "center",
-};

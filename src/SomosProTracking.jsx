@@ -14,6 +14,7 @@ import { SidebarApp } from './components/layout/SidebarApp';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta } from './design/tokens';
+import { Paginador } from './components/ui/listas';
 import { ClipboardList, Download, Plus, Search, Upload } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
@@ -180,47 +181,6 @@ const selectFiltro = {
  fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
  cursor: "pointer", outline: "none", maxWidth: 210,
 };
-
-// Paginador con numeros: con 2.300 pedidos en paginas de 100 son 23 paginas, y
-// saltar a una concreta es mas util que avanzar de una en una.
-function Paginador({ total, page, setPage, pageSize }) {
- const paginas = Math.max(1, Math.ceil(total / pageSize));
- if (paginas <= 1) return null;
-
- const numeros = [];
- const agregar = (n) => { if (!numeros.includes(n)) numeros.push(n); };
- agregar(1);
- for (let n = page - 1; n <= page + 1; n++) if (n > 1 && n < paginas) agregar(n);
- agregar(paginas);
- numeros.sort((a, b) => a - b);
-
- const boton = (contenido, alPulsar, activo, inactivo) => (
-  <button key={contenido + String(activo)} onClick={alPulsar} disabled={inactivo} style={{
-   minWidth: 30, height: 30, padding: "0 8px", borderRadius: T.radio.chico,
-   border: activo ? "none" : `1px solid ${T.color.borde2}`,
-   background: activo ? T.color.marca : T.color.superficie,
-   color: activo ? "#fff" : inactivo ? T.color.borde2 : T.color.tinta2,
-   cursor: inactivo ? "not-allowed" : "pointer", fontFamily: "inherit",
-   fontSize: 13, fontWeight: activo ? 700 : 500,
-  }}>{contenido}</button>
- );
-
- const piezas = [];
- numeros.forEach((n, i) => {
-  if (i > 0 && n - numeros[i - 1] > 1) {
-   piezas.push(<span key={"e" + n} style={{ color: T.color.tinta3, padding: "0 4px" }}>...</span>);
-  }
-  piezas.push(boton(String(n), () => setPage(n), n === page, false));
- });
-
- return (
-  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-   {boton("<", () => setPage(Math.max(1, page - 1)), false, page === 1)}
-   {piezas}
-   {boton(">", () => setPage(Math.min(paginas, page + 1)), false, page === paginas)}
-  </div>
- );
-}
 
 function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
