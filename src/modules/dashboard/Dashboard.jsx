@@ -130,7 +130,7 @@ function Buscador({ pedidos, onAbrirPedido }) {
 function SelectorRango({ rango, setRango }) {
  const [abierto, setAbierto] = useState(false);
  const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
- const actual = RANGOS.find(r => r.id === rango) || RANGOS[1];
+ const actual = RANGOS.find(r => r.id === rango) || RANGOS[3];
 
  return (
   <div ref={ref} style={{ position: "relative" }}>
@@ -334,7 +334,9 @@ export function Dashboard({
  pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [],
  promesas = [], ciudades = [], setActiveTab, onBuscarPedido, onVerEstado,
 }) {
- const [rango, setRango] = useState("30");
+ // El dashboard abre con todo el historico: es la foto completa de la operacion.
+ // Los rangos cortos sirven para mirar un periodo, no para ser el punto de partida.
+ const [rango, setRango] = useState("todo");
 
  const irA = (tab) => { if (setActiveTab) setActiveTab(tab); };
  const abrirPedido = (texto) => {
@@ -343,7 +345,7 @@ export function Dashboard({
  };
 
  const m = useMemo(() => {
-  const dias = (RANGOS.find(r => r.id === rango) || RANGOS[1]).dias;
+  const dias = (RANGOS.find(r => r.id === rango) || RANGOS[3]).dias;
   const desde = dias ? restarDias(dias) : null;
   const enRango = desde
    ? pedidos.filter(p => (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde)
