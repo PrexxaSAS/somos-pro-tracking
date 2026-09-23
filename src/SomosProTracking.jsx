@@ -14,6 +14,7 @@ import { SidebarApp } from './components/layout/SidebarApp';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta } from './design/tokens';
+import { ClipboardList, Download, Plus, Search, Upload } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -1780,13 +1781,18 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      </div>
      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
       <button style={botonBarra} onClick={imprimirPlanilla}>
+       <ClipboardList size={15} style={{ color:T.color.tinta3 }} />
        Planilla{seleccion.size > 0 ? ` (${seleccion.size})` : ""}
       </button>
-      <button style={botonBarra} onClick={() => setModCSV(true)}>CSV pedidos</button>
-      <button style={botonBarra} onClick={() => setModGuias(true)}>Cargar guias paqueteria</button>
+      <button style={botonBarra} onClick={() => setModCSV(true)}>
+       <Download size={15} style={{ color:T.color.tinta3 }} /> CSV pedidos
+      </button>
+      <button style={botonBarra} onClick={() => setModGuias(true)}>
+       <Upload size={15} style={{ color:T.color.tinta3 }} /> Cargar guias paqueteria
+      </button>
       <button onClick={() => setModNuevo(true)} style={{
        ...botonBarra, background:T.color.marca, border:"none", color:"#fff", fontWeight:700,
-      }}>+ Nuevo pedido</button>
+      }}><Plus size={16} /> Nuevo pedido</button>
      </div>
     </header>
 
@@ -1819,10 +1825,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     <section style={{ ...tarjeta, overflow:"hidden" }}>
      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:14, borderBottom:`1px solid ${T.color.borde}` }}>
       <div style={{ position:"relative", flex:"1 1 260px", minWidth:220 }}>
+       <Search size={15} style={{ position:"absolute", left:12, top:11, color:T.color.tinta3 }} />
        <input value={busq} onChange={e => { setBusq(e.target.value); setPage(1); }}
         placeholder="Buscar por N pedido, factura, cliente o ciudad"
         style={{
-         width:"100%", boxSizing:"border-box", padding:"9px 12px",
+         width:"100%", boxSizing:"border-box", padding:"9px 12px 9px 34px",
          border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
          fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
         }}/>
