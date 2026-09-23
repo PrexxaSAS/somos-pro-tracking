@@ -1,34 +1,53 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal, Search, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
+import { ESTADOS_PEDIDO } from '../../Constants';
 
 // Piezas compartidas por las pantallas de listado (Pedidos, Conductores, Usuarios).
 // Viven aqui para que las tres se vean y se comporten igual: si cambia el estilo de
 // una barra de filtros o de un paginador, cambia en todas a la vez.
 
 export const th = {
- ...T.texto.seccion, color: T.color.tinta3, textAlign: "left",
- padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5,
+ ...T.texto.seccion, color: T.color.placeholder, textAlign: "left",
+ padding: "10px 18px", whiteSpace: "nowrap",
 };
 
 export const td = {
- padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle",
+ padding: "12px 18px", fontSize: 13, color: T.color.tinta2, verticalAlign: "middle",
+ borderBottom: `1px solid ${T.color.divisor}`,
+};
+
+// Celdas con cifras: alineadas a la derecha y con numeros de ancho fijo, para que
+// las columnas no bailen al cambiar de pagina.
+export const tdCifra = {
+ ...td, textAlign: "right", fontWeight: 700, color: T.color.tinta,
+ fontVariantNumeric: "tabular-nums",
 };
 
 export const mono = {
- fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, color: T.color.tinta3,
+ fontFamily: T.fuente.mono, fontWeight: 500, fontSize: 12, color: T.color.tinta3,
+};
+
+// Chip para IDs, placas y NIT.
+export const chipMono = {
+ ...mono, color: T.color.tinta2, background: T.color.superficie2,
+ border: `1px solid ${T.color.borde}`, borderRadius: T.radio.chico,
+ padding: "3px 8px", display: "inline-block",
 };
 
 export const botonBarra = {
- display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px",
- border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
+ display: "inline-flex", alignItems: "center", gap: 8, padding: "0 14px", height: 38,
+ border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.boton,
  background: T.color.superficie, cursor: "pointer", fontFamily: "inherit",
- fontSize: 13.5, fontWeight: 600, color: T.color.tinta, whiteSpace: "nowrap",
+ fontSize: 13, fontWeight: 600, color: T.color.tinta2, whiteSpace: "nowrap",
 };
 
 export const botonPrincipal = {
- ...botonBarra, background: T.color.marca, border: "none", color: "#fff", fontWeight: 700,
+ ...botonBarra, background: T.color.marca, border: "none", color: "#fff", fontWeight: 600,
 };
+
+// Boton pequeno para dentro de una fila.
+export const botonFila = { ...botonBarra, height: 30, padding: "0 11px", fontSize: 12.5 };
 
 export const iconoAccion = {
  border: "none", background: "transparent", cursor: "pointer",
@@ -38,8 +57,8 @@ export const iconoAccion = {
 
 export function Pagina({ children }) {
  return (
-  <div style={{ minHeight: "100%", background: T.color.fondo, margin: "-28px -24px", padding: "24px 28px 40px", color: T.color.tinta }}>
-   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
+  <div style={{ minHeight: "100%", background: T.color.fondo, margin: "-28px -24px", padding: "28px 36px 36px", color: T.color.tinta }}>
+   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
     {children}
    </div>
   </div>
@@ -51,7 +70,7 @@ export function Encabezado({ titulo, descripcion, acciones }) {
   <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
    <div>
     <h1 style={{ margin: 0, ...T.texto.titulo }}>{titulo}</h1>
-    {descripcion && <p style={{ margin: "4px 0 0", color: T.color.tinta3, fontSize: 13.5 }}>{descripcion}</p>}
+    {descripcion && <p style={{ margin: "4px 0 0", color: T.color.tinta3, ...T.texto.subtitulo }}>{descripcion}</p>}
    </div>
    {acciones && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{acciones}</div>}
   </header>
@@ -105,9 +124,10 @@ export function Buscador({ valor, onChange, placeholder, ancho = 280 }) {
   <div style={{ position: "relative", width: ancho, maxWidth: "100%" }}>
    <Search size={15} style={{ position: "absolute", left: 12, top: 11, color: T.color.tinta3 }} />
    <input value={valor} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{
-    width: "100%", boxSizing: "border-box", padding: "9px 12px 9px 34px",
+    width: "100%", boxSizing: "border-box", height: 36, padding: "0 12px 0 34px",
     border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
     fontSize: 13, fontFamily: "inherit", color: T.color.tinta, outline: "none",
+    background: T.color.superficie2,
    }}/>
   </div>
  );
@@ -177,6 +197,30 @@ export function BarraSeleccion({ cantidad, onLimpiar, acciones }) {
    }}><X size={13} /> Quitar seleccion</button>
    <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>{acciones}</div>
   </div>
+ );
+}
+
+// Chip de estado: punto de color con su etiqueta al lado. El color nunca va solo.
+export function ChipEstado({ estado, novedad }) {
+ const color = T.estado[estado] || T.color.neutroPunto;
+ const label = ESTADOS_PEDIDO[estado]?.label || estado;
+ return (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+   <span style={{
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px",
+    borderRadius: T.radio.pastilla, background: T.color.neutroSuave,
+    fontSize: 12, fontWeight: 600, color: T.color.tinta2, whiteSpace: "nowrap",
+   }}>
+    <span style={{ width: 6, height: 6, borderRadius: 3, background: color }} />
+    {label}
+   </span>
+   {novedad && (
+    <span style={{
+     padding: "3px 9px", borderRadius: T.radio.pastilla,
+     background: T.color.malSuave, color: T.color.mal, fontSize: 11.5, fontWeight: 700,
+    }}>Novedad</span>
+   )}
+  </span>
  );
 }
 

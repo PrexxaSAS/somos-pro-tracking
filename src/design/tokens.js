@@ -1,75 +1,94 @@
-// Sistema de diseno de QTracking.
+// Sistema de diseno de QTracking. La referencia escrita es docs/systemdesign.md:
+// si algo se contradice, manda el documento.
 //
-// Un solo lugar para los colores, radios, sombras y tamanos de letra. Los modulos
-// no deberian llevar hexadecimales sueltos: si un color hace falta, se agrega aqui.
-//
-// La paleta de estado (T.estado) esta validada para graficas: los ocho estados de
-// un pedido se distinguen entre si con vision normal y con daltonismo, incluso
-// cuando aparecen pegados en la barra apilada del dashboard. Si se cambia alguno,
-// hay que volver a validar la secuencia completa antes de usarla en una grafica.
+// Un solo lugar para los colores, radios y tamanos de letra. Los modulos no
+// deberian llevar hexadecimales sueltos: si un color hace falta, se agrega aqui.
 
 export const T = {
  color: {
   // Superficies
-  fondo:     "#f6f7f9",  // fondo de la aplicacion
+  fondo:     "#f7f6fa",  // fondo de la aplicacion
   superficie:  "#ffffff",  // tarjetas, sidebar, modales
-  superficie2: "#fafafb",  // filas alternas, zonas hundidas
-  borde:     "#ececf1",
-  borde2:    "#e2e3ea",  // bordes de controles
+  superficie2: "#f7f6fa",  // relleno suave: busqueda, chips, segmento
+  superficie3: "#f1f0f5",  // relleno mas marcado
+  hoverFila:  "#fbfafd",
+  borde:     "#ecebf1",  // borde de tarjeta
+  borde2:    "#e6e4ec",  // borde de control
+  divisor:    "#f0eff4",  // divisor entre filas
 
   // Texto
-  tinta:    "#16161d",
-  tinta2:    "#5b5b6b",
-  tinta3:    "#8e8e9e",
+  tinta:    "#17141f",  // primario
+  tinta2:    "#4a4657",  // secundario
+  tinta3:    "#77738a",  // terciario
+  tinta4:    "#8a8697",  // deshabilitado
+  placeholder: "#a09cae",
+  tenue:    "#c9c5d6",
 
   // Marca
-  marca:    "#6d42d8",
-  marcaFuerte: "#5a34bd",
-  marcaSuave:  "#f1ecfd",
+  marca:    "#5b35d5",
+  marcaFuerte: "#4b2ab8",
+  marcaSuave:  "#f1edfd",
+  marcaAvatar: "#e9e3fc",
   marcaBorde:  "#ddd0fb",
 
-  // Estado de la interfaz (avisos, no series de datos)
-  bien:     "#15803d",
-  bienSuave:  "#f0fdf4",
-  ojo:     "#d97706",
-  ojoSuave:   "#fffbeb",
-  mal:     "#dc2626",
-  malSuave:   "#fef2f2",
+  // Semanticos: solo con significado operativo, nunca como color decorativo.
+  mal:     "#c33a31",  // texto
+  malPunto:   "#e04a3f",  // punto y acentos
+  malSuave:   "#fdecea",
+  malBorde:   "#f3d3cf",
+  ojo:     "#8a6420",
+  ojoPunto:   "#d98b1c",
+  ojoSuave:   "#fbf4e6",
+  bien:     "#177a56",
+  bienPunto:  "#1f9a6e",
+  bienSuave:  "#e5f5ee",
+  info:     "#24568f",
+  infoPunto:  "#2d6fb8",
+  infoSuave:  "#e8f0fa",
+  neutro:    "#4a4657",
+  neutroPunto: "#a39db8",
+  neutroSuave: "#f1f0f5",
  },
 
- // Estados del pedido. El color se usa en badges, leyendas y en la barra apilada.
- // Secuencia validada en este orden; no reordenar sin volver a comprobarla.
+ // Estados del pedido para la barra apilada y los chips.
  estado: {
-  sin_asignar:   "#64748b", // gris a proposito: es el estado "sin nada todavia"
-  pendiente:    "#d97706",
-  en_transito:   "#7c3aed",
-  paqueteria:    "#0891b2",
-  entregado:    "#15803d",
-  novedad:     "#dc2626",
-  solo_facturar:  "#0d9488",
-  cliente_recoge:  "#a21caf",
+  sin_asignar:   "#a39db8",
+  pendiente:    "#d6d2e2",
+  en_transito:   "#9b7ff5",
+  paqueteria:    "#c3b1fa",
+  entregado:    "#5b35d5",
+  novedad:     "#e04a3f",
+  solo_facturar:  "#1f8a7a",
+  cliente_recoge:  "#2d6fb8",
  },
 
- radio: { chico: 8, control: 10, tarjeta: 16, pastilla: 999 },
+ fuente: {
+  ui: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+  mono: "'IBM Plex Mono', ui-monospace, Menlo, monospace",
+ },
+
+ radio: { chico: 6, control: 10, boton: 10, tarjeta: 14, pastilla: 999 },
 
  sombra: {
-  tarjeta: "0 1px 2px rgba(16,16,29,.04)",
-  flotante: "0 12px 32px rgba(16,16,29,.12)",
+  tarjeta: "none",                    // las tarjetas se definen por el borde
+  segmento: "0 1px 2px rgba(0,0,0,.08)",
+  flotante: "0 12px 32px rgba(23,20,31,.14)",
  },
 
  texto: {
-  titulo:   { fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em" },
-  subtitulo: { fontSize: 14, fontWeight: 500 },
-  cifra:   { fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" },
-  etiqueta:  { fontSize: 12, fontWeight: 600 },
-  seccion:  { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" },
+  titulo:   { fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" },
+  subtitulo: { fontSize: 14, fontWeight: 400 },
+  tarjeta:  { fontSize: 15, fontWeight: 700 },
+  cifra:   { fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" },
+  cifraGrande:{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" },
+  seccion:  { fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" },
+  meta:    { fontSize: 12, fontWeight: 400 },
  },
 };
 
-// Tarjeta base: la usan el dashboard y los modulos que ya migraron al diseno nuevo.
+// Tarjeta base: sin sombra, definida por su borde.
 export const tarjeta = {
  background: T.color.superficie,
  border: `1px solid ${T.color.borde}`,
  borderRadius: T.radio.tarjeta,
- boxShadow: T.sombra.tarjeta,
 };

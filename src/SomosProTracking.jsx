@@ -16,7 +16,8 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Segmentado, MenuFila,
- Paginador, PieTabla, th, td, mono, botonBarra, botonPrincipal, iconoAccion,
+ Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
+ botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import { ChevronDown, ChevronRight, ClipboardList, Download, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
@@ -2001,59 +2002,79 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
 
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
-    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Rastreo GPS</h1>
-    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Seguimiento geografico de pedidos con conductor asignado</p>
-   </header>
+  <Pagina>
+   <Encabezado
+    titulo="Rastreo GPS"
+    descripcion="Seguimiento geografico de pedidos con conductor asignado"
+   />
 
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
-    <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:16, alignItems:"start" }}>
-     <section style={{ ...cardStyle, overflow:"hidden" }}>
-      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}` }}>
-       <h2 style={{ margin:0, fontSize:14, fontWeight:850 }}>Pedidos con conductor</h2>
-       <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:12 }}>{conCond.length} pedido(s) disponibles</p>
+   <div style={{ display:"grid", gridTemplateColumns:"340px 1fr", gap:16, alignItems:"start" }}>
+    <section style={{ ...tarjeta, overflow:"hidden", maxHeight:"72vh", display:"flex", flexDirection:"column" }}>
+     <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
+      <div style={{ ...T.texto.tarjeta }}>En ruta</div>
+      <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
+       {conCond.length} {conCond.length===1 ? "pedido con conductor" : "pedidos con conductor"}
       </div>
-      <div style={{ display:"flex", flexDirection:"column", gap:0, maxHeight:"calc(100vh - 190px)", overflowY:"auto" }}>
-       {conCond.length === 0 && <p style={{ color:"#9ca3af", fontSize:13, padding:20, margin:0 }}>Sin pedidos asignados.</p>}
-       {conCond.map(p => {
-        const active = sel?.id === p.id;
-        return (
-         <button key={p.id} onClick={() => setSel(p)} style={{ width:"100%", padding:"14px 18px", background:active?"#f0eef9":"#fff", border:"none", borderBottom:`1px solid ${border}`, cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"flex-start" }}>
-           <div>
-            <div style={{ fontWeight:850, color:active?"#5b33d6":"#111827" }}>{p.guia_interna || p.id}</div>
-            <div style={{ fontSize:13, color:"#4b5563", marginTop:4 }}>{p.cliente}</div>
-            <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>{p.ciudad_nombre}</div>
-           </div>
-           <Badge estado={p.estado} />
-          </div>
-         </button>
-        );
-       })}
-      </div>
-     </section>
-
-     <section style={{ ...cardStyle, minHeight:520, overflow:"hidden" }}>
-      {sel && mapUrl ? (
-       <>
-        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
-         <div>
-          <div style={{ fontWeight:850, fontSize:17 }}>{sel.guia_interna || sel.id} <span style={{ color:"#6b7280", fontWeight:650 }}>{sel.cliente}</span></div>
-          <div style={{ fontSize:13, color:"#6b7280", marginTop:6 }}>{sel.direccion}, {ciudad?.name || sel.ciudad_nombre}</div>
-          {cond && <div style={{ fontSize:13, color:"#5b33d6", marginTop:4 }}>{cond.nombre} · Placa: {sel.placa || cond.placa}</div>}
-         </div>
-         <Badge estado={sel.estado} />
-        </div>
-        <iframe title="mapa-rastreo" src={mapUrl} width="100%" height="458" style={{ border:"none", display:"block" }} allowFullScreen loading="lazy" />
-       </>
-      ) : (
-       <div style={{ minHeight:520, display:"grid", placeItems:"center", color:"#9ca3af", textAlign:"center", padding:40 }}>Selecciona un pedido para ver el mapa de entrega.</div>
+     </div>
+     <div style={{ overflowY:"auto" }}>
+      {conCond.length===0 && (
+       <div style={{ padding:40, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+        Ningun pedido tiene conductor asignado.
+       </div>
       )}
-     </section>
-    </div>
-   </main>
-  </div>
+      {conCond.map(p=>{
+       const c = conductores.find(x=>String(x.id)===String(p.conductor_id));
+       const activo = sel?.id === p.id;
+       return (
+        <button key={p.id} onClick={()=>setSel(p)} style={{
+         width:"100%", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit",
+         padding:"12px 16px", borderBottom:`1px solid ${T.color.divisor}`,
+         background: activo ? T.color.marcaSuave : "transparent",
+        }}>
+         <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center" }}>
+          <span style={{ fontSize:13, fontWeight:700, color: activo ? T.color.marca : T.color.tinta }}>
+           {p.guia_interna || p.id}
+          </span>
+          <ChipEstado estado={p.estado}/>
+         </div>
+         <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:4 }}>
+          {p.cliente} · {p.ciudad_nombre || "sin ciudad"}
+         </div>
+         <div style={{ ...T.texto.meta, color:T.color.tinta4, marginTop:2 }}>
+          {c ? `${c.nombre} · ${c.placa || "sin placa"}` : "conductor no encontrado"}
+         </div>
+        </button>
+       );
+      })}
+     </div>
+    </section>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     {!sel ? (
+      <div style={{ padding:60, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+       Selecciona un pedido para ver su destino en el mapa.
+      </div>
+     ) : (
+      <>
+       <div style={{ padding:"14px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+        <div>
+         <div style={{ ...T.texto.tarjeta }}>{sel.cliente}</div>
+         <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
+          {sel.direccion || "Sin direccion"}{ciudad ? ` · ${ciudad.name}` : ""}
+         </div>
+        </div>
+        <div style={{ textAlign:"right" }}>
+         <div style={{ fontSize:13, fontWeight:600, color:T.color.tinta }}>{cond?.nombre || "Sin conductor"}</div>
+         {cond?.placa && <div style={{ ...mono, marginTop:2 }}>{cond.placa}</div>}
+        </div>
+       </div>
+       <iframe title="Mapa del destino" src={mapUrl} style={{ width:"100%", height:"62vh", border:"none", display:"block" }} loading="lazy"/>
+      </>
+     )}
+    </section>
+   </div>
+
+  </Pagina>
  );
 }
 
@@ -3470,58 +3491,80 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esCliente ? "Mis Devoluciones" : "Devoluciones"}</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de solicitudes de devolucion</p>
+  <Pagina>
+   <Encabezado
+    titulo={esCliente ? "Mis devoluciones" : "Devoluciones"}
+    descripcion="Gestion y seguimiento de solicitudes de devolucion"
+    acciones={<button onClick={()=>setModNueva(true)} style={botonPrincipal}><Plus size={16}/> Nueva devolucion</button>}
+   />
+
+   <Indicadores items={[
+    { label:"Abiertas", valor:totalAbiertas, color:T.color.marca, destacado:true },
+    { label:"Cerradas", valor:totalCerradas, color:T.color.bienPunto },
+    { label:"Con soporte", valor:filtradas.filter(d=>d.soporte_nombre).length, color:T.color.infoPunto },
+    { label:"Total", valor:devoluciones.length, color:T.color.neutroPunto },
+   ]}/>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${filtradas.length} de ${devoluciones.length}`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, factura, pedido o ciudad" ancho={300}/>
+    </BarraFiltros>
+
+    <div style={{ overflowX:"auto" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
+      <thead>
+       <tr>
+        <th style={th}>Guia</th>
+        <th style={th}>Factura</th>
+        <th style={th}>Pedido</th>
+        <th style={th}>Recogida</th>
+        <th style={th}>Sede destino</th>
+        <th style={{...th, textAlign:"right"}}>Unidades</th>
+        <th style={th}>Estado</th>
+        <th style={{...th, textAlign:"right"}}>Acciones</th>
+       </tr>
+      </thead>
+      <tbody>
+       {pageItems.length===0 && (
+        <tr><td colSpan={8} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
+         {devoluciones.length===0 ? "Sin devoluciones registradas." : "Ninguna devolucion coincide con la busqueda."}
+        </td></tr>
+       )}
+       {pageItems.map(d=>(
+        <tr key={d.id} style={{ cursor:"pointer" }} onClick={()=>setModDet(d)}>
+         <td style={td}><span style={chipMono}>{d.guia}</span></td>
+         <td style={td}><span style={mono}>{d.factura || "-"}</span></td>
+         <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{d.pedido_ref || "-"}</td>
+         <td style={td}>
+          <div style={{ color:T.color.tinta, fontWeight:600 }}>{d.ciudad_nombre || "-"}</div>
+          <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{d.dir_recogida}</div>
+         </td>
+         <td style={td}>{d.dir_entrega || <span style={{ color:T.color.tinta4 }}>Sin registrar</span>}</td>
+         <td style={tdCifra}>{d.unidades}</td>
+         <td style={td}><ChipEstado estado={d.estado} novedad={d.novedad}/></td>
+         <td style={{ ...td, textAlign:"right" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ display:"inline-flex", gap:6 }}>
+           {(d.soporte_nombre || d.soporte_data) && (
+            <button style={botonFila} onClick={()=>abrirArchivoRemoto("devoluciones", d.id, "soporte_data", "soporte_nombre", d.soporte_nombre || "soporte", showToast)}>Soporte</button>
+           )}
+           {esCliente && !d.conductor_id && d.estado==="sin_asignar" && (
+            <button style={botonFila} onClick={()=>abrirEditarCliente(d)}>Editar</button>
+           )}
+           <button style={botonFila} onClick={()=>setModDet(d)}>Ver</button>
+          </div>
+         </td>
+        </tr>
+       ))}
+      </tbody>
+     </table>
     </div>
-    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Devolucion</button>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_nombre||d.soporte_data).length}</div></div>
-    </section>
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia, factura o pedido..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
-      <span style={{ color:"#6b7280", fontSize:13 }}>{filtradas.length} de {devoluciones.length}</span>
-      <span style={{ background:"#fef2f2", color:"#dc2626", borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800 }}>{totalAbiertas} abiertas</span>
-     </div>
-     {filtradas.length===0 ? (
-      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin devoluciones registradas.</div>
-     ) : (
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-        <thead>
-         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-          {["Guia", "Factura", "Pedido", "Ciudad", "Unidades", "Estado", "Soporte", "Acciones"].map(h => (
-           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
-          ))}
-         </tr>
-        </thead>
-        <tbody>
-         {pageItems.map(d=>(
-          <tr key={d.id} style={{ borderBottom:`1px solid ${border}` }}>
-           <td style={{ padding:"16px", color:"#dc2626", fontWeight:850, fontFamily:"monospace" }}>{d.guia}</td>
-           <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{d.factura}</td>
-           <td style={{ padding:"16px", fontWeight:750 }}>{d.pedido_ref}</td>
-           <td style={{ padding:"16px" }}><div>{d.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{d.dir_recogida}</div></td>
-           <td style={{ padding:"16px", fontWeight:850 }}>{d.unidades}</td>
-           <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={d.estado}/>{d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{d.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {d.fecha_real}</div>}</td>
-           <td style={{ padding:"16px" }}>{(d.soporte_nombre||d.soporte_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`, showToast)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
-           <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !d.conductor_id && d.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(d)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(d)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
-          </tr>
-         ))}
-        </tbody>
-       </table>
-      </div>
-     )}
-     <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
-    </section>
-   </main>
+
+    <PieTabla
+     izquierda={`${filtradas.length} ${filtradas.length===1 ? "devolucion" : "devoluciones"}`}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+    />
+   </section>
+
    {(modNueva||modEditar)&&(
     <Modal title={modEditar ? "Editar Solicitud de Devolucion" : "Nueva Solicitud de Devolucion"} onClose={cerrarFormulario} wide>
      <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -3591,7 +3634,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
      onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
      showToast={showToast} canEdit={user.rol!=="cliente"}/>
    )}
-  </div>
+  </Pagina>
  );
 }
 
@@ -3878,58 +3921,84 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esCliente ? "Mis Recogidas" : "Recogidas"}</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de solicitudes de recogida</p>
+  <Pagina>
+   <Encabezado
+    titulo={esCliente ? "Mis recogidas" : "Recogidas"}
+    descripcion="Gestion y seguimiento de solicitudes de recogida"
+    acciones={<button onClick={()=>setModNueva(true)} style={botonPrincipal}><Plus size={16}/> Nueva recogida</button>}
+   />
+
+   <Indicadores items={[
+    { label:"Abiertas", valor:totalAbiertas, color:T.color.marca, destacado:true },
+    { label:"Cerradas", valor:totalCerradas, color:T.color.bienPunto },
+    { label:"Con documento", valor:filtradas.filter(r=>r.doc_nombre).length, color:T.color.infoPunto },
+    { label:"Total", valor:recogidas.length, color:T.color.neutroPunto },
+   ]}/>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${filtradas.length} de ${recogidas.length}`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, ciudad o direccion" ancho={280}/>
+    </BarraFiltros>
+
+    <div style={{ overflowX:"auto" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
+      <thead>
+       <tr>
+        <th style={th}>Guia</th>
+        <th style={th}>Recogida</th>
+        <th style={th}>Entrega</th>
+        <th style={{...th, textAlign:"right"}}>Unidades</th>
+        <th style={{...th, textAlign:"right"}}>Peso</th>
+        <th style={th}>Estado</th>
+        <th style={th}>Documento</th>
+        <th style={{...th, textAlign:"right"}}>Acciones</th>
+       </tr>
+      </thead>
+      <tbody>
+       {pageItems.length===0 && (
+        <tr><td colSpan={8} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
+         {recogidas.length===0 ? "Sin recogidas registradas." : "Ninguna recogida coincide con la busqueda."}
+        </td></tr>
+       )}
+       {pageItems.map(r=>(
+        <tr key={r.id} style={{ cursor:"pointer" }} onClick={()=>setModDet(r)}>
+         <td style={td}><span style={chipMono}>{r.guia}</span></td>
+         <td style={td}>
+          <div style={{ color:T.color.tinta, fontWeight:600 }}>{r.ciudad_recogida_nombre || "-"}</div>
+          <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{r.dir_recogida}</div>
+         </td>
+         <td style={td}>
+          <div style={{ color:T.color.tinta, fontWeight:600 }}>{r.ciudad_entrega_nombre || "-"}</div>
+          <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{r.dir_entrega}</div>
+         </td>
+         <td style={tdCifra}>{r.unidades}</td>
+         <td style={tdCifra}>{r.peso_kg} kg</td>
+         <td style={td}><ChipEstado estado={r.estado} novedad={r.novedad}/></td>
+         <td style={td} onClick={e=>e.stopPropagation()}>
+          {(r.doc_nombre || r.doc_data)
+           ? <button style={botonFila} onClick={()=>abrirArchivoRemoto("recogidas", r.id, "doc_data", "doc_nombre", r.doc_nombre || "documento", showToast)}>Ver</button>
+           : <span style={{ color:T.color.tinta4 }}>-</span>}
+         </td>
+         <td style={{ ...td, textAlign:"right" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ display:"inline-flex", gap:6 }}>
+           {esCliente && !r.conductor_id && r.estado==="sin_asignar" && (
+            <button style={botonFila} onClick={()=>abrirEditarCliente(r)}>Editar</button>
+           )}
+           <button style={botonFila} onClick={()=>setModDet(r)}>Ver</button>
+          </div>
+         </td>
+        </tr>
+       ))}
+      </tbody>
+     </table>
     </div>
-    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Recogida</button>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_nombre||r.doc_data).length}</div></div>
-    </section>
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
-      <span style={{ color:"#6b7280", fontSize:13 }}>{filtradas.length} de {recogidas.length}</span>
-      <span style={{ background:"#ecfeff", color:"#0891b2", borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800 }}>{totalAbiertas} abiertas</span>
-     </div>
-     {filtradas.length===0 ? (
-      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin recogidas registradas.</div>
-     ) : (
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-        <thead>
-         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-          {["Guia", "Recogida", "Entrega", "Unidades", "Peso", "Estado", "Documento", "Acciones"].map(h => (
-           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
-          ))}
-         </tr>
-        </thead>
-        <tbody>
-         {pageItems.map(r=>(
-          <tr key={r.id} style={{ borderBottom:`1px solid ${border}` }}>
-           <td style={{ padding:"16px", color:"#0891b2", fontWeight:850, fontFamily:"monospace" }}>{r.guia}</td>
-           <td style={{ padding:"16px" }}><div>{r.ciudad_recogida_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_recogida}</div></td>
-           <td style={{ padding:"16px" }}><div>{r.ciudad_entrega_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_entrega}</div></td>
-           <td style={{ padding:"16px", fontWeight:850 }}>{r.unidades}</td>
-           <td style={{ padding:"16px", color:"#4b5563" }}>{r.peso_kg} kg</td>
-           <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={r.estado}/>{r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{r.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {r.fecha_real}</div>}</td>
-           <td style={{ padding:"16px" }}>{(r.doc_nombre||r.doc_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`, showToast)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
-           <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !r.conductor_id && r.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(r)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(r)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
-          </tr>
-         ))}
-        </tbody>
-       </table>
-      </div>
-     )}
-     <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
-    </section>
-   </main>
+
+    <PieTabla
+     izquierda={`${filtradas.length} ${filtradas.length===1 ? "recogida" : "recogidas"}`}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+    />
+   </section>
+
    {(modNueva||modEditar)&&(
     <Modal title={modEditar ? "Editar Solicitud de Recogida" : "Nueva Solicitud de Recogida"} onClose={cerrarFormulario} wide>
      <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -3981,7 +4050,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
       showToast={showToast} canEdit={user.rol!=="cliente"}/>
     </Modal>
    )}
-  </div>
+  </Pagina>
  );
 }
 
@@ -4229,6 +4298,8 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  };
 
  const esCliente = user.rol==="cliente";
+ // Gestionar una PQRS (responder y cerrarla) es tarea de la operacion, no del cliente.
+ const puedeGestionar = ["admin", "operador"].includes(user.rol);
  const esOperador = user.rol==="admin"||user.rol==="operador";
  const filt = pqrs.filter(p=>{
   if (esCliente && ![user.nombre, user.user].includes(p.solicitado_por)) return false;
@@ -4245,68 +4316,117 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  useEffect(() => { setPage(1); }, [busq, filtroEst, pageSize]);
 
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>PQRS</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Peticiones, quejas, reclamos y solicitudes de gestion</p>
-    </div>
-    {esCliente&&<button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva PQRS</button>}
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:14 }}>
-     {Object.entries(ESTADOS_PQRS).map(([k,v])=>(
-      <button key={k} onClick={()=>setFiltroEst(filtroEst===k?"todos":k)} style={{ ...cardStyle, padding:18, textAlign:"left", cursor:"pointer", borderColor:filtroEst===k?v.color:border, background:filtroEst===k?v.bg:"#fff" }}>
-       <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>{v.label}</div>
-       <div style={{ fontSize:30, fontWeight:900, color:v.color, marginTop:8 }}>{pqrs.filter(p=>p.estado===k).length}</div>
-      </button>
-     ))}
-    </section>
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por caso, factura, pedido o motivo..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
-      <select value={filtroEst} onChange={e=>setFiltroEst(e.target.value)} style={{ ...iSt, width:"auto", borderRadius:12, background:"#fff" }}>
-       <option value="todos">Todos los estados</option>
-       {Object.entries(ESTADOS_PQRS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-      </select>
-      <span style={{ color:"#6b7280", fontSize:13 }}>{filt.length} de {pqrs.length}</span>
-     </div>
-     {filt.length===0 ? (
-      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin PQRS registradas.</div>
-     ) : (
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-        <thead>
-         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-          {["Caso", "Factura", "Pedido", "Motivo", "Solicitado", "Estado", "Gestion", "Acciones"].map(h => (
-           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
-          ))}
+  <Pagina>
+   <Encabezado
+    titulo="PQRS"
+    descripcion="Peticiones, quejas, reclamos y sugerencias"
+    acciones={<button onClick={()=>setModNueva(true)} style={botonPrincipal}><Plus size={16}/> Nueva PQRS</button>}
+   />
+
+   {/* Cada indicador filtra por su estado; volver a tocarlo quita el filtro. */}
+   <Indicadores items={[
+    { label:"Abiertas", valor:pqrs.filter(x=>x.estado==="abierta").length, color:T.color.malPunto,
+      activo:filtroEst==="abierta", onClick:()=>setFiltroEst(filtroEst==="abierta"?"todos":"abierta") },
+    { label:"En gestion", valor:pqrs.filter(x=>x.estado==="en_gestion").length, color:T.color.ojoPunto,
+      activo:filtroEst==="en_gestion", onClick:()=>setFiltroEst(filtroEst==="en_gestion"?"todos":"en_gestion") },
+    { label:"Cerradas", valor:pqrs.filter(x=>x.estado==="cerrada").length, color:T.color.bienPunto,
+      activo:filtroEst==="cerrada", onClick:()=>setFiltroEst(filtroEst==="cerrada"?"todos":"cerrada") },
+    { label:"Todas", valor:pqrs.length, color:T.color.neutroPunto,
+      activo:filtroEst==="todos", onClick:()=>setFiltroEst("todos") },
+   ]}/>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${filt.length} de ${pqrs.length}`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar caso, factura, pedido o motivo" ancho={300}/>
+     <SelectFiltro valor={filtroEst} onChange={setFiltroEst} ancho={190}>
+      <option value="todos">Todos los estados</option>
+      <option value="abierta">Abiertas</option>
+      <option value="en_gestion">En gestion</option>
+      <option value="cerrada">Cerradas</option>
+     </SelectFiltro>
+    </BarraFiltros>
+
+    <div style={{ overflowX:"auto" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
+      <thead>
+       <tr>
+        <th style={th}>Caso</th>
+        <th style={th}>Factura</th>
+        <th style={th}>Pedido</th>
+        <th style={th}>Motivo</th>
+        <th style={th}>Solicitado por</th>
+        <th style={th}>Estado</th>
+        <th style={{...th, textAlign:"right"}}>Acciones</th>
+       </tr>
+      </thead>
+      <tbody>
+       {pageItems.length===0 && (
+        <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
+         {pqrs.length===0 ? "Sin PQRS registradas." : "Ninguna PQRS coincide con el filtro."}
+        </td></tr>
+       )}
+       {pageItems.map(x=>{
+        const estilo = x.estado==="abierta"
+         ? { fondo:T.color.malSuave, texto:T.color.mal, punto:T.color.malPunto, label:"Abierta" }
+         : x.estado==="en_gestion"
+         ? { fondo:T.color.ojoSuave, texto:T.color.ojo, punto:T.color.ojoPunto, label:"En gestion" }
+         : { fondo:T.color.bienSuave, texto:T.color.bien, punto:T.color.bienPunto, label:"Cerrada" };
+        return (
+         <tr key={x.id}>
+          <td style={td}><span style={chipMono}>{x.id}</span></td>
+          <td style={td}><span style={mono}>{x.factura || "-"}</span></td>
+          <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{x.pedido_ref || "-"}</td>
+          <td style={{ ...td, maxWidth:260 }}>
+           <div style={{ color:T.color.tinta, fontWeight:600 }}>{x.motivo}</div>
+           {x.descripcion && (
+            <div style={{ ...T.texto.meta, color:T.color.tinta3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+             {x.descripcion}
+            </div>
+           )}
+          </td>
+          <td style={td}>
+           <div>{x.solicitado_por || "-"}</div>
+           <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{x.fecha_creacion}</div>
+          </td>
+          <td style={td}>
+           <span style={{
+            display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+            borderRadius:T.radio.pastilla, background:estilo.fondo, color:estilo.texto,
+            fontSize:12, fontWeight:600, whiteSpace:"nowrap",
+           }}>
+            <span style={{ width:6, height:6, borderRadius:3, background:estilo.punto }}/>
+            {estilo.label}
+           </span>
+          </td>
+          <td style={{ ...td, textAlign:"right" }}>
+           <div style={{ display:"inline-flex", gap:6 }}>
+            {(x.soporte_nombre || x.soporte_data) && (
+             <button style={botonFila} onClick={()=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}>Soporte</button>
+            )}
+            {puedeGestionar && x.estado!=="cerrada" && (
+             <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
+              onClick={()=>{ setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}>
+              Gestionar
+             </button>
+            )}
+            {esCliente && x.estado==="abierta" && (
+             <button style={botonFila} onClick={()=>abrirEditarCliente(x)}>Editar</button>
+            )}
+           </div>
+          </td>
          </tr>
-        </thead>
-        <tbody>
-         {pageItems.map(p=>{
-          const est = ESTADOS_PQRS[p.estado]||ESTADOS_PQRS.abierta;
-          const tieneGestion = Boolean((p.respuesta||"").trim() || p.fecha_gestion || p.gestionado_por);
-          return (
-           <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
-            <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850, fontFamily:"monospace" }}>{p.id}</td>
-            <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
-            <td style={{ padding:"16px", fontWeight:750 }}>{p.pedido_ref}</td>
-            <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>{p.descripcion}</div></td>
-            <td style={{ padding:"16px" }}><div>{p.solicitado_por}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.fecha_creacion}</div></td>
-            <td style={{ padding:"16px" }}><span style={{ background:est.bg, color:est.color, border:`1px solid ${est.color}40`, borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800, whiteSpace:"nowrap" }}>{est.label}</span></td>
-            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4, whiteSpace:"pre-wrap" }}>{p.respuesta}</div>{(p.soporte_nombre||p.soporte_data)&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoRemoto('pqrs', p.id, 'soporte_data', 'soporte_nombre', `soporte-${p.id}`, showToast)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
-            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:null, nombre:"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
-           </tr>
-          );
-         })}
-        </tbody>
-       </table>
-      </div>
-     )}
-     <PaginationControls total={filt.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
-    </section>
-   </main>
+        );
+       })}
+      </tbody>
+     </table>
+    </div>
+
+    <PieTabla
+     izquierda={`${filt.length} ${filt.length===1 ? "caso" : "casos"}`}
+     derecha={<Paginador total={filt.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+    />
+   </section>
+
    {(modNueva||modEditar)&&(
     <Modal title={modEditar ? "Editar PQRS" : "Nueva PQRS"} onClose={cerrarFormulario}>
      <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -4360,7 +4480,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
      </div>
     </Modal>
    )}
-  </div>
+  </Pagina>
  );
 }
 
