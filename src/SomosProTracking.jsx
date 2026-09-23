@@ -23,7 +23,7 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
-import { ChevronDown, ChevronRight, ClipboardList, Download, FileText, MapPin, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, MapPin, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -884,31 +884,81 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
  const totalAplicar = matches.filter(seActualiza).length;
 
  return (
-  <Modal title=" Cargar Guias de Paqueteria" onClose={onClose} wide>
-   <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-
-    {/* Info */}
-    <div style={{ background:"#eff6ff", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#1e40af" }}>
-     <strong>Regla:</strong> 1 pedido = 1 guia. Columnas requeridias: <code>Guia Estado_Pro Pedido_Pro</code>.
-     <br/><span style={{fontSize:12,color:"#64748b"}}>El match se hace por <strong>Pedido_Pro = No. Pedido</strong> en el sistema. Acepta CSV con coma o punto y coma.</span>
-     <br/><span style={{fontSize:12,color:"#64748b"}}>Si un pedido viene repetido con <strong>guias diferentes</strong>, se toma la de <strong>fecha de elaboracion mas reciente</strong> (DD/MM/AAAA o AAAA-MM-DD). Repetido con la <strong>misma guia</strong> es error del archivo y no se carga.</span>
-    </div>
-
-    {/* Drop zone */}
-    {!matches.length && !resultado && (
-     <div style={{ border:`2px dashed ${cargando?"#7c3aed":"#e2e8f0"}`, borderRadius:12,
-      padding:"28px 20px", textAlign:"center", cursor:"pointer", background:archivo?"#f5f3ff":"#fafafa" }}
-      onClick={()=>fileRef.current?.click()}
+  <ModalForm
+   titulo="Cargar guias de paqueteria"
+   descripcion={resultado ? "Resultado de la carga" : "Asocia una guia a cada pedido existente"}
+   ancho="M"
+   onClose={onClose}
+   onPrimario={matches.length > 0 && !resultado ? aplicar : null}
+   guardando={aplicando}
+   primarioDeshabilitado={totalAplicar === 0}
+   textoPrimario={`Cargar ${totalAplicar > 0 ? totalAplicar + " guias" : "guias"}`}
+  >
+   {!matches.length && !resultado && (
+    <>
+     <button onClick={()=>fileRef.current?.click()}
       onDragOver={e=>e.preventDefault()}
-      onDrop={e=>{e.preventDefault();leerArchivo(e.dataTransfer.files[0]);}}>
-      <div style={{fontSize:36,marginBottom:8}}>{cargando?"":""}</div>
-      {cargando ? <div style={{color:"#7c3aed",fontWeight:700}}>Procesando...</div>
-       : archivo ? <div style={{color:"#059669",fontWeight:700}}> {archivo}</div>
-       : <div style={{color:"#64748b",fontWeight:600}}>Clic o arrastra el archivo CSV aqu</div>}
+      onDrop={e=>{e.preventDefault();leerArchivo(e.dataTransfer.files[0]);}}
+      style={{
+       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
+       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
+       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
+      }}>
+      <span style={{
+       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
+       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
+      }}><Upload size={20} /></span>
+      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
+       {cargando ? "Procesando el archivo..." : "Arrastra el archivo CSV o haz clic para seleccionarlo"}
+      </span>
+      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
+       Solo archivos .csv · separador coma o punto y coma
+      </span>
+     </button>
+
+     <EnlacePie icono={<Download size={15} />}
+      onClick={()=>descargarCSV("plantilla_guias.csv", "Guia,Estado_Pro,Pedido_Pro,Fecha_Elaboracion",
+       "205022008549,ENTREGADO,PX000117858,15/07/2026")}>
+      Descargar plantilla CSV
+     </EnlacePie>
+
+     <div style={{ ...tarjeta, padding:14, display:"flex", flexDirection:"column", gap:12 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+       <FileText size={15} style={{ color:T.color.tinta3 }} />
+       <span style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>Formato del archivo</span>
+       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>· 1 pedido = 1 guia</span>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"90px 1fr", gap:10, alignItems:"start" }}>
+       <span style={{ fontSize:12.5, color:T.color.tinta3, paddingTop:3 }}>Requeridas</span>
+       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+        {["Guia","Estado_Pro","Pedido_Pro"].map(x => (
+         <span key={x} style={{
+          fontFamily:T.fuente.mono, fontSize:11.5, padding:"3px 8px",
+          borderRadius:T.radio.chico, background:T.color.superficie2,
+          border:`1px solid ${T.color.borde}`, color:T.color.tinta2,
+         }}>{x}</span>
+        ))}
+       </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"90px 1fr", gap:10, alignItems:"start" }}>
+       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>Cruce</span>
+       <span style={{ fontSize:12.5, color:T.color.tinta2 }}>
+        Pedido_Pro = N de pedido en el sistema
+       </span>
+      </div>
      </div>
-    )}
-    <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}}
-     onChange={e=>leerArchivo(e.target.files[0])}/>
+
+     <FranjaInfo>
+      Si un pedido se repite con <strong>guias diferentes</strong>, se toma la de fecha de elaboracion
+      mas reciente (DD/MM/AAAA o AAAA-MM-DD).
+     </FranjaInfo>
+     <FranjaAviso>
+      Si se repite con la <strong>misma guia</strong>, es error del archivo y esa fila no se carga.
+     </FranjaAviso>
+    </>
+   )}
+   <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
+    onChange={e=>leerArchivo(e.target.files[0])}/>
 
     {/* Error de parseo */}
     {err && <div style={{background:"#fef2f2",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#dc2626",fontWeight:600}}> {err}</div>}
@@ -969,7 +1019,6 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
         ))}
        </div>
       )}
-      <Btn size="sm" variant="secondary" style={{marginTop:12}} onClick={onClose}>Cerrar</Btn>
      </div>
     )}
 
@@ -1096,55 +1145,62 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
        </div>
       )}
 
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);}}> Cambiar archivo</Btn>
-       <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
-       <Btn disabled={aplicando||totalAplicar===0} onClick={aplicar}>
-        {aplicando?" Aplicando...":` Aplicar ${totalAplicar} actualizacion(es)`}
-       </Btn>
-      </div>
+      <EnlacePie onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);setResultado(null);}}>Cambiar archivo</EnlacePie>
      </>
     )}
-   </div>
-  </Modal>
+  </ModalForm>
  );
 }
 
 
+// Importador de pedidos: valida el archivo antes de escribir nada, para que los
+// errores se vean y se corrijan sin dejar la base a medias. Lo que la base decide
+// (RLS, triggers, choques) se sigue reportando durante la importacion.
+const MODOS_IMPORTACION = [
+ { id: "crear", titulo: "Crear pedidos nuevos",
+   detalle: "Importa todas las filas como pedidos nuevos. Las que ya existan se omiten." },
+ { id: "completar", titulo: "Completar datos de pedidos existentes",
+   detalle: "Llena solo ciudad, direccion, cajas, factura y fecha/hora que esten vacias. No cambia estado, conductor ni guia." },
+ { id: "fechahora", titulo: "Cargar unicamente fecha y hora",
+   detalle: "Escribe solo la fecha y hora vacias en pedidos existentes. No crea pedidos ni toca otras columnas." },
+ { id: "notas", titulo: "Actualizar notas desde el plano",
+   detalle: "Reemplaza el texto de las notas aunque ya tengan contenido. No escribe ninguna otra columna." },
+];
+
+const COLUMNAS_REQUERIDAS = ["id","cliente","ciudad_codigo","direccion","cajas","factura","fecha_estimada","tipo"];
+const COLUMNAS_ALIAS = ["Pedido_Pro","DANE_Destino","Total_Cajas","Factura_Pro","Paqueteria","Guia"];
+const COLUMNAS_OPCIONALES = ["empresa_transporte","paqueteria","guia_paqueteria","notas","ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","fecha","hora"];
+
+function Chips({ items, color }) {
+ return (
+  <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+   {items.map(x => (
+    <span key={x} style={{
+     fontFamily:T.fuente.mono, fontSize:11.5, padding:"3px 8px",
+     borderRadius:T.radio.chico, background:color || T.color.superficie2,
+     border:`1px solid ${T.color.borde}`, color:T.color.tinta2,
+    }}>{x}</span>
+   ))}
+  </div>
+ );
+}
+
 function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
- const [txt,    setTxt]    = useState("");
- const [prev,   setPrev]   = useState([]);
- const [err,    setErr]    = useState("");
+ const [txt, setTxt] = useState("");
+ const [prev, setPrev] = useState([]);
+ const [err, setErr] = useState("");
  const [cargando, setCargando] = useState(false);
- const [nombreArchivo, setNombreArchivo] = useState("");
+ const [validando, setValidando] = useState(false);
+ const [archivo, setArchivo] = useState(null);   // { nombre, filas, tam, sep }
+ const [validacion, setValidacion] = useState(null);
+ const [modo, setModo] = useState("crear");
+ const [verFormato, setVerFormato] = useState(true);
+ const [verPegar, setVerPegar] = useState(false);
+ const [aviso, setAviso] = useState("");
  const fileRef = useRef(null);
 
- const [aviso, setAviso] = useState("");
- const [completar, setCompletar] = useState(false);
- // Modo estricto para recargar el plano sobre pedidos que ya existen: escribe
- // unicamente fecha_pedido y hora_pedido. No crea pedidos ni toca ningun otro campo.
- const [soloFechaHora, setSoloFechaHora] = useState(false);
- // Modo reparacion: el parser viejo cortaba las observaciones que traian una coma o
- // un salto de linea. Este modo las vuelve a escribir desde el plano original.
- const [actualizarNotas, setActualizarNotas] = useState(false);
  const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen,fecha_pedido,hora_pedido";
  const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal,2026-05-08,08:30\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,,2026-05-11,14:05";
-
-
- // Leer archivo CSV desde el disco
- const leerArchivo = async (file) => {
-  if (!file) return;
-  if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
-   setErr("Solo se aceptan archivos .CSV"); return;
-  }
-  setNombreArchivo(file.name);
-  try {
-   const texto = await leerTextoCsv(file);
-   setTxt(texto);
-   setErr("");
-   setPrev(parsear(texto));
-  } catch(ex) { setErr(ex.message); setPrev([]); }
- };
 
  const parsear = (texto) => {
   // Acepta coma, punto y coma o tabulador, y respeta los campos entre comillas.
@@ -1235,125 +1291,310 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   });
  };
 
+ // Valida sin escribir: formato, tipos, catalogo DANE, duplicados del archivo y
+ // cuales ids existen. Lo que decide la base se comprueba despues, al importar.
+ const validar = async (filas) => {
+  setValidando(true);
+  const errores = [];
+  const vistos = new Set();
+  const codigosValidos = new Set((ciudades || []).map(c => c.code));
+
+  filas.forEach((r, i) => {
+   const fila = i + 2; // +1 por el encabezado, +1 porque las filas se cuentan desde 1
+   const id = String(r.id || "").trim();
+   if (!id || id.startsWith("IMP-")) {
+    errores.push({ fila, campo:"id", mensaje:"La fila no trae numero de pedido" });
+    return;
+   }
+   if (vistos.has(id)) {
+    errores.push({ fila, campo:"id", mensaje:`Pedido ${id} repetido dentro del archivo` });
+    return;
+   }
+   vistos.add(id);
+   const codigo = String(r.ciudad_codigo || "").trim();
+   if (codigo && codigosValidos.size > 0 && !codigosValidos.has(codigo)) {
+    errores.push({ fila, campo:"ciudad_codigo", mensaje:`Codigo DANE ${codigo} no existe en el catalogo` });
+   }
+   const cajasOriginal = r._csvOriginal ? Object.entries(r._csvOriginal).find(([k]) => /cajas/i.test(k))?.[1] : null;
+   if (cajasOriginal && String(cajasOriginal).trim() && Number.isNaN(Number(String(cajasOriginal).replace(",", ".")))) {
+    errores.push({ fila, campo:"cajas", mensaje:`Valor "${cajasOriginal}" no es numerico` });
+   }
+  });
+
+  const ids = [...vistos];
+  let existentes = new Set();
+  try {
+   const mapa = await buscarPedidosPorId(ids, "id");
+   existentes = new Set([...mapa.keys()].map(String));
+  } catch (e) {
+   setErr("No se pudo comprobar cuales pedidos ya existen: " + e.message);
+  }
+
+  const nuevos = ids.filter(id => !existentes.has(id));
+  setValidacion({
+   total: filas.length,
+   existentes: ids.length - nuevos.length,
+   nuevos: nuevos.length,
+   errores,
+  });
+  setValidando(false);
+ };
+
+ const leerArchivo = async (file) => {
+  if (!file) return;
+  if (!/\.(csv|txt)$/i.test(file.name)) {
+   setErr("Solo se aceptan archivos .CSV. Si tienes un Excel, guardalo como CSV.");
+   return;
+  }
+  setErr(""); setValidacion(null);
+  try {
+   const texto = await leerTextoCsv(file);
+   const filas = parsear(texto);
+   const primeraLinea = texto.split(/\r?\n/)[0] || "";
+   setTxt(texto);
+   setPrev(filas);
+   setArchivo({
+    nombre: file.name,
+    filas: filas.length,
+    tam: (file.size / 1024).toFixed(0) + " KB",
+    sep: primeraLinea.includes(";") ? ";" : primeraLinea.includes("\t") ? "tabulador" : ",",
+   });
+   await validar(filas);
+  } catch (ex) { setErr(ex.message); setPrev([]); setArchivo(null); }
+ };
+
+ const filasConError = new Set((validacion?.errores || []).map(e => e.fila));
+ const filasValidas = prev.filter((_, i) => !filasConError.has(i + 2));
+ const aImportar = modo === "crear"
+  ? filasValidas.length - (validacion?.existentes || 0)
+  : (validacion?.existentes || 0);
+
+ const descargarErrores = () => {
+  const filas = (validacion?.errores || []).map(e =>
+   [e.fila, e.campo, `"${e.mensaje.replace(/"/g, '""')}"`].join(","));
+  descargarCSV("errores_validacion.csv", "fila,columna,error", filas.join("\n"));
+ };
+
  const importar = async () => {
-  if (prev.length === 0) { setErr("Primero carga un archivo o previsualiza el contenido."); return; }
+  if (filasValidas.length === 0) { setErr("No hay filas validas para importar."); return; }
   setCargando(true);
   try {
-   await onImportar(prev, {
-    completarExistentes: completar || soloFechaHora || actualizarNotas,
-    soloFechaHora,
-    actualizarNotas,
+   await onImportar(filasValidas, {
+    completarExistentes: modo !== "crear",
+    soloFechaHora: modo === "fechahora",
+    actualizarNotas: modo === "notas",
    });
-  } catch(e) {
-   setErr("Error importando: " + e.message);
-  }
+  } catch (e) { setErr("Error importando: " + e.message); }
   setCargando(false);
  };
 
+ const modoActual = MODOS_IMPORTACION.find(m => m.id === modo);
+
  return (
-  <Modal title="Importar Pedidos desde CSV" onClose={onClose} wide>
-   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+  <ModalForm
+   titulo="Importar pedidos desde CSV"
+   descripcion={archivo ? "Revisa el resultado de la validacion antes de importar" : "Crea pedidos en lote o completa los existentes"}
+   ancho="M"
+   onClose={onClose}
+   onPrimario={archivo && !validando ? importar : null}
+   guardando={cargando}
+   primarioDeshabilitado={!archivo || validando || filasValidas.length === 0}
+   textoPrimario={archivo ? `Importar ${aImportar > 0 ? aImportar + " pedidos" : "pedidos"}` : "Importar"}
+  >
+   {!archivo ? (
+    <>
+     <button onClick={() => fileRef.current && fileRef.current.click()}
+      onDragOver={e => e.preventDefault()}
+      onDrop={e => { e.preventDefault(); leerArchivo(e.dataTransfer.files[0]); }}
+      style={{
+       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
+       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
+       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
+      }}>
+      <span style={{
+       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
+       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
+      }}><FileText size={20} /></span>
+      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
+       Arrastra el archivo CSV o haz clic para seleccionarlo
+      </span>
+      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
+       Solo archivos .csv · separador coma o punto y coma
+      </span>
+     </button>
+     <input ref={fileRef} type="file" accept=".csv" style={{ display:"none" }}
+      onChange={e => leerArchivo(e.target.files[0])} />
 
-    {/* Info columnas */}
-    <div style={{ background: "#fffbeb", borderRadius: 10, padding: 12, fontSize: 13, color: "#92400e" }}>
-     <strong>Columnas requeridias:</strong> id, cliente, ciudad_codigo, direccion, cajas, factura, fecha_estimada, tipo<br/>
-     <strong>Tambien acepta los nombres del plano:</strong> Pedido_Pro, DANE_Destino, Total_Cajas, Factura_Pro, Paqueteria, Guia<br/>
-     <strong>Opcionales:</strong> empresa_transporte, paqueteria, guia_paqueteria, notas, ciudad_origen_codigo, ciudad_origen_nombre, direccion_origen<br/>
-     <strong>Fecha y Hora</strong> (cuando se genero el pedido) son opcionales: si el plano las trae se guardan, y si no, el pedido se importa igual.
-    </div>
+     <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
+      <EnlacePie icono={<Download size={15} />}
+       onClick={() => descargarCSV("plantilla_pedidos.csv", CABECERA, EJEMPLO)}>
+       Descargar plantilla CSV
+      </EnlacePie>
+      <EnlacePie icono={<ClipboardList size={15} />} onClick={() => setVerPegar(!verPegar)}>
+       Pegar texto directamente
+      </EnlacePie>
+     </div>
 
-    {/* Descargar plantilla */}
-    <Btn size="sm" variant="success"
-     onClick={()=>descargarCSV("plantilla_pedidos.csv", CABECERA, EJEMPLO)}>
-      Descargar Plantilla CSV
-    </Btn>
-
-    {/* Upload de archivo */}
-    <div
-     style={{ border: `2px dashed ${P[300]}`, borderRadius: 12, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: nombreArchivo ? "#f0fdf4" : P[50] }}
-     onClick={()=>fileRef.current&&fileRef.current.click()}
-     onDragOver={e=>{e.preventDefault();}}
-     onDrop={e=>{e.preventDefault();leerArchivo(e.dataTransfer.files[0]);}}
-    >
-     <div style={{ fontSize: 32, marginBottom: 8 }}></div>
-     {nombreArchivo ? (
-      <div style={{ color: "#059669", fontWeight: 700, fontSize: 14 }}> {nombreArchivo}</div>
-     ) : (
+     {verPegar && (
       <>
-       <div style={{ fontWeight: 700, color: P[700], fontSize: 14 }}>Haz clic para seleccionar el archivo CSV</div>
-       <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 4 }}>o arrastralo aqu Solo archivos .CSV</div>
+       <AreaTexto label="Contenido del CSV" filas={5} valor={txt} onChange={setTxt}
+        placeholder="Pega aqui el contenido del archivo..." />
+       <button style={botonBarra} onClick={() => {
+        try {
+         const filas = parsear(txt);
+         setPrev(filas);
+         setArchivo({ nombre:"texto pegado", filas:filas.length, tam:"-", sep:txt.includes(";") ? ";" : "," });
+         validar(filas);
+        } catch (e) { setErr(e.message); }
+       }}>Validar texto</button>
       </>
      )}
-    </div>
-    <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display:"none" }}
-     onChange={e=>leerArchivo(e.target.files[0])}/>
 
-    {/* Tambin permite pegar texto */}
-    <details style={{ fontSize: 13 }}>
-     <summary style={{ cursor:"pointer", color:P[600], fontWeight:600 }}>Tambin puedes pegar el texto directamente</summary>
-     <textarea value={txt} onChange={e=>{setTxt(e.target.value);setNombreArchivo("");}} rows={5}
-      style={{ ...iSt, fontFamily:"monospace", fontSize:11, resize:"vertical", marginTop:8 }}
-      placeholder="Pega el contenido CSV aqu..."/>
-     <Btn size="sm" variant="secondary" style={{ marginTop:6 }}
-      onClick={()=>{setErr("");try{setPrev(parsear(txt));}catch(e){setErr(e.message);setPrev([]);}}}>
-       Previsualizar texto
-     </Btn>
-    </details>
-
-    {err && <p style={{ color:"#dc2626", background:"#fef2f2", padding:"8px 12px", borderRadius:8, fontSize:13, margin:0 }}> {err}</p>}
-    {aviso && <p style={{ color:"#92400e", background:"#fffbeb", border:"1px solid #fcd34d", padding:"8px 12px", borderRadius:8, fontSize:13, margin:0 }}>{aviso}</p>}
-
-    {/* Preview */}
-    {prev.length > 0 && (
-     <div style={{ background:"#f0fdf4", borderRadius:10, padding:14, border:"1px solid #86efac", maxHeight:200, overflowY:"auto" }}>
-      <p style={{ margin:"0 0 8px", fontWeight:700, color:"#15803d", fontSize:13 }}> {prev.length} pedido(s) listos para importar:</p>
-      {prev.map((p,i) => (
-       <div key={i} style={{ fontSize:12, color:"#334155", padding:"2px 0", borderBottom:"1px solid #dcfce7" }}>
-        <strong>{p.id}</strong> {p.cliente} {p.ciudad_nombre} {p.cajas} cajas {p.factura}
+     <div style={{ ...tarjeta, overflow:"hidden" }}>
+      <button onClick={() => setVerFormato(!verFormato)} style={{
+       display:"flex", alignItems:"center", gap:10, width:"100%", padding:"12px 14px",
+       border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left",
+      }}>
+       <FileText size={15} style={{ color:T.color.tinta3 }} />
+       <span style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>Formato del archivo</span>
+       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>· {COLUMNAS_REQUERIDAS.length} columnas requeridas</span>
+       <span style={{ marginLeft:"auto", color:T.color.tinta3, display:"grid", placeItems:"center" }}>
+        {verFormato ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+       </span>
+      </button>
+      {verFormato && (
+       <div style={{ padding:"0 14px 14px", display:"flex", flexDirection:"column", gap:12 }}>
+        {[["Requeridas", COLUMNAS_REQUERIDAS], ["Alias del plano", COLUMNAS_ALIAS], ["Opcionales", COLUMNAS_OPCIONALES]].map(([titulo, items]) => (
+         <div key={titulo} style={{ display:"grid", gridTemplateColumns:"120px 1fr", gap:10, alignItems:"start" }}>
+          <span style={{ fontSize:12.5, color:T.color.tinta3, paddingTop:3 }}>{titulo}</span>
+          <Chips items={items} />
+         </div>
+        ))}
+        <FranjaInfo>
+         <strong>Fecha y hora</strong> (cuando se genero el pedido) son opcionales: si el plano las trae se guardan;
+         si no, el pedido se importa igual.
+        </FranjaInfo>
        </div>
+      )}
+     </div>
+
+     <Seccion titulo="Modo de importacion" />
+     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+      {MODOS_IMPORTACION.map(m => (
+       <button key={m.id} onClick={() => setModo(m.id)} style={{
+        display:"flex", gap:10, alignItems:"flex-start", textAlign:"left",
+        padding:"12px 14px", borderRadius:T.radio.control, cursor:"pointer", fontFamily:"inherit",
+        border:`1px solid ${modo === m.id ? T.color.marca : T.color.borde2}`,
+        background: modo === m.id ? T.color.marcaSuave : T.color.superficie,
+       }}>
+        <span style={{
+         width:16, height:16, borderRadius:8, marginTop:1, flexShrink:0,
+         border:`2px solid ${modo === m.id ? T.color.marca : T.color.borde2}`,
+         display:"grid", placeItems:"center",
+        }}>
+         {modo === m.id && <span style={{ width:7, height:7, borderRadius:4, background:T.color.marca }} />}
+        </span>
+        <span style={{ minWidth:0 }}>
+         <span style={{ display:"block", fontSize:13, fontWeight:600, color:T.color.tinta }}>{m.titulo}</span>
+         <span style={{ display:"block", fontSize:12, color:T.color.tinta3, marginTop:3, lineHeight:1.45 }}>{m.detalle}</span>
+        </span>
+       </button>
       ))}
      </div>
-    )}
+    </>
+   ) : (
+    <>
+     <div style={{ ...tarjeta, padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
+      <span style={{
+       width:34, height:34, borderRadius:T.radio.chico, flexShrink:0,
+       background:T.color.bienSuave, color:T.color.bien, display:"grid", placeItems:"center",
+      }}><FileText size={16} /></span>
+      <span style={{ flex:1, minWidth:0 }}>
+       <span style={{ display:"block", fontSize:13.5, fontWeight:700, color:T.color.tinta }}>{archivo.nombre}</span>
+       <span style={{ display:"block", fontSize:12, color:T.color.tinta3 }}>
+        {archivo.filas} filas · {archivo.tam} · separador {archivo.sep}
+       </span>
+      </span>
+      <EnlacePie onClick={() => { setArchivo(null); setValidacion(null); setPrev([]); setErr(""); }}>
+       Cambiar archivo
+      </EnlacePie>
+     </div>
 
-    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f5f3ff", border:`1px solid ${P[200]}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:P[800], cursor:"pointer" }}>
-     <input type="checkbox" checked={completar && !soloFechaHora && !actualizarNotas} disabled={soloFechaHora || actualizarNotas} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
-     <span>
-      <strong>Completar datos de pedidos existentes</strong><br/>
-      <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas, factura y la fecha y hora del pedido que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
-     </span>
-    </label>
+     {validando ? (
+      <div style={{ padding:24, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
+       Validando el archivo...
+      </div>
+     ) : validacion && (
+      <>
+       <div style={{ ...tarjeta, display:"grid", gridTemplateColumns:"repeat(4,1fr)" }}>
+        {[
+         { label:"Filas leidas", valor:validacion.total, color:T.color.neutroPunto },
+         { label:"Pedidos existentes", valor:validacion.existentes, color:T.color.marca, destacado:true },
+         { label: modo === "crear" ? "Nuevos" : "Nuevos (se omiten)", valor:validacion.nuevos, color:T.color.tinta3 },
+         { label:"Con errores", valor:validacion.errores.length, color:T.color.malPunto, malo:true },
+        ].map((k, i) => (
+         <div key={k.label} style={{ padding:"14px 16px", borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+           <span style={{ width:6, height:6, borderRadius:3, background:k.color, flexShrink:0 }} />
+           <span style={{ fontSize:12, color:T.color.tinta3, whiteSpace:"nowrap" }}>{k.label}</span>
+          </div>
+          <div style={{
+           ...T.texto.cifra, fontSize:24,
+           color: k.malo && k.valor > 0 ? T.color.mal : k.destacado ? T.color.marca : T.color.tinta,
+          }}>{k.valor}</div>
+         </div>
+        ))}
+       </div>
 
-    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
-     <input type="checkbox" checked={soloFechaHora && !actualizarNotas} disabled={actualizarNotas} onChange={e=>setSoloFechaHora(e.target.checked)} style={{ marginTop:2 }}/>
-     <span>
-      <strong>Cargar unicamente Fecha y Hora del pedido</strong><br/>
-      <span style={{ color:"#64748b" }}>Para recargar el plano sobre pedidos que ya existen. Escribe solo la fecha y la hora que esten vacias:
-      no crea pedidos nuevos y no modifica ninguna otra columna.</span>
-     </span>
-    </label>
+       {validacion.errores.length > 0 && (
+        <div style={{ border:`1px solid ${T.color.malBorde}`, borderRadius:T.radio.tarjeta, overflow:"hidden" }}>
+         <div style={{
+          display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
+          background:T.color.malSuave, color:T.color.mal, fontSize:13, fontWeight:700,
+         }}>
+          <AlertTriangle size={15} />
+          {validacion.errores.length} fila(s) con errores no se importaran
+          <span style={{ marginLeft:"auto" }}>
+           <EnlacePie onClick={descargarErrores}>Descargar detalle</EnlacePie>
+          </span>
+         </div>
+         <div style={{ maxHeight:200, overflowY:"auto" }}>
+          {validacion.errores.slice(0, 50).map((e, i) => (
+           <div key={i} style={{
+            display:"grid", gridTemplateColumns:"70px 130px 1fr", gap:10,
+            padding:"9px 14px", borderTop:`1px solid ${T.color.divisor}`, fontSize:12.5,
+           }}>
+            <span style={{ color:T.color.tinta3 }}>Fila {e.fila}</span>
+            <span style={{ fontFamily:T.fuente.mono, color:T.color.tinta2 }}>{e.campo}</span>
+            <span style={{ color:T.color.mal }}>{e.mensaje}</span>
+           </div>
+          ))}
+         </div>
+        </div>
+       )}
 
-    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#fff7ed", border:"1px solid #fdba74", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
-     <input type="checkbox" checked={actualizarNotas} onChange={e=>setActualizarNotas(e.target.checked)} style={{ marginTop:2 }}/>
-     <span>
-      <strong>Actualizar notas desde el plano</strong><br/>
-      <span style={{ color:"#64748b" }}>Para reparar las observaciones que quedaron cortadas. Reemplaza el texto de las notas
-      aunque ya tengan contenido, y no escribe ninguna otra columna ni crea pedidos.</span>
-     </span>
-    </label>
+       <FranjaInfo>
+        <strong>Modo:</strong> {modoActual.titulo}. {modoActual.detalle}
+        <span style={{ marginLeft:8 }}>
+         <EnlacePie onClick={() => setArchivo(null)}>Cambiar</EnlacePie>
+        </span>
+       </FranjaInfo>
+      </>
+     )}
+    </>
+   )}
 
-    <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-     <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
-     <Btn disabled={prev.length===0||cargando} onClick={importar}>
-      {cargando ? " Importando..."
-       : actualizarNotas ? ` Actualizar notas (${prev.length})`
-       : soloFechaHora ? ` Cargar fecha y hora (${prev.length})`
-       : ` Importar (${prev.length})`}
-     </Btn>
-    </div>
-   </div>
-  </Modal>
+   {err && (
+    <div style={{
+     background:T.color.malSuave, border:`1px solid ${T.color.malBorde}`,
+     color:T.color.mal, borderRadius:T.radio.control, padding:"10px 12px", fontSize:13,
+    }}>{err}</div>
+   )}
+   {aviso && <FranjaInfo>{aviso}</FranjaInfo>}
+  </ModalForm>
  );
 }
+
 
 function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], busquedaInicial = "", estadoInicial = "", recargar, user }) {
  const [filtro, setFiltro] = useState(estadoInicial || "todos");
