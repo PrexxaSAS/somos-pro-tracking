@@ -1,8 +1,23 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useMemo } from 'react';
+import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { P, ROLES } from '../../Constants';
 import { Btn, Card, Field, Modal } from '../../Subcomponentes';
+import { T, tarjeta } from '../../design/tokens';
 import { supabase } from '../../supabase';
 import { mensajeErrorFuncion } from '../../utils/errors';
+
+// Color por rol, para el punto de la pastilla y la inicial del avatar.
+const COLOR_ROL = {
+ admin: T.color.marca,
+ operador: "#7c3aed",
+ transportista: "#0891b2",
+ conductor: "#15803d",
+ cliente: "#d97706",
+ cartera: "#16161d",
+};
+
+const inicialesUsuario = (nombre) => (nombre || "?")
+ .trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
 
 export function Usuarios({ usuarios, transportistas = [], showToast, recargar }) {
  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
@@ -12,6 +27,11 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  const [guardando, setGuardando] = useState(false);
  const [eliminando, setEliminando] = useState(null);
  const [ocultos,  setOcultos]  = useState([]);
+ const [busq, setBusq] = useState("");
+ const [rolFiltro, setRolFiltro] = useState("todos");
+ // "Acceso" no es lo mismo que activo/inactivo: mira si el usuario tiene cuenta en
+ // Supabase Auth (auth_user_id). Sin ella no puede entrar al sistema.
+ const [acceso, setAcceso] = useState("todos");
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const roleColors = {admin:P[600],operador:P[400],transportista:"#0891b2",conductor:"#059669",cliente:"#d97706"};
  const border = "#e5e7eb";
@@ -154,50 +174,201 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   return null;
  };
 
+ const listaBase = useMemo(() => usuarios
+  .filter(u => !ocultos.includes(u.id))
+  .slice()
+  .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })),
+ [usuarios, ocultos]);
+
+ const porRol = (rol) => rol === "todos"
+  ? listaBase.length
+  : listaBase.filter(u => u.rol === rol).length;
+
+ const filtrados = useMemo(() => {
+  const q = busq.trim().toLowerCase();
+  return listaBase.filter(u => {
+   const okRol = rolFiltro === "todos" || u.rol === rolFiltro;
+   const conAcceso = Boolean(u.auth_user_id);
+   const okAcceso = acceso === "todos"
+    || (acceso === "con" && conAcceso)
+    || (acceso === "sin" && !conAcceso);
+   const okBusq = !q ||
+    (u.nombre || "").toLowerCase().includes(q) ||
+    (u.user || "").toLowerCase().includes(q) ||
+    (u.cedula || "").toLowerCase().includes(q) ||
+    (u.nit || "").toLowerCase().includes(q) ||
+    (u.empresa || "").toLowerCase().includes(q);
+   return okRol && okAcceso && okBusq;
+  });
+ }, [listaBase, busq, rolFiltro, acceso]);
+
+ const th = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5 };
+ const td = { padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
+ const mono = { fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, color: T.color.tinta3 };
+
+ const tarjetasRol = [["todos", "Todos"], ...Object.entries(ROLES)];
+
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Usuarios</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Administracion de accesos, roles y perfiles del sistema</p>
-    </div>
-    <button style={primaryButton} onClick={abrirNuevo}>+ Nuevo Usuario</button>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:14 }}>
-     {Object.entries(ROLES).map(([rol,label]) => (
-      <div key={rol} style={{ ...cardStyle, padding:16 }}>
-       <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>{label}</div>
-       <div style={{ color:roleColors[rol] || "#111827", fontSize:28, fontWeight:900, marginTop:8 }}>{usuarios.filter(u=>u.rol===rol).length}</div>
-      </div>
-     ))}
+  <div style={{ minHeight:"100%", background:T.color.fondo, margin:"-28px -24px", padding:"24px 28px 40px", color:T.color.tinta }}>
+   <div style={{ maxWidth:1320, margin:"0 auto", display:"flex", flexDirection:"column", gap:18 }}>
+
+    <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
+     <div>
+      <h1 style={{ margin:0, ...T.texto.titulo }}>Usuarios</h1>
+      <p style={{ margin:"4px 0 0", color:T.color.tinta3, fontSize:13.5 }}>
+       Administracion de accesos, roles y perfiles del sistema
+      </p>
+     </div>
+     <button onClick={abrirNuevo} style={{
+      display:"inline-flex", alignItems:"center", gap:8, padding:"10px 16px",
+      border:"none", borderRadius:T.radio.control, background:T.color.marca,
+      cursor:"pointer", fontFamily:"inherit", fontSize:13.5, fontWeight:700, color:"#fff",
+     }}><Plus size={16} /> Nuevo usuario</button>
+    </header>
+
+    {/* Cada tarjeta es tambien el filtro por rol. */}
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
+     {tarjetasRol.map(([rol, label]) => {
+      const activo = rolFiltro === rol;
+      return (
+       <button key={rol} onClick={() => setRolFiltro(rol)} style={{
+        ...tarjeta, padding:"14px 16px", textAlign:"left", cursor:"pointer",
+        fontFamily:"inherit",
+        border:`1px solid ${activo ? T.color.marca : T.color.borde}`,
+        boxShadow: activo ? `0 0 0 3px ${T.color.marcaSuave}` : T.sombra.tarjeta,
+       }}>
+        <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:6 }}>
+         <span style={{ width:7, height:7, borderRadius:4, flexShrink:0,
+          background: rol === "todos" ? T.color.tinta : (COLOR_ROL[rol] || T.color.tinta3) }} />
+         <span style={{ fontSize:12.5, color:T.color.tinta2, lineHeight:1.2 }}>{label}</span>
+        </div>
+        <div style={{ ...T.texto.cifra, color: activo ? T.color.marca : T.color.tinta }}>{porRol(rol)}</div>
+       </button>
+      );
+     })}
     </section>
-    <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-    {usuarios.filter(u=>!ocultos.includes(u.id)).map(u=>(
-     <article key={u.id} style={{ ...cardStyle, padding:18, borderTop:`3px solid ${roleColors[u.rol]||P[400]}` }}>
-      <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
-       <div style={{width:42,height:42,borderRadius:14,background:`${roleColors[u.rol] || "#6d42d8"}18`,display:"flex",alignItems:"center",justifyContent:"center",color:roleColors[u.rol] || "#6d42d8",fontWeight:900,fontSize:16}}>
-        {u.nombre[0].toUpperCase()}
-       </div>
-       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontWeight:850,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.nombre}</div>
-        <div style={{fontSize:12,color:"#64748b"}}>@{u.user}</div>
-       </div>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", padding:14, borderBottom:`1px solid ${T.color.borde}` }}>
+      <div style={{ position:"relative", width:300 }}>
+       <Search size={15} style={{ position:"absolute", left:12, top:11, color:T.color.tinta3 }} />
+       <input value={busq} onChange={e => setBusq(e.target.value)}
+        placeholder="Buscar nombre, usuario, cedula o NIT"
+        style={{
+         width:"100%", boxSizing:"border-box", padding:"9px 12px 9px 34px",
+         border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
+         fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
+        }}/>
       </div>
-      <span style={{background:`${roleColors[u.rol]}18`,color:roleColors[u.rol],borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{ROLES[u.rol]||u.rol}</span>
-      {u.cedula &&<p style={{margin:"6px 0 0",fontSize:12,color:"#64748b"}}>CC: {u.cedula}</p>}
-      {u.nit  &&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>NIT: {u.nit}</p>}
-      {u.placa &&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>Placa: {u.placa}</p>}
-      {u.celular&&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}> {u.celular}</p>}
-      {u.empresa&&<p style={{margin:"4px 0 0",fontSize:12,color:"#64748b"}}>{u.empresa}</p>}
-      <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
-       <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditar(u)}>Editar</button>
-       {u.user!=="admin"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626", opacity:eliminando===u.id?0.6:1, cursor:eliminando===u.id?"not-allowed":"pointer" }} disabled={eliminando===u.id} onClick={()=>eliminar(u.id,u.user)}>{eliminando===u.id?"Eliminando...":"Eliminar"}</button>}
+
+      <div style={{ display:"inline-flex", padding:3, gap:2, background:T.color.superficie2,
+       borderRadius:T.radio.control, border:`1px solid ${T.color.borde}` }}>
+       {[["todos","Todos"], ["con","Con acceso"], ["sin","Sin acceso"]].map(([id,label]) => (
+        <button key={id} onClick={() => setAcceso(id)} style={{
+         border:"none", cursor:"pointer", fontFamily:"inherit", padding:"6px 14px",
+         borderRadius:8, fontSize:13, fontWeight: acceso === id ? 700 : 500,
+         color: acceso === id ? T.color.tinta : T.color.tinta2,
+         background: acceso === id ? T.color.superficie : "transparent",
+         boxShadow: acceso === id ? T.sombra.tarjeta : "none",
+        }}>{label}</button>
+       ))}
       </div>
-     </article>
-    ))}
+
+      <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
+       {filtrados.length} {filtrados.length === 1 ? "usuario" : "usuarios"} · orden A-Z
+      </div>
+     </div>
+
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead>
+        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+         <th style={th}>Usuario</th>
+         <th style={th}>Rol</th>
+         <th style={th}>Vinculacion</th>
+         <th style={th}>Acceso</th>
+         <th style={{ ...th, textAlign:"right" }}>Acciones</th>
+        </tr>
+       </thead>
+       <tbody>
+        {filtrados.length === 0 && (
+         <tr><td colSpan={5} style={{ ...td, textAlign:"center", padding:40, color:T.color.tinta3 }}>
+          Ningun usuario coincide con el filtro.
+         </td></tr>
+        )}
+        {filtrados.map(u => {
+         const color = COLOR_ROL[u.rol] || T.color.tinta3;
+         const conAcceso = Boolean(u.auth_user_id);
+         return (
+          <tr key={u.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+           <td style={td}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+             <span style={{
+              width:34, height:34, borderRadius:T.radio.pastilla, flexShrink:0,
+              background:`${color}18`, color, display:"grid", placeItems:"center",
+              fontSize:12, fontWeight:800,
+             }}>{inicialesUsuario(u.nombre)}</span>
+             <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>{u.nombre}</div>
+              <div style={mono}>@{u.user}</div>
+             </div>
+            </div>
+           </td>
+           <td style={td}>
+            <span style={{
+             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+             borderRadius:T.radio.pastilla, background:`${color}14`, color,
+             fontSize:12, fontWeight:700, whiteSpace:"nowrap",
+            }}>
+             <span style={{ width:6, height:6, borderRadius:3, background:color }} />
+             {ROLES[u.rol] || u.rol}
+            </span>
+           </td>
+           <td style={td}>
+            {u.empresa || u.nit || u.cedula || u.placa ? (
+             <>
+              <div>{u.empresa || "Somos PRO"}</div>
+              <div style={mono}>
+               {[u.nit && `NIT ${u.nit}`, u.cedula && `CC ${u.cedula}`, u.placa]
+                .filter(Boolean).join("  ·  ")}
+              </div>
+             </>
+            ) : <span style={{ color:T.color.tinta3 }}>-</span>}
+           </td>
+           <td style={td}>
+            <span style={{ display:"inline-flex", alignItems:"center", gap:7, whiteSpace:"nowrap" }}>
+             <span style={{ width:7, height:7, borderRadius:4, background: conAcceso ? T.color.bien : T.color.borde2 }} />
+             <span style={{ color: conAcceso ? T.color.tinta2 : T.color.tinta3 }}>
+              {conAcceso ? "Con acceso" : "Sin acceso"}
+             </span>
+            </span>
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:4 }}>
+             <button onClick={() => abrirEditar(u)} title="Editar" style={iconoAccion}>
+              <Pencil size={15} />
+             </button>
+             {u.user !== "admin" && (
+              <button onClick={() => eliminar(u.id, u.user)} title="Eliminar"
+               disabled={eliminando === u.id}
+               style={{ ...iconoAccion, color:T.color.mal, opacity: eliminando === u.id ? 0.5 : 1 }}>
+               <Trash2 size={15} />
+              </button>
+             )}
+            </div>
+           </td>
+          </tr>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+
+     <div style={{ padding:"12px 16px", borderTop:`1px solid ${T.color.borde}`, fontSize:12.5, color:T.color.tinta3 }}>
+      {filtrados.length} {filtrados.length === 1 ? "usuario" : "usuarios"}
+     </div>
     </section>
-   </main>
+   </div>
 
    {modal&&(
     <Modal title="Nuevo Usuario" onClose={()=>setModal(false)}>
@@ -238,5 +409,8 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  );
 }
 
-
-
+const iconoAccion = {
+ border: "none", background: "transparent", cursor: "pointer",
+ color: T.color.tinta3, padding: 7, borderRadius: T.radio.chico,
+ display: "grid", placeItems: "center",
+};
