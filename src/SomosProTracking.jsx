@@ -1382,8 +1382,10 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  );
 }
 
-function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], busquedaInicial = "", recargar, user }) {
- const [filtro, setFiltro] = useState("todos");
+function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], busquedaInicial = "", estadoInicial = "", recargar, user }) {
+ const [filtro, setFiltro] = useState(estadoInicial || "todos");
+ // Al llegar desde la barra del dashboard, se filtra por el estado que se toco.
+ useEffect(() => { if (estadoInicial) setFiltro(estadoInicial); }, [estadoInicial]);
  const [busq, setBusq] = useState(busquedaInicial || "");
  // Cuando el dashboard manda una consulta, se aplica aunque el modulo ya estuviera montado.
  useEffect(() => { if (busquedaInicial) setBusq(busquedaInicial); }, [busquedaInicial]);
@@ -4295,6 +4297,11 @@ export default function SomosProTracking() {
  // Lo que se elige en el buscador del dashboard: Pedidos se abre con esa consulta
  // ya aplicada, en vez de dejar al usuario buscando otra vez.
  const [busquedaPedidos, setBusquedaPedidos] = useState("");
+ // Navegar por el menu o por las tarjetas del dashboard limpia esa consulta. Sin
+ // esto, cada regreso a Pedidos volvia a aplicar la ultima busqueda, y cualquier
+ // enlace terminaba mostrando siempre el mismo pedido.
+ const [estadoPedidos, setEstadoPedidos] = useState("");
+ const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
  const [toast,     setToast]     = useState(null);
 
  const showToast = (msg, type = "info") => setToast({ msg, type });
@@ -4557,9 +4564,10 @@ export default function SomosProTracking() {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
-   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}
-    onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setTab("pedidos"); }}/>;
-   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} recargar={recargarPedidos} user={user}/>;
+   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
+    onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setEstadoPedidos(""); setTab("pedidos"); }}
+    onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
+   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}/>;
    case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas}/>;
@@ -4595,7 +4603,7 @@ export default function SomosProTracking() {
 
  return (
   <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#fafafa" }}>
-   <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
+   <SidebarApp user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
    <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa" }}>
     {renderContent()}
    </main>

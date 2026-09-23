@@ -332,7 +332,7 @@ function BarraEstados({ conteos, total, onIrAEstado }) {
 
 export function Dashboard({
  pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [],
- promesas = [], ciudades = [], setActiveTab, onBuscarPedido,
+ promesas = [], ciudades = [], setActiveTab, onBuscarPedido, onVerEstado,
 }) {
  const [rango, setRango] = useState("30");
 
@@ -550,7 +550,8 @@ export function Dashboard({
        {m.enRango.length.toLocaleString("es-CO")} pedidos
       </span>
      }>Pedidos por estado</TituloTarjeta>
-     <BarraEstados conteos={m.conteos} total={m.enRango.length} onIrAEstado={() => irA("pedidos")} />
+     <BarraEstados conteos={m.conteos} total={m.enRango.length}
+      onIrAEstado={(estado) => (onVerEstado ? onVerEstado(estado) : irA("pedidos"))} />
     </Tarjeta>
 
    </div>
