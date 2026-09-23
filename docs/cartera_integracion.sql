@@ -12,6 +12,13 @@
 -- public.usuarios, asi que las politicas pueden apoyarse en current_user_role() como
 -- el resto del sistema.
 --
+-- CUAL DE LOS DOS SCRIPTS USAR:
+--   - Este script es para el proyecto donde YA corrio el schema viejo de
+--     Qtrack_Pedidos (el de prueba): migra lo que ya existe.
+--   - Si el proyecto nunca tuvo el modulo (produccion), las tablas no existen y
+--     este script falla con "relation public.pedidos_cartera does not exist".
+--     Para ese caso usa docs/cartera_schema.sql, que las crea ya integradas.
+--
 -- ORDEN OBLIGATORIO:
 --   1. Este script en el proyecto de PRUEBA.
 --   2. Probar el modulo con un usuario de cada rol.
