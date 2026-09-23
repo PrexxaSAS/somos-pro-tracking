@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
-import * as XLSX from 'xlsx';
+import { leerTextoCsv, filasCsv } from '../../utils/files';
 import emailjs from '@emailjs/browser';
 
 // ── Configuración ──────────────────────────────────────────────────────────────
@@ -374,18 +374,16 @@ export function GestionAsesores({showToast}) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target.result;
-      const lines = text.trim().split(/\r?\n/).filter(l=>l.trim());
-      if(lines.length<2){showToast("Archivo vacío o solo tiene encabezado","error");return;}
-      const sep = lines[0].includes(';')?';':',';
-      const hdrs = lines[0].split(sep).map(h=>h.trim().replace(/"/g,'').toLowerCase());
+      const filas = filasCsv(text);
+      if(filas.length<2){showToast("Archivo vacío o solo tiene encabezado","error");return;}
+      const hdrs = filas[0].map(h=>h.toLowerCase());
       const iCod = hdrs.findIndex(h=>h.includes('codigo')||h.includes('código'));
       const iNom = hdrs.findIndex(h=>h.includes('nombre'));
       const iEml = hdrs.findIndex(h=>h.includes('email')||h.includes('correo'));
       if(iCod===-1||iNom===-1||iEml===-1){showToast("El CSV debe tener columnas: codigo, nombre, email","error");return;}
-      const datos = lines.slice(1).map(l=>{
-        const c=l.split(sep).map(x=>x.trim().replace(/^"|"$/g,''));
-        return {codigo:c[iCod]||'',nombre:c[iNom]||'',email:c[iEml]||''};
-      }).filter(r=>r.codigo&&r.nombre&&r.email);
+      const datos = filas.slice(1)
+        .map(c=>({codigo:c[iCod]||'',nombre:c[iNom]||'',email:c[iEml]||''}))
+        .filter(r=>r.codigo&&r.nombre&&r.email);
       let ok=0;
       for(const d of datos){
         const {error}=await supabase.from('asesores').upsert(d,{onConflict:'codigo'});
@@ -405,7 +403,7 @@ export function GestionAsesores({showToast}) {
           <Btn onClick={()=>{setForm(vacio);setEditando(null);setModNuevo(true);}}>+ Nuevo Asesor</Btn>
         </div>
       </div>
-      <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}} onChange={e=>{if(e.target.files[0])cargarCSV(e.target.files[0]);}}/>
+      <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])cargarCSV(e.target.files[0]);}}/>
       <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 16px",fontSize:12,color:"#1e40af",marginBottom:16}}>
         📌 El CSV debe tener estas columnas: <strong>codigo, nombre, email</strong> — separadas por coma o punto y coma.
       </div>
@@ -457,10 +455,9 @@ export function CargarCarteraVencida({showToast}) {
   const fileRef = useRef(null);
 
   const parsearCSV = (text) => {
-    const lines = text.trim().split(/\r?\n/).filter(l=>l.trim());
-    if(lines.length<2) throw new Error("Archivo vacío");
-    const sep = lines[0].includes(';')?';':',';
-    const hdrs = lines[0].split(sep).map(h=>h.trim().replace(/"/g,'').toLowerCase());
+    const filas = filasCsv(text);
+    if(filas.length<2) throw new Error("Archivo vacío");
+    const hdrs = filas[0].map(h=>h.toLowerCase());
     const iNit  = hdrs.findIndex(h=>h==='cliente'||h.includes('nit'));
     const iRaz  = hdrs.findIndex(h=>h.includes('razonsocial')||h.includes('razon'));
     const iDias = hdrs.findIndex(h=>h.includes('diasexcedio')||h.includes('dias'));
@@ -468,8 +465,7 @@ export function CargarCarteraVencida({showToast}) {
     if(iNit===-1||iDias===-1) throw new Error("No se encontraron columnas requeridas: Cliente (NIT) y DiasExcedio");
 
     const porNit = {};
-    for(const line of lines.slice(1)) {
-      const c = line.split(sep).map(x=>x.trim().replace(/^"|"$/g,''));
+    for(const c of filas.slice(1)) {
       const nit  = c[iNit]||'';
       const dias = parseInt(c[iDias])||0;
       const raz  = iRaz!==-1?c[iRaz]||'':'';
@@ -487,18 +483,18 @@ export function CargarCarteraVencida({showToast}) {
     }));
   };
 
-  const leerArchivo = (file) => {
+  const leerArchivo = async (file) => {
     setArchivo(file.name); setPreview(null); setResultado(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const datos = parsearCSV(e.target.result);
-        const vencidos = datos.filter(d=>d.tiene_vencidos).length;
-        setPreview({total:datos.length, vencidos, alDia:datos.length-vencidos, datos});
-      } catch(ex) { showToast("Error: "+ex.message,"error"); setArchivo(''); }
-    };
-    reader.onerror=()=>showToast("Error leyendo el archivo","error");
-    reader.readAsText(file,'latin-1');
+    if(!/\.(csv|txt)$/i.test(file.name)) {
+      showToast("Solo se aceptan archivos .CSV","error");
+      setArchivo('');
+      return;
+    }
+    try {
+      const datos = parsearCSV(await leerTextoCsv(file));
+      const vencidos = datos.filter(d=>d.tiene_vencidos).length;
+      setPreview({total:datos.length, vencidos, alDia:datos.length-vencidos, datos});
+    } catch(ex) { showToast("Error: "+ex.message,"error"); setArchivo(''); }
   };
 
   const aplicar = async () => {
@@ -544,7 +540,7 @@ export function CargarCarteraVencida({showToast}) {
           <div style={{color:"#64748b",fontWeight:600}}>{archivo||"Clic o arrastra el archivo CSV aquí"}</div>
         </div>
       )}
-      <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}} onChange={e=>{if(e.target.files[0])leerArchivo(e.target.files[0]);}}/>
+      <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])leerArchivo(e.target.files[0]);}}/>
 
       {preview&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -603,21 +599,18 @@ export function CargarPedidos({showToast,onCargado}) {
     return 'pendiente';
   };
 
-  const leerArchivo = (file) => {
+  // Solo CSV. leerTextoCsv resuelve el encoding (UTF-8 y, si no, Windows-1252) y
+  // filasCsv respeta las comillas, asi que un campo con comas o saltos de linea
+  // adentro ya no corre las columnas.
+  const leerArchivo = async (file) => {
     setArchivo(file.name); setPedidos([]); setErrMsg(''); setResultado(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    if(!/\.(csv|txt)$/i.test(file.name)) {
+      setErrMsg("Solo se aceptan archivos .CSV. Si tienes un Excel, guardalo como CSV y vuelve a subirlo.");
+      setArchivo('');
+      return;
+    }
       try {
-        let wb;
-        // Try Excel first, then CSV
-        if(file.name.endsWith('.xlsx')||file.name.endsWith('.xls')) {
-          const data = new Uint8Array(e.target.result);
-          wb = XLSX.read(data,{type:'array'});
-        } else {
-          wb = XLSX.read(e.target.result,{type:'string'});
-        }
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        const rows = filasCsv(await leerTextoCsv(file));
         if(rows.length<2){setErrMsg("El archivo está vacío o solo tiene encabezado");return;}
 
         const hdrs = rows[0].map(h=>String(h||'').trim().toLowerCase().replace(/\s+/g,'_'));
@@ -694,12 +687,6 @@ export function CargarPedidos({showToast,onCargado}) {
         if(lista.length===0){setErrMsg("No se encontraron pedidos en el archivo");return;}
         setPedidos(lista);
       } catch(ex){setErrMsg("Error leyendo el archivo: "+ex.message);}
-    };
-    reader.onerror=()=>setErrMsg("Error leyendo el archivo");
-    if(file.name.endsWith('.xlsx')||file.name.endsWith('.xls'))
-      reader.readAsArrayBuffer(file);
-    else
-      reader.readAsText(file,'latin-1');
   };
 
   const isFecha = (val) => {
@@ -752,7 +739,7 @@ export function CargarPedidos({showToast,onCargado}) {
   return (
     <div>
       <h2 style={{margin:"0 0 8px",fontWeight:900}}>📤 Cargar Pedidos</h2>
-      <p style={{margin:"0 0 20px",fontSize:13,color:"#64748b"}}>Sube el archivo de pedidos del día en formato Excel (.xlsx) o CSV. El sistema los clasificará automáticamente según el estado de cartera.</p>
+      <p style={{margin:"0 0 20px",fontSize:13,color:"#64748b"}}>Sube el archivo de pedidos del día en formato CSV. El sistema los clasificará automáticamente según el estado de cartera.</p>
 
       {!pedidos.length&&!resultado&&(
         <>
@@ -761,12 +748,12 @@ export function CargarPedidos({showToast,onCargado}) {
             onDrop={e=>{e.preventDefault();if(e.dataTransfer.files[0])leerArchivo(e.dataTransfer.files[0]);}}>
             <div style={{fontSize:44,marginBottom:8}}>📊</div>
             <div style={{color:"#64748b",fontWeight:600,fontSize:15}}>{archivo||"Clic o arrastra el archivo aquí"}</div>
-            <div style={{color:"#94a3b8",fontSize:12,marginTop:6}}>Acepta archivos .xlsx, .xls y .csv</div>
+            <div style={{color:"#94a3b8",fontSize:12,marginTop:6}}>Solo archivos .csv</div>
           </div>
           {errMsg&&<div style={{background:"#fef2f2",borderRadius:10,padding:"10px 16px",fontSize:13,color:"#dc2626",fontWeight:600,marginTop:12}}>⚠️ {errMsg}</div>}
         </>
       )}
-      <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0])leerArchivo(e.target.files[0]);}}/>
+      <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])leerArchivo(e.target.files[0]);}}/>
 
       {pedidos.length>0&&!resultado&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
