@@ -15,7 +15,7 @@ import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta } from './design/tokens';
 import {
- Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Segmentado, MenuFila,
+ Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
  Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
