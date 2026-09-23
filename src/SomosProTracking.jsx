@@ -502,7 +502,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     )}
     {estadoDesp==="cliente_recoge"&&!tieneSoportes&&(
      <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
-      Cliente Recoge necesita el soporte de entrega. Adjuntalo con el boton de soportes: al subirlo se guarda todo junto.
+      Queda a la espera de que el cliente recoja. Cuando adjuntes el soporte de entrega, el pedido se cierra como Entregado y conserva esta modalidad.
      </p>
     )}
 
