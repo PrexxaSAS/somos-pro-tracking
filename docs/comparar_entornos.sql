@@ -48,7 +48,7 @@ politicas as (
   where schemaname = 'public'
 ),
 triggers as (
-  select md5(string_agg(c.relname || '.' || t.tgname || ':' || t.tgenabled, '|'
+  select md5(string_agg(c.relname || '.' || t.tgname || ':' || t.tgenabled::text, '|'
               order by c.relname, t.tgname)) as huella,
          count(*) as elementos
   from pg_trigger t
