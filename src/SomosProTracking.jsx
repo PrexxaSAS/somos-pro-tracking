@@ -202,11 +202,10 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  const pedidoEnTransito = pedido.estado === "en_transito";
  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
  const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
- // Cliente Recoge: la mercancia la retira el cliente, asi que no hay conductor ni
- // transportadora que asignar. El formulario oculta esos campos y el guardado los deja
- // en null, para que no quede un pedido recogido por el cliente con un conductor
- // asignado que nunca lo movio.
- const recogeElCliente = estadoDesp === "cliente_recoge";
+ // Cliente Recoge y Solo Facturar no se despachan: no hay conductor ni transportadora
+ // que asignar. El formulario oculta esos campos y el guardado los deja en null, para
+ // que ningun conductor figure moviendo un pedido que nunca salio con el.
+ const sinTransporte = ESTADOS_SIN_DESPACHO.includes(estadoDesp);
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
  const conductorHistorico = cond && !conductoresActivos.some(c=>String(c.id)===String(cond.id)) ? cond : null;
  const conductoresOpciones = conductorHistorico ? [conductorHistorico, ...conductoresActivos] : conductoresActivos;
@@ -289,9 +288,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   const cambios = canBasicEdit && !canEdit && !canAssign ? { ...cambiosBase, ...entrega } : {
    ...cambiosBase,
    ...(canEdit || canAssign ? {
-    conductor_id: (tipoModal==="paqueteria" || recogeElCliente) ? null : (c?.id||null),
-    placa: (tipoModal==="paqueteria" || recogeElCliente) ? null : (c?.placa||null),
-    nit_proveedor: (tipoModal==="paqueteria" || recogeElCliente) ? null : (c?.nit_proveedor||null),
+    conductor_id: (tipoModal==="paqueteria" || sinTransporte) ? null : (c?.id||null),
+    placa: (tipoModal==="paqueteria" || sinTransporte) ? null : (c?.placa||null),
+    nit_proveedor: (tipoModal==="paqueteria" || sinTransporte) ? null : (c?.nit_proveedor||null),
     estado: nuevoEstado,
     ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
    } : {}),
@@ -417,13 +416,13 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
      <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date" disabled={pedidoBloqueadoEdicion}/>
     </div>
 
-    {canEdit&&recogeElCliente&&(
+    {canEdit&&sinTransporte&&(
      <p style={{fontSize:12,color:P[700],background:P[50],border:`1px solid ${P[200]}`,borderRadius:8,padding:"8px 12px",margin:0}}>
-      Recoge el cliente: este pedido no lleva conductor ni transportadora. Si tenia uno asignado, se quita al guardar.
+      {estadoDesp==="cliente_recoge"?"Recoge el cliente:":"Solo se factura:"} este pedido no lleva conductor ni transportadora. Si tenia uno asignado, se quita al guardar.
      </p>
     )}
 
-    {canEdit&&!recogeElCliente&&(
+    {canEdit&&!sinTransporte&&(
      <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <Field label="Tipo de Transporte" value={tipoModal} onChange={setTipoModal} as="select"
        options={[
@@ -460,7 +459,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
      </div>
     )}
 
-    {canAssign&&!recogeElCliente&&tipoModal!=="paqueteria"&&(
+    {canAssign&&!sinTransporte&&tipoModal!=="paqueteria"&&(
      <div>
       <Field label="Asignar Conductor" value={condId} onChange={v=>{
        setCondId(v);
