@@ -206,9 +206,15 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
    showToast(pedidoCerrado ? "No se puede modificar un pedido que ya fue entregado" : "No se puede editar un pedido en transito","error");
    return;
   }
-  // Cliente Recoge se puede marcar sin soporte: el pedido queda a la espera de que el
-  // cliente pase por la mercancia y sus datos se siguen pudiendo corregir. El soporte es
-  // lo que lo cierra como entregado, no lo que habilita la modalidad.
+  // Cliente Recoge saca el pedido de los despachos pendientes, de los vencidos y de los
+  // que estan en riesgo, asi que no se guarda sin la prueba de que el cliente se llevo la
+  // mercancia. La excepcion es un pedido que YA estaba en ese estado: a ese hay que poder
+  // corregirle las cajas o la factura sin obligarlo a tener soporte todavia.
+  const marcandoClienteRecoge = estadoDesp === "cliente_recoge" && pedido.estado !== "cliente_recoge";
+  if (marcandoClienteRecoge && !tieneSoportes) {
+   showToast("Para marcar Cliente Recoge adjunta el soporte de entrega: al subirlo se guardan tambien los datos del formulario","error");
+   return;
+  }
   const c = conductores.find(c=>String(c.id)===String(condId));
   let nuevoEstado = pedido.estado;
   if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
@@ -497,7 +503,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     )}
     {estadoDesp==="cliente_recoge"&&!tieneSoportes&&(
      <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
-      Queda a la espera de que el cliente recoja. Cuando adjuntes el soporte de entrega, el pedido se cierra como Entregado y conserva esta modalidad.
+      Cliente Recoge necesita el soporte de entrega. Adjuntalo con el boton de soportes: al subirlo se guardan tambien las cajas, la factura y los demas datos, y el pedido queda como Entregado con esta modalidad.
      </p>
     )}
 
