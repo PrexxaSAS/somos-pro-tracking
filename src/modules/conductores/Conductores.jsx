@@ -288,11 +288,16 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
      </Fila>
      <Fila>
       <Texto label="Placa" obligatorio mono valor={form.placa} onChange={f("placa")} placeholder="ABC-123" />
-      <Selector label="Transportista" valor={form.nit_proveedor} onChange={f("nit_proveedor")}
+      {/* Un solo campo de empresa: al elegir la transportista se llenan su NIT y su
+          nombre, que antes se pedian por separado y podian quedar contradiciendose. */}
+      <Selector label="Empresa transportista" valor={form.nit_proveedor}
+       onChange={nit => {
+        const emp = (transportistas || []).find(x => x.nit === nit);
+        setForm(pp => ({ ...pp, nit_proveedor:nit, empresa:emp?.nombre || emp?.empresa || "" }));
+       }}
        placeholder="Sin asignar"
        opciones={(transportistas || []).filter(x => x?.nit).map(x => ({ value:x.nit, label:x.nombre || x.empresa || x.nit }))} />
      </Fila>
-     <Texto label="Empresa de transporte" valor={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S" />
      <Seccion titulo="Acceso al sistema" />
      <Fila>
       <Texto label="Usuario" obligatorio mono valor={form.user_login} onChange={f("user_login")} placeholder="juan.perez" />

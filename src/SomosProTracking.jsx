@@ -3702,7 +3702,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
      descripcion="Genera una guia de devolucion para el pedido"
      ancho="M"
      onClose={cerrarFormulario}
-     onPrimario={guardar}
+     onPrimario={crear}
      textoPrimario={modEditar ? "Guardar cambios" : "Crear devolucion"}
     >
      {!modEditar && (
@@ -3765,8 +3765,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
       </>
      )}
 
-     <Adjunto label="Soporte" nombre={form.soporte_nombre}
-      onArchivo={async (file)=>{ const data = await fileToBase64(file); setForm(p=>({ ...p, soporte_data:data, soporte_nombre:file.name })); }} />
+     <Adjunto label="Soporte" nombre={form.soporte_nombre} onArchivo={(file)=>cargarDoc([file])} />
     </ModalForm>
    )}
    {modDet&&(
@@ -4146,7 +4145,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
      descripcion="Programa una recogida en origen y su entrega"
      ancho="M"
      onClose={cerrarFormulario}
-     onPrimario={guardar}
+     onPrimario={crear}
      textoPrimario={modEditar ? "Guardar cambios" : "Registrar recogida"}
     >
      <Seccion titulo="Recogida" />
@@ -4201,8 +4200,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
       </>
      )}
 
-     <Adjunto label="Documento de soporte" nombre={form.doc_nombre}
-      onArchivo={async (file)=>{ const data = await fileToBase64(file); setForm(p=>({ ...p, doc_data:data, doc_nombre:file.name })); }} />
+     <Adjunto label="Documento de soporte" nombre={form.doc_nombre} onArchivo={(file)=>cargarDoc([file])} />
     </ModalForm>
    )}
    {modDet&&(
@@ -4591,25 +4589,26 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
    </section>
 
    {(modNueva||modEditar)&&(
-    <Modal title={modEditar ? "Editar PQRS" : "Nueva PQRS"} onClose={cerrarFormulario}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {!modEditar&&<div style={{background:"#fffbeb",borderRadius:10,padding:10,fontSize:12,color:"#92400e",fontWeight:600}}>
-       Se generar automaticamente un numero de caso PQRS-{new Date().getFullYear()}-XXXX.
-      </div>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="No. Factura *"   value={form.factura}  onChange={f("factura")}  placeholder="FAC-2200"/>
-       <Field label="No. Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
-      </div>
-      <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="select"
-       options={[{value:"",label:" Seleccione el motivo "},...MOTIVOS.map(m=>({value:m,label:m}))]}/>
-      <Field label="Descripcion detallada *" value={form.descripcion} onChange={f("descripcion")} as="textarea"
-       placeholder="Describe con detalle la situacin, fecha del evento, personas involucradias..."/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
-       <Btn onClick={crear}>{modEditar ? " Guardar Cambios" : " Radicar PQRS"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo={modEditar ? "Editar PQRS" : "Nueva PQRS"}
+     descripcion="Peticion, queja, reclamo o sugerencia"
+     onClose={cerrarFormulario}
+     onPrimario={crear}
+     textoPrimario={modEditar ? "Guardar cambios" : "Radicar PQRS"}
+    >
+     {!modEditar && (
+      <FranjaInfo>Se generara automaticamente el numero de caso PQRS-{new Date().getFullYear()}-XXXX</FranjaInfo>
+     )}
+     <Fila>
+      <Texto label="N factura" obligatorio mono valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" />
+      <Texto label="N pedido de referencia" obligatorio mono valor={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001" />
+     </Fila>
+     <Selector label="Motivo" obligatorio valor={form.motivo} onChange={f("motivo")}
+      placeholder="Seleccione el motivo"
+      opciones={MOTIVOS.map(m=>({ value:m, label:m }))} />
+     <AreaTexto label="Descripcion detallada" obligatorio filas={4} valor={form.descripcion} onChange={f("descripcion")}
+      placeholder="Describe la situacion, la fecha del evento y las personas involucradas..." />
+    </ModalForm>
    )}
    {modGestion&&(
    <Modal title={`Gestionar PQRS ${modGestion.id}`} onClose={()=>setModGestion(null)}>
