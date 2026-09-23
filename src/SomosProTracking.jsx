@@ -14,8 +14,11 @@ import { SidebarApp } from './components/layout/SidebarApp';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta } from './design/tokens';
-import { Paginador } from './components/ui/listas';
-import { ClipboardList, Download, Plus, Search, Upload } from 'lucide-react';
+import {
+ Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Segmentado, MenuFila,
+ Paginador, PieTabla, th, td, mono, botonBarra, botonPrincipal, iconoAccion,
+} from './components/ui/listas';
+import { ChevronDown, ChevronRight, ClipboardList, Download, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -2054,12 +2057,16 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  );
 }
 
-function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar }) {
+function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno }) {
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
  const [modCond, setModCond] = useState(null);
  const [modEdit, setModEdit] = useState(null);
  const [modSoportes, setModSoportes] = useState(null);
+ const [busqEmp, setBusqEmp] = useState("");
+ const [vistaEmp, setVistaEmp] = useState("todas");
+ // Empresas con su lista de conductores desplegada.
+ const [abiertas, setAbiertas] = useState(() => new Set());
  const [guardando, setGuardando] = useState(false);
  const [formE, setFormE] = useState({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
  const [formC, setFormC] = useState({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
@@ -2172,138 +2179,55 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
   setGuardando(false);
  };
 
- return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esMia ? "Mi Empresa" : "Transportistas"}</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>{esMia ? "Conductores asociados a tu empresa" : "Gestion de empresas transportistas y sus conductores"}</p>
-    </div>
-    {!esMia && <button style={primaryButton} onClick={() => setModEmpresa(true)}>+ Nueva Empresa</button>}
-    {esMia && <button style={primaryButton} onClick={() => { setModCond({ nit:miNit, nombre:user.empresa || user.nombre }); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" }); }}>+ Inscribir Conductor</button>}
-   </header>
+ // Empresas con sus conductores y sus conteos, en orden alfabetico.
+ const empresas = useMemo(() => misEmp
+  .map(t => {
+   const suyos = conductoresActivos.filter(c => c.nit_proveedor === t.nit);
+   const enTransito = pedidos.filter(p =>
+    p.estado === "en_transito" && suyos.some(c => String(c.id) === String(p.conductor_id))).length;
+   return { ...t, conductores: suyos, enTransito };
+  })
+  .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })),
+  [misEmp, conductoresActivos, pedidos]);
 
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:24 }}>
-    {esMia && (
-     <section style={{ ...cardStyle, padding:22 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-       <div style={{ width:46, height:46, borderRadius:14, background:"#6d42d8", color:"#fff", display:"grid", placeItems:"center", fontWeight:900 }}>PRO</div>
-       <div>
-        <h2 style={{ margin:0, fontSize:18, fontWeight:850 }}>{user.empresa || user.nombre}</h2>
-        <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:13 }}>NIT: {miNit} · {misCon.length} conductor(es)</p>
-       </div>
-      </div>
-     </section>
-    )}
+ const empresasFiltradas = useMemo(() => {
+  const q = busqEmp.trim().toLowerCase();
+  return empresas.filter(e => {
+   const okVista = vistaEmp === "todas"
+    || (vistaEmp === "con" && e.conductores.length > 0)
+    || (vistaEmp === "sin" && e.conductores.length === 0);
+   const okBusq = !q ||
+    (e.nombre || "").toLowerCase().includes(q) ||
+    (e.nit || "").toLowerCase().includes(q) ||
+    (e.contacto || "").toLowerCase().includes(q) ||
+    e.conductores.some(c =>
+     (c.nombre || "").toLowerCase().includes(q) || (c.placa || "").toLowerCase().includes(q));
+   return okVista && okBusq;
+  });
+ }, [empresas, busqEmp, vistaEmp]);
 
-    {!esMia && (
-     <section>
-      <h2 style={{ margin:"0 0 14px", fontSize:16, fontWeight:850 }}>Empresas Transportistas</h2>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))", gap:14 }}>
-       {misEmp.map(t => {
-        const total = conductoresActivos.filter(c => c.nit_proveedor === t.nit).length;
-        return (
-         <article key={t.id} style={{ ...cardStyle, padding:18 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start" }}>
-           <div>
-            <div style={{ fontSize:16, fontWeight:850 }}>{t.nombre}</div>
-            <div style={{ color:"#6b7280", fontSize:13, marginTop:5, fontFamily:"monospace" }}>{t.nit}</div>
-           </div>
-           <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"4px 10px", fontSize:12, fontWeight:800 }}>{total}</span>
-          </div>
-          <div style={{ marginTop:14, color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
-           {t.contacto && <span>Contacto: {t.contacto}</span>}
-           {t.tel && <span>Tel: {t.tel}</span>}
-           <span>{total} conductor(es)</span>
-          </div>
-          <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap" }}>
-           <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => abrirEditarEmpresa(t)}>Editar</button>
-           <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => { setModCond(t); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" }); }}>+ Conductor</button>
-          </div>
-         </article>
-        );
-       })}
-       {misEmp.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin empresas registradas.</div>}
-      </div>
-     </section>
-    )}
+ const alternarFila = (nit) => setAbiertas(prev => {
+  const s = new Set(prev);
+  if (s.has(nit)) s.delete(nit); else s.add(nit);
+  return s;
+ });
+ const todasAbiertas = empresasFiltradas.length > 0 && empresasFiltradas.every(e => abiertas.has(e.nit));
+ const alternarTodas = () => setAbiertas(todasAbiertas ? new Set() : new Set(empresasFiltradas.map(e => e.nit)));
 
-    <section>
-     <h2 style={{ margin:"0 0 14px", fontSize:16, fontWeight:850 }}>{esMia ? "Mis Conductores" : "Todos los Conductores"}</h2>
-     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
-      {misCon.map(c => (
-       <article key={c.id} style={{ ...cardStyle, padding:18 }}>
-        <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:12 }}>
-         <div style={{ width:40, height:40, borderRadius:20, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{c.nombre?.[0]?.toUpperCase() || "C"}</div>
-         <div style={{ minWidth:0 }}>
-          <div style={{ fontWeight:850, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nombre}</div>
-          <div style={{ color:"#6b7280", fontSize:13 }}>Placa: <span style={{ fontFamily:"monospace", color:"#111827" }}>{c.placa}</span></div>
-         </div>
-        </div>
-        <div style={{ color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
-         {c.cedula && <span>CC: {c.cedula}</span>}
-         {c.celular && <span>Tel: {c.celular}</span>}
-         {c.empresa && <span>{c.empresa}</span>}
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:14 }}>
-         <span style={{ background:"#ecfdf5", color:"#059669", borderRadius:99, padding:"4px 10px", fontSize:12, fontWeight:800 }}>Activo</span>
-         <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>Editar</button>
-        </div>
-       </article>
-      ))}
-     {misCon.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores inscritos.</div>}
-     </div>
-    </section>
+ const exportarEmpresas = () => {
+  const esc = (v) => { const x = String(v ?? ""); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+  const filas = empresasFiltradas.flatMap(e => e.conductores.length === 0
+   ? [[e.nombre, e.nit, e.contacto, e.tel, "", "", ""].map(esc).join(",")]
+   : e.conductores.map(c => [e.nombre, e.nit, e.contacto, e.tel, c.nombre, c.cedula, c.placa].map(esc).join(",")));
+  descargarCSV(
+   `transportistas_${new Date().toISOString().slice(0, 10)}.csv`,
+   "empresa,nit,contacto,telefono,conductor,cedula,placa",
+   filas.join("\n"),
+  );
+  showToast(`${empresasFiltradas.length} empresa(s) exportadas`, "success");
+ };
 
-    {esMia && (
-     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-       <div>
-        <h2 style={{ margin:0, fontSize:16, fontWeight:850 }}>Pedidos de mis conductores</h2>
-        <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:13 }}>Consulta los pedidos asignados y reemplaza soportes de entrega si hubo error de archivo.</p>
-       </div>
-       <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{pedidosMisConductores.length} pedidos</span>
-      </div>
-      {pedidosMisConductores.length === 0 ? (
-       <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Aun no hay pedidos asociados a tus conductores.</div>
-      ) : (
-       <div style={{ overflowX:"auto" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-         <thead>
-          <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-           {["Pedido", "Factura", "Cliente", "Destino", "Conductor", "Estado", "Soportes", "Acciones"].map(h => (
-            <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
-           ))}
-          </tr>
-         </thead>
-         <tbody>
-          {pedidosMisConductores.map(p => {
-           const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-           const soportesCount = Array.isArray(p.soportes) && p.soportes.length > 0 ? p.soportes.length : (Array.isArray(p.soportes_data) ? p.soportes_data.length : 0);
-           return (
-            <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
-             <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
-             <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
-             <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
-             <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
-             <td style={{ padding:"16px" }}><div>{cond?.nombre || "Sin conductor"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond?.placa || ""}</div></td>
-             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
-             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>verPDFSoportes(p, showToast)}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
-             <td style={{ padding:"16px", textAlign:"right" }}>
-              <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModSoportes(p)} disabled={soportesCount === 0}>
-               Reemplazar soportes
-              </button>
-             </td>
-            </tr>
-           );
-          })}
-         </tbody>
-        </table>
-       </div>
-      )}
-     </section>
-    )}
-   </main>
+ const modales = (<>
 
    {modEmpresa && <Modal title="Nueva Empresa Transportista" onClose={() => setModEmpresa(false)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required placeholder="Transportes XYZ S.A.S"/><Field label="NIT *" value={formE.nit} onChange={fe("nit")} required placeholder="900123456-1"/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Persona de Contacto" value={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz"/><Field label="Telefono" value={formE.tel} onChange={fe("tel")} placeholder="3001234567"/></div><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEmpresa(false)}>Cancelar</Btn><Btn onClick={crearEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Crear Empresa y Usuario"}</Btn></div></div></Modal>}
    {modEditEmp && <Modal title={`Editar ${modEditEmp.nombre}`} onClose={() => setModEditEmp(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required/><p style={{ fontSize:12, color:"#64748b", margin:0 }}>NIT: <strong>{modEditEmp.nit}</strong> (no modificable)</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/><Field label="Telefono" value={formE.tel} onChange={fe("tel")}/></div><Field label="Nueva Contrasena (vacio = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contrasena..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEditEmp(null)}>Cancelar</Btn><Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
@@ -2330,7 +2254,303 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
      </div>
     </Modal>
    )}
-  </div>
+ </>);
+
+ const abrirInscribir = (t) => {
+  setModCond(t);
+  setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
+ };
+
+ // ── Vista del propio transportista ────────────────────────────────────────
+ if (esMia) {
+  const miEmpresa = empresas[0];
+  return (
+   <Pagina>
+    <Encabezado
+     titulo="Mi empresa"
+     descripcion="Conductores asociados a tu empresa y sus pedidos"
+     acciones={
+      <button onClick={() => abrirInscribir({ nit: miNit, nombre: user.empresa || user.nombre })} style={botonPrincipal}>
+       <Plus size={16} /> Inscribir conductor
+      </button>
+     }
+    />
+
+    <Indicadores items={[
+     { label: "Conductores", valor: misCon.length, color: T.color.marca, destacado: true },
+     { label: "Pedidos asignados", valor: pedidosMisConductores.length, color: T.color.bien },
+     { label: "En transito", valor: pedidosMisConductores.filter(p => p.estado === "en_transito").length, color: T.color.ojo },
+     { label: "Entregados", valor: pedidosMisConductores.filter(p => p.estado === "entregado").length },
+    ]}/>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
+      <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>{user.empresa || user.nombre}</div>
+      <div style={{ ...mono, marginTop:2 }}>NIT {miNit}</div>
+     </div>
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead>
+        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+         <th style={th}>Conductor</th>
+         <th style={th}>Placa</th>
+         <th style={th}>Cedula</th>
+         <th style={th}>Telefono</th>
+         <th style={{ ...th, textAlign:"right" }}>Acciones</th>
+        </tr>
+       </thead>
+       <tbody>
+        {misCon.length === 0 && (
+         <tr><td colSpan={5} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>
+          Aun no tienes conductores inscritos.
+         </td></tr>
+        )}
+        {misCon.map(c => (
+         <tr key={c.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+          <td style={{ ...td, fontWeight:700, color:T.color.tinta }}>{c.nombre}</td>
+          <td style={td}><span style={{ ...mono, background:T.color.superficie2, padding:"3px 9px", borderRadius:T.radio.chico }}>{c.placa}</span></td>
+          <td style={td}>{c.cedula || "-"}</td>
+          <td style={td}>{c.celular || "-"}</td>
+          <td style={{ ...td, textAlign:"right" }}>
+           <button style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}
+            onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>
+            Editar
+           </button>
+          </td>
+         </tr>
+        ))}
+       </tbody>
+      </table>
+     </div>
+    </section>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+      <div>
+       <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Pedidos de mis conductores</div>
+       <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>
+        Puedes reemplazar el soporte de entrega si hubo un error de carga.
+       </div>
+      </div>
+     </div>
+     {pedidosMisConductores.length === 0 ? (
+      <div style={{ padding:36, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
+       Aun no hay pedidos asociados a tus conductores.
+      </div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <thead>
+         <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+          <th style={th}>Pedido</th>
+          <th style={th}>Cliente</th>
+          <th style={th}>Destino</th>
+          <th style={th}>Conductor</th>
+          <th style={th}>Estado</th>
+          <th style={{ ...th, textAlign:"right" }}>Soportes</th>
+         </tr>
+        </thead>
+        <tbody>
+         {pedidosMisConductores.map(p => {
+          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+          return (
+           <tr key={p.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+            <td style={{ ...td, fontWeight:700, color:T.color.tinta }}>{p.guia_interna || p.id}</td>
+            <td style={td}>{p.cliente}</td>
+            <td style={td}>{p.ciudad_nombre || "-"}</td>
+            <td style={td}>{cond?.nombre || "-"}</td>
+            <td style={td}>
+             <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5 }}>
+              <span style={{ width:7, height:7, borderRadius:4, background:T.estado[p.estado] || T.color.tinta3 }} />
+              {ESTADOS_PEDIDO[p.estado]?.label || p.estado}
+             </span>
+            </td>
+            <td style={{ ...td, textAlign:"right" }}>
+             <button style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }} onClick={() => setModSoportes(p)}>
+              Reemplazar
+             </button>
+            </td>
+           </tr>
+          );
+         })}
+        </tbody>
+       </table>
+      </div>
+     )}
+    </section>
+
+    {modales}
+   </Pagina>
+  );
+ }
+
+ // ── Vista de administracion ───────────────────────────────────────────────
+ return (
+  <Pagina>
+   <Encabezado
+    titulo="Transportistas"
+    descripcion="Gestion de empresas transportistas y sus conductores"
+    acciones={<>
+     <button onClick={exportarEmpresas} style={botonBarra}><Download size={15} /> Exportar</button>
+     <button onClick={() => setModEmpresa(true)} style={botonPrincipal}><Plus size={16} /> Nueva empresa</button>
+    </>}
+   />
+
+   <Indicadores items={[
+    { label: "Empresas", valor: empresas.length },
+    { label: "Con conductores", valor: empresas.filter(e => e.conductores.length > 0).length, color: T.color.marca, destacado: true },
+    { label: "Sin conductores", valor: empresas.filter(e => e.conductores.length === 0).length, color: T.color.ojo },
+    { label: "Conductores vinculados", valor: conductoresActivos.filter(c => c.nit_proveedor).length, color: T.color.bien },
+   ]}/>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={
+     <span style={{ display:"inline-flex", alignItems:"center", gap:14 }}>
+      <button onClick={alternarTodas} style={{
+       border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
+       color:T.color.marca, fontSize:12.5, fontWeight:600, padding:0,
+      }}>{todasAbiertas ? "Contraer todo" : "Expandir todo"}</button>
+      <span>{empresasFiltradas.length} {empresasFiltradas.length === 1 ? "empresa" : "empresas"} · orden A-Z</span>
+     </span>
+    }>
+     <Buscador valor={busqEmp} onChange={setBusqEmp} placeholder="Buscar empresa, NIT, conductor o placa" ancho={300} />
+     <Segmentado valor={vistaEmp} onChange={setVistaEmp}
+      opciones={[["todas","Todas"], ["con","Con conductores"], ["sin","Sin conductores"]]} />
+    </BarraFiltros>
+
+    <div style={{ overflowX:"auto" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <thead>
+       <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+        <th style={{ ...th, width:44 }} />
+        <th style={th}>Empresa</th>
+        <th style={th}>NIT</th>
+        <th style={th}>Contacto</th>
+        <th style={th}>Telefono</th>
+        <th style={{ ...th, textAlign:"right" }}>Conductores</th>
+        <th style={{ ...th, width:200 }} />
+       </tr>
+      </thead>
+      <tbody>
+       {empresasFiltradas.length === 0 && (
+        <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:40, color:T.color.tinta3 }}>
+         {empresas.length === 0 ? "Sin empresas registradas." : "Ninguna empresa coincide con el filtro."}
+        </td></tr>
+       )}
+       {empresasFiltradas.map(e => {
+        const abierta = abiertas.has(e.nit);
+        return (
+         <React.Fragment key={e.nit || e.id}>
+          <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+           <td style={td}>
+            <button onClick={() => alternarFila(e.nit)} title={abierta ? "Contraer" : "Ver conductores"} style={{
+             ...iconoAccion, border:`1px solid ${T.color.borde2}`, background:T.color.superficie,
+            }}>{abierta ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+           </td>
+           <td style={td}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+             <span style={{
+              width:34, height:34, borderRadius:T.radio.chico, flexShrink:0,
+              background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
+             }}><Truck size={16} /></span>
+             <span style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>{e.nombre}</span>
+            </div>
+           </td>
+           <td style={{ ...td, ...mono }}>{e.nit}</td>
+           <td style={td}>{e.contacto || <span style={{ color:T.color.tinta3 }}>-</span>}</td>
+           <td style={td}>{e.tel || <span style={{ color:T.color.tinta3 }}>-</span>}</td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <span style={{
+             display:"inline-flex", minWidth:26, justifyContent:"center", padding:"3px 9px",
+             borderRadius:T.radio.chico, fontSize:12, fontWeight:700,
+             background: e.conductores.length ? T.color.marcaSuave : T.color.superficie2,
+             color: e.conductores.length ? T.color.marca : T.color.tinta3,
+            }}>{e.conductores.length}</span>
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
+             <button onClick={() => abrirInscribir(e)} style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}>
+              <UserPlus size={14} /> Conductor
+             </button>
+             <MenuFila opciones={[
+              { texto: "Editar empresa", accion: () => abrirEditarEmpresa(e) },
+              { texto: abierta ? "Contraer conductores" : "Ver conductores", accion: () => alternarFila(e.nit) },
+             ]}/>
+            </div>
+           </td>
+          </tr>
+
+          {abierta && (
+           <tr style={{ borderBottom:`1px solid ${T.color.borde}`, background:T.color.superficie2 }}>
+            <td colSpan={7} style={{ padding:0 }}>
+             {e.conductores.length === 0 ? (
+              <div style={{ padding:"16px 20px", display:"flex", alignItems:"center", gap:10, fontSize:13, color:T.color.tinta3 }}>
+               Esta empresa aun no tiene conductores.
+               <button onClick={() => abrirInscribir(e)} style={{
+                border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
+                color:T.color.marca, fontSize:13, fontWeight:600, padding:0,
+               }}>Agregar el primero</button>
+              </div>
+             ) : (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+               <thead>
+                <tr>
+                 <th style={{ ...th, paddingLeft:74 }}>Conductor</th>
+                 <th style={th}>Placa</th>
+                 <th style={th}>Cedula</th>
+                 <th style={th}>Telefono</th>
+                 <th style={{ ...th, textAlign:"right" }}>En transito</th>
+                 <th style={{ ...th, width:120 }} />
+                </tr>
+               </thead>
+               <tbody>
+                {e.conductores.map(c => {
+                 const transito = pedidos.filter(p =>
+                  String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
+                 return (
+                  <tr key={c.id}>
+                   <td style={{ ...td, paddingLeft:74, fontWeight:600, color:T.color.tinta }}>{c.nombre}</td>
+                   <td style={td}>
+                    <span style={{ ...mono, background:T.color.superficie, padding:"3px 9px", borderRadius:T.radio.chico, border:`1px solid ${T.color.borde}` }}>{c.placa}</span>
+                   </td>
+                   <td style={td}>{c.cedula || "-"}</td>
+                   <td style={td}>{c.celular || "-"}</td>
+                   <td style={{ ...td, textAlign:"right", fontWeight:700, color: transito ? T.color.marca : T.color.tinta3 }}>{transito}</td>
+                   <td style={{ ...td, textAlign:"right" }}>
+                    <button style={{ ...botonBarra, padding:"5px 11px", fontSize:12.5 }}
+                     onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>
+                     Editar
+                    </button>
+                   </td>
+                  </tr>
+                 );
+                })}
+               </tbody>
+              </table>
+             )}
+            </td>
+           </tr>
+          )}
+         </React.Fragment>
+        );
+       })}
+      </tbody>
+     </table>
+    </div>
+
+    <PieTabla
+     izquierda={`${empresasFiltradas.length} ${empresasFiltradas.length === 1 ? "empresa" : "empresas"}`}
+     derecha={
+      <button onClick={() => setActiveTabExterno && setActiveTabExterno("conductores")} style={{
+       border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
+       color:T.color.marca, fontSize:13, fontWeight:600, padding:0,
+      }}>Ver todos los conductores &rarr;</button>
+     }
+    />
+   </section>
+
+   {modales}
+  </Pagina>
  );
 }
 
@@ -4616,7 +4836,7 @@ export default function SomosProTracking() {
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}
     onVerPedidos={(c)=>{ setEstadoPedidos(""); setBusquedaPedidos(c.placa || c.nombre || ""); setTab("pedidos"); }}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas}/>;
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
     ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
