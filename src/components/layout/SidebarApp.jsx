@@ -18,6 +18,9 @@ import {
   User,
   Users,
   Warehouse,
+  Wallet,
+  Printer,
+  Search,
 } from 'lucide-react';
 import { ROLES } from '../../Constants';
 
@@ -37,6 +40,9 @@ const MENUS = {
     ["promesas", "Promesas de Servicio", CalendarClock],
     ["facturas", "Facturas Proveedor", FileText],
     ["usuarios", "Usuarios", User],
+    ["cartera_pedidos", "Cartera", Wallet],
+    ["cartera_sedes", "Sedes y Cortes", Warehouse],
+    ["cartera_asesores", "Asesores", Users],
   ],
   operador: [
     ["dashboard", "Dashboard", BarChart3],
@@ -50,6 +56,18 @@ const MENUS = {
     ["promesas", "Promesas de Servicio", CalendarClock],
     ["facturas", "Facturas Proveedor", FileText],
   ],
+  // Modulo de cartera. Las pestanas llevan prefijo para no chocar con las de arriba:
+  // "consultas", por ejemplo, ya la usa el rol cliente para ver sus pedidos.
+  cartera: [
+    ["cartera_cargar", "Cargar Pedidos", Box],
+    ["cartera_pedidos", "Gestion de Pedidos", Wallet],
+    ["cartera_vencida", "Cartera Vencida", FileText],
+  ],
+  logistica: [
+    ["cartera_logistica", "Logistica", Printer],
+    ["cartera_pedidos", "Gestion de Pedidos", Wallet],
+  ],
+  consultas: [["cartera_consultas", "Consultas", Search]],
   transportista: [["mi_empresa", "Mi Empresa", Truck]],
   conductor: [["mis_pedidos", "Mis Pedidos", Box], ["mis_devoluciones", "Mis Devoluciones", RotateCcw], ["mis_recogidas", "Mis Recogidas", PackageCheck], ["mi_ubicacion", "Mi Ubicacion GPS", MapPin]],
   cliente: [["consultas", "Estado Pedidos", Box], ["devoluciones", "Mis Devoluciones", RotateCcw], ["recogidas", "Mis Recogidas", PackageCheck], ["pqrs", "PQRS", HelpCircle]],
