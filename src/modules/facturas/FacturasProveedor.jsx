@@ -1,6 +1,9 @@
 ﻿import React, { useState } from 'react';
 import { P } from '../../Constants';
 import { Btn, Card, Field, Modal } from '../../Subcomponentes';
+import {
+ ModalForm, Fila, Texto, Selector, AreaTexto,
+} from '../../components/ui/formularios';
 import { supabase } from '../../supabase';
 import { mensajeError } from '../../utils/errors';
 import { exportarCSVFacturaProveedor } from '../../utils/facturasCsv';
@@ -229,22 +232,27 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
 
    {/* Modal nueva factura */}
    {modNueva&&(
-    <Modal title="Nueva Factura de Proveedor" onClose={()=>{setModNueva(false);setForm(vacio);}}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="No. Factura del Proveedor *" value={form.numero_factura} onChange={f("numero_factura")} placeholder="FAC-PRO-001"/>
-      <Field label="Transportista *" value={form.transportista_id} onChange={f("transportista_id")} as="select"
-       options={[{value:"",label:" Seleccione transportista "},...(transportistas||[]).map(t=>({value:t.id,label:`${t.nombre} NIT: ${t.nit}`}))]}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Fecha Factura *" value={form.fecha_factura} onChange={f("fecha_factura")} type="date"/>
-       <Field label="Valor Total (COP) *" value={form.valor_total} onChange={f("valor_total")} type="number" placeholder="1500000"/>
-      </div>
-      <Field label="Observaciones" value={form.observaciones} onChange={f("observaciones")} as="textarea" placeholder="Notas adicionales..."/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-       <Btn disabled={guard} onClick={crear}>{guard?"Guardando...":" Crear Factura"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo="Nueva factura de proveedor"
+     descripcion="Registro para conciliacion con transportista"
+     onClose={()=>{setModNueva(false);setForm(vacio);}}
+     onPrimario={crear}
+     guardando={guard}
+     textoPrimario="Crear factura"
+    >
+     <Texto label="N factura del proveedor" obligatorio mono valor={form.numero_factura}
+      onChange={f("numero_factura")} placeholder="FAC-PRO-001" />
+     <Selector label="Transportista" obligatorio valor={form.transportista_id} onChange={f("transportista_id")}
+      placeholder="Seleccione transportista"
+      opciones={(transportistas||[]).map(x=>({ value:x.id, label:`${x.nombre} - NIT ${x.nit}` }))} />
+     <Fila>
+      <Texto label="Fecha de factura" obligatorio tipo="date" valor={form.fecha_factura} onChange={f("fecha_factura")} />
+      <Texto label="Valor total" obligatorio tipo="number" prefijo="COP" valor={form.valor_total}
+       onChange={f("valor_total")} placeholder="1500000" />
+     </Fila>
+     <AreaTexto label="Observaciones" opcional valor={form.observaciones} onChange={f("observaciones")}
+      placeholder="Notas adicionales..." />
+    </ModalForm>
    )}
 
    {/* Modal gestionar guias */}

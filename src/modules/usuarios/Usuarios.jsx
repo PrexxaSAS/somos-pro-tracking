@@ -1,7 +1,9 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { P, ROLES } from '../../Constants';
-import { Btn, Card, Field, Modal } from '../../Subcomponentes';
+import {
+ ModalForm, Seccion, Fila, Texto, Clave, Selector,
+} from '../../components/ui/formularios';
 import { T, tarjeta } from '../../design/tokens';
 import { supabase } from '../../supabase';
 import { mensajeErrorFuncion } from '../../utils/errors';
@@ -166,44 +168,42 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   if (recargar) await recargar();
  };
 
+ // Campos que solo aplican a ciertos roles.
  const camposRol = () => {
-  const transportistaOpciones = (transportistas || [])
-   .filter(t => t?.nit)
-   .map(t => ({ value:t.nit, label:t.nombre || t.empresa || t.nit }));
-  const transportistaActualExiste = !form.nit_proveedor || transportistaOpciones.some(t => t.value === form.nit_proveedor);
-  const opcionesEmpresaConductor = [
-   { value:"", label:"Seleccione" },
-   ...(!transportistaActualExiste ? [{ value:form.nit_proveedor, label:form.empresa || "Empresa actual" }] : []),
-   ...transportistaOpciones,
-  ];
-  const seleccionarEmpresaConductor = (nit) => {
-   const empresa = (transportistas || []).find(t => t.nit === nit);
-   setForm(p => ({
-    ...p,
-    nit_proveedor:nit,
-    empresa:empresa?.nombre || empresa?.empresa || "",
-   }));
-  };
+  const opcionesTransportista = (transportistas || [])
+   .filter(x => x?.nit)
+   .map(x => ({ value:x.nit, label:x.nombre || x.empresa || x.nit }));
 
-  if (form.rol==="transportista") return (
-   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-    <Field label="NIT" value={form.nit} onChange={f("nit")} placeholder="900123456-1"/>
-    <Field label="Empresa" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ"/>
-   </div>
-  );
-  if (form.rol==="conductor") return (
+  if (form.rol === "transportista") return (
    <>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-     <Field label="Cedula" value={form.cedula} onChange={f("cedula")} placeholder="1012345678"/>
-     <Field label="Placa" value={form.placa} onChange={f("placa")} placeholder="ABC-123"/>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-     <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567"/>
-     <Field label="Empresa" value={form.nit_proveedor} onChange={seleccionarEmpresaConductor} as="select" options={opcionesEmpresaConductor}/>
-    </div>
-    {form.nit_proveedor && <div style={{background:"#f8fafc",border:`1px solid ${border}`,borderRadius:12,padding:"10px 12px",fontSize:13,color:"#4b5563"}}>NIT proveedor: <strong>{form.nit_proveedor}</strong></div>}
+    <Seccion titulo="Datos de la empresa" />
+    <Fila>
+     <Texto label="NIT" obligatorio mono valor={form.nit} onChange={f("nit")} placeholder="900123456-1" />
+     <Texto label="Empresa" valor={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ" />
+    </Fila>
    </>
   );
+
+  if (form.rol === "conductor") return (
+   <>
+    <Seccion titulo="Datos del conductor" />
+    <Fila>
+     <Texto label="Cedula" obligatorio mono valor={form.cedula} onChange={f("cedula")} placeholder="1012345678" />
+     <Texto label="Placa" obligatorio mono valor={form.placa} onChange={f("placa")} placeholder="ABC-123" />
+    </Fila>
+    <Fila>
+     <Texto label="Celular" valor={form.celular} onChange={f("celular")} placeholder="300 123 4567" />
+     <Selector label="Empresa" obligatorio valor={form.nit_proveedor}
+      onChange={nit => {
+       const empresa = (transportistas || []).find(x => x.nit === nit);
+       setForm(pp => ({ ...pp, nit_proveedor:nit, empresa:empresa?.nombre || empresa?.empresa || "" }));
+      }}
+      placeholder="Seleccione"
+      opciones={opcionesTransportista} />
+    </Fila>
+   </>
+  );
+
   return null;
  };
 
@@ -389,39 +389,45 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
    </section>
 
    {modal&&(
-    <Modal title="Nuevo Usuario" onClose={()=>setModal(false)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Usuario (login) *" value={form.user} onChange={f("user")} required placeholder="usuario123" name="spt_admin_user_login" autoComplete="off" data-lpignore="true"/>
-       <Field label="Contrasena *" value={form.pass} onChange={f("pass")} required type="password" placeholder="" name="spt_admin_user_password" autoComplete="new-password" data-lpignore="true"/>
-      </div>
-      <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
-      {camposRol()}
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModal(false)}>Cancelar</Btn>
-       <Btn onClick={crearUsuario} disabled={guardando}>{guardando?"Guardando...":" Crear Usuario"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo="Nuevo usuario"
+     descripcion="Acceso al sistema con rol asignado"
+     onClose={()=>setModal(false)}
+     onPrimario={crearUsuario}
+     guardando={guardando}
+     textoPrimario="Crear usuario"
+    >
+     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
+     <Selector label="Rol" obligatorio valor={form.rol} onChange={f("rol")}
+      opciones={Object.entries(ROLES).map(([k,v])=>({ value:k, label:v }))} />
+     {camposRol()}
+     <Seccion titulo="Acceso al sistema" />
+     <Fila>
+      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} placeholder="juan.perez" />
+      <Clave label="Contrasena" obligatorio valor={form.pass} onChange={f("pass")} ayuda="Minimo 8 caracteres" />
+     </Fila>
+    </ModalForm>
    )}
 
    {modEditar&&(
-    <Modal title={`Editar ${modEditar.nombre}`} onClose={()=>setModEditar(null)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Usuario *" value={form.user} onChange={f("user")} required name="username" autoComplete="username"/>
-       <Field label="Nueva contrasea (vaco = sin cambio)" value={form.pass} onChange={f("pass")} type="password" placeholder="Nueva contrasea..." name="password" autoComplete="current-password"/>
-      </div>
-      <Field label="Rol" value={form.rol} onChange={f("rol")} as="select" options={Object.entries(ROLES).map(([k,v])=>({value:k,label:v}))}/>
-      {camposRol()}
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModEditar(null)}>Cancelar</Btn>
-       <Btn onClick={guardarEdicion} disabled={guardando}>{guardando?"Guardando...":" Guardar Cambios"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo={`Editar ${modEditar.nombre}`}
+     descripcion="Cambia sus datos, su rol o su contrasena"
+     onClose={()=>setModEditar(null)}
+     onPrimario={guardarEdicion}
+     guardando={guardando}
+     textoPrimario="Guardar cambios"
+    >
+     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} />
+     <Selector label="Rol" obligatorio valor={form.rol} onChange={f("rol")}
+      opciones={Object.entries(ROLES).map(([k,v])=>({ value:k, label:v }))} />
+     {camposRol()}
+     <Seccion titulo="Acceso al sistema" />
+     <Fila>
+      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} />
+      <Clave label="Nueva contrasena" valor={form.pass} onChange={f("pass")} ayuda="Dejala vacia para no cambiarla" />
+     </Fila>
+    </ModalForm>
    )}
   </Pagina>
  );

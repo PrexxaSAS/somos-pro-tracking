@@ -19,6 +19,9 @@ import {
  Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
+import {
+ ModalForm, Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
+} from './components/ui/formularios';
 import { ChevronDown, ChevronRight, ClipboardList, Download, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
@@ -1920,36 +1923,71 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    </div>
 
    {modNuevo && (
-    <Modal title="Nuevo Pedido" onClose={() => setModNuevo(false)}>
-     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-       <Field label="N de Pedido" value={form.id} onChange={f("id")} required placeholder="PED-012" />
-       <Field label="N de Factura" value={form.factura} onChange={f("factura")} required placeholder="FAC-3000" />
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-       <Field label="Cantidad de Cajas" value={form.cajas} onChange={f("cajas")} type="number" placeholder="10" />
-       <Field label="Fecha Entrega Estimada" value={form.fecha_estimada} onChange={f("fecha_estimada")} type="date" />
-      </div>
-      <Field label="Nombre del Cliente / Destinatario" value={form.cliente} onChange={f("cliente")} required placeholder="Empresa Destino S.A.S" />
-      <Field label="Ciudad de Entrega (Codigo DANE)" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} required as="select" options={[{ value:"", label:" Seleccione ciudad " }, ...(ciudades || []).map(c => ({ value:c.code, label:`${c.name} ${c.code}` }))]} />
-      <Field label="Direccion de Entrega" value={form.direccion} onChange={f("direccion")} placeholder="Cra 15 #93-47 Of 302" />
-      <div style={{ background:"#f8fafc", borderRadius:12, padding:"12px 14px", border:`1px solid ${border}` }}>
-       <div style={{ fontSize:11, fontWeight:800, color:"#6b7280", textTransform:"uppercase", marginBottom:10 }}>Origen / CEDI de Despacho</div>
-       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-        <Field label="Ciudad Origen (DANE)" value={form.ciudad_origen_codigo} onChange={f("ciudad_origen_codigo")} as="select" options={[{ value:"", label:" Sin especificar " }, ...(ciudades || []).map(c => ({ value:c.code, label:`${c.name} ${c.code}` }))]} />
-        <Field label="Direccion Origen / CEDI" value={form.direccion_origen} onChange={f("direccion_origen")} placeholder="Bodega principal" />
-       </div>
-      </div>
-      <Field label="Tipo de Envio" value={form.tipo} onChange={f("tipo")} as="select" options={[{ value:"propio", label:"Transporte Propio" }, { value:"empresa_transporte", label:"Empresa Transportista" }, { value:"mensajeria", label:"Mensajeria" }, { value:"paqueteria", label:"Paqueteria Tercero" }]} />
-      {form.tipo === "paqueteria" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Paqueteria" value={form.paqueteria} onChange={f("paqueteria")} as="select" options={[{ value:"", label:"Seleccione" }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} /><Field label="No. Guia" value={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-XXXXX" /></div>}
-      {form.tipo !== "paqueteria" && <Field label="Asignar Conductor (opcional)" value={form.conductor_id} onChange={v => { f("conductor_id")(v); const c = conductoresActivos.find(cx => String(cx.id) === String(v)); if (c && form.tipo === "empresa_transporte") f("empresa_transporte")(c.empresa || ""); }} as="select" options={[{ value:"", label:" Sin asignar " }, ...(form.tipo === "empresa_transporte" ? conductoresActivos.filter(c => c.empresa || c.nit_proveedor) : conductoresActivos).map(c => ({ value:c.id, label:`${c.nombre} - ${c.placa}${c.empresa ? " - " + c.empresa : ""}` }))]} />}
-      <Field label="Notas / Observaciones" value={form.notas} onChange={f("notas")} as="textarea" placeholder="Instrucciones especiales..." />
-      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-       <Btn variant="secondary" onClick={() => setModNuevo(false)}>Cancelar</Btn>
-       <Btn onClick={guardar}>Guardar Pedido</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo="Nuevo pedido"
+     descripcion="Registra un pedido y su destino de entrega"
+     ancho="M"
+     onClose={() => setModNuevo(false)}
+     onPrimario={guardar}
+     textoPrimario="Crear pedido"
+    >
+     <Seccion titulo="Identificacion" />
+     <Fila>
+      <Texto label="N de pedido" obligatorio valor={form.id} onChange={f("id")} placeholder="PED-012" mono />
+      <Texto label="N de factura" obligatorio valor={form.factura} onChange={f("factura")} placeholder="FAC-3000" mono />
+     </Fila>
+     <Fila>
+      <Texto label="Cantidad de cajas" valor={form.cajas} onChange={f("cajas")} tipo="number" placeholder="10" />
+      <Texto label="Fecha estimada de entrega" valor={form.fecha_estimada} onChange={f("fecha_estimada")} tipo="date" />
+     </Fila>
+
+     <Seccion titulo="Destino" />
+     <Texto label="Cliente / destinatario" obligatorio valor={form.cliente} onChange={f("cliente")} placeholder="Empresa Destino S.A.S" />
+     <Fila>
+      <Selector label="Ciudad de entrega (DANE)" obligatorio valor={form.ciudad_codigo} onChange={f("ciudad_codigo")}
+       placeholder="Seleccione ciudad"
+       opciones={(ciudades || []).map(c => ({ value:c.code, label:`${c.name} - ${c.code}` }))} />
+      <Texto label="Direccion de entrega" valor={form.direccion} onChange={f("direccion")} placeholder="Cra 15 #93-47 Of 302" />
+     </Fila>
+
+     <Seccion titulo="Origen / CEDI de despacho" />
+     <Fila>
+      <Selector label="Ciudad origen (DANE)" valor={form.ciudad_origen_codigo} onChange={f("ciudad_origen_codigo")}
+       placeholder="Sin especificar"
+       opciones={(ciudades || []).map(c => ({ value:c.code, label:`${c.name} - ${c.code}` }))} />
+      <Texto label="Direccion origen / CEDI" valor={form.direccion_origen} onChange={f("direccion_origen")} placeholder="Bodega principal" />
+     </Fila>
+
+     <Seccion titulo="Transporte" />
+     <Fila>
+      <Selector label="Tipo de envio" valor={form.tipo} onChange={f("tipo")}
+       opciones={[
+        { value:"propio", label:"Transporte propio" },
+        { value:"empresa_transporte", label:"Empresa transportista" },
+        { value:"mensajeria", label:"Mensajeria" },
+        { value:"paqueteria", label:"Paqueteria tercero" },
+       ]} />
+      {form.tipo === "paqueteria" ? (
+       <Selector label="Paqueteria" valor={form.paqueteria} onChange={f("paqueteria")}
+        placeholder="Seleccione"
+        opciones={(paqueterias || []).filter(x => typeof x === "string" && x).map(x => ({ value:x, label:x }))} />
+      ) : (
+       <Selector label="Conductor" opcional valor={form.conductor_id}
+        onChange={v => {
+         f("conductor_id")(v);
+         const c = conductoresActivos.find(cx => String(cx.id) === String(v));
+         if (c) setForm(pp => ({ ...pp, placa:c.placa || "", nit_proveedor:c.nit_proveedor || "" }));
+        }}
+        placeholder="Sin asignar"
+        opciones={conductoresActivos.map(c => ({ value:c.id, label:`${c.nombre} - ${c.placa || ""}` }))} />
+      )}
+     </Fila>
+     {form.tipo === "paqueteria" && (
+      <Texto label="No. guia de paqueteria" valor={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-0001" mono />
+     )}
+
+     <AreaTexto label="Notas / observaciones" opcional valor={form.notas} onChange={f("notas")} placeholder="Instrucciones especiales..." />
+    </ModalForm>
    )}
 
    {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
@@ -2250,10 +2288,101 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
 
  const modales = (<>
 
-   {modEmpresa && <Modal title="Nueva Empresa Transportista" onClose={() => setModEmpresa(false)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required placeholder="Transportes XYZ S.A.S"/><Field label="NIT *" value={formE.nit} onChange={fe("nit")} required placeholder="900123456-1"/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Persona de Contacto" value={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz"/><Field label="Telefono" value={formE.tel} onChange={fe("tel")} placeholder="3001234567"/></div><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEmpresa(false)}>Cancelar</Btn><Btn onClick={crearEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Crear Empresa y Usuario"}</Btn></div></div></Modal>}
-   {modEditEmp && <Modal title={`Editar ${modEditEmp.nombre}`} onClose={() => setModEditEmp(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required/><p style={{ fontSize:12, color:"#64748b", margin:0 }}>NIT: <strong>{modEditEmp.nit}</strong> (no modificable)</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/><Field label="Telefono" value={formE.tel} onChange={fe("tel")}/></div><Field label="Nueva Contrasena (vacio = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contrasena..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEditEmp(null)}>Cancelar</Btn><Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
-   {modCond && <Modal title={`Inscribir Conductor ${modCond.nombre}`} onClose={() => setModCond(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>Empresa: <strong>{modCond.nombre}</strong> · NIT: <strong>{modCond.nit}</strong></div><Field label="Nombre *" value={formC.nombre} onChange={fc("nombre")} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula *" value={formC.cedula} onChange={fc("cedula")} required placeholder="1012345678"/><Field label="Celular" value={formC.celular} onChange={fc("celular")} placeholder="3001234567"/></div><Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso del conductor</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModCond(null)}>Cancelar</Btn><Btn onClick={inscribirConductor} disabled={guardando}>{guardando ? "Guardando..." : "Inscribir y Crear Usuario"}</Btn></div></div></Modal>}
-   {modEdit && <Modal title={`Editar Conductor ${modEdit.nombre}`} onClose={() => setModEdit(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Nombre *" value={formEdit.nombre} onChange={v => setFormEdit(p => ({ ...p, nombre:v }))} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula" value={formEdit.cedula} onChange={v => setFormEdit(p => ({ ...p, cedula:v }))} placeholder="1012345678"/><Field label="Celular" value={formEdit.celular} onChange={v => setFormEdit(p => ({ ...p, celular:v }))} placeholder="3001234567"/></div><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Placa *" value={formEdit.placa} onChange={v => setFormEdit(p => ({ ...p, placa:v }))} required placeholder="ABC-123"/>{!esMia && <Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v => setFormEdit(p => ({ ...p, nit_proveedor:v }))} placeholder="900123456-1"/>}</div>{esMia ? <div style={{ background:"#f8fafc", border:`1px solid ${border}`, borderRadius:12, padding:12, fontSize:13, color:"#4b5563" }}><div style={{ fontWeight:800, marginBottom:4 }}>Pertenencia del conductor</div><div>NIT proveedor: <strong>{formEdit.nit_proveedor || miNit}</strong></div><div>Empresa: <strong>{formEdit.empresa || user.empresa || user.nombre}</strong></div><div style={{ color:"#6b7280", marginTop:6 }}>Estos datos solo pueden ser modificados por un administrador.</div></div> : <Field label="Empresa" value={formEdit.empresa} onChange={v => setFormEdit(p => ({ ...p, empresa:v }))} placeholder="Transportes XYZ"/>}<div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEdit(null)}>Cancelar</Btn><Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
+   {modEmpresa && (
+    <ModalForm
+     titulo="Nueva empresa transportista"
+     descripcion="Crea la empresa y su usuario de acceso"
+     ancho="M"
+     onClose={() => setModEmpresa(false)}
+     onPrimario={crearEmpresa}
+     guardando={guardando}
+     textoPrimario="Crear empresa y usuario"
+    >
+     <Texto label="Razon social" obligatorio valor={formE.nombre} onChange={fe("nombre")} placeholder="Transportes XYZ S.A.S" />
+     <Fila>
+      <Texto label="NIT" obligatorio mono valor={formE.nit} onChange={fe("nit")} placeholder="900123456-1" />
+      <Texto label="Telefono" valor={formE.tel} onChange={fe("tel")} placeholder="300 123 4567" />
+     </Fila>
+     <Texto label="Persona de contacto" valor={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz" />
+     <Seccion titulo="Acceso al sistema" />
+     <Fila>
+      <Texto label="Usuario" obligatorio mono valor={formE.user_login} onChange={fe("user_login")} placeholder="trans.xyz" />
+      <Clave label="Contrasena" obligatorio valor={formE.pass_login} onChange={fe("pass_login")} />
+     </Fila>
+    </ModalForm>
+   )}
+   {modEditEmp && (
+    <ModalForm
+     titulo={`Editar ${modEditEmp.nombre}`}
+     descripcion="Datos de contacto de la empresa"
+     onClose={() => setModEditEmp(null)}
+     onPrimario={guardarEdicionEmpresa}
+     guardando={guardando}
+     textoPrimario="Guardar cambios"
+    >
+     <Texto label="Razon social" obligatorio valor={formE.nombre} onChange={fe("nombre")} />
+     <FranjaInfo>El NIT no se puede cambiar: es la llave con la que se vinculan los conductores.</FranjaInfo>
+     <Fila>
+      <Texto label="Persona de contacto" valor={formE.contacto} onChange={fe("contacto")} />
+      <Texto label="Telefono" valor={formE.tel} onChange={fe("tel")} />
+     </Fila>
+    </ModalForm>
+   )}
+   {modCond && (
+    <ModalForm
+     titulo="Inscribir conductor"
+     descripcion="Quedara vinculado a la empresa indicada"
+     ancho="M"
+     onClose={() => setModCond(null)}
+     onPrimario={inscribirConductor}
+     guardando={guardando}
+     textoPrimario="Inscribir y crear usuario"
+    >
+     <FranjaInfo icono={<Truck size={15} />}>
+      Empresa: <strong>{modCond.nombre}</strong> · NIT {modCond.nit}
+     </FranjaInfo>
+     <Texto label="Nombre" obligatorio valor={formC.nombre} onChange={fc("nombre")} placeholder="Juan Perez" />
+     <Fila>
+      <Texto label="Cedula" obligatorio mono valor={formC.cedula} onChange={fc("cedula")} placeholder="1012345678" />
+      <Texto label="Celular" valor={formC.celular} onChange={fc("celular")} placeholder="300 123 4567" />
+     </Fila>
+     <Texto label="Placa" obligatorio mono valor={formC.placa} onChange={fc("placa")} placeholder="XYZ-456" style={{ maxWidth:"50%" }} />
+     <Seccion titulo="Acceso del conductor" />
+     <Fila>
+      <Texto label="Usuario" obligatorio mono valor={formC.user_login} onChange={fc("user_login")} placeholder="juan.perez" />
+      <Clave label="Contrasena" obligatorio valor={formC.pass_login} onChange={fc("pass_login")} />
+     </Fila>
+    </ModalForm>
+   )}
+   {modEdit && (
+    <ModalForm
+     titulo={`Editar ${modEdit.nombre}`}
+     descripcion="Datos del conductor"
+     ancho="M"
+     onClose={() => setModEdit(null)}
+     onPrimario={guardarEdicionConductor}
+     guardando={guardando}
+     textoPrimario="Guardar cambios"
+    >
+     <Texto label="Nombre" obligatorio valor={formEdit.nombre} onChange={v => setFormEdit(pp => ({ ...pp, nombre:v }))} />
+     <Fila>
+      <Texto label="Cedula" obligatorio mono valor={formEdit.cedula} onChange={v => setFormEdit(pp => ({ ...pp, cedula:v }))} />
+      <Texto label="Celular" valor={formEdit.celular} onChange={v => setFormEdit(pp => ({ ...pp, celular:v }))} />
+     </Fila>
+     <Fila>
+      <Texto label="Placa" obligatorio mono valor={formEdit.placa} onChange={v => setFormEdit(pp => ({ ...pp, placa:v }))} />
+      {!esMia && (
+       <Selector label="Empresa" valor={formEdit.nit_proveedor}
+        onChange={v => {
+         const emp = (transportistas || []).find(x => x.nit === v);
+         setFormEdit(pp => ({ ...pp, nit_proveedor:v, empresa:emp?.nombre || emp?.empresa || "" }));
+        }}
+        placeholder="Sin asignar"
+        opciones={(transportistas || []).filter(x => x?.nit).map(x => ({ value:x.nit, label:x.nombre || x.empresa || x.nit }))} />
+      )}
+     </Fila>
+    </ModalForm>
+   )}
    {modSoportes && (
     <Modal title={`Reemplazar soportes ${modSoportes.guia_interna || modSoportes.id}`} onClose={() => setModSoportes(null)}>
      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -2681,16 +2810,18 @@ function Ciudades({ ciudades, showToast, recargar }) {
    </main>
 
    {modNueva&&(
-    <Modal title="Nueva Ciudad / Municipio" onClose={()=>setModNueva(false)}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="Codigo DANE" value={form.code} onChange={v=>setForm(p=>({...p,code:v}))} required placeholder="05045"/>
-      <Field label="Nombre del municipio" value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} required placeholder="Apartad"/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>setModNueva(false)}>Cancelar</Btn>
-       <Btn onClick={guardar}> Guardar</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo="Nueva ciudad / municipio"
+     descripcion="Se agrega al catalogo DANE del sistema"
+     onClose={()=>setModNueva(false)}
+     onPrimario={guardar}
+     textoPrimario="Guardar ciudad"
+    >
+     <Texto label="Codigo DANE" obligatorio mono valor={form.code}
+      onChange={v=>setForm(p=>({...p,code:v}))} placeholder="05045" />
+     <Texto label="Nombre del municipio" obligatorio valor={form.name}
+      onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Apartado" />
+    </ModalForm>
    )}
    {modCSV&&(
     <ModalCSVCiudades onClose={()=>setModCSV(false)} onImportar={async (nuevas)=>{
@@ -3566,67 +3697,77 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    </section>
 
    {(modNueva||modEditar)&&(
-    <Modal title={modEditar ? "Editar Solicitud de Devolucion" : "Nueva Solicitud de Devolucion"} onClose={cerrarFormulario} wide>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {!modEditar&&<div style={{background:"#fef2f2",borderRadius:10,padding:10,fontSize:12,color:"#dc2626",fontWeight:600}}>
-       Se generar automaticamente una Guia (DV-{new Date().getFullYear()}-XXXX).
-      </div>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="No. Factura *" value={form.factura} onChange={f("factura")} placeholder="FAC-2200"/>
-       <Field label="No. Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-       <Field label="Unidades *" value={form.unidades} onChange={f("unidades")} type="number" placeholder="5"/>
-       <Field label="Volumen m *" value={form.volumen_m3} onChange={f("volumen_m3")} type="number" placeholder="0.5"/>
-       <Field label="Peso kg *" value={form.peso_kg} onChange={f("peso_kg")} type="number" placeholder="10"/>
-      </div>
-      <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
-      <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
-       options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
-      <Field label="Sede destino *" value={form.dir_entrega} onChange={f("dir_entrega")} as="select"
-       options={[
-        {value:"",label:" Seleccione "},
-        ...SEDES_DESTINO.map(x=>({value:x,label:x})),
-        // Si la devolucion ya tenia un valor que no esta en la lista, se conserva
-        // como opcion para no borrarlo al editar.
-        ...(form.dir_entrega && !SEDES_DESTINO.includes(form.dir_entrega) ? [{value:form.dir_entrega,label:form.dir_entrega}] : []),
-       ]}/>
-      <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolucin..."/>
-      {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
-       options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
-      }
-      {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"&&(
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Field label="Empresa Paqueteria" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega, TCC..."/>
-        <Field label="No. Guia" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
-       </div>
-      )}
-      {!esCliente && !modEditar && ((form.tipo_envio||"conductor")!=="paqueteria")&&(
-       <Field label="Conductor (opcional)" value={form.conductor_id}
-        onChange={v=>{
-         f("conductor_id")(v);
-         const c=conductoresActivos.find(cx=>String(cx.id)===String(v));
-         if(c&&form.tipo_envio==="empresa_transporte") f("paqueteria")(c.empresa||"");
-        }} as="select"
-        options={[
-         {value:"",label:" Sin asignar "},
-         ...((form.tipo_envio||"conductor")==="empresa_transporte"
-          ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
-          : conductoresActivos
-         ).map(c=>({value:c.id,label:`${c.nombre} ${c.placa}${c.empresa?" "+c.empresa:""}`}))
-        ]}/>
-      )}
-      <div style={{border:`1px dashed ${P[300]}`,borderRadius:10,padding:14,textAlign:"center",cursor:"pointer"}}
-       onClick={()=>fileRef.current&&fileRef.current.click()}>
-       {form.soporte_nombre?<span style={{color:"#059669",fontWeight:700}}> {form.soporte_nombre}</span>:<span style={{color:P[600]}}> Adjuntar soporte (opcional)</span>}
-      </div>
-      <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
-       <Btn onClick={crear}>{modEditar ? " Guardar Cambios" : " Registrar Devolucion"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo={modEditar ? "Editar solicitud de devolucion" : "Nueva solicitud de devolucion"}
+     descripcion="Genera una guia de devolucion para el pedido"
+     ancho="M"
+     onClose={cerrarFormulario}
+     onPrimario={guardar}
+     textoPrimario={modEditar ? "Guardar cambios" : "Crear devolucion"}
+    >
+     {!modEditar && (
+      <FranjaInfo>Se generara automaticamente la guia DV-{new Date().getFullYear()}-XXXX</FranjaInfo>
+     )}
+
+     <Fila>
+      <Texto label="N factura" obligatorio mono valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" />
+      <Texto label="N pedido de referencia" obligatorio mono valor={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001" />
+     </Fila>
+
+     <Seccion titulo="Carga" />
+     <Fila columnas={3}>
+      <Texto label="Unidades" obligatorio tipo="number" valor={form.unidades} onChange={f("unidades")} placeholder="5" />
+      <Texto label="Volumen" obligatorio tipo="number" prefijo="m3" valor={form.volumen_m3} onChange={f("volumen_m3")} placeholder="0.5" />
+      <Texto label="Peso" obligatorio tipo="number" prefijo="kg" valor={form.peso_kg} onChange={f("peso_kg")} placeholder="10" />
+     </Fila>
+
+     <Seccion titulo="Recogida y destino" />
+     <Fila>
+      <Texto label="Direccion de recogida" obligatorio valor={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47" />
+      <Selector label="Ciudad de recogida" obligatorio valor={form.ciudad_codigo} onChange={f("ciudad_codigo")}
+       placeholder="Seleccione"
+       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
+     </Fila>
+     <Selector label="Sede destino" obligatorio valor={form.dir_entrega} onChange={f("dir_entrega")}
+      placeholder="Seleccione"
+      opciones={[
+       ...SEDES_DESTINO.map(x=>({ value:x, label:x })),
+       ...(form.dir_entrega && !SEDES_DESTINO.includes(form.dir_entrega)
+        ? [{ value:form.dir_entrega, label:form.dir_entrega }] : []),
+      ]} />
+     <AreaTexto label="Motivo" obligatorio valor={form.motivo} onChange={f("motivo")}
+      placeholder="Describe el motivo de la devolucion..." />
+
+     {!esCliente && !modEditar && (
+      <>
+       <Seccion titulo="Transporte" />
+       <Fila>
+        <Selector label="Tipo de envio" valor={form.tipo_envio||"conductor"} onChange={f("tipo_envio")}
+         opciones={[
+          { value:"conductor", label:"Conductor propio" },
+          { value:"empresa_transporte", label:"Empresa transportista" },
+          { value:"mensajeria", label:"Mensajeria" },
+          { value:"paqueteria", label:"Paqueteria tercero" },
+         ]} />
+        {(form.tipo_envio||"conductor")==="paqueteria" ? (
+         <Selector label="Paqueteria" valor={form.paqueteria||""} onChange={f("paqueteria")}
+          placeholder="Seleccione"
+          opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
+        ) : (
+         <Selector label="Conductor" opcional valor={form.conductor_id} onChange={f("conductor_id")}
+          placeholder="Sin asignar"
+          opciones={conductoresActivos.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+        )}
+       </Fila>
+       {(form.tipo_envio||"conductor")==="paqueteria" && (
+        <Texto label="No. guia de paqueteria" mono valor={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-0001" />
+       )}
+      </>
+     )}
+
+     <Adjunto label="Soporte" nombre={form.soporte_nombre}
+      onArchivo={async (file)=>{ const data = await fileToBase64(file); setForm(p=>({ ...p, soporte_data:data, soporte_nombre:file.name })); }} />
+    </ModalForm>
    )}
    {modDet&&(
     <ModalDetalleDV dev={modDet} conductores={conductores} ciudades={ciudades}
@@ -4000,47 +4141,69 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
    </section>
 
    {(modNueva||modEditar)&&(
-    <Modal title={modEditar ? "Editar Solicitud de Recogida" : "Nueva Solicitud de Recogida"} onClose={cerrarFormulario} wide>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
-       <Field label="Ciudad de Recogida *" value={form.ciudad_recogida_cod} onChange={f("ciudad_recogida_cod")} as="select"
-        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Direccion de Entrega *" value={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Av El Poblado #43A-15"/>
-       <Field label="Ciudad de Entrega *" value={form.ciudad_entrega_cod} onChange={f("ciudad_entrega_cod")} as="select"
-        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-       <Field label="Unidades *" value={form.unidades} onChange={f("unidades")} type="number" placeholder="5"/>
-       <Field label="Volumen m *" value={form.volumen_m3} onChange={f("volumen_m3")} type="number" placeholder="0.5"/>
-       <Field label="Peso kg *" value={form.peso_kg} onChange={f("peso_kg")} type="number" placeholder="10"/>
-      </div>
-      <Field label="Observaciones" value={form.observaciones} onChange={f("observaciones")} as="textarea" placeholder="Instrucciones especiales..."/>
-      {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
-       options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
-      }
-      {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"?(
-       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Field label="Empresa Paqueteria" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega..."/>
-        <Field label="No. Guia" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
-       </div>
-      ):(!esCliente && !modEditar &&
-       <Field label="Conductor (opcional)" value={form.conductor_id} onChange={f("conductor_id")} as="select"
-        options={[{value:"",label:" Sin asignar "},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} ${c.placa}`}))]}/>
-      )}
-      <div style={{border:`1px dashed ${P[300]}`,borderRadius:10,padding:14,textAlign:"center",cursor:"pointer"}}
-       onClick={()=>fileRef.current&&fileRef.current.click()}>
-       {form.doc_nombre?<span style={{color:"#059669",fontWeight:700}}> {form.doc_nombre}</span>:<span style={{color:P[600]}}> Adjuntar documento (opcional)</span>}
-      </div>
-      <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
-       <Btn onClick={crear}>{modEditar ? " Guardar Cambios" : " Registrar Recogida"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo={modEditar ? "Editar solicitud de recogida" : "Nueva solicitud de recogida"}
+     descripcion="Programa una recogida en origen y su entrega"
+     ancho="M"
+     onClose={cerrarFormulario}
+     onPrimario={guardar}
+     textoPrimario={modEditar ? "Guardar cambios" : "Registrar recogida"}
+    >
+     <Seccion titulo="Recogida" />
+     <Fila>
+      <Texto label="Direccion de recogida" obligatorio valor={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47" />
+      <Selector label="Ciudad de recogida" obligatorio valor={form.ciudad_recogida_cod} onChange={f("ciudad_recogida_cod")}
+       placeholder="Seleccione"
+       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
+     </Fila>
+
+     <Seccion titulo="Entrega" />
+     <Fila>
+      <Texto label="Direccion de entrega" obligatorio valor={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Av El Poblado #43A-15" />
+      <Selector label="Ciudad de entrega" obligatorio valor={form.ciudad_entrega_cod} onChange={f("ciudad_entrega_cod")}
+       placeholder="Seleccione"
+       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
+     </Fila>
+
+     <Seccion titulo="Carga" />
+     <Fila columnas={3}>
+      <Texto label="Unidades" obligatorio tipo="number" valor={form.unidades} onChange={f("unidades")} placeholder="5" />
+      <Texto label="Volumen" obligatorio tipo="number" prefijo="m3" valor={form.volumen_m3} onChange={f("volumen_m3")} placeholder="0.5" />
+      <Texto label="Peso" obligatorio tipo="number" prefijo="kg" valor={form.peso_kg} onChange={f("peso_kg")} placeholder="10" />
+     </Fila>
+     <AreaTexto label="Observaciones" opcional valor={form.observaciones} onChange={f("observaciones")}
+      placeholder="Instrucciones especiales..." />
+
+     {!esCliente && !modEditar && (
+      <>
+       <Seccion titulo="Transporte" />
+       <Fila>
+        <Selector label="Tipo de envio" valor={form.tipo_envio||"conductor"} onChange={f("tipo_envio")}
+         opciones={[
+          { value:"conductor", label:"Conductor propio" },
+          { value:"empresa_transporte", label:"Empresa transportista" },
+          { value:"mensajeria", label:"Mensajeria" },
+          { value:"paqueteria", label:"Paqueteria tercero" },
+         ]} />
+        {(form.tipo_envio||"conductor")==="paqueteria" ? (
+         <Selector label="Paqueteria" valor={form.paqueteria||""} onChange={f("paqueteria")}
+          placeholder="Seleccione"
+          opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
+        ) : (
+         <Selector label="Conductor" opcional valor={form.conductor_id} onChange={f("conductor_id")}
+          placeholder="Sin asignar"
+          opciones={conductoresActivos.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+        )}
+       </Fila>
+       {(form.tipo_envio||"conductor")==="paqueteria" && (
+        <Texto label="No. guia de paqueteria" mono valor={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-0001" />
+       )}
+      </>
+     )}
+
+     <Adjunto label="Documento de soporte" nombre={form.doc_nombre}
+      onArchivo={async (file)=>{ const data = await fileToBase64(file); setForm(p=>({ ...p, doc_data:data, doc_nombre:file.name })); }} />
+    </ModalForm>
    )}
    {modDet&&(
     <Modal title={`Recogida ${modDet.guia}`} onClose={()=>setModDet(null)} wide>

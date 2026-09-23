@@ -2,7 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Download, Plus } from 'lucide-react';
 import { supabase } from '../../supabase';
 import { T, tarjeta } from '../../design/tokens';
-import { Modal, Field, Btn } from '../../Subcomponentes';
+import {
+ ModalForm, Seccion, Fila, Texto, Clave, Selector,
+} from '../../components/ui/formularios';
 import { descargarCSV } from '../../utils/files';
 import { mensajeErrorFuncion } from '../../utils/errors';
 import {
@@ -270,39 +272,33 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
    </section>
 
    {modal && (
-    <Modal title="Registrar conductor" onClose={() => setModal(false)}>
-     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{
-       background: T.color.marcaSuave, borderRadius: T.radio.control, padding: 12,
-       fontSize: 13, color: T.color.tinta2, border: `1px solid ${T.color.marcaBorde}`,
-      }}>
-       Se creara automaticamente el usuario de acceso al sistema.
-      </div>
-      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required placeholder="Juan Perez" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-       <Field label="Cedula *" value={form.cedula} onChange={f("cedula")} required placeholder="1012345678" />
-       <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567" />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-       <Field label="Placa *" value={form.placa} onChange={f("placa")} required placeholder="ABC-123" />
-       <Field label="Transportista" value={form.nit_proveedor} onChange={f("nit_proveedor")} as="select"
-        options={[{ value: "", label: "Sin asignar" },
-         ...(transportistas || []).filter(t => t?.nit).map(t => ({ value: t.nit, label: t.nombre || t.empresa || t.nit }))]}/>
-      </div>
-      <Field label="Empresa de transporte" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S" />
-      <div style={{ borderTop: `1px solid ${T.color.borde}`, paddingTop: 12 }}>
-       <p style={{ ...T.texto.seccion, color: T.color.tinta3, margin: "0 0 10px" }}>Acceso al sistema</p>
-       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" />
-        <Field label="Contrasena *" value={form.pass_login} onChange={f("pass_login")} required type="password" name="spt_driver_password" autoComplete="new-password" />
-       </div>
-      </div>
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-       <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
-       <Btn onClick={guardar} disabled={guardando}>{guardando ? "Guardando..." : "Guardar y crear usuario"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo="Registrar conductor"
+     descripcion="Crea el conductor y su usuario de acceso"
+     ancho="M"
+     onClose={() => setModal(false)}
+     onPrimario={guardar}
+     guardando={guardando}
+     textoPrimario="Crear conductor"
+    >
+     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
+     <Fila>
+      <Texto label="Cedula" obligatorio mono valor={form.cedula} onChange={f("cedula")} placeholder="1012345678" />
+      <Texto label="Celular" valor={form.celular} onChange={f("celular")} placeholder="300 123 4567" />
+     </Fila>
+     <Fila>
+      <Texto label="Placa" obligatorio mono valor={form.placa} onChange={f("placa")} placeholder="ABC-123" />
+      <Selector label="Transportista" valor={form.nit_proveedor} onChange={f("nit_proveedor")}
+       placeholder="Sin asignar"
+       opciones={(transportistas || []).filter(x => x?.nit).map(x => ({ value:x.nit, label:x.nombre || x.empresa || x.nit }))} />
+     </Fila>
+     <Texto label="Empresa de transporte" valor={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S" />
+     <Seccion titulo="Acceso al sistema" />
+     <Fila>
+      <Texto label="Usuario" obligatorio mono valor={form.user_login} onChange={f("user_login")} placeholder="juan.perez" />
+      <Clave label="Contrasena" obligatorio valor={form.pass_login} onChange={f("pass_login")} />
+     </Fila>
+    </ModalForm>
    )}
   </Pagina>
  );
