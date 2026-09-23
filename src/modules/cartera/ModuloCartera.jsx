@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { leerTextoCsv, filasCsv } from '../../utils/files';
+import { P } from '../../Constants';
+import { Card, Btn, Field, Modal } from '../../Subcomponentes';
 import emailjs from '@emailjs/browser';
 
 // ── Configuración ──────────────────────────────────────────────────────────────
@@ -10,12 +12,6 @@ const EJS_TEMPLATE  = 'template_7mepnqg';
 const EJS_PUBLIC    = 'ZMsvylkrklU4MQ-Bx';
 
 // ── Colores verdes ─────────────────────────────────────────────────────────────
-const C = {
-  950:"#022c22",900:"#064e3b",800:"#065f46",700:"#047857",
-  600:"#059669",500:"#10b981",400:"#34d399",300:"#6ee7b7",
-  200:"#a7f3d0",100:"#d1fae5",50:"#ecfdf5",
-};
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const fCOP = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(n||0);
 const fFecha = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleDateString('es-CO'); };
@@ -114,50 +110,6 @@ const enviarCorreoRechazo = async (pedido, motivo, emailAsesor) => {
 };
 
 // ── Componentes base ───────────────────────────────────────────────────────────
-function Card({children, style={}}) {
-  return <div style={{background:"#fff",borderRadius:14,boxShadow:`0 2px 16px ${C[600]}10`,padding:20,border:`1px solid ${C[100]}`,...style}}>{children}</div>;
-}
-
-function Btn({children,onClick,variant="primary",size="md",style={},disabled=false,type="button"}) {
-  const sz={sm:{padding:"5px 12px",fontSize:12},md:{padding:"9px 16px",fontSize:13},lg:{padding:"12px 24px",fontSize:14}};
-  const vr={
-    primary:  {background:`linear-gradient(135deg,${C[700]},${C[600]})`,color:"#fff",boxShadow:`0 2px 8px ${C[600]}40`},
-    secondary:{background:C[50],color:C[700],border:`1px solid ${C[200]}`},
-    success:  {background:"linear-gradient(135deg,#059669,#10b981)",color:"#fff"},
-    danger:   {background:"#fef2f2",color:"#dc2626",border:"1px solid #fca5a5"},
-    ghost:    {background:"transparent",color:"#64748b",border:"1px solid #e2e8f0"},
-    warning:  {background:"#fffbeb",color:"#d97706",border:"1px solid #fcd34d"},
-  };
-  return <button type={type} onClick={disabled?undefined:onClick} disabled={disabled} style={{border:"none",cursor:disabled?"not-allowed":"pointer",borderRadius:9,fontWeight:700,fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:disabled?0.5:1,...sz[size],...vr[variant],...style}}>{children}</button>;
-}
-
-function Field({label,value,onChange,type="text",placeholder="",as="input",options=[],style={},readOnly=false,required=false}) {
-  const base={border:`1.5px solid ${C[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:readOnly?"#f8fafb":"#fafafa",width:"100%",boxSizing:"border-box"};
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:4,...style}}>
-      {label&&<label style={{fontSize:11,fontWeight:700,color:C[700],textTransform:"uppercase",letterSpacing:0.5}}>{label}{required&&<span style={{color:"#ef4444"}}> *</span>}</label>}
-      {as==="select"?<select value={value} onChange={e=>onChange(e.target.value)} style={base} disabled={readOnly}>
-        {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>:as==="textarea"?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={3} style={{...base,resize:"vertical"}} readOnly={readOnly}/>:
-      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={base} readOnly={readOnly}/>}
-    </div>
-  );
-}
-
-function Modal({title,children,onClose,wide=false,extraWide=false}) {
-  return (
-    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"#00000088",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#fff",borderRadius:18,padding:24,width:"100%",maxWidth:extraWide?900:wide?680:500,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px #0004"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h3 style={{margin:0,fontSize:17,color:C[800],fontWeight:800}}>{title}</h3>
-          <button onClick={onClose} style={{border:"none",background:C[50],cursor:"pointer",fontSize:18,color:C[600],width:32,height:32,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function BadgeEstado({estado}) {
   const e = ESTADOS_CARTERA[estado]||ESTADOS_CARTERA.pendiente;
   return <span style={{background:e.bg,color:e.color,border:`1px solid ${e.color}40`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{e.label}</span>;
@@ -211,17 +163,17 @@ export function GestionSedes({showToast}) {
       {sedes.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay sedes registradas. Agrega la primera sede para comenzar.</Card>}
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {sedes.map(s=>(
-          <Card key={s.id} style={{borderLeft:`4px solid ${s.activa?C[600]:"#94a3b8"}`}}>
+          <Card key={s.id} style={{borderLeft:`4px solid ${s.activa?P[600]:"#94a3b8"}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
               <div>
-                <div style={{fontWeight:800,fontSize:16,color:s.activa?C[800]:"#94a3b8"}}>{s.nombre}</div>
+                <div style={{fontWeight:800,fontSize:16,color:s.activa?P[800]:"#94a3b8"}}>{s.nombre}</div>
                 <div style={{fontSize:13,color:"#64748b",marginTop:4,display:"flex",gap:16,flexWrap:"wrap"}}>
                   <span>📍 {s.municipio}</span>
                   <span>🏷️ DANE: {s.dane_code}</span>
                   <span>📦 {s.capacidad_dia} pedidos/día</span>
                   <span>⏰ Último corte: {s.hora_ultimo_corte}</span>
                   <span>🔄 {s.num_cortes} cortes/día</span>
-                  <span style={{color:s.activa?C[600]:"#94a3b8",fontWeight:700}}>{s.activa?"● Activa":"○ Inactiva"}</span>
+                  <span style={{color:s.activa?P[600]:"#94a3b8",fontWeight:700}}>{s.activa?"● Activa":"○ Inactiva"}</span>
                 </div>
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -248,7 +200,7 @@ export function GestionSedes({showToast}) {
               <Field label="Hora último corte" value={form.hora_ultimo_corte} onChange={f("hora_ultimo_corte")} type="time"/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>f("activa")(!form.activa)}>
-              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${form.activa?C[600]:"#94a3b8"}`,background:form.activa?C[600]:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${form.activa?P[600]:"#94a3b8"}`,background:form.activa?P[600]:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {form.activa&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
               </div>
               <span style={{fontSize:13,fontWeight:600,color:"#334155"}}>Sede activa</span>
@@ -300,7 +252,7 @@ export function ModalCortes({sede,onClose,showToast}) {
   return (
     <Modal title={`Cortes — ${sede.nombre}`} onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <div style={{background:C[50],borderRadius:10,padding:14,border:`1px solid ${C[200]}`}}>
+        <div style={{background:P[50],borderRadius:10,padding:14,border:`1px solid ${P[200]}`}}>
           <div style={{fontWeight:700,marginBottom:10,fontSize:13}}>➕ Agregar Corte</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:10,alignItems:"end"}}>
             <Field label="Hora del corte" value={form.hora_corte} onChange={f("hora_corte")} type="time"/>
@@ -312,16 +264,16 @@ export function ModalCortes({sede,onClose,showToast}) {
         {cortes.length===0&&<div style={{textAlign:"center",padding:24,color:"#94a3b8",fontSize:13}}>No hay cortes configurados para esta sede.</div>}
         {cortes.length>0&&(
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead><tr style={{background:C[50]}}>
+            <thead><tr style={{background:P[50]}}>
               {["Orden","Hora del Corte","Pedidos Máx.","Eliminar"].map(h=>(
-                <th key={h} style={{padding:"9px 14px",textAlign:"left",fontWeight:700,color:C[700],fontSize:11}}>{h}</th>
+                <th key={h} style={{padding:"9px 14px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11}}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {cortes.map((c,i)=>(
-                <tr key={c.id} style={{borderTop:`1px solid ${C[100]}`,background:i%2?"#fafafa":"#fff"}}>
+                <tr key={c.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
                   <td style={{padding:"9px 14px",fontWeight:700}}>{c.orden}</td>
-                  <td style={{padding:"9px 14px",fontWeight:700,color:C[700],fontSize:16}}>{c.hora_corte}</td>
+                  <td style={{padding:"9px 14px",fontWeight:700,color:P[700],fontSize:16}}>{c.hora_corte}</td>
                   <td style={{padding:"9px 14px"}}>{c.capacidad_corte} pedidos</td>
                   <td style={{padding:"9px 14px"}}><button onClick={()=>eliminar(c.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#dc2626",fontSize:18,padding:0}}>×</button></td>
                 </tr>
@@ -410,11 +362,11 @@ export function GestionAsesores({showToast}) {
       {asesores.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay asesores registrados.</Card>}
       <Card style={{padding:0,overflow:"hidden"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-          <thead><tr style={{background:C[50]}}>{["Código","Nombre","Correo","Acciones"].map(h=><th key={h} style={{padding:"10px 16px",textAlign:"left",fontWeight:700,color:C[700],fontSize:11}}>{h}</th>)}</tr></thead>
+          <thead><tr style={{background:P[50]}}>{["Código","Nombre","Correo","Acciones"].map(h=><th key={h} style={{padding:"10px 16px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11}}>{h}</th>)}</tr></thead>
           <tbody>
             {asesores.map((a,i)=>(
-              <tr key={a.id} style={{borderTop:`1px solid ${C[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                <td style={{padding:"10px 16px",fontFamily:"monospace",fontWeight:700,color:C[700]}}>{a.codigo}</td>
+              <tr key={a.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
+                <td style={{padding:"10px 16px",fontFamily:"monospace",fontWeight:700,color:P[700]}}>{a.codigo}</td>
                 <td style={{padding:"10px 16px",fontWeight:600}}>{a.nombre}</td>
                 <td style={{padding:"10px 16px",color:"#64748b"}}>{a.email}</td>
                 <td style={{padding:"10px 16px"}}>
@@ -533,7 +485,7 @@ export function CargarCarteraVencida({showToast}) {
       </Card>
 
       {!preview&&!resultado&&(
-        <div style={{border:`2px dashed ${C[300]}`,borderRadius:14,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}
+        <div style={{border:`2px dashed ${P[300]}`,borderRadius:14,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}
           onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()}
           onDrop={e=>{e.preventDefault();if(e.dataTransfer.files[0])leerArchivo(e.dataTransfer.files[0]);}}>
           <div style={{fontSize:40,marginBottom:8}}>📂</div>
@@ -545,7 +497,7 @@ export function CargarCarteraVencida({showToast}) {
       {preview&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-            {[{l:"Total clientes",v:preview.total,c:C[600],bg:C[50]},{l:"Con cartera vencida",v:preview.vencidos,c:"#dc2626",bg:"#fef2f2"},{l:"Al día",v:preview.alDia,c:"#059669",bg:"#ecfdf5"}].map(s=>(
+            {[{l:"Total clientes",v:preview.total,c:P[600],bg:P[50]},{l:"Con cartera vencida",v:preview.vencidos,c:"#dc2626",bg:"#fef2f2"},{l:"Al día",v:preview.alDia,c:"#059669",bg:"#ecfdf5"}].map(s=>(
               <div key={s.l} style={{background:s.bg,borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
                 <div style={{fontSize:28,fontWeight:900,color:s.c}}>{s.v}</div>
                 <div style={{fontSize:11,color:"#64748b",fontWeight:700,marginTop:4}}>{s.l}</div>
@@ -743,7 +695,7 @@ export function CargarPedidos({showToast,onCargado}) {
 
       {!pedidos.length&&!resultado&&(
         <>
-          <div style={{border:`2px dashed ${C[300]}`,borderRadius:14,padding:"40px 20px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}
+          <div style={{border:`2px dashed ${P[300]}`,borderRadius:14,padding:"40px 20px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}
             onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()}
             onDrop={e=>{e.preventDefault();if(e.dataTransfer.files[0])leerArchivo(e.dataTransfer.files[0]);}}>
             <div style={{fontSize:44,marginBottom:8}}>📊</div>
@@ -758,7 +710,7 @@ export function CargarPedidos({showToast,onCargado}) {
       {pedidos.length>0&&!resultado&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-            {[{l:"Total pedidos",v:resumen.total,c:C[600],bg:C[50]},{l:"Cartera Vencida",v:resumen.vencida,c:"#dc2626",bg:"#fef2f2"},{l:"Preaprobados",v:resumen.preaprobado,c:"#059669",bg:"#ecfdf5"},{l:"Pendientes",v:resumen.pendiente,c:"#d97706",bg:"#fffbeb"}].map(s=>(
+            {[{l:"Total pedidos",v:resumen.total,c:P[600],bg:P[50]},{l:"Cartera Vencida",v:resumen.vencida,c:"#dc2626",bg:"#fef2f2"},{l:"Preaprobados",v:resumen.preaprobado,c:"#059669",bg:"#ecfdf5"},{l:"Pendientes",v:resumen.pendiente,c:"#d97706",bg:"#fffbeb"}].map(s=>(
               <div key={s.l} style={{background:s.bg,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:26,fontWeight:900,color:s.c}}>{s.v}</div>
                 <div style={{fontSize:11,color:"#64748b",fontWeight:700,marginTop:3}}>{s.l}</div>
@@ -767,12 +719,12 @@ export function CargarPedidos({showToast,onCargado}) {
           </div>
           <Card style={{padding:0,overflow:"hidden",maxHeight:320,overflowY:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{position:"sticky",top:0,background:C[50]}}>
-                <tr>{["Pedido","NIT","Cliente","Valor","Plazo","Asesor","Sede Origen","Estado"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:700,color:C[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
+              <thead style={{position:"sticky",top:0,background:P[50]}}>
+                <tr>{["Pedido","NIT","Cliente","Valor","Plazo","Asesor","Sede Origen","Estado"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {pedidos.map((p,i)=>(
-                  <tr key={p.numero_pedido} style={{borderTop:`1px solid ${C[100]}`,background:i%2?"#fafafa":"#fff"}}>
+                  <tr key={p.numero_pedido} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
                     <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700,fontSize:11}}>{p.numero_pedido}</td>
                     <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
                     <td style={{padding:"8px 12px",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cliente}</td>
@@ -945,7 +897,7 @@ export function GestionPedidos({user, showToast}) {
           const cnt = t.k==='todos'?pedidos.length:(conteos[t.k]||0);
           const est = ESTADOS_CARTERA[t.k];
           return (
-            <button key={t.k} onClick={()=>setFiltroEst(t.k)} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",background:filtroEst===t.k?(est?.bg||C[50]):"#f1f5f9",color:filtroEst===t.k?(est?.color||C[700]):"#64748b",boxShadow:filtroEst===t.k?"0 2px 8px #0002":"none"}}>
+            <button key={t.k} onClick={()=>setFiltroEst(t.k)} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",background:filtroEst===t.k?(est?.bg||P[50]):"#f1f5f9",color:filtroEst===t.k?(est?.color||P[700]):"#64748b",boxShadow:filtroEst===t.k?"0 2px 8px #0002":"none"}}>
               {t.l} {cnt>0&&<span style={{background:"rgba(0,0,0,0.1)",borderRadius:10,padding:"1px 6px",fontSize:10,marginLeft:4}}>{cnt}</span>}
             </button>
           );
@@ -956,7 +908,7 @@ export function GestionPedidos({user, showToast}) {
       <Card style={{padding:12,marginBottom:16}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
           <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por pedido, NIT, cliente o asesor..."
-            style={{flex:1,minWidth:200,border:`1.5px solid ${C[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafafa"}}/>
+            style={{flex:1,minWidth:200,border:`1.5px solid ${P[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafafa"}}/>
           {seleccion.size>0&&(
             <Btn onClick={aprobarSeleccionados} disabled={aprobando} variant="success">
               {aprobando?"Aprobando...":"✅ Aprobar seleccionados ("+seleccion.size+")"}
@@ -973,7 +925,7 @@ export function GestionPedidos({user, showToast}) {
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{background:C[50]}}>
+              <thead style={{background:P[50]}}>
                 <tr>
                   <th style={{padding:"10px 12px",width:36}}>
                     {pendientesAprobacion.length>0&&(
@@ -982,7 +934,7 @@ export function GestionPedidos({user, showToast}) {
                     )}
                   </th>
                   {["Pedido","NIT","Cliente","Valor Total","Plazo","Asesor","Sede Origen","Estado","Corte Asignado","Acciones"].map(h=>(
-                    <th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>
+                    <th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -990,11 +942,11 @@ export function GestionPedidos({user, showToast}) {
                 {filtrados.map((p,i)=>{
                   const esPendiente = ['pendiente','preaprobado','cartera_vencida'].includes(p.estado_cartera);
                   return (
-                    <tr key={p.id} style={{borderTop:`1px solid ${C[100]}`,background:seleccion.has(p.id)?`${C[100]}`:i%2?"#fafafa":"#fff"}}>
+                    <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:seleccion.has(p.id)?`${P[100]}`:i%2?"#fafafa":"#fff"}}>
                       <td style={{padding:"10px 12px"}}>
                         {esPendiente&&<input type="checkbox" checked={seleccion.has(p.id)} onChange={()=>toggleSel(p.id)} style={{cursor:"pointer",width:15,height:15}}/>}
                       </td>
-                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,color:C[700],fontSize:11}}>{p.numero_pedido}</td>
+                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,color:P[700],fontSize:11}}>{p.numero_pedido}</td>
                       <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
                       <td style={{padding:"10px 12px",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{p.cliente}</td>
                       <td style={{padding:"10px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
@@ -1003,7 +955,7 @@ export function GestionPedidos({user, showToast}) {
                       <td style={{padding:"10px 12px",fontSize:11,color:"#64748b"}}>{p.origen?.split('-').pop()||'—'}</td>
                       <td style={{padding:"10px 12px"}}><BadgeEstado estado={p.estado_cartera}/></td>
                       <td style={{padding:"10px 12px",fontSize:11,color:"#64748b"}}>
-                        {p.fecha_corte?<><div style={{fontWeight:600,color:C[700]}}>{fFecha(p.fecha_corte)}</div><div>{new Date(p.fecha_corte).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</div></>:'—'}
+                        {p.fecha_corte?<><div style={{fontWeight:600,color:P[700]}}>{fFecha(p.fecha_corte)}</div><div>{new Date(p.fecha_corte).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</div></>:'—'}
                       </td>
                       <td style={{padding:"10px 12px",display:"flex",gap:6,flexWrap:"wrap"}}>
                         {esPendiente&&<Btn size="sm" variant="success" disabled={aprobando} onClick={()=>aprobarUno(p.id)}>✓ Aprobar</Btn>}
@@ -1193,14 +1145,14 @@ export function ModuloLogistica({showToast}) {
           <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#334155"}}>Cortes del {fFecha(filtroFecha+'T12:00:00')}</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
             {cortes.map(c=>(
-              <Card key={c.id} style={{borderLeft:`4px solid ${c.estado==='transmitido'?C[600]:c.estado==='cerrado'?"#d97706":"#94a3b8"}`}}>
-                <div style={{fontWeight:700,fontSize:15,color:C[700]}}>{c.hora_corte}</div>
+              <Card key={c.id} style={{borderLeft:`4px solid ${c.estado==='transmitido'?P[600]:c.estado==='cerrado'?"#d97706":"#94a3b8"}`}}>
+                <div style={{fontWeight:700,fontSize:15,color:P[700]}}>{c.hora_corte}</div>
                 <div style={{fontSize:12,color:"#64748b",marginTop:4}}>{c.sedes?.nombre}</div>
                 <div style={{fontSize:12,marginTop:4}}>
                   <span style={{fontWeight:600}}>{c.pedidos_asignados}</span>/{c.capacidad_max} pedidos
                 </div>
                 <div style={{marginTop:8,display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:12,background:c.estado==='transmitido'?C[100]:c.estado==='cerrado'?"#fffbeb":"#f1f5f9",color:c.estado==='transmitido'?C[700]:c.estado==='cerrado'?"#d97706":"#64748b"}}>{c.estado==='transmitido'?'✓ Transmitido':c.estado==='cerrado'?'Cerrado':'Abierto'}</span>
+                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:12,background:c.estado==='transmitido'?P[100]:c.estado==='cerrado'?"#fffbeb":"#f1f5f9",color:c.estado==='transmitido'?P[700]:c.estado==='cerrado'?"#d97706":"#64748b"}}>{c.estado==='transmitido'?'✓ Transmitido':c.estado==='cerrado'?'Cerrado':'Abierto'}</span>
                   {c.estado==='abierto'&&<Btn size="sm" disabled={transmitiendo} onClick={()=>transmitirCorte(c.id)}>▶ Transmitir</Btn>}
                 </div>
               </Card>
@@ -1223,22 +1175,22 @@ export function ModuloLogistica({showToast}) {
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{background:C[50]}}>
-                <tr>{["Pedido","NIT","Cliente","Valor","Corte","Transmitido","Impresión","Acciones"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
+              <thead style={{background:P[50]}}>
+                <tr>{["Pedido","NIT","Cliente","Valor","Corte","Transmitido","Impresión","Acciones"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {pedidos.map((p,i)=>(
-                  <tr key={p.id} style={{borderTop:`1px solid ${C[100]}`,background:i%2?"#fafafa":"#fff"}}>
+                  <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
                     <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,fontSize:11}}>{p.numero_pedido}</td>
                     <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
                     <td style={{padding:"10px 12px",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{p.cliente}</td>
                     <td style={{padding:"10px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
                     <td style={{padding:"10px 12px",fontSize:11}}>{p.fecha_corte?<><div style={{fontWeight:600}}>{fFecha(p.fecha_corte)}</div><div style={{color:"#64748b"}}>{new Date(p.fecha_corte).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</div></>:'—'}</td>
                     <td style={{padding:"10px 12px"}}>
-                      {p.transmitido_tms?<span style={{color:C[600],fontWeight:700,fontSize:11}}>✓ {p.fecha_transmision?new Date(p.fecha_transmision).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):''}</span>:<span style={{color:"#94a3b8",fontSize:11}}>Pendiente</span>}
+                      {p.transmitido_tms?<span style={{color:P[600],fontWeight:700,fontSize:11}}>✓ {p.fecha_transmision?new Date(p.fecha_transmision).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):''}</span>:<span style={{color:"#94a3b8",fontSize:11}}>Pendiente</span>}
                     </td>
                     <td style={{padding:"10px 12px"}}>
-                      <span style={{fontSize:11,fontWeight:700,color:p.estado_impresion==='impreso'?C[600]:"#94a3b8"}}>{p.estado_impresion==='impreso'?'✓ Impreso':'No impreso'}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:p.estado_impresion==='impreso'?P[600]:"#94a3b8"}}>{p.estado_impresion==='impreso'?'✓ Impreso':'No impreso'}</span>
                       {p.fecha_impresion&&<div style={{fontSize:10,color:"#94a3b8"}}>{fFechaHora(p.fecha_impresion)}</div>}
                     </td>
                     <td style={{padding:"10px 12px"}}>
@@ -1278,8 +1230,8 @@ export function ModuloConsultas({showToast}) {
   const getEstadoTexto = (p) => {
     if(p.estado_cartera==='rechazado') return {label:'Rechazado',color:'#dc2626'};
     if(p.estado_cartera==='aprobado'&&!p.transmitido_tms) return {label:'Aprobado — En espera de corte',color:'#d97706'};
-    if(p.transmitido_tms&&p.estado_impresion==='no_impreso') return {label:'Transmitido a logística',color:C[600]};
-    if(p.estado_impresion==='impreso') return {label:'Impreso — En picking',color:C[700]};
+    if(p.transmitido_tms&&p.estado_impresion==='no_impreso') return {label:'Transmitido a logística',color:P[600]};
+    if(p.estado_impresion==='impreso') return {label:'Impreso — En picking',color:P[700]};
     return ESTADOS_CARTERA[p.estado_cartera]||{label:p.estado_cartera,color:'#64748b'};
   };
 
@@ -1289,7 +1241,7 @@ export function ModuloConsultas({showToast}) {
       <Card style={{padding:12,marginBottom:16}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por pedido, NIT o cliente..."
-            style={{flex:1,minWidth:200,border:`1.5px solid ${C[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafafa"}}/>
+            style={{flex:1,minWidth:200,border:`1.5px solid ${P[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafafa"}}/>
           <Field value={filtroEst} onChange={setFiltroEst} as="select" style={{width:200}}
             options={[{value:'todos',label:'Todos los estados'},{value:'pendiente',label:'Pendiente de aprobación'},{value:'preaprobado',label:'Preaprobado'},{value:'cartera_vencida',label:'Cartera Vencida'},{value:'aprobado',label:'Aprobado — En espera'},{value:'rechazado',label:'Rechazado'}]}/>
         </div>
@@ -1299,15 +1251,15 @@ export function ModuloConsultas({showToast}) {
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{background:C[50]}}>
-                <tr>{["Pedido","NIT","Cliente","Valor","Plazo","Fecha Pedido","Estado Actual","Corte / Transmisión"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
+              <thead style={{background:P[50]}}>
+                <tr>{["Pedido","NIT","Cliente","Valor","Plazo","Fecha Pedido","Estado Actual","Corte / Transmisión"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {filtrados.map((p,i)=>{
                   const est=getEstadoTexto(p);
                   return (
-                    <tr key={p.id} style={{borderTop:`1px solid ${C[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,color:C[700],fontSize:11}}>{p.numero_pedido}</td>
+                    <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
+                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,color:P[700],fontSize:11}}>{p.numero_pedido}</td>
                       <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
                       <td style={{padding:"10px 12px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{p.cliente}</td>
                       <td style={{padding:"10px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
@@ -1318,7 +1270,7 @@ export function ModuloConsultas({showToast}) {
                         {p.motivo_rechazo&&<div style={{fontSize:10,color:"#94a3b8",marginTop:3,fontStyle:"italic"}}>{p.motivo_rechazo}</div>}
                       </td>
                       <td style={{padding:"10px 12px",fontSize:11}}>
-                        {p.fecha_corte&&<div style={{color:C[700],fontWeight:600}}>{fFechaHora(p.fecha_corte)}</div>}
+                        {p.fecha_corte&&<div style={{color:P[700],fontWeight:600}}>{fFechaHora(p.fecha_corte)}</div>}
                         {p.fecha_transmision&&<div style={{color:"#059669",marginTop:2}}>Transmitido: {fFechaHora(p.fecha_transmision)}</div>}
                         {!p.fecha_corte&&'—'}
                       </td>
