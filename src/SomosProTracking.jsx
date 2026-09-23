@@ -175,6 +175,10 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
  const [verCamara, setVerCamara] = useState(false);
  const [novedadEntrega, setNovedadEntrega] = useState(pedido.novedad||false);
  const [soportesData, setSoportesData] = useState(Array.isArray(pedido.soportes_data)?pedido.soportes_data:[]);
+ // Fotos adjuntadas que aun no se han guardado. La entrega se registra al presionar
+ // Guardar, no al subir la foto: asi los datos del formulario y el cierre del pedido
+ // viajan en una sola escritura y no queda a medias si el usuario no alcanza a guardar.
+ const [fotosPendientes, setFotosPendientes] = useState([]);
 
  useEffect(() => {
   let activo = true;
@@ -193,7 +197,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   return d.toISOString().split("T")[0];
  })() : null;
  const fuenteRiesgo = fechaLimitePromesa ? "Promesa de servicio" : "Fecha estimada";
- const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0);
+ const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0) || (fotosPendientes.length > 0);
  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
  const pedidoEnTransito = pedido.estado === "en_transito";
  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
@@ -246,7 +250,38 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
    cambiosBase.estado = novedad ? "novedad" : "entregado";
    cambiosBase.novedad = novedad;
   }
-  const cambios = canBasicEdit && !canEdit && !canAssign ? cambiosBase : {
+  // Con fotos adjuntas, este guardado ES la entrega: escribe los soportes, cierra el
+  // pedido y conserva la modalidad (Cliente Recoge / Solo Facturar) en estado_despacho,
+  // porque la columna estado pasa a "entregado".
+  const hoyEntrega = new Date().toISOString().split("T")[0];
+  const conNovedadEntrega = Boolean(novedadEntrega);
+  const modalidad = ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp
+   : ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : null;
+  const entrega = fotosPendientes.length > 0 ? {
+   soportes: [...(pedido.soportes||[]), ...fotosPendientes.map((_,i)=>`soporte_${pedido.id}_${(pedido.soportes||[]).length+i+1}.jpg`)],
+   soportes_data: [...soportesData, ...fotosPendientes],
+   estado: conNovedadEntrega ? "novedad" : "entregado",
+   fecha_real: hoyEntrega,
+   novedad: conNovedadEntrega,
+   ...(modalidad ? { estado_despacho: modalidad } : {}),
+  } : {};
+
+  // Quien solo puede registrar la entrega (el conductor) no manda el formulario
+  // completo: el trigger de la base exige que cierre el pedido sin tocar nada mas.
+  const soloEntrega = fotosPendientes.length > 0 && !canEdit && !canBasicEdit && !canAssign;
+  if (soloEntrega) {
+   const cambiosEntrega = { ...cambiosPendientesDelFormulario(), ...entrega };
+   setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambiosEntrega}:p));
+   showToast("Guardando...","info");
+   const { error: errEntrega } = await supabase.from("pedidos").update(cambiosEntrega).eq("id", pedido.id).select("id").single();
+   if (errEntrega) { showToast(mensajeError(errEntrega, "el registro de la entrega"),"error"); return; }
+   showToast("Entrega registrada","success");
+   if (window._recargarPedidos) await window._recargarPedidos();
+   onClose();
+   return;
+  }
+
+  const cambios = canBasicEdit && !canEdit && !canAssign ? { ...cambiosBase, ...entrega } : {
    ...cambiosBase,
    ...(canEdit || canAssign ? {
     conductor_id: tipoModal==="paqueteria" ? null : (c?.id||null),
@@ -263,6 +298,8 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     paqueteria: tipoModal==="paqueteria" ? paqModal : null,
     guia_paqueteria: tipoModal==="paqueteria" ? guiaPaq : null,
    } : {}),
+   // Va de ultimo a proposito: si hay soportes adjuntos, el pedido se cierra.
+   ...entrega,
   };
   setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
 
@@ -272,7 +309,9 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   // asi que no hace falta recargar las diez tablas ni desmontar la pantalla.
   const { error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select("id").single();
   if (error) { showToast(mensajeError(error, "los cambios del pedido"),"error"); return; }
-  showToast(" Cambios guardados Estado: "+(ESTADOS_PEDIDO[nuevoEstado]?.label || nuevoEstado),"success");
+  const estadoFinal = entrega.estado || nuevoEstado;
+  showToast(" Cambios guardados Estado: "+(ESTADOS_PEDIDO[estadoFinal]?.label || estadoFinal),"success");
+  if (fotosPendientes.length > 0 && window._recargarPedidos) await window._recargarPedidos();
   onClose();
  };
 
@@ -298,7 +337,7 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
   return cambios;
  };
 
- const subirFotos = async (fotos) => {
+ const adjuntarFotos = (fotos) => {
   if (pedidoCerrado) {
    showToast("No se puede modificar un pedido que ya fue entregado","error");
    return;
@@ -307,51 +346,11 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
    showToast("Solo el conductor puede registrar la entrega de un pedido en transito","error");
    return;
   }
-  const hoy = new Date().toISOString().split("T")[0];
-  const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
-  const conNovedad = Boolean(novedadEntrega);
-  const estadoFinal = conNovedad ? "novedad" : "entregado";
-  const nuevosSoportes = [...(pedido.soportes||[]),...nombres];
-  const nuevosSoportesData = [...soportesData,...fotos];
-  // Subir el soporte cierra el pedido, y despues la base ya no deja modificarlo:
-  // por eso lo que este escrito en el formulario tiene que viajar en esta misma
-  // escritura. Antes se perdia en silencio y el pedido quedaba cerrado sin cajas
-  // ni factura, sin forma de corregirlo desde la aplicacion.
-  const pendientes = cambiosPendientesDelFormulario();
-  // "Cliente Recoge" y "Solo Facturar" viven en la columna estado, que al subir el
-  // soporte pasa a "entregado". Para no perder como se entrego el pedido, la
-  // modalidad se guarda en estado_despacho antes de que el estado la reemplace.
-  const modalidad = ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp
-   : ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : null;
-  const cambios = {
-   ...pendientes,
-   ...(modalidad ? { estado_despacho: modalidad } : {}),
-   soportes: nuevosSoportes,
-   soportes_data: nuevosSoportesData,
-   estado: estadoFinal,
-   fecha_real: hoy,
-   novedad: conNovedad,
-  };
-  setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
-  try {
-   const { error: sErr } = await supabase.from('pedidos').update(cambios).eq('id', pedido.id);
-   if (sErr) {
-    await supabase.from('pedidos').update({
-     ...pendientes,
-     estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes
-    }).eq('id', pedido.id);
-    showToast(" Estado guardado. Fotos muy pesadas usa imagenes mas pequenas", "warning");
-   } else {
-    showToast(`${fotos.length} soporte(s) guardados. Estado: ${estadoFinal==="entregado"?"Entregado":"Con Novedad"}. Fecha: ${hoy}`,"success");
-   }
-  } catch(e) {
-   showToast("Error de conexion al guardar soportes. Revisa tu internet.", "error");
-  }
-  const refrescarPedidos = window._recargarPedidos || window._recargar;
-  if (refrescarPedidos) await refrescarPedidos();
+  setFotosPendientes(prev => [...prev, ...fotos]);
   setVerCamara(false);
-  onClose();
+  showToast(`${fotos.length} soporte(s) adjuntos. Presiona Guardar Cambios para registrar la entrega.`,"info");
  };
+
 
  const caPrev = condId!==(pedido.conductor_id?.toString()||"") && condId!=="";
 
@@ -523,9 +522,14 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
 
     <div>
      <div style={{fontWeight:700,fontSize:13,color:P[800],marginBottom:10}}>Soportes Fotograficos de Entrega</div>
-     {soportesData.length>0?(
+     {fotosPendientes.length>0&&(
+      <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:"0 0 10px"}}>
+       {fotosPendientes.length} soporte(s) adjuntos sin guardar. Presiona <strong>Guardar Cambios</strong> para registrar la entrega.
+      </p>
+     )}
+     {[...soportesData, ...fotosPendientes].length>0?(
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:12}}>
-       {soportesData.map((s,i)=>(
+       {[...soportesData, ...fotosPendientes].map((s,i)=>(
         <div key={i} style={{borderRadius:8,overflow:"hidden",border:`2px solid ${P[200]}`}}>
          <img src={s.data} alt={"s"+i} style={{width:"100%",height:90,objectFit:"cover",display:"block"}} />
          <div style={{fontSize:10,color:P[700],padding:"4px 8px",fontWeight:600,background:P[50]}}>Soporte {i+1}</div>
@@ -571,12 +575,14 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
      <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
      <div style={{display:"flex",gap:10}}>
       <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
-      {(canEdit||canBasicEdit)&&!pedidoBloqueadoEdicion&&<Btn onClick={guardar}>Guardar Cambios</Btn>}
+      {(canEdit||canBasicEdit||fotosPendientes.length>0)&&!pedidoBloqueadoEdicion&&(
+       <Btn onClick={guardar}>{fotosPendientes.length>0?"Guardar y Registrar Entrega":"Guardar Cambios"}</Btn>
+      )}
      </div>
     </div>
    </div>
    {verGuia&&<GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)}/>}
-   {verCamara&&<CargadorFotos pedido={pedido} onGuardar={subirFotos} onClose={()=>setVerCamara(false)} showToast={showToast}/>}
+   {verCamara&&<CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast}/>}
   </Modal>
  );
 }
