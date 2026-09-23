@@ -81,8 +81,8 @@ alter table public.historial_cartera
 --    Quien puede que cosa:
 --      admin      -> todo
 --      cartera    -> carga y decide pedidos; lee la configuracion
---      logistica  -> ve pedidos aprobados y los marca impresos/transmitidos
---      consultas  -> solo lectura
+--      operador   -> ve pedidos aprobados y los marca impresos/transmitidos
+--      cliente    -> solo lectura
 --      anon       -> nada
 -- ---------------------------------------------------------------------------
 do $$
@@ -101,7 +101,7 @@ begin
       drop policy if exists cartera_lectura on public.%I;
       create policy cartera_lectura on public.%I
         for select to authenticated
-        using (public.current_user_role() in ('admin','operador','cartera','logistica','consultas'));
+        using (public.current_user_role() in ('admin','operador','cartera','cliente'));
     $p$, t, t);
 
     -- Escritura: admin y cartera en todas; logistica solo en las de pedidos
@@ -116,19 +116,21 @@ begin
   end loop;
 end $$;
 
--- Logistica necesita actualizar los pedidos aprobados (impresion y transmision)
+-- El operador (que hace las veces de logistica) necesita actualizar los pedidos aprobados (impresion y transmision)
 -- y los cortes programados (cerrar el corte al transmitir).
-drop policy if exists cartera_logistica_update on public.pedidos_cartera;
-create policy cartera_logistica_update on public.pedidos_cartera
+drop policy if exists cartera_logistica_update;
+drop policy if exists cartera_operador_update on public.pedidos_cartera;
+create policy cartera_operador_update on public.pedidos_cartera
   for update to authenticated
-  using (public.current_user_role() = 'logistica')
-  with check (public.current_user_role() = 'logistica');
+  using (public.current_user_role() = 'operador')
+  with check (public.current_user_role() = 'operador');
 
-drop policy if exists cartera_logistica_cortes on public.cortes_programados;
-create policy cartera_logistica_cortes on public.cortes_programados
+drop policy if exists cartera_logistica_cortes;
+drop policy if exists cartera_operador_cortes on public.cortes_programados;
+create policy cartera_operador_cortes on public.cortes_programados
   for update to authenticated
-  using (public.current_user_role() = 'logistica')
-  with check (public.current_user_role() = 'logistica');
+  using (public.current_user_role() = 'operador')
+  with check (public.current_user_role() = 'operador');
 
 -- ---------------------------------------------------------------------------
 -- 4) Comprobar que anon quedo por fuera

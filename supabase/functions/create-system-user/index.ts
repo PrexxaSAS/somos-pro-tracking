@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
 
     const rolesPermitidos = ["admin", "operador", "transportista", "conductor", "cliente",
       // Roles del modulo de cartera
-      "cartera", "logistica", "consultas"];
+      "cartera"];
     if (!userId) return json({ error: "ID de usuario requerido." }, 400);
     if (!rolesPermitidos.includes(rol)) return json({ error: "Rol no soportado." }, 400);
     if (!nombre || !username) return json({ error: "Nombre y usuario son obligatorios." }, 400);
@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
 
   const rolesPermitidos = ["admin", "operador", "transportista", "conductor", "cliente",
       // Roles del modulo de cartera
-      "cartera", "logistica", "consultas"];
+      "cartera"];
   if (!rolesPermitidos.includes(rol)) {
     return json({ error: "Rol no soportado." }, 400);
   }

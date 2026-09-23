@@ -55,6 +55,8 @@ const MENUS = {
     ["pqrs", "PQRS", HelpCircle],
     ["promesas", "Promesas de Servicio", CalendarClock],
     ["facturas", "Facturas Proveedor", FileText],
+    ["cartera_logistica", "Logistica Cartera", Printer],
+    ["cartera_pedidos", "Cartera", Wallet],
   ],
   // Modulo de cartera. Las pestanas llevan prefijo para no chocar con las de arriba:
   // "consultas", por ejemplo, ya la usa el rol cliente para ver sus pedidos.
@@ -63,14 +65,9 @@ const MENUS = {
     ["cartera_pedidos", "Gestion de Pedidos", Wallet],
     ["cartera_vencida", "Cartera Vencida", FileText],
   ],
-  logistica: [
-    ["cartera_logistica", "Logistica", Printer],
-    ["cartera_pedidos", "Gestion de Pedidos", Wallet],
-  ],
-  consultas: [["cartera_consultas", "Consultas", Search]],
   transportista: [["mi_empresa", "Mi Empresa", Truck]],
   conductor: [["mis_pedidos", "Mis Pedidos", Box], ["mis_devoluciones", "Mis Devoluciones", RotateCcw], ["mis_recogidas", "Mis Recogidas", PackageCheck], ["mi_ubicacion", "Mi Ubicacion GPS", MapPin]],
-  cliente: [["consultas", "Estado Pedidos", Box], ["devoluciones", "Mis Devoluciones", RotateCcw], ["recogidas", "Mis Recogidas", PackageCheck], ["pqrs", "PQRS", HelpCircle]],
+  cliente: [["consultas", "Estado Pedidos", Box], ["devoluciones", "Mis Devoluciones", RotateCcw], ["recogidas", "Mis Recogidas", PackageCheck], ["pqrs", "PQRS", HelpCircle], ["cartera_consultas", "Consultas Cartera", Search]],
 };
 
 export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed, pqrs = [] }) {

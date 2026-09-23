@@ -4396,8 +4396,7 @@ export default function SomosProTracking() {
    }
   }
   setUser(userWithConductorId);
-  const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas",
-   cartera: "cartera_cargar", logistica: "cartera_logistica", consultas: "cartera_consultas" };
+  const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas", cartera: "cartera_cargar" };
   setTab(def[u.rol] || "dashboard");
   await cargarTodo(userWithConductorId);
  };

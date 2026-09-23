@@ -148,8 +148,8 @@ create index if not exists idx_historial_pedido on public.historial_cartera(pedi
 -- 2) Politicas por rol
 --      admin      -> todo
 --      cartera    -> carga y decide pedidos; lee la configuracion
---      logistica  -> lee todo y actualiza pedidos y cortes (impresion, transmision)
---      consultas  -> solo lectura
+--      operador   -> lee todo y actualiza pedidos y cortes (impresion, transmision)
+--      cliente    -> solo lectura
 --      anon       -> nada
 -- ---------------------------------------------------------------------------
 do $$
@@ -166,7 +166,7 @@ begin
       drop policy if exists cartera_lectura on public.%I;
       create policy cartera_lectura on public.%I
         for select to authenticated
-        using (public.current_user_role() in ('admin','operador','cartera','logistica','consultas'));
+        using (public.current_user_role() in ('admin','operador','cartera','cliente'));
     $p$, t, t);
 
     execute format($p$
@@ -179,17 +179,19 @@ begin
   end loop;
 end $$;
 
-drop policy if exists cartera_logistica_update on public.pedidos_cartera;
-create policy cartera_logistica_update on public.pedidos_cartera
+drop policy if exists cartera_logistica_update;
+drop policy if exists cartera_operador_update on public.pedidos_cartera;
+create policy cartera_operador_update on public.pedidos_cartera
   for update to authenticated
-  using (public.current_user_role() = 'logistica')
-  with check (public.current_user_role() = 'logistica');
+  using (public.current_user_role() = 'operador')
+  with check (public.current_user_role() = 'operador');
 
-drop policy if exists cartera_logistica_cortes on public.cortes_programados;
-create policy cartera_logistica_cortes on public.cortes_programados
+drop policy if exists cartera_logistica_cortes;
+drop policy if exists cartera_operador_cortes on public.cortes_programados;
+create policy cartera_operador_cortes on public.cortes_programados
   for update to authenticated
-  using (public.current_user_role() = 'logistica')
-  with check (public.current_user_role() = 'logistica');
+  using (public.current_user_role() = 'operador')
+  with check (public.current_user_role() = 'operador');
 
 -- ---------------------------------------------------------------------------
 -- 3) Verificacion: anon no debe poder leer ni escribir

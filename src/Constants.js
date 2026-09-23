@@ -57,15 +57,15 @@ export const ROLES = {
  transportista: "Empresa Transportista",
  conductor:   "Conductor",
  cliente:    "Cliente Interno",
- // Roles del modulo de cartera (integracion de Qtrack_Pedidos).
+ // Unico rol nuevo del modulo de cartera: logistica y consultas resultaron ser
+ // el operador y el cliente interno que ya existian.
  cartera:    "Cartera",
- logistica:   "Logistica",
- consultas:   "Consultas",
 };
 
 // Roles que solo usan el modulo de cartera. No consultan pedidos, devoluciones ni
 // ninguna de las tablas de tracking, asi que su sesion no carga nada de eso.
-export const ROLES_CARTERA = ["cartera", "logistica", "consultas"];
+// El operador y el cliente si las usan, aunque tambien vean vistas del modulo.
+export const ROLES_CARTERA = ["cartera"];
 
 // Sedes a donde se lleva la mercancia de una devolucion. Se guarda el texto
 // completo en devoluciones.dir_entrega. Para agregar una sede basta con sumarla aqui.
