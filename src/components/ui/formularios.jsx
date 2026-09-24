@@ -47,11 +47,10 @@ export function ModalForm({
      }}><X size={18} /></button>
     </header>
 
-    <div style={{
-     padding: "0 24px 20px", overflowY: "auto",
-     display: "flex", flexDirection: "column", gap: 16,
-    }}>
-     {children}
+    <div style={{ padding: "0 24px 20px", overflowY: "auto", overflowX: "hidden" }}>
+     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {children}
+     </div>
     </div>
 
     <footer style={{
@@ -315,11 +314,10 @@ export function ModalGestion({
      }}><X size={18} /></button>
     </header>
 
-    <div style={{
-     padding: "0 24px 20px", overflowY: "auto",
-     display: "flex", flexDirection: "column", gap: 16,
-    }}>
-     {children}
+    <div style={{ padding: "0 24px 20px", overflowY: "auto", overflowX: "hidden" }}>
+     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {children}
+     </div>
     </div>
 
     <footer style={{
