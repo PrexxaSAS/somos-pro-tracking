@@ -31,3 +31,13 @@ button:active:not(:disabled) { transform: scale(0.97); }
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Resaltado de toque en el celular.
+   Chrome y Safari pintan un recuadro azul sobre lo que se toca. Se quita: el
+   boton ya responde al pulsarlo con su propia animacion, y los enlaces y las
+   filas se atenuan un instante, que es senal suficiente y no tapa el diseno. */
+* { -webkit-tap-highlight-color: transparent; }
+
+a:active,
+label:active,
+[role="button"]:active { opacity: .7; }
