@@ -2154,6 +2154,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  );
 }
 function RastreoGPS({ pedidos, conductores, ciudades }) {
+ const esMovil = useEsMovil();
  const conCond = pedidos.filter(p => p.conductor_id);
  const [sel, setSel] = useState(conCond[0] || null);
  const cond = conductores.find(c => String(c.id) === String(sel?.conductor_id));
@@ -2169,8 +2170,14 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
     descripcion="Seguimiento geografico de pedidos con conductor asignado"
    />
 
-   <div style={{ display:"grid", gridTemplateColumns:"340px 1fr", gap:16, alignItems:"start" }}>
-    <section style={{ ...tarjeta, overflow:"hidden", maxHeight:"72vh", display:"flex", flexDirection:"column" }}>
+   <div style={{
+    display:"grid", gap:16, alignItems:"start",
+    gridTemplateColumns: esMovil ? "minmax(0,1fr)" : "340px minmax(0,1fr)",
+   }}>
+    <section style={{
+     ...tarjeta, overflow:"hidden", display:"flex", flexDirection:"column",
+     maxHeight: esMovil ? "38vh" : "72vh",
+    }}>
      <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
       <div style={{ ...T.texto.tarjeta }}>En ruta</div>
       <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
@@ -2229,7 +2236,8 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
          {cond?.placa && <div style={{ ...mono, marginTop:2 }}>{cond.placa}</div>}
         </div>
        </div>
-       <iframe title="Mapa del destino" src={mapUrl} style={{ width:"100%", height:"62vh", border:"none", display:"block" }} loading="lazy"/>
+       <iframe title="Mapa del destino" src={mapUrl} loading="lazy"
+        style={{ width:"100%", height: esMovil ? "52vh" : "62vh", border:"none", display:"block" }}/>
       </>
      )}
     </section>
