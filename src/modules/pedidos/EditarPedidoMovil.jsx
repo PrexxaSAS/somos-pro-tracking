@@ -555,9 +555,21 @@ export function EditarPedidoMovil({
 
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
      <Campo etiqueta="Cajas">
+      {/* Se escribe y ademas se ajusta de a uno: con cien cajas nadie va a
+          pulsar el boton cien veces. */}
       <div style={{ ...entrada, padding: "0 4px 0 14px" }}>
-       <span style={{ flex: 1 }}>{e.cajas || 0}</span>
-       <span style={{ display: "flex", gap: 2 }}>
+       <input
+        value={e.cajas}
+        onChange={ev => e.setCajas(ev.target.value.replace(/\D/g, ""))}
+        inputMode="numeric"
+        placeholder="0"
+        disabled={bloqueado}
+        style={{
+         flex: 1, minWidth: 0, border: "none", outline: "none", padding: 0,
+         background: "transparent", fontFamily: "inherit", fontSize: 15,
+         color: T.color.tinta, opacity: bloqueado ? 0.6 : 1,
+        }}/>
+       <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
         <button onClick={() => paso(-1)} disabled={bloqueado} title="Quitar una caja" style={{
          width: 36, height: 36, borderRadius: 8, border: "none", cursor: "pointer",
          background: T.color.superficie3, color: T.color.tinta2, display: "grid", placeItems: "center",
