@@ -2020,9 +2020,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       onAcciones={() => setEditMovil(ped)}
       onEntregar={() => setEntregaMovil(ped)}
       onGuia={() => setModGuia(ped)}
-      // Un pedido en transito lo cierra su conductor desde su propia app; los
-      // demas que sigan abiertos los puede cerrar quien este mirando.
-      puedeEntregar={!["entregado", "novedad", "en_transito"].includes(ped.estado)}
+      // Quien puede registrar la entrega desde aqui. Fuera quedan: los ya
+      // cerrados; los que van en transito, que los cierra su conductor desde
+      // su app; y Solo facturar, donde no hay entrega que soportar porque la
+      // mercancia nunca sale -- solo falta la factura.
+      puedeEntregar={!["entregado", "novedad", "en_transito", "solo_facturar"].includes(ped.estado)}
      />
     );
    })()}
