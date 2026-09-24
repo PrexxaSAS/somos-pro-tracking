@@ -296,7 +296,7 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   <style>{`
    .guia-print-portal{display:none}
    @media print{
-    @page{size:letter;margin:12mm}
+    @page{size:letter;margin:0}
     html,body{
      width:auto!important;
      margin:0!important;
@@ -309,10 +309,12 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
      width:100%!important;
      max-width:190mm!important;
      margin:0 auto!important;
+     /* Los margenes de la hoja, puestos por el documento: arriba algo mas,
+        que es donde va el membrete. A los lados los da el centrado. */
+     padding:14mm 0 12mm!important;
      box-sizing:border-box!important;
      border:none!important;
      border-radius:0!important;
-     padding:0!important;
      box-shadow:none!important;
      page-break-after:avoid!important;
      break-after:avoid!important;
