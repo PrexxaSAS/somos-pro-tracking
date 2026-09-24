@@ -3029,7 +3029,7 @@ function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogid
   </Pagina>
  );
 }
-function Ciudades({ ciudades, showToast, recargar }) {
+function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
  const [modNueva,setModNueva]=useState(false);
  const [modCSV,setModCSV]=useState(false);
  const [busq,setBusq]=useState("");
@@ -3049,47 +3049,60 @@ function Ciudades({ ciudades, showToast, recargar }) {
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
+ const usosCiudad = (code) => (pedidos || []).filter(p => p.ciudad_codigo === code).length;
+
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Ciudades / DANE</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Catalogo de ciudades y codigos DANE usados en la operacion</p>
-    </div>
-    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-     <button style={buttonBase} onClick={()=>setModCSV(true)}>CSV Masivo</button>
-     <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Ciudad</button>
-    </div>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar ciudad o codigo DANE..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
-      <span style={{ color:"#6b7280", fontSize:13 }}>{filt.length} de {ciudades.length}</span>
+  <Pagina>
+   <Encabezado
+    titulo="Ciudades / DANE"
+    descripcion="Catalogo de municipios con su codigo DANE"
+    acciones={<>
+     <button onClick={()=>setModCSV(true)} style={botonBarra}><Upload size={15}/> Importar CSV</button>
+     <button onClick={()=>{setForm({code:"",name:""});setModNueva(true);}} style={botonPrincipal}>
+      <Plus size={16}/> Nueva ciudad
+     </button>
+    </>}
+   />
+
+   <Indicadores items={[
+    { label:"Ciudades", valor:(ciudades||[]).length, color:T.color.marca, destacado:true },
+    { label:"Con pedidos", valor:(ciudades||[]).filter(c=>usosCiudad(c.code)>0).length, color:T.color.bienPunto },
+    { label:"Sin usar", valor:(ciudades||[]).filter(c=>usosCiudad(c.code)===0).length, color:T.color.neutroPunto },
+   ]}/>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${filt.length} de ${(ciudades||[]).length} · orden A-Z`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar ciudad o codigo DANE" ancho={300}/>
+    </BarraFiltros>
+
+    {filt.length === 0 ? (
+     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+      {(ciudades||[]).length === 0 ? "Sin ciudades registradas." : "Ninguna ciudad coincide con la busqueda."}
      </div>
-     <div style={{ overflowX:"auto", maxHeight:560, overflowY:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-       <thead style={{ position:"sticky", top:0, background:"#fff", zIndex:1 }}>
-        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-         <th style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>Codigo DANE</th>
-         <th style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>Ciudad / Municipio</th>
+    ) : (
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead>
+        <tr>
+         <th style={th}>Municipio</th>
+         <th style={th}>Codigo DANE</th>
+         <th style={{...th, textAlign:"right"}}>Pedidos</th>
         </tr>
        </thead>
        <tbody>
-        {filt.map(c=>(
-         <tr key={c.code} style={{ borderBottom:`1px solid ${border}` }}>
-          <td style={{ padding:"14px 16px", fontFamily:"monospace", fontWeight:850, color:"#5b33d6" }}>{c.code}</td>
-          <td style={{ padding:"14px 16px", color:"#111827", fontWeight:700 }}>{c.name}</td>
+        {filt.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es",{sensitivity:"base"})).map(c => (
+         <tr key={c.code}>
+          <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.name}</td>
+          <td style={td}><span style={chipMono}>{c.code}</span></td>
+          <td style={tdCifra}>{usosCiudad(c.code)}</td>
          </tr>
         ))}
-        {filt.length===0&&(
-         <tr><td colSpan={2} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin ciudades encontradas.</td></tr>
-        )}
        </tbody>
       </table>
      </div>
-    </section>
-   </main>
+    )}
+   </section>
+
 
    {modNueva&&(
     <ModalForm
@@ -3115,7 +3128,7 @@ function Ciudades({ ciudades, showToast, recargar }) {
      if(recargar) await recargar();
     }} />
    )}
-  </div>
+  </Pagina>
  );
 }
 
@@ -3590,101 +3603,131 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  };
 
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Promesas de Servicio</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Dias habiles de entrega prometidos por ciudad destino</p>
-    </div>
-    <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"7px 12px", fontSize:13, fontWeight:850 }}>
-     {conPromesa.length}/{ciudades.length} configuradas
-    </span>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ ...cardStyle, padding:18 }}>
-     <div style={{ fontWeight:850, marginBottom:12 }}>Agregar promesa</div>
-     <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "end" }}>
-     <Field label="Ciudad destino" value={nueva.ciudad_codigo} onChange={v => setNueva(p => ({...p, ciudad_codigo: v}))} as="select"
-      options={[
-       { value: "", label: "Selecciona ciudad" },
-       ...(ciudades||[]).map(c => ({ value: c.code, label: `${c.name} (${c.code})${promMap[c.code] ? " " + promMap[c.code] + " dias" : ""}` }))
-      ]}/>
-     <Field label="Dias plazo" value={nueva.dias_plazo} onChange={v => setNueva(p => ({...p, dias_plazo: v}))}
-      type="number" placeholder="2" style={{ width: 110 }}/>
-     <button style={{ ...primaryButton, alignSelf:"end", height:40 }} onClick={guardarNueva} disabled={guard}>Guardar</button>
-    </div>
-    </section>
+  <Pagina>
+   <Encabezado
+    titulo="Promesas de servicio"
+    descripcion="Dias habiles de entrega prometidos por ciudad destino"
+   />
 
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
-      <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
-      <span style={{ color:"#6b7280", fontSize:13 }}>{conPromesa.length} con promesa</span>
+   <Indicadores items={[
+    { label:"Ciudades con promesa", valor:conPromesa.length, color:T.color.marca, destacado:true },
+    { label:"Sin configurar", valor:sinPromesa.length, color:T.color.ojoPunto },
+    { label:"Promedio de dias", valor:conPromesa.length
+      ? (conPromesa.reduce((a,c)=>a+Number(promMap[c.code]||0),0)/conPromesa.length).toFixed(1)
+      : 0, color:T.color.neutroPunto },
+   ]}/>
+
+   <section style={{ ...tarjeta, padding:14 }}>
+    <div style={{ display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
+     <div style={{ flex:"1 1 280px", minWidth:220 }}>
+      <Selector label="Ciudad destino" valor={nueva.ciudad_codigo}
+       onChange={v=>setNueva(p=>({...p, ciudad_codigo:v}))}
+       placeholder="Selecciona una ciudad"
+       opciones={(ciudades||[]).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es"))
+        .map(c=>({ value:c.code, label:`${c.name} (${c.code})${promMap[c.code] ? " · " + promMap[c.code] + " dias" : ""}` }))}/>
      </div>
+     <div style={{ width:130 }}>
+      <Texto label="Dias de plazo" tipo="number" valor={nueva.dias_plazo}
+       onChange={v=>setNueva(p=>({...p, dias_plazo:v}))} placeholder="2"/>
+     </div>
+     <button onClick={guardarNueva} disabled={guard} style={{ ...botonPrincipal, marginBottom:0 }}>
+      <Plus size={16}/> {guard ? "Guardando..." : "Agregar"}
+     </button>
+    </div>
+   </section>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${conPromesa.length} configuradas · ${sinPromesa.length} sin promesa`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar ciudad o codigo DANE" ancho={300}/>
+    </BarraFiltros>
+
+    {conPromesa.length === 0 ? (
+     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+      Aun no hay promesas configuradas. Sin promesa, el riesgo de un pedido se calcula con su fecha estimada.
+     </div>
+    ) : (
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-      <thead>
-       <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-        {["Ciudad", "Codigo DANE", "Dias Plazo", "Acciones"].map(h => (
-         <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
-        ))}
-       </tr>
-      </thead>
-      <tbody>
-       {pageItems.map((c, i) => (
-        <tr key={c.code} style={{ borderBottom:`1px solid ${border}` }}>
-         <td style={{ padding:"16px", fontWeight:800 }}>{c.name}</td>
-         <td style={{ padding:"16px", fontFamily:"monospace", color:"#5b33d6", fontWeight:850 }}>{c.code}</td>
-         <td style={{ padding:"16px" }}>
-          {editando === c.code ? (
-           <input type="number" value={diasEdit} onChange={e => setDiasEdit(e.target.value)}
-            style={{ width:70, padding:"8px 10px", borderRadius:10, border:`1px solid ${border}`, fontSize:14, fontWeight:800 }}
-            autoFocus onKeyDown={e => e.key === "Enter" && guardarEdit(c.code)}/>
-          ) : (
-           <span style={{ background:"#f0eef9", border:"1px solid #ddd6fe", borderRadius:99, padding:"5px 12px", fontWeight:850, color:"#5b33d6", fontSize:13 }}>
-            {promMap[c.code]} dia{promMap[c.code] !== 1 ? "s" : ""}
-           </span>
-          )}
-         </td>
-         <td style={{ padding:"16px", textAlign:"right" }}>
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-           {editando === c.code ? (
-            <>
-             <button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={() => guardarEdit(c.code)}>Guardar</button>
-             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={() => setEditando(null)}>Cancelar</button>
-            </>
-           ) : (
-            <>
-             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={() => { setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}>Editar</button>
-             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={() => eliminar(c.code, c.name)}>Quitar</button>
-            </>
-           )}
-          </div>
-         </td>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead>
+        <tr>
+         <th style={th}>Ciudad</th>
+         <th style={th}>Codigo DANE</th>
+         <th style={{...th, textAlign:"right"}}>Dias de plazo</th>
+         <th style={{...th, textAlign:"right", width:130}}>Acciones</th>
         </tr>
-       ))}
-      </tbody>
-     </table>
+       </thead>
+       <tbody>
+        {conPromesa.slice((page-1)*pageSize, page*pageSize).map(c => (
+         <tr key={c.code}>
+          <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.name}</td>
+          <td style={td}><span style={chipMono}>{c.code}</span></td>
+          <td style={{ ...tdCifra, width:150 }}>
+           {editando === c.code ? (
+            <input value={diasEdit} onChange={e=>setDiasEdit(e.target.value)} type="number" autoFocus
+             style={{
+              width:80, height:32, padding:"0 10px", textAlign:"right",
+              border:`1px solid ${T.color.marca}`, borderRadius:T.radio.chico,
+              fontSize:13, fontFamily:"inherit", outline:"none",
+             }}/>
+           ) : (
+            <span>{promMap[c.code]} {Number(promMap[c.code]) === 1 ? "dia" : "dias"}</span>
+           )}
+          </td>
+          <td style={{ ...td, textAlign:"right" }}>
+           <div style={{ display:"inline-flex", gap:6 }}>
+            {editando === c.code ? (
+             <>
+              <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
+               onClick={()=>guardarEdit(c.code)}>Guardar</button>
+              <button style={botonFila} onClick={()=>setEditando(null)}>Cancelar</button>
+             </>
+            ) : (
+             <>
+              <button style={botonFila}
+               onClick={()=>{ setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}>Editar</button>
+              <button title="Quitar promesa" onClick={()=>eliminar(c.code, c.name)}
+               style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
+             </>
+            )}
+           </div>
+          </td>
+         </tr>
+        ))}
+       </tbody>
+      </table>
      </div>
-     <PaginationControls total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
-    </section>
+    )}
 
-   {sinFiltradias.length > 0 && (
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:"14px 18px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", gap:12 }}>
-      <span style={{ fontWeight:850 }}>Sin promesa configurada</span>
-      <span style={{ color:"#dc2626", fontSize:13, fontWeight:850 }}>{sinFiltradias.length}</span>
+    <PieTabla
+     izquierda={`${conPromesa.length} ${conPromesa.length === 1 ? "ciudad" : "ciudades"} con promesa`}
+     derecha={<Paginador total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+    />
+   </section>
+
+   {sinPromesa.length > 0 && (
+    <section style={{ ...tarjeta, padding:16 }}>
+     <div style={{ ...T.texto.tarjeta, marginBottom:4 }}>Ciudades sin promesa</div>
+     <div style={{ fontSize:12.5, color:T.color.tinta3, marginBottom:12 }}>
+      Sus pedidos calculan el riesgo con la fecha estimada de cada uno.
      </div>
-     <div style={{ display:"flex", flexWrap:"wrap", gap:8, padding:16 }}>
-      {sinFiltradias.map(c => (
-       <span key={c.code} style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:99, padding:"6px 12px", fontSize:12, color:"#dc2626", fontWeight:750 }}>
-        {c.name}
-       </span>
+     <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+      {sinFiltradias.slice(0, 60).map(c => (
+       <button key={c.code} onClick={()=>setNueva({ ciudad_codigo:c.code, dias_plazo:"" })} style={{
+        border:`1px solid ${T.color.borde}`, background:T.color.superficie2,
+        borderRadius:T.radio.chico, padding:"4px 9px", cursor:"pointer",
+        fontFamily:"inherit", fontSize:12.5, color:T.color.tinta2,
+       }}>{c.name}</button>
       ))}
+      {sinFiltradias.length > 60 && (
+       <span style={{ fontSize:12.5, color:T.color.tinta3, alignSelf:"center" }}>
+        y {sinFiltradias.length - 60} mas
+       </span>
+      )}
      </div>
     </section>
    )}
-   </main>
-  </div>
+
+  </Pagina>
  );
 }
 
@@ -5460,7 +5503,7 @@ export default function SomosProTracking() {
     ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
     : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
-   case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={recargarCiudades}/>;
+   case "ciudades":    return <Ciudades ciudades={ciudades} pedidos={pedidos} showToast={showToast} recargar={recargarCiudades}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} recargar={recargarPaqueterias}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}/>;
