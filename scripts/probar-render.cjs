@@ -18,6 +18,8 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
+import { ModalDetalle } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
+import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -68,6 +70,50 @@ for (const p of pedidos) {
   onCerrar(){}, onEditar(){}, onGuia(){}, onAcciones(){},
  })]);
 }
+// El modal de escritorio comparte el hook de edicion con la pantalla del
+// celular: se prueba en los dos permisos que cambian lo que se puede tocar.
+for (const [nombre, permisos] of [
+ ["admin", { canEdit:true, canBasicEdit:false, canAssign:false, canDeliver:false }],
+ ["operador", { canEdit:false, canBasicEdit:true, canAssign:true, canDeliver:false }],
+ ["conductor", { canEdit:false, canBasicEdit:false, canAssign:false, canDeliver:true }],
+]) {
+ casos.push(["ModalDetalle/" + nombre, React.createElement(ModalDetalle, {
+  pedido: pedidos[0],
+  conductores:[{ id:7, nombre:"J. Castrillon", placa:"ABC123", activo:true }],
+  ciudades:[{ code:"05001", name:"Medellin" }],
+  transportistas:[], paqueterias:[], promesas:[{ ciudad_codigo:"05001", dias_plazo:2 }],
+  onClose(){}, setPedidos(){}, showToast(){}, ...permisos,
+ })]);
+}
+
+// La edicion cambia de forma con el estado (editable vs bloqueado) y con el
+// tipo de transporte, que decide que campos aparecen.
+for (const p of pedidos) {
+ casos.push(["EditarPedidoMovil/" + p.estado, React.createElement(EditarPedidoMovil, {
+  pedido: p, pedidos,
+  conductores:[{ id:7, nombre:"J. Castrillon", placa:"ABC123", activo:true, empresa:"Transportes Prueba" }],
+  ciudades:[{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }],
+  paqueterias:[{ id:1, nombre:"Servientrega" }], transportistas:[{ id:1, nombre:"Transportes Prueba" }],
+  promesas:[{ ciudad_codigo:"05001", dias_plazo:2 }],
+  setPedidos(){}, showToast(){}, onClose(){}, onGuia(){}, onMapa(){},
+  canEdit:true,
+ })]);
+}
+// Un pedido sin nada: los cuatro faltantes a la vez.
+casos.push(["EditarPedidoMovil/vacio", React.createElement(EditarPedidoMovil, {
+ pedido: { id:"PX1", estado:"sin_asignar" }, pedidos:[],
+ conductores:[], ciudades:[], promesas:[],
+ setPedidos(){}, showToast(){}, onClose(){}, onGuia(){}, onMapa(){}, canEdit:true,
+})]);
+
+casos.push(["HojaConductores", React.createElement(HojaConductores, {
+ conductores:[
+  { id:7, nombre:"Andres Arevalo", placa:"NLX290", activo:true, empresa:"Transportes Prueba" },
+  { id:8, nombre:"J. Castrillon", placa:"ABC123", activo:true },
+ ],
+ pedidos, tipo:"propio", seleccionado:"", onElegir(){}, onClose(){},
+})]);
+
 // Sin promesa y sin ninguna fecha: el caso que mas ramas nulas recorre.
 casos.push(["DetallePedidoMovil/vacio", React.createElement(DetallePedidoMovil, {
  pedido: { id:"PX1", estado:"sin_asignar" },
@@ -116,6 +162,13 @@ esbuild.buildSync({
   loader: { '.js': 'jsx', '.jsx': 'jsx', '.png': 'dataurl' },
   jsx: 'automatic',
   logLevel: 'error',
+  // La pantalla arrastra el cliente de Supabase, que lee import.meta.env. Fuera
+  // del navegador no existe: se le dan valores de mentira porque la prueba solo
+  // dibuja, nunca consulta.
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://ejemplo.supabase.co'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('clave-de-prueba'),
+  },
 });
 
 // El codigo consulta el ancho de la ventana al montar: fuera del navegador se
