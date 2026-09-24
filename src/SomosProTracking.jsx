@@ -5193,6 +5193,20 @@ export default function SomosProTracking() {
  // enlace terminaba mostrando siempre el mismo pedido.
  const [estadoPedidos, setEstadoPedidos] = useState("");
  const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
+
+ // El QR de la guia apunta a ?pedido=<id>. Al entrar con esa direccion se abre
+ // ese pedido y se limpia el parametro, para que recargar despues no lo repita.
+ useEffect(() => {
+  if (!user) return;
+  let buscado = "";
+  try { buscado = new URLSearchParams(window.location.search).get("pedido") || ""; } catch { buscado = ""; }
+  if (!buscado) return;
+  setBusquedaPedidos(buscado);
+  setTab(user.rol === "conductor" ? "mis_pedidos" : user.rol === "cliente" ? "consultas" : "pedidos");
+  try {
+   window.history.replaceState({}, "", window.location.pathname);
+  } catch { /* sin permiso para cambiar la direccion */ }
+ }, [user]);
  const [toast,     setToast]     = useState(null);
 
  const showToast = (msg, type = "info") => setToast({ msg, type });

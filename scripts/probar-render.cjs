@@ -21,6 +21,7 @@ import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedi
 import { ModalDetalle } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
+import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -113,6 +114,17 @@ for (const p of [pedidos[0], { id:"Z", estado:"en_transito" }]) {
  casos.push(["RegistrarEntregaMovil/" + p.id, React.createElement(RegistrarEntregaMovil, {
   pedido: p, promesa: { dias_plazo: 2 },
   onConfirmar(){}, onNovedad(){}, onClose(){},
+ })]);
+}
+
+// La guia se dibuja igual en los dos anchos, y ademas monta una copia oculta
+// para imprimir: el caso de paqueteria cambia el bloque del transportista.
+for (const p of [pedidos[0], pedidos[3], { id:"SIN", estado:"sin_asignar" }]) {
+ casos.push(["GuiaImprimible/" + p.id, React.createElement(GuiaImprimible, {
+  pedido: p,
+  conductores:[{ id:7, nombre:"J. Castrillon", placa:"ABC123", cedula:"1020", celular:"300", empresa:"Transportes Prueba" }],
+  ciudades:[{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }],
+  onClose(){},
  })]);
 }
 
