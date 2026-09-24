@@ -188,7 +188,7 @@ export function DetallePedidoMovil({
    </header>
 
    <div style={{
-    flex: 1, minHeight: 0, overflowY: "auto",
+    flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
     display: "flex", flexDirection: "column", gap: 12, padding: "0 16px 20px",
    }}>
     <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 0 6px" }}>

@@ -87,7 +87,39 @@ for (const abs of jsx(path.join(base, 'src'))) {
   }
 }
 
-console.log(problemas
-  ? `\n${problemas} identificador(es) sin definir.`
-  : '\nTodos los identificadores usados existen.');
-process.exit(problemas ? 1 : 0);
+
+// Segunda pasada, solo en las pantallas del celular: columnas de rejilla que no
+// se pueden encoger. Un <input> (o un <select>/<textarea>) tiene ancho minimo
+// propio, y una columna "1fr" es en realidad minmax(auto,1fr): ese minimo impide
+// encogerla y la rejilla se sale de la pantalla. Lo correcto es minmax(0,1fr).
+// En escritorio no se nota porque el modal es ancho, asi que la regla se
+// comprueba donde de verdad aplica; ni el build ni el render la ven.
+let rejillas = 0;
+for (const abs of jsx(path.join(base, 'src'))) {
+  const rel = path.relative(base, abs).replace(/\\/g, '/');
+  if (!/Movil\.jsx$/.test(rel)) continue;
+  const lineas = fs.readFileSync(abs, 'utf8').replace(/\r\n/g, '\n').split('\n');
+  lineas.forEach((l, i) => {
+    const m = l.match(/gridTemplateColumns: *["'\`]([^"'\`]*)["'\`]/);
+    if (!m) return;
+    // Una pista con su propio minimo (minmax(...)) ya se sabe encoger.
+    const sueltas = m[1].replace(/minmax\([^)]*\)/g, '');
+    if (!/(^|[ ,])1fr/.test(sueltas)) return;
+    // Solo estorba cuando la rejilla lleva dentro un campo de formulario.
+    const dentro = lineas.slice(i, i + 40).join('\n');
+    if (!/<(input|select|textarea)\b/.test(dentro)) return;
+    rejillas++;
+    console.log('REJILLA ' + rel + ':' + (i + 1) + ': "' + m[1] +
+      '" lleva un campo dentro; usa minmax(0,1fr) o se sale de la pantalla');
+  });
+}
+
+if (problemas || rejillas) {
+  const partes = [];
+  if (problemas) partes.push(problemas + ' identificador(es) sin definir');
+  if (rejillas) partes.push(rejillas + ' rejilla(s) que no se encogen');
+  console.log('\n' + partes.join(' y ') + '.');
+} else {
+  console.log('\nTodos los identificadores existen y las rejillas se encogen.');
+}
+process.exit(problemas + rejillas ? 1 : 0);

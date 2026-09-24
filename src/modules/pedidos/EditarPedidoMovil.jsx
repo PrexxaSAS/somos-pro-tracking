@@ -57,7 +57,7 @@ function Etiqueta({ children, falta, opcional }) {
  return (
   <span style={{
    fontSize: 13, fontWeight: 600, color: T.color.tinta2,
-   display: "flex", alignItems: "center", gap: 6,
+   display: "flex", alignItems: "center", gap: 6, minWidth: 0,
   }}>
    {children}
    {opcional && <span style={{ color: T.color.placeholder, fontWeight: 400 }}>· opcional</span>}
@@ -68,7 +68,7 @@ function Etiqueta({ children, falta, opcional }) {
 
 function Campo({ etiqueta, falta, opcional, ayuda, children }) {
  return (
-  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+  <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
    <Etiqueta falta={falta} opcional={opcional}>{etiqueta}</Etiqueta>
    {children}
    {ayuda && <span style={{ fontSize: 12, color: T.color.tinta4 }}>{ayuda}</span>}
@@ -341,7 +341,7 @@ export function EditarPedidoMovil({
    </header>
 
    <div style={{
-    flex: 1, minHeight: 0, overflowY: "auto",
+    flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
     display: "flex", flexDirection: "column", gap: 16, padding: "14px 16px 20px",
    }}>
     <div style={{
@@ -553,7 +553,7 @@ export function EditarPedidoMovil({
 
     <Seccion>Carga</Seccion>
 
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12 }}>
      <Campo etiqueta="Cajas">
       {/* Se escribe y ademas se ajusta de a uno: con cien cajas nadie va a
           pulsar el boton cien veces. */}

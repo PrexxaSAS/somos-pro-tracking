@@ -135,7 +135,7 @@ export function HojaMas({ user, grupos, activeTab, onIr, onLogout, onShareApp, o
      {grupos.map(([titulo, items]) => (
       <div key={titulo} style={{ paddingTop: 16 }}>
        <div style={{ ...T.texto.seccion, color: T.color.placeholder, padding: "0 8px 8px" }}>{titulo}</div>
-       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 4 }}>
         {items.map(([tab, label, Icono]) => {
          const activo = activeTab === tab;
          return (
