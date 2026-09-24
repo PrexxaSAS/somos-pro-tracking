@@ -611,6 +611,114 @@ export function EditarPedidoMovil({
      </div>
     </Campo>
 
+    {/* El soporte de un pedido normal se sube aqui, con el resto de sus datos.
+        Cliente recoge tiene pantalla propia porque ahi el operador registra la
+        entrega entera; aqui solo se adjunta y se guarda. */}
+    {!e.pedidoCerrado && (
+     <>
+      <Seccion>Soporte de entrega</Seccion>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
+        {e.fotosPendientes.map((f, i) => (
+         <div key={i} style={{
+          aspectRatio: "1", borderRadius: 12, overflow: "hidden", position: "relative",
+          background: T.color.marcaAvatar,
+         }}>
+          <img src={f.data} alt={`Soporte ${i + 1}`}
+           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}/>
+          <button title="Quitar" onClick={() => e.setFotosPendientes(prev => prev.filter((_, j) => j !== i))}
+           style={{
+            position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: 12,
+            background: "rgba(23,20,31,.7)", color: "#fff", border: "none", cursor: "pointer",
+            display: "grid", placeItems: "center", padding: 0,
+           }}><X size={12} /></button>
+         </div>
+        ))}
+
+        {guardados > 0 && e.fotosPendientes.length === 0 && (
+         <div style={{
+          aspectRatio: "1", borderRadius: 12, background: T.color.superficie2,
+          border: `1px solid ${T.color.borde}`, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 4, color: T.color.tinta3,
+         }}>
+          <Imagen size={22} />
+          <span style={{ fontSize: 11, fontWeight: 600 }}>{guardados} guardado{guardados === 1 ? "" : "s"}</span>
+         </div>
+        )}
+
+        {puedeAdjuntar && cupoFotos > 0 && (
+         <button onClick={() => camRef.current?.click()} style={{
+          aspectRatio: "1", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+          border: `1.5px dashed ${T.color.tenue}`, background: T.color.superficie,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 6, color: T.color.marca,
+         }}>
+          <Camera size={24} />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>Camara</span>
+         </button>
+        )}
+
+        {puedeAdjuntar && cupoFotos > 0 && (
+         <button onClick={() => galeriaRef.current?.click()} style={{
+          aspectRatio: "1", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+          border: `1.5px dashed ${T.color.borde2}`, background: T.color.hoverFila,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 6, color: T.color.placeholder,
+         }}>
+          <Plus size={20} />
+          <span style={{ fontSize: 12 }}>Galeria</span>
+         </button>
+        )}
+       </div>
+
+       <input ref={camRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+        onChange={async ev => { const f = await leerFotos(ev.target.files, cupoFotos); ev.target.value = ""; if (f.length) e.adjuntarFotos(f); }}/>
+       <input ref={galeriaRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+        onChange={async ev => { const f = await leerFotos(ev.target.files, cupoFotos); ev.target.value = ""; if (f.length) e.adjuntarFotos(f); }}/>
+
+       <span style={{ fontSize: 12, color: T.color.tinta4 }}>
+        {guardados + e.fotosPendientes.length} de 3 soportes
+        {!puedeAdjuntar && e.pedidoEnTransito ? " · solo el conductor asignado puede adjuntar" : ""}
+       </span>
+      </div>
+
+      {e.fotosPendientes.length > 0 && (
+       <div style={{
+        display: "flex", gap: 10, padding: "10px 12px", borderRadius: T.radio.control,
+        background: T.color.ojoSuave, fontSize: 13, color: T.color.ojo, lineHeight: 1.45,
+       }}>
+        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+        <span>Al guardar, el pedido queda <b>{e.novedadEntrega ? "con novedad" : "entregado"}</b> con estos soportes.</span>
+       </div>
+      )}
+
+      {e.puedeMarcarNovedadEntrega && (
+       <button onClick={() => e.setNovedadEntrega(!e.novedadEntrega)} style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+        borderRadius: T.radio.control, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+        background: e.novedadEntrega ? T.color.malSuave : T.color.superficie,
+        border: `1px solid ${e.novedadEntrega ? T.color.malBorde : T.color.borde2}`,
+       }}>
+        <span style={{
+         width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: "grid", placeItems: "center",
+         background: e.novedadEntrega ? T.color.mal : "transparent",
+         border: `2px solid ${e.novedadEntrega ? T.color.mal : T.color.tenue}`,
+         color: "#fff",
+        }}>{e.novedadEntrega && <Check size={13} />}</span>
+        <span style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+         <span style={{ fontSize: 13, fontWeight: 700, color: e.novedadEntrega ? T.color.mal : T.color.tinta }}>
+          Entrega con novedad
+         </span>
+         <span style={{ fontSize: 12, color: T.color.tinta3 }}>
+          Marca esto si hubo algun inconveniente
+         </span>
+        </span>
+       </button>
+      )}
+     </>
+    )}
+
     <Campo etiqueta="Notas" opcional>
      <textarea value={e.notasEdit} onChange={ev => e.setNotasEdit(ev.target.value)}
       placeholder="Instrucciones especiales de entrega" rows={3} disabled={bloqueado}

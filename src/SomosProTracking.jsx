@@ -2020,11 +2020,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       onAcciones={() => setEditMovil(ped)}
       onEntregar={() => setEntregaMovil(ped)}
       onGuia={() => setModGuia(ped)}
-      // Quien puede registrar la entrega desde aqui. Fuera quedan: los ya
-      // cerrados; los que van en transito, que los cierra su conductor desde
-      // su app; y Solo facturar, donde no hay entrega que soportar porque la
-      // mercancia nunca sale -- solo falta la factura.
-      puedeEntregar={!["entregado", "novedad", "en_transito", "solo_facturar"].includes(ped.estado)}
+      // La pantalla aparte de registrar la entrega es solo para Cliente
+      // recoge: ahi la mercancia sale sin conductor y el soporte lo sube el
+      // operador. En los demas el soporte va dentro de la edicion, junto al
+      // resto del pedido, y en Solo facturar no hay entrega que soportar.
+      puedeEntregar={ped.estado === "cliente_recoge"}
      />
     );
    })()}

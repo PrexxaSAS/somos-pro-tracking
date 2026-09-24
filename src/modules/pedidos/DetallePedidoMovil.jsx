@@ -167,10 +167,15 @@ export function DetallePedidoMovil({
  // entrega solo se ofrece a quien de verdad puede: un pedido en transito esta
  // bloqueado para todos menos su conductor, y los de Solo facturar o Cliente
  // recoge nunca salen con nadie, asi que ahi el soporte lo sube el operador.
- const principal = faltaConductor ? { texto: "Asignar conductor", icono: UserPlus, fondo: T.color.marca }
+ // Cada accion carga con su destino. Antes el destino se decidia aparte y se
+ // podia ir por otro lado que el que anunciaba el boton: "Asignar conductor"
+ // terminaba abriendo la pantalla de subir el soporte.
+ const principal = faltaConductor
+  ? { texto: "Asignar conductor", icono: UserPlus, fondo: T.color.marca, accion: onEditar }
   : cerrado ? null
-  : puedeEntregar ? { texto: "Registrar entrega", icono: Check, fondo: T.color.bienPunto }
-  : { texto: "Editar pedido", icono: Pencil, fondo: T.color.marca };
+  : puedeEntregar
+   ? { texto: "Registrar entrega", icono: Check, fondo: T.color.bienPunto, accion: onEntregar }
+   : { texto: "Editar pedido", icono: Pencil, fondo: T.color.marca, accion: onEditar };
 
  return (
   <div style={{
@@ -378,7 +383,7 @@ export function DetallePedidoMovil({
     }}>
      <FileText size={16} style={{ color: T.color.tinta4 }} /> Guia
     </button>
-    <button onClick={principal && puedeEntregar ? onEntregar : onEditar} style={{
+    <button onClick={principal ? principal.accion : onEditar} style={{
      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
      height: 48, borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "inherit",
      fontSize: 14, fontWeight: 600, color: "#fff",
