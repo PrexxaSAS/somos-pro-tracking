@@ -23,7 +23,7 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, MapPin, Plus, Search, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, MapPin, Plus, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -2909,24 +2909,124 @@ function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogid
   win.print();
  };
 
+ const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
+ const gpsFresco = gpsCond && (Date.now() - gpsCond.ts) < 300000;
+
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
-    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Resumen Transportador</h1>
-    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Pedidos, devoluciones y recogidas activas por conductor</p>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ ...cardStyle, padding:18 }}>
-     <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"end" }}>
-      <Field label="Seleccionar Conductor / Transportador" value={selCond} onChange={setSelCond} as="select" options={[{ value:"", label:"Seleccione conductor" }, ...condOpts.map(c => ({ value:c.id, label:`${c.nombre} ${c.placa} ${c.empresa || ""}` }))]} />
-      <button style={{ ...buttonBase, height:40 }} onClick={imprimir} disabled={!cond}>Imprimir Resumen</button>
-     </div>
+  <Pagina>
+   <Encabezado
+    titulo="Resumen transportador"
+    descripcion="Pedidos, devoluciones y recogidas activas por conductor"
+    acciones={
+     <button onClick={imprimir} disabled={!cond} style={{ ...botonBarra, opacity: cond ? 1 : 0.5, cursor: cond ? "pointer" : "not-allowed" }}>
+      <ClipboardList size={15} /> Imprimir resumen
+     </button>
+    }
+   />
+
+   <section style={{ ...tarjeta, padding:14 }}>
+    <SelectFiltro valor={selCond} onChange={setSelCond} ancho={420}>
+     <option value="">Seleccione un conductor</option>
+     {condOpts.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"))
+      .map(c=><option key={c.id} value={c.id}>{c.nombre} - {c.placa || "sin placa"}</option>)}
+    </SelectFiltro>
+   </section>
+
+   {!cond ? (
+    <section style={{ ...tarjeta, padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+     {condOpts.length === 0
+      ? "No hay pedidos con conductor asignado."
+      : "Selecciona un conductor para ver lo que lleva en ruta."}
     </section>
-    {cond && <section style={{ ...cardStyle, padding:22 }}><div style={{ display:"flex", alignItems:"center", gap:16, justifyContent:"space-between", flexWrap:"wrap" }}><div style={{ display:"flex", alignItems:"center", gap:14 }}><div style={{ width:48, height:48, borderRadius:24, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{cond.nombre?.[0]?.toUpperCase() || "C"}</div><div><h2 style={{ margin:0, fontSize:18 }}>{cond.nombre}</h2><p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:13 }}>Placa: {cond.placa}{cond.celular && ` · ${cond.celular}`}</p><p style={{ margin:"3px 0 0", color:"#6b7280", fontSize:12 }}>{cond.empresa || ""} {cond.nit_proveedor ? `· NIT: ${cond.nit_proveedor}` : ""}</p></div></div><div style={{ display:"flex", gap:14 }}><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900 }}>{misPeds.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>pedidos</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900, color:"#ef4444" }}>{misDV.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>devoluc.</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900, color:"#059669" }}>{misRC.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>recogidas</div></div></div></div></section>}
-    {cond && <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}><div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}><thead><tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>{["#", "Guia Interna", "No. Pedido", "Factura", "Cliente", "Ciudad", "Cajas", "Estado", "Fecha Est."].map(h => <th key={h} style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>{h}</th>)}</tr></thead><tbody>{misPeds.map((p,i) => <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}><td style={{ padding:"16px", color:"#6b7280" }}>{i+1}</td><td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}>{p.guia_interna || ""}</td><td style={{ padding:"16px", fontWeight:800 }}>{p.id}</td><td style={{ padding:"16px", fontFamily:"monospace", color:"#4b5563" }}>{p.factura}</td><td style={{ padding:"16px" }}>{p.cliente}</td><td style={{ padding:"16px", color:"#4b5563" }}>{p.ciudad_nombre}</td><td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td><td style={{ padding:"16px" }}><Badge estado={p.estado} /></td><td style={{ padding:"16px", color:"#6b7280" }}>{p.fecha_estimada || ""}</td></tr>)}<tr style={{ background:"#fafafa" }}><td colSpan={6} style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>TOTAL</td><td style={{ padding:"16px", fontWeight:900, fontSize:16 }}>{totalCajas}</td><td colSpan={2} style={{ padding:"16px", color:"#6b7280" }}>{misPeds.length} pedido(s)</td></tr></tbody></table></div></section>}
-    {!cond && condOpts.length === 0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No hay pedidos con conductor asignado.</section>}
-   </main>
-  </div>
+   ) : (
+    <>
+     <Indicadores items={[
+      { label:"Pedidos en transito", valor:misPeds.length, color:T.color.marca, destacado:true },
+      { label:"Cajas", valor:totalCajas, color:T.color.neutroPunto },
+      { label:"Devoluciones", valor:misDV.length, color:T.color.infoPunto },
+      { label:"Recogidas", valor:misRC.length, color:T.color.bienPunto },
+     ]}/>
+
+     <section style={{ ...tarjeta, padding:16, display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+      <span style={{
+       width:40, height:40, borderRadius:T.radio.pastilla, flexShrink:0,
+       background:T.color.marcaAvatar, color:T.color.marca,
+       display:"grid", placeItems:"center", fontSize:13, fontWeight:800,
+      }}>
+       {(cond.nombre||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
+      </span>
+      <div style={{ minWidth:0 }}>
+       <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>{cond.nombre}</div>
+       <div style={{ ...mono, marginTop:2 }}>
+        {cond.placa || "sin placa"}{cond.cedula ? `  ·  CC ${cond.cedula}` : ""}
+       </div>
+      </div>
+      <span style={{
+       marginLeft:"auto", display:"inline-flex", alignItems:"center", gap:7,
+       padding:"4px 11px", borderRadius:T.radio.pastilla,
+       background: gpsFresco ? T.color.bienSuave : T.color.neutroSuave,
+       color: gpsFresco ? T.color.bien : T.color.tinta3, fontSize:12, fontWeight:600,
+      }}>
+       <span style={{ width:6, height:6, borderRadius:3, background: gpsFresco ? T.color.bienPunto : T.color.neutroPunto }}/>
+       {gpsFresco ? "GPS activo" : "Sin reporte GPS"}
+      </span>
+     </section>
+
+     {[
+      { titulo:"Pedidos en transito", filas:misPeds, tipo:"pedido" },
+      { titulo:"Devoluciones asignadas", filas:misDV, tipo:"devolucion" },
+      { titulo:"Recogidas asignadas", filas:misRC, tipo:"recogida" },
+     ].map(bloque => (
+      <section key={bloque.titulo} style={{ ...tarjeta, overflow:"hidden" }}>
+       <div style={{
+        display:"flex", alignItems:"center", gap:10,
+        padding:"13px 18px", borderBottom:`1px solid ${T.color.borde}`,
+       }}>
+        <span style={{ ...T.texto.tarjeta }}>{bloque.titulo}</span>
+        <span style={{
+         fontSize:12, fontWeight:700, padding:"2px 9px", borderRadius:T.radio.pastilla,
+         background: bloque.filas.length ? T.color.marcaSuave : T.color.neutroSuave,
+         color: bloque.filas.length ? T.color.marca : T.color.tinta4,
+        }}>{bloque.filas.length}</span>
+       </div>
+       {bloque.filas.length === 0 ? (
+        <div style={{ padding:28, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
+         Nada asignado en este momento.
+        </div>
+       ) : (
+        <div style={{ overflowX:"auto" }}>
+         <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead>
+           <tr>
+            <th style={th}>{bloque.tipo === "pedido" ? "Pedido" : "Guia"}</th>
+            <th style={th}>{bloque.tipo === "pedido" ? "Cliente" : "Ciudad"}</th>
+            <th style={th}>Destino</th>
+            <th style={{...th, textAlign:"right"}}>{bloque.tipo === "pedido" ? "Cajas" : "Unidades"}</th>
+           </tr>
+          </thead>
+          <tbody>
+           {bloque.filas.map(x => (
+            <tr key={x.id}>
+             <td style={td}><span style={chipMono}>{x.guia_interna || x.guia || x.id}</span></td>
+             <td style={td}>{x.cliente || x.ciudad_nombre || x.ciudad_recogida_nombre || "-"}</td>
+             <td style={td}>
+              <div>{x.ciudad_nombre || x.ciudad_entrega_nombre || "-"}</div>
+              <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>
+               {x.direccion || x.dir_entrega || x.dir_recogida || ""}
+              </div>
+             </td>
+             <td style={tdCifra}>{x.cajas || x.unidades || 0}</td>
+            </tr>
+           ))}
+          </tbody>
+         </table>
+        </div>
+       )}
+      </section>
+     ))}
+    </>
+   )}
+  </Pagina>
  );
 }
 function Ciudades({ ciudades, showToast, recargar }) {
@@ -3589,7 +3689,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
 }
 
 
-function GestionPaqueterias({ paqueterias, showToast, recargar }) {
+function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) {
  const [nueva, setNueva] = useState("");
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
@@ -3604,42 +3704,98 @@ function GestionPaqueterias({ paqueterias, showToast, recargar }) {
   showToast(" Empresa de paqueteria agregada","success");
   if (recargar) await recargar();
  };
+ // Solo se puede quitar una empresa que ningun pedido este usando: si no, el
+ // pedido quedaria apuntando a una paqueteria que ya no existe en el catalogo.
+ const eliminar = async (nombre) => {
+  if (!window.confirm(`Quitar "${nombre}" del catalogo de paqueterias?`)) return;
+  const { error } = await supabase.from('paqueterias').delete().eq('nombre', nombre);
+  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"), "error"); return; }
+  showToast("Empresa quitada del catalogo", "info");
+  if (recargar) await recargar();
+ };
+
+ const lista = (paqueterias || []).slice()
+  .sort((a,b)=>String(a).localeCompare(String(b), "es", { sensitivity:"base" }));
+ const usos = (nombre) => (pedidos || []).filter(p => p.paqueteria === nombre).length;
+
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Paqueterias</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Empresas externas usadas para guias de paqueteria</p>
-    </div>
-    <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"7px 12px", fontSize:13, fontWeight:850 }}>
-     {(paqueterias||[]).length} registradas
-    </span>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ ...cardStyle, padding:18 }}>
-     <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center" }}>
+  <Pagina>
+   <Encabezado
+    titulo="Paqueterias"
+    descripcion="Empresas externas usadas para guias de paqueteria"
+   />
+
+   <section style={{ ...tarjeta, padding:14, display:"flex", gap:10, flexWrap:"wrap" }}>
+    <div style={{ flex:"1 1 280px", minWidth:220 }}>
      <input value={nueva} onChange={e=>setNueva(e.target.value)}
       onKeyDown={e=>e.key==="Enter"&&agregar()}
-      placeholder="Nombre de la empresa (ej: Servientrega, TCC...)"
-      style={{...iSt, borderRadius:12, background:"#fff"}}/>
-     <button style={primaryButton} onClick={agregar}>+ Agregar</button>
+      placeholder="Nombre de la empresa (Servientrega, TCC, Coordinadora...)"
+      style={{
+       width:"100%", boxSizing:"border-box", height:38, padding:"0 12px",
+       border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
+       fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
+       background:T.color.superficie2,
+      }}/>
     </div>
-    </section>
-    {(paqueterias||[]).length===0&&<section style={{ ...cardStyle, textAlign:"center", padding:42, color:"#9ca3af" }}>Sin empresas registradas.</section>}
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
-    {(paqueterias||[]).map((p,i)=>(
-     <article key={i} style={{ ...cardStyle, padding:18, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
-       <div style={{ width:38, height:38, borderRadius:12, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{String(p || "P").slice(0,1).toUpperCase()}</div>
-       <span style={{ fontWeight:800, color:"#111827", whiteSpace:"normal", overflowWrap:"anywhere", lineHeight:1.25 }}>{p}</span>
-      </div>
-      <button onClick={async ()=>{const{error}=await supabase.from('paqueterias').delete().eq('nombre',p); if(!error){showToast('Eliminado','info'); if(recargar) await recargar();}}}
-       style={{ ...buttonBase, padding:"7px 10px", fontSize:13, color:"#dc2626" }}>Eliminar</button>
-     </article>
-    ))}
-    </section>
-   </main>
-  </div>
+    <button onClick={agregar} style={botonPrincipal}><Plus size={16}/> Agregar</button>
+   </section>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${lista.length} ${lista.length === 1 ? "empresa" : "empresas"} · orden A-Z`}>
+     <span style={{ fontSize:13, color:T.color.tinta3 }}>
+      Estas son las opciones que aparecen al marcar un envio como paqueteria.
+     </span>
+    </BarraFiltros>
+
+    {lista.length === 0 ? (
+     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+      Sin empresas registradas. Agrega la primera arriba.
+     </div>
+    ) : (
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead>
+        <tr>
+         <th style={th}>Empresa</th>
+         <th style={{...th, textAlign:"right"}}>Pedidos con esta paqueteria</th>
+         <th style={{...th, width:60}} />
+        </tr>
+       </thead>
+       <tbody>
+        {lista.map((nombre, i) => {
+         const enUso = usos(nombre);
+         return (
+          <tr key={i}>
+           <td style={td}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+             <span style={{
+              width:34, height:34, borderRadius:T.radio.chico, flexShrink:0,
+              background:T.color.marcaAvatar, color:T.color.marca,
+              display:"grid", placeItems:"center", fontSize:13, fontWeight:800,
+             }}>{String(nombre || "?").charAt(0).toUpperCase()}</span>
+             <span style={{ fontSize:13.5, fontWeight:600, color:T.color.tinta }}>{nombre}</span>
+            </div>
+           </td>
+           <td style={tdCifra}>{enUso}</td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <button title={enUso ? `No se puede quitar: ${enUso} pedido(s) la usan` : "Quitar"}
+             onClick={()=>enUso === 0 && eliminar(nombre)}
+             disabled={enUso > 0}
+             style={{
+              ...iconoAccion,
+              color: enUso > 0 ? T.color.tenue : T.color.mal,
+              cursor: enUso > 0 ? "not-allowed" : "pointer",
+             }}><Trash2 size={15}/></button>
+           </td>
+          </tr>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+    )}
+   </section>
+  </Pagina>
  );
 }
 
@@ -5305,7 +5461,7 @@ export default function SomosProTracking() {
     : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={recargarCiudades}/>;
-   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={recargarPaqueterias}/>;
+   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} recargar={recargarPaqueterias}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}/>;
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={recargarPedidos}/>;
