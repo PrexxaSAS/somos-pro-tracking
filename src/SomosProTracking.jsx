@@ -17,6 +17,7 @@ import { PedidosMovil } from './modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from './modules/pedidos/DetallePedidoMovil';
 import { usePedidoEditable } from './modules/pedidos/usePedidoEditable';
 import { EditarPedidoMovil } from './modules/pedidos/EditarPedidoMovil';
+import { RegistrarEntregaMovil } from './modules/pedidos/RegistrarEntregaMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -3163,7 +3164,8 @@ function ModalCSVCiudades({ onClose, onImportar }) {
  );
 }
 
-function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, recargar }) {
+function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = [], showToast, recargar }) {
+ const esMovil = useEsMovil();
  const [modDet,  setModDet]  = useState(null);
  const [modFotos, setModFotos] = useState(null); // pedido para cargar soportes
  const [novedad,  setNovedad]  = useState(false);
@@ -3176,7 +3178,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
  const thStyle = { padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}`, color:"#6b7280", fontSize:12, textTransform:"uppercase", whiteSpace:"nowrap" };
  const tdStyle = { padding:"16px", borderBottom:`1px solid ${border}`, verticalAlign:"middle" };
 
- const marcarEntregado = async (pedido, fotos, conNovedad) => {
+ const marcarEntregado = async (pedido, fotos, conNovedad, extra = {}) => {
   if (["entregado","novedad"].includes(pedido.estado)) {
    showToast("No se puede modificar un pedido que ya fue entregado", "error");
    setModFotos(null);
@@ -3196,8 +3198,20 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
    fecha_real: hoy,
    novedad: conNovedad,
   };
+  // Quien recibio y donde. Van aparte porque son columnas nuevas: si la base
+  // todavia no las tiene (docs/pedidos_entrega.sql sin correr), la entrega se
+  // guarda igual sin ellas en vez de fallar entera.
+  const extras = {};
+  for (const [k, v] of Object.entries(extra)) {
+   if (v !== null && v !== undefined && v !== "") extras[k] = v;
+  }
   try {
-   const { error: e1 } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id);
+   let { error: e1 } = await supabase.from("pedidos")
+    .update({ ...cambios, ...extras }).eq("id", pedido.id);
+   if (e1 && /column .* does not exist|could not find the .* column/i.test(e1.message || "")) {
+    showToast("Falta correr docs/pedidos_entrega.sql: se guarda la entrega sin los datos de quien recibe","warning");
+    ({ error: e1 } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id));
+   }
    if (e1 && e1.message && e1.message.includes('too large')) {
     await supabase.from("pedidos").update({
      estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes,
@@ -3355,7 +3369,17 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, 
     onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
 
    {/* Modal cargar soportes de entrega */}
-   {modFotos&&(
+   {modFotos && esMovil && (
+    <RegistrarEntregaMovil
+     pedido={modFotos}
+     promesa={(promesas || []).find(x => x.ciudad_codigo === modFotos.ciudad_codigo)}
+     onConfirmar={async ({ fotos, ...datos }) => { await marcarEntregado(modFotos, fotos, false, datos); }}
+     onNovedad={() => { setNovedad(true); }}
+     onClose={() => setModFotos(null)}
+    />
+   )}
+
+   {modFotos && !esMovil && (
     <Modal title={`Registrar Entrega - ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
      <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {/* Info pedido */}
@@ -5448,7 +5472,7 @@ export default function SomosProTracking() {
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} recargar={recargarPaqueterias}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
    case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}/>;
-   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={recargarPedidos}/>;
+   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} promesas={promesas} showToast={showToast} recargar={recargarPedidos}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
    case "mi_ubicacion":  return <MiUbicacion user={user}/>;

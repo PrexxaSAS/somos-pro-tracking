@@ -1,7 +1,7 @@
 import React from 'react';
 import {
  AlertTriangle, Boxes, Check, ChevronLeft, ChevronRight, FileText, History,
- MapPin, MoreHorizontal, Package, Phone, Truck, UserPlus,
+ MapPin, MoreHorizontal, Package, Pencil, Phone, Truck, UserPlus,
 } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO } from '../../Constants';
@@ -105,6 +105,7 @@ function Fila({ etiqueta, valor, falta, mono, icono: Icono, onIcono }) {
 // ── Vista ───────────────────────────────────────────────────────────────────
 export function DetallePedidoMovil({
  pedido, conductor, promesa, onCerrar, onEditar, onGuia, onAcciones,
+ puedeEntregar = false,
 }) {
  const tr = transportePedido(pedido, conductor);
  const tono = TONO_ESTADO[pedido.estado] || TONO_ESTADO.sin_asignar;
@@ -162,10 +163,14 @@ export function DetallePedidoMovil({
   window.open(`https://maps.google.com/maps?q=${encodeURIComponent(destino)}`, "_blank");
  };
 
- // Una sola accion principal, la que toca segun el estado.
+ // Una sola accion principal, la que toca segun el estado. Registrar la
+ // entrega solo lo ofrece a quien de verdad puede hacerlo: un pedido en
+ // transito esta bloqueado para todos menos su conductor, asi que a los demas
+ // el boton los llevaria a una pantalla donde no pueden guardar nada.
  const principal = faltaConductor ? { texto: "Asignar conductor", icono: UserPlus, fondo: T.color.marca }
   : cerrado ? null
-  : { texto: "Registrar entrega", icono: Check, fondo: T.color.bienPunto };
+  : puedeEntregar ? { texto: "Registrar entrega", icono: Check, fondo: T.color.bienPunto }
+  : { texto: "Editar pedido", icono: Pencil, fondo: T.color.marca };
 
  return (
   <div style={{

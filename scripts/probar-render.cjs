@@ -20,6 +20,7 @@ import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modul
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
 import { ModalDetalle } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
+import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -105,6 +106,15 @@ casos.push(["EditarPedidoMovil/vacio", React.createElement(EditarPedidoMovil, {
  conductores:[], ciudades:[], promesas:[],
  setPedidos(){}, showToast(){}, onClose(){}, onGuia(){}, onMapa(){}, canEdit:true,
 })]);
+
+// Los tres pasos se dibujan en el mismo componente segun su estado interno;
+// aqui se comprueba el primero, que es el que monta la camara y el GPS.
+for (const p of [pedidos[0], { id:"Z", estado:"en_transito" }]) {
+ casos.push(["RegistrarEntregaMovil/" + p.id, React.createElement(RegistrarEntregaMovil, {
+  pedido: p, promesa: { dias_plazo: 2 },
+  onConfirmar(){}, onNovedad(){}, onClose(){},
+ })]);
+}
 
 casos.push(["HojaConductores", React.createElement(HojaConductores, {
  conductores:[
