@@ -13,6 +13,7 @@ import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
 import { NavegacionMovil } from './components/layout/NavegacionMovil';
 import { PedidosMovil } from './modules/pedidos/PedidosMovil';
+import { DetallePedidoMovil } from './modules/pedidos/DetallePedidoMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -1620,6 +1621,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  // Transporte propio o paqueteria. Es filtro propio y no una pestana mas:
  // se cruza con el estado en vez de reemplazarlo.
  const [tipoF, setTipoF] = useState("");
+ // En el celular el detalle es una pantalla completa, no el modal de escritorio.
+ const [detMovil, setDetMovil] = useState(null);
  const esMovil = useEsMovil();
  // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
  // sin seleccion, la planilla sale con todo lo que este filtrado.
@@ -1948,7 +1951,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
      tipoF={tipoF} setTipoF={setTipoF}
-     onAbrir={setModDet}
+     onAbrir={setDetMovil}
      onNuevo={() => setModNuevo(true)}
      onPlanilla={imprimirPlanilla}
      onCSV={() => setModCSV(true)}
@@ -2139,6 +2142,23 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </section>
    </div>
    )}
+
+   {detMovil && (() => {
+    // Se busca de nuevo en la lista para que, al guardar en el modal completo,
+    // el detalle muestre los datos recien guardados y no los de la apertura.
+    const ped = pedidos.find(x => x.id === detMovil.id) || detMovil;
+    return (
+     <DetallePedidoMovil
+      pedido={ped}
+      conductor={conductores.find(c => String(c.id) === String(ped.conductor_id))}
+      promesa={(promesas || []).find(x => x.ciudad_codigo === ped.ciudad_codigo)}
+      onCerrar={() => setDetMovil(null)}
+      onEditar={() => setModDet(ped)}
+      onAcciones={() => setModDet(ped)}
+      onGuia={() => setModGuia(ped)}
+     />
+    );
+   })()}
 
    {modNuevo && (
     <ModalForm

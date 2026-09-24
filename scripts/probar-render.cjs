@@ -17,6 +17,7 @@ import { Dashboard } from '${raiz.replace(/\\/g, '/')}/src/modules/dashboard/Das
 import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/components/layout/NavegacionMovil';
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
+import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -56,6 +57,21 @@ casos.push(["HojaFiltros", React.createElement(HojaFiltros, {
  rango:"30", setRango(){}, ciudadF:"05001", setCiudadF(){},
  conductorF:"sin", setConductorF(){}, tipoF:"paqueteria", setTipoF(){},
  onLimpiar(){}, onClose(){},
+})]);
+
+// Cada estado dibuja una cabecera, un bloque y un pie distintos.
+for (const p of pedidos) {
+ casos.push(["DetallePedidoMovil/" + p.estado, React.createElement(DetallePedidoMovil, {
+  pedido: p,
+  conductor: p.conductor_id ? { id:7, nombre:"Juan Esteban Castrillon", placa:"NLX290", celular:"3001234567" } : undefined,
+  promesa: { ciudad_codigo:p.ciudad_codigo, dias_plazo:2 },
+  onCerrar(){}, onEditar(){}, onGuia(){}, onAcciones(){},
+ })]);
+}
+// Sin promesa y sin ninguna fecha: el caso que mas ramas nulas recorre.
+casos.push(["DetallePedidoMovil/vacio", React.createElement(DetallePedidoMovil, {
+ pedido: { id:"PX1", estado:"sin_asignar" },
+ onCerrar(){}, onEditar(){}, onGuia(){}, onAcciones(){},
 })]);
 
 for (const rol of ROLES_PRUEBA) {
