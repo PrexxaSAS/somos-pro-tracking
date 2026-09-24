@@ -4,7 +4,7 @@ import {
  MapPin, Plus, X,
 } from 'lucide-react';
 import { T } from '../../design/tokens';
-import { comprimirImagen } from '../../utils/images';
+import { leerFotos } from '../../utils/images';
 
 // La entrega se registra en el punto de entrega, de pie y con una mano: tres
 // pasos cortos en vez de un formulario. Cada paso pide una sola cosa, el boton
@@ -70,13 +70,9 @@ export function RegistrarEntregaMovil({
  }, []);
 
  const agregar = async (files) => {
-  const nuevas = [];
-  for (const file of Array.from(files || []).slice(0, MAX_FOTOS - fotos.length)) {
-   if (!file.type.startsWith("image/")) continue;
-   const data = await comprimirImagen(file);
-   nuevas.push({ data, nombre: file.name, hora: horaCorta() });
-  }
-  setFotos(prev => [...prev, ...nuevas].slice(0, MAX_FOTOS));
+  const nuevas = await leerFotos(files, MAX_FOTOS - fotos.length);
+  const conHora = nuevas.map(f => ({ ...f, hora: horaCorta() }));
+  setFotos(prev => [...prev, ...conHora].slice(0, MAX_FOTOS));
  };
 
  const quitar = (i) => setFotos(prev => prev.filter((_, j) => j !== i));
