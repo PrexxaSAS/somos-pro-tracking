@@ -18,6 +18,7 @@ import { DetallePedidoMovil } from './modules/pedidos/DetallePedidoMovil';
 import { usePedidoEditable } from './modules/pedidos/usePedidoEditable';
 import { EditarPedidoMovil } from './modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from './modules/pedidos/RegistrarEntregaMovil';
+import { RegistrarEntregaOperador } from './modules/pedidos/RegistrarEntregaOperador';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -1481,6 +1482,10 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [detMovil, setDetMovil] = useState(null);
  // La edicion en el celular es otra pantalla completa, no el modal de escritorio.
  const [editMovil, setEditMovil] = useState(null);
+ // Registrar la entrega desde el listado de pedidos: es para los que nunca
+ // salen con conductor (Solo facturar, Cliente recoge) y para los que aun no
+ // se han despachado. Los que van en transito los cierra su conductor.
+ const [entregaMovil, setEntregaMovil] = useState(null);
  const esMovil = useEsMovil();
  // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
  // sin seleccion, la planilla sale con todo lo que este filtrado.
@@ -2013,7 +2018,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       onCerrar={() => setDetMovil(null)}
       onEditar={() => setEditMovil(ped)}
       onAcciones={() => setEditMovil(ped)}
+      onEntregar={() => setEntregaMovil(ped)}
       onGuia={() => setModGuia(ped)}
+      // Un pedido en transito lo cierra su conductor desde su propia app; los
+      // demas que sigan abiertos los puede cerrar quien este mirando.
+      puedeEntregar={!["entregado", "novedad", "en_transito"].includes(ped.estado)}
      />
     );
    })()}
@@ -2038,6 +2047,24 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       onClose={() => setEditMovil(null)}
       onGuia={() => setModGuia(ped)}
       onMapa={irAlMapa}
+      canEdit={user?.rol !== "operador"}
+      canBasicEdit={user?.rol === "operador"}
+      canAssign={user?.rol === "operador"}
+     />
+    );
+   })()}
+
+   {entregaMovil && (() => {
+    const ped = pedidos.find(x => x.id === entregaMovil.id) || entregaMovil;
+    return (
+     <RegistrarEntregaOperador
+      pedido={ped}
+      conductores={conductores}
+      ciudades={ciudades}
+      promesas={promesas}
+      setPedidos={setPedidos}
+      showToast={showToast}
+      onClose={() => setEntregaMovil(null)}
       canEdit={user?.rol !== "operador"}
       canBasicEdit={user?.rol === "operador"}
       canAssign={user?.rol === "operador"}

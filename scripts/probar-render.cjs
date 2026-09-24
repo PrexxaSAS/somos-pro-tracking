@@ -21,6 +21,7 @@ import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedi
 import { ModalDetalle } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
+import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
 
 const pedidos = [
@@ -125,6 +126,14 @@ for (const p of [pedidos[0], pedidos[3], { id:"SIN", estado:"sin_asignar" }]) {
   conductores:[{ id:7, nombre:"J. Castrillon", placa:"ABC123", cedula:"1020", celular:"300", empresa:"Transportes Prueba" }],
   ciudades:[{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }],
   onClose(){},
+ })]);
+}
+
+// La entrega del operador: para los que nunca salen con conductor.
+for (const p of [{ id:'CR', estado:'cliente_recoge', cliente:'X' }, { id:'SF', estado:'solo_facturar', cliente:'Y', soportes:['a.jpg'] }]) {
+ casos.push(["RegistrarEntregaOperador/" + p.estado, React.createElement(RegistrarEntregaOperador, {
+  pedido: p, conductores:[], ciudades:[], promesas:[],
+  setPedidos(){}, showToast(){}, onClose(){}, canEdit:true,
  })]);
 }
 

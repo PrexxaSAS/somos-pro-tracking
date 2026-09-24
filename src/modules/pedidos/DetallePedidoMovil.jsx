@@ -104,7 +104,7 @@ function Fila({ etiqueta, valor, falta, mono, icono: Icono, onIcono }) {
 
 // ── Vista ───────────────────────────────────────────────────────────────────
 export function DetallePedidoMovil({
- pedido, conductor, promesa, onCerrar, onEditar, onGuia, onAcciones,
+ pedido, conductor, promesa, onCerrar, onEditar, onGuia, onAcciones, onEntregar,
  puedeEntregar = false,
 }) {
  const tr = transportePedido(pedido, conductor);
@@ -164,9 +164,9 @@ export function DetallePedidoMovil({
  };
 
  // Una sola accion principal, la que toca segun el estado. Registrar la
- // entrega solo lo ofrece a quien de verdad puede hacerlo: un pedido en
- // transito esta bloqueado para todos menos su conductor, asi que a los demas
- // el boton los llevaria a una pantalla donde no pueden guardar nada.
+ // entrega solo se ofrece a quien de verdad puede: un pedido en transito esta
+ // bloqueado para todos menos su conductor, y los de Solo facturar o Cliente
+ // recoge nunca salen con nadie, asi que ahi el soporte lo sube el operador.
  const principal = faltaConductor ? { texto: "Asignar conductor", icono: UserPlus, fondo: T.color.marca }
   : cerrado ? null
   : puedeEntregar ? { texto: "Registrar entrega", icono: Check, fondo: T.color.bienPunto }
@@ -378,7 +378,7 @@ export function DetallePedidoMovil({
     }}>
      <FileText size={16} style={{ color: T.color.tinta4 }} /> Guia
     </button>
-    <button onClick={onEditar} style={{
+    <button onClick={principal && puedeEntregar ? onEntregar : onEditar} style={{
      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
      height: 48, borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "inherit",
      fontSize: 14, fontWeight: 600, color: "#fff",

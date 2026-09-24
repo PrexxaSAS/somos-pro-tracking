@@ -199,6 +199,75 @@ export function usePedidoEditable({
   return cambios;
  };
 
+ // Registra la entrega en una sola escritura: los soportes, el cierre y -- si
+ // el pedido era Cliente recoge o Solo facturar -- la modalidad, que hay que
+ // conservar en estado_despacho porque la columna estado pasa a "entregado".
+ // La usan la pantalla del conductor y la del operador, para que cerrar un
+ // pedido signifique lo mismo en las dos.
+ const registrarEntrega = async ({ fotos = [], conNovedad = false, fechaReal = null, recibe = {} }) => {
+  if (pedidoCerrado) {
+   showToast("No se puede modificar un pedido que ya fue entregado", "error");
+   return false;
+  }
+  if (pedidoEnTransito && !canDeliver) {
+   showToast("Solo el conductor puede registrar la entrega de un pedido en transito", "error");
+   return false;
+  }
+  if (fotos.length === 0) {
+   showToast("Adjunta al menos un soporte de entrega", "error");
+   return false;
+  }
+
+  // Los soportes viejos no viajan en el listado: si el pedido ya tenia, hay
+  // que traerlos antes de escribir o se perderian.
+  let previos = soportesData;
+  if (previos.length === 0 && (pedido.soportes || []).length > 0) {
+   try { previos = await cargarSoportesPedido(pedido.id); } catch (e) { previos = []; }
+  }
+
+  const modalidad = ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp
+   : ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : null;
+
+  const cambios = {
+   soportes: [
+    ...(pedido.soportes || []),
+    ...fotos.map((_, i) => `soporte_${pedido.id}_${(pedido.soportes || []).length + i + 1}.jpg`),
+   ],
+   soportes_data: [...previos, ...fotos],
+   estado: conNovedad ? "novedad" : "entregado",
+   fecha_real: fechaReal || new Date().toISOString().split("T")[0],
+   novedad: conNovedad,
+   ...(modalidad ? { estado_despacho: modalidad } : {}),
+  };
+
+  // Quien recibio y donde. Van aparte porque son columnas nuevas: si la base
+  // no las tiene todavia, la entrega se guarda igual sin ellas.
+  const extras = {};
+  for (const [k, v] of Object.entries(recibe)) {
+   if (v !== null && v !== undefined && v !== "") extras[k] = v;
+  }
+
+  setPedidos(prev => prev.map(x => x.id === pedido.id ? { ...x, ...cambios } : x));
+  showToast("Guardando...", "info");
+
+  let { error } = await supabase.from("pedidos")
+   .update({ ...cambios, ...extras }).eq("id", pedido.id).select("id").single();
+  if (error && /column .* does not exist|could not find the .* column/i.test(error.message || "")) {
+   showToast("Falta correr docs/pedidos_entrega.sql: se guarda la entrega sin los datos de quien recibe", "warning");
+   ({ error } = await supabase.from("pedidos")
+    .update(cambios).eq("id", pedido.id).select("id").single());
+  }
+  if (error) {
+   showToast(mensajeError(error, "el registro de la entrega"), "error");
+   return false;
+  }
+
+  showToast("Entrega registrada", "success");
+  if (window._recargarPedidos) await window._recargarPedidos();
+  onClose();
+  return true;
+ };
+
  const adjuntarFotos = (fotos) => {
   if (pedidoCerrado) {
    showToast("No se puede modificar un pedido que ya fue entregado","error");
@@ -270,6 +339,7 @@ export function usePedidoEditable({
   conductorHistorico,
   conductoresOpciones,
   guardar,
+  registrarEntrega,
   cambiosPendientesDelFormulario,
   adjuntarFotos,
   caPrev,

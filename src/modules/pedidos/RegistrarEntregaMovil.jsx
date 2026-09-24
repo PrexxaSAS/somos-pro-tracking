@@ -11,9 +11,9 @@ import { leerFotos } from '../../utils/images';
 // vive fijo abajo y nada obliga a desplazarse para continuar.
 
 const MAX_FOTOS = 3;
-const PASOS = ["Evidencia", "Recibe", "Confirmar"];
-
-const RELACIONES = ["Cliente", "Portero", "Almacen", "Otro"];
+// Dos pasos: la foto y la confirmacion. A quien recibe no se le piden datos --
+// en la puerta, con el motor andando, nadie teclea un nombre y una cedula.
+const PASOS = ["Evidencia", "Confirmar"];
 
 const entrada = {
  display: "flex", alignItems: "center", height: 48, width: "100%", boxSizing: "border-box",
@@ -46,9 +46,6 @@ export function RegistrarEntregaMovil({
  const [paso, setPaso] = useState(pasoInicial);
  const [fotos, setFotos] = useState([]);
  const [observaciones, setObservaciones] = useState("");
- const [nombre, setNombre] = useState("");
- const [cedula, setCedula] = useState("");
- const [relacion, setRelacion] = useState("Cliente");
  const [ubicacion, setUbicacion] = useState(null);
  const [permisoUbicacion, setPermisoUbicacion] = useState("pidiendo");
  const [guardando, setGuardando] = useState(false);
@@ -81,9 +78,6 @@ export function RegistrarEntregaMovil({
   setGuardando(true);
   await onConfirmar({
    fotos: fotos.map(f => ({ data: f.data, nombre: f.nombre })),
-   recibe_nombre: nombre.trim(),
-   recibe_cedula: cedula.trim(),
-   recibe_relacion: relacion,
    entrega_observaciones: observaciones.trim(),
    entrega_lat: ubicacion?.lat ?? null,
    entrega_lng: ubicacion?.lng ?? null,
@@ -91,9 +85,7 @@ export function RegistrarEntregaMovil({
   setGuardando(false);
  };
 
- const puedeSeguir = paso === 0 ? fotos.length > 0
-  : paso === 1 ? nombre.trim().length > 0
-  : true;
+ const puedeSeguir = paso === 0 ? fotos.length > 0 : true;
 
  // Comparacion con la promesa, para que el conductor vea si llego a tiempo.
  const limite = promesa && pedido.fecha_creacion
@@ -263,48 +255,6 @@ export function RegistrarEntregaMovil({
 
     {paso === 1 && (
      <>
-      <Titulo ayuda="Datos de la persona que recibe la mercancia.">Quien recibe</Titulo>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-       <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>
-        Nombre <span style={{ color: T.color.mal }}>*</span>
-       </span>
-       <input value={nombre} onChange={ev => setNombre(ev.target.value)}
-        placeholder="Nombre de quien recibe" autoFocus style={entrada}/>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-       <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>
-        Cedula <span style={{ color: T.color.placeholder, fontWeight: 400 }}>· opcional</span>
-       </span>
-       <input value={cedula} onChange={ev => setCedula(ev.target.value)}
-        placeholder="1020000000" inputMode="numeric"
-        style={{ ...entrada, fontFamily: T.fuente.mono }}/>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-       <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>Relacion con el cliente</span>
-       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {RELACIONES.map(r => {
-         const activo = relacion === r;
-         return (
-          <button key={r} onClick={() => setRelacion(r)} style={{
-           height: 40, padding: "0 14px", display: "flex", alignItems: "center",
-           borderRadius: T.radio.pastilla, cursor: "pointer", fontFamily: "inherit",
-           fontSize: 13, fontWeight: activo ? 600 : 500,
-           background: activo ? T.color.marca : T.color.superficie,
-           border: activo ? "1px solid transparent" : `1px solid ${T.color.borde2}`,
-           color: activo ? "#fff" : T.color.tinta2,
-          }}>{r}</button>
-         );
-        })}
-       </div>
-      </div>
-     </>
-    )}
-
-    {paso === 2 && (
-     <>
       <Titulo ayuda="Al confirmar, el pedido pasa a Entregado.">Revisa y confirma</Titulo>
 
       <section style={{
@@ -313,9 +263,6 @@ export function RegistrarEntregaMovil({
        display: "flex", flexDirection: "column",
       }}>
        {[
-        ["Recibe", nombre, 1],
-        ["Cedula", cedula || "Sin cedula", 1],
-        ["Relacion", relacion, 1],
         ["Observaciones", observaciones || "Sin observaciones", 0],
        ].map(([k, v, volver]) => (
         <div key={k} style={{
@@ -372,17 +319,17 @@ export function RegistrarEntregaMovil({
     paddingBottom: `calc(12px + env(safe-area-inset-bottom, 0px))`,
    }}>
     <button
-     onClick={paso === 2 ? confirmar : () => setPaso(p => p + 1)}
+     onClick={paso === 1 ? confirmar : () => setPaso(p => p + 1)}
      disabled={!puedeSeguir || guardando}
      style={{
       display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
       width: "100%", height: 52, borderRadius: 12, border: "none", fontFamily: "inherit",
       fontSize: 15, fontWeight: 600, color: "#fff",
-      background: paso === 2 ? T.color.bienPunto : T.color.marca,
+      background: paso === 1 ? T.color.bienPunto : T.color.marca,
       cursor: (!puedeSeguir || guardando) ? "not-allowed" : "pointer",
       opacity: (!puedeSeguir || guardando) ? 0.5 : 1,
      }}>
-     {paso === 2
+     {paso === 1
       ? <><Check size={18} /> {guardando ? "Registrando..." : "Confirmar entrega"}</>
       : <>Continuar <ArrowRight size={17} /></>}
     </button>
