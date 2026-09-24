@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { AlertTriangle, Bell, CalendarDays, ChevronRight, Search } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
+import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
 
 // Rangos del filtro de fecha. Se compara contra fecha_creacion del pedido.
@@ -17,6 +18,13 @@ const ORDEN_ESTADOS = [
  "sin_asignar", "pendiente", "en_transito", "paqueteria",
  "entregado", "novedad", "solo_facturar", "cliente_recoge",
 ];
+
+const botonCabecera = {
+ position: "relative", padding: 9, border: "1px solid " + T.color.borde2,
+ borderRadius: T.radio.control, background: T.color.superficie,
+ cursor: "pointer", display: "grid", placeItems: "center", color: T.color.tinta2,
+ flexShrink: 0,
+};
 
 const hoyISO = () => new Date().toISOString().split("T")[0];
 const restarDias = (n) => {
@@ -64,7 +72,7 @@ function Enlace({ children, onClick }) {
 
 // ── Controles del encabezado ────────────────────────────────────────────────
 
-function Buscador({ pedidos, onAbrirPedido }) {
+function Buscador({ pedidos, onAbrirPedido, compacto = false }) {
  const [texto, setTexto] = useState("");
  const [abierto, setAbierto] = useState(false);
  const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
@@ -86,11 +94,12 @@ function Buscador({ pedidos, onAbrirPedido }) {
   onAbrirPedido(valor);
  };
 
- return (
-  <div ref={ref} style={{ position: "relative", width: 300 }}>
+ const campo = (
+  <>
    <Search size={15} style={{ position: "absolute", left: 12, top: 11, color: T.color.tinta3 }} />
    <input
     value={texto}
+    autoFocus={compacto}
     onChange={e => { setTexto(e.target.value); setAbierto(true); }}
     onFocus={() => setAbierto(true)}
     onKeyDown={e => { if (e.key === "Enter" && consulta) elegir(texto.trim()); }}
@@ -99,9 +108,54 @@ function Buscador({ pedidos, onAbrirPedido }) {
      width: "100%", boxSizing: "border-box",
      padding: "9px 12px 9px 34px",
      border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
-     fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
+     fontSize: 16, fontFamily: "inherit", color: T.color.tinta,
      background: T.color.superficie, outline: "none",
     }}/>
+  </>
+ );
+
+ // El campo entero no cabe en la cabecera del celular: ahi es un boton que
+ // despliega la busqueda sobre el contenido.
+ if (compacto) {
+  return (
+   <div ref={ref} style={{ position: "relative" }}>
+    <button onClick={() => setAbierto(!abierto)} title="Buscar pedido" style={botonCabecera}>
+     <Search size={18} />
+    </button>
+    {abierto && (
+     <div style={{
+      position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 40,
+      width: "78vw", maxWidth: 330, minWidth: 220,
+      ...tarjeta, boxShadow: T.sombra.flotante, padding: 8,
+     }}>
+      <div style={{ position: "relative" }}>{campo}</div>
+      {consulta.length >= 2 && (
+       <div style={{ marginTop: 6, maxHeight: 300, overflowY: "auto" }}>
+        {resultados.length === 0 ? (
+         <div style={{ padding: "10px 12px", fontSize: 13, color: T.color.tinta3 }}>Sin resultados</div>
+        ) : resultados.map(p => (
+         <button key={p.id} onClick={() => elegir(p.id)} style={{
+          width: "100%", textAlign: "left", border: "none", background: "transparent",
+          cursor: "pointer", fontFamily: "inherit", padding: "9px 10px",
+          borderRadius: T.radio.chico, display: "block",
+         }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{p.id}</div>
+          <div style={{ fontSize: 12, color: T.color.tinta3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+           {p.cliente}{p.guia_interna ? ` · ${p.guia_interna}` : ""}
+          </div>
+         </button>
+        ))}
+       </div>
+      )}
+     </div>
+    )}
+   </div>
+  );
+ }
+
+ return (
+  <div ref={ref} style={{ position: "relative", width: 300 }}>
+   {campo}
    {abierto && consulta.length >= 2 && (
     <div style={{
      position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 40,
@@ -127,26 +181,29 @@ function Buscador({ pedidos, onAbrirPedido }) {
  );
 }
 
-function SelectorRango({ rango, setRango }) {
+function SelectorRango({ rango, setRango, ancho = false }) {
  const [abierto, setAbierto] = useState(false);
  const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
  const actual = RANGOS.find(r => r.id === rango) || RANGOS[3];
 
  return (
-  <div ref={ref} style={{ position: "relative" }}>
+  <div ref={ref} style={{ position: "relative", width: ancho ? "100%" : undefined }}>
    <button onClick={() => setAbierto(!abierto)} style={{
-    display: "inline-flex", alignItems: "center", gap: 8,
-    padding: "9px 12px", border: `1px solid ${T.color.borde2}`,
+    display: "flex", alignItems: "center", gap: 8,
+    width: ancho ? "100%" : undefined, boxSizing: "border-box",
+    padding: ancho ? "11px 14px" : "9px 12px", border: `1px solid ${T.color.borde2}`,
     borderRadius: T.radio.control, background: T.color.superficie,
-    cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+    cursor: "pointer", fontFamily: "inherit", fontSize: 13.5,
     fontWeight: 600, color: T.color.tinta,
    }}>
-    <CalendarDays size={15} style={{ color: T.color.tinta3 }} />
+    <CalendarDays size={15} style={{ color: T.color.tinta3, flexShrink: 0 }} />
     {actual.label}
+    {ancho && <ChevronDown size={16} style={{ color: T.color.tinta3, marginLeft: "auto" }} />}
    </button>
    {abierto && (
     <div style={{
-     position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, minWidth: 190,
+     position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40,
+     left: ancho ? 0 : undefined, minWidth: ancho ? undefined : 190,
      ...tarjeta, boxShadow: T.sombra.flotante, padding: 6,
     }}>
      {RANGOS.map(r => (
@@ -355,6 +412,7 @@ export function Dashboard({
  // El dashboard abre con todo el historico: es la foto completa de la operacion.
  // Los rangos cortos sirven para mirar un periodo, no para ser el punto de partida.
  const [rango, setRango] = useState("todo");
+ const esMovil = useEsMovil();
 
  const irA = (tab) => { if (setActiveTab) setActiveTab(tab); };
  const abrirPedido = (texto) => {
@@ -444,49 +502,100 @@ export function Dashboard({
   { label: "Total pedidos", valor: m.enRango.length, color: T.color.tinta3 },
   { label: "Activos", valor: m.activos.length, color: T.color.marca, destacado: true },
   { label: "Entregados", valor: m.entregados.length, color: T.color.bien },
-  { label: "En riesgo", valor: m.enRiesgo.length, color: T.color.ojo },
-  { label: "Vencidos", valor: m.vencidos.length, color: T.color.mal },
+  { label: "En riesgo", valor: m.enRiesgo.length, color: T.color.ojo, resalta: true },
+  { label: "Vencidos", valor: m.vencidos.length, color: T.color.mal, resalta: true },
   { label: "Devoluciones", valor: devoluciones.length, color: T.color.tinta3 },
  ];
 
+ const pie = ALTO_BARRA + 16;
+
  return (
-  <div style={{ minHeight: "100%", background: T.color.fondo, margin: "-28px -24px", padding: "24px 28px 40px", color: T.color.tinta }}>
-   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
+  <div style={{
+   minHeight: "100%", background: T.color.fondo, color: T.color.tinta,
+   margin: esMovil ? `-16px -16px -${pie}px` : "-28px -24px",
+   padding: esMovil ? `14px 16px ${pie + 12}px` : "24px 28px 40px",
+  }}>
+   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: esMovil ? 12 : 18 }}>
 
-    <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-     <div>
-      <h1 style={{ margin: 0, ...T.texto.titulo }}>Dashboard</h1>
-      <p style={{ margin: "4px 0 0", color: T.color.tinta3, fontSize: 13.5 }}>
-       Resumen operativo de seguimiento y entregas
-      </p>
-     </div>
-     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-      <Buscador pedidos={pedidos} onAbrirPedido={abrirPedido} />
-      <SelectorRango rango={rango} setRango={setRango} />
-      <Campana avisos={avisos} onIr={irA} />
-     </div>
-    </header>
+    {esMovil ? (
+     <>
+      <header style={{ display: "flex", alignItems: "center", gap: 12 }}>
+       <div style={{
+        width: 38, height: 38, borderRadius: 11, flexShrink: 0,
+        background: `linear-gradient(135deg,${T.color.marca},${T.color.marcaFuerte})`,
+        color: "#fff", display: "grid", placeItems: "center",
+        fontWeight: 800, fontSize: 12, letterSpacing: "-0.02em",
+       }}>PRO</div>
+       <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11.5, color: T.color.tinta3, lineHeight: 1.2 }}>Somos PRO · Tracking</div>
+        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>Dashboard</h1>
+       </div>
+       <Buscador pedidos={pedidos} onAbrirPedido={abrirPedido} compacto />
+       <Campana avisos={avisos} onIr={irA} />
+      </header>
+      <SelectorRango rango={rango} setRango={setRango} ancho />
+     </>
+    ) : (
+     <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+      <div>
+       <h1 style={{ margin: 0, ...T.texto.titulo }}>Dashboard</h1>
+       <p style={{ margin: "4px 0 0", color: T.color.tinta3, fontSize: 13.5 }}>
+        Resumen operativo de seguimiento y entregas
+       </p>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+       <Buscador pedidos={pedidos} onAbrirPedido={abrirPedido} />
+       <SelectorRango rango={rango} setRango={setRango} />
+       <Campana avisos={avisos} onIr={irA} />
+      </div>
+     </header>
+    )}
 
-    <Tarjeta style={{ padding: 0 }}>
-     <div style={{ display: "grid", gridTemplateColumns: `repeat(${kpis.length},1fr)` }}>
-      {kpis.map((k, i) => (
-       <div key={k.label} style={{
-        padding: "18px 22px",
-        borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}`,
-       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+    {esMovil ? (
+     // En dos columnas las seis cifras se leen de un vistazo sin desplazarse.
+     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      {kpis.map(k => (
+       <div key={k.label} style={{ ...tarjeta, padding: "13px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
          <span style={{ width: 7, height: 7, borderRadius: 4, background: k.color, flexShrink: 0 }} />
-         <span style={{ fontSize: 12.5, color: T.color.tinta2, whiteSpace: "nowrap" }}>{k.label}</span>
+         <span style={{
+          fontSize: 12, color: T.color.tinta2, minWidth: 0,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+         }}>{k.label}</span>
         </div>
-        <div style={{ ...T.texto.cifra, color: k.destacado ? T.color.marca : T.color.tinta }}>
-         {k.valor.toLocaleString("es-CO")}
-        </div>
+        <div style={{
+         fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.1,
+         color: k.destacado ? T.color.marca : k.resalta ? k.color : T.color.tinta,
+        }}>{k.valor.toLocaleString("es-CO")}</div>
        </div>
       ))}
      </div>
-    </Tarjeta>
+    ) : (
+     <Tarjeta style={{ padding: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${kpis.length},1fr)` }}>
+       {kpis.map((k, i) => (
+        <div key={k.label} style={{
+         padding: "18px 22px",
+         borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}`,
+        }}>
+         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 4, background: k.color, flexShrink: 0 }} />
+          <span style={{ fontSize: 12.5, color: T.color.tinta2, whiteSpace: "nowrap" }}>{k.label}</span>
+         </div>
+         <div style={{ ...T.texto.cifra, color: k.destacado ? T.color.marca : T.color.tinta }}>
+          {k.valor.toLocaleString("es-CO")}
+         </div>
+        </div>
+       ))}
+      </div>
+     </Tarjeta>
+    )}
 
-    <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr 0.85fr", gap: 18, alignItems: "start" }}>
+    <div style={{
+     display: "grid", alignItems: "start",
+     gridTemplateColumns: esMovil ? "1fr" : "1.15fr 1fr 0.85fr",
+     gap: esMovil ? 12 : 18,
+    }}>
 
      <Tarjeta>
       <TituloTarjeta accion={
@@ -518,9 +627,9 @@ export function Dashboard({
             background: "transparent", cursor: "pointer", fontFamily: "inherit",
             padding: "11px 0", textAlign: "left", width: "100%",
            }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta, minWidth: 108 }}>{p.id}</span>
-            <span style={{ fontSize: 12.5, color: T.color.tinta3, flex: 1, whiteSpace: "nowrap" }}>
-             vencio {p.limite}
+            <span style={{ flex: 1, minWidth: 0 }}>
+             <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{p.id}</span>
+             <span style={{ display: "block", fontSize: 12.5, color: T.color.tinta3 }}>vencio {p.limite}</span>
             </span>
             <span style={{
              background: T.color.malSuave, color: T.color.mal, borderRadius: T.radio.pastilla,

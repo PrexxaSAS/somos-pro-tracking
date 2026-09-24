@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verificar": "node scripts/auditar-identificadores.cjs && node scripts/probar-render.cjs"
   },
   "dependencies": {
     "@emailjs/browser": "^4.3.3",

@@ -27,7 +27,7 @@ import { T } from '../../design/tokens';
 
 // El menu va agrupado por secciones: con quince opciones seguidas nadie encuentra
 // nada. Cada rol ve solo sus grupos, y un grupo sin opciones no se dibuja.
-const MENUS = {
+export const MENUS = {
   admin: [
     ["Operacion", [
       ["dashboard", "Dashboard", BarChart3],

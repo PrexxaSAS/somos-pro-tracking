@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal, Search, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
+import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
 
 // Piezas compartidas por las pantallas de listado (Pedidos, Conductores, Usuarios).
@@ -56,9 +57,18 @@ export const iconoAccion = {
 };
 
 export function Pagina({ children }) {
+ // Los margenes negativos anulan el relleno del contenedor para que el fondo
+ // llegue a los bordes; en el celular ese relleno es otro, y abajo hay que
+ // devolver el espacio que reserva la barra de navegacion.
+ const esMovil = useEsMovil();
+ const pie = ALTO_BARRA + 16;
  return (
-  <div style={{ minHeight: "100%", background: T.color.fondo, margin: "-28px -24px", padding: "28px 36px 36px", color: T.color.tinta }}>
-   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+  <div style={{
+   minHeight: "100%", background: T.color.fondo, color: T.color.tinta,
+   margin: esMovil ? `-16px -16px -${pie}px` : "-28px -24px",
+   padding: esMovil ? `16px 16px ${pie + 12}px` : "28px 36px 36px",
+  }}>
+   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: esMovil ? 14 : 20 }}>
     {children}
    </div>
   </div>

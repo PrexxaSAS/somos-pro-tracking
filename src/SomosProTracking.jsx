@@ -11,6 +11,8 @@ import { Login } from './components/auth/Login';
 import { CargadorFotos } from './components/delivery/CargadorFotos';
 import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
+import { NavegacionMovil } from './components/layout/NavegacionMovil';
+import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta } from './design/tokens';
@@ -5219,6 +5221,7 @@ export default function SomosProTracking() {
  const [promesas,    setPromesas]    = useState([]);
  const [facturas,    setFacturas]    = useState([]);
  const [collapsed,   setCollapsed]   = useState(false);
+ const esMovil = useEsMovil();
  const [modCompartir,  setModCompartir]  = useState(false);
  // Lo que se elige en el buscador del dashboard: Pedidos se abre con esa consulta
  // ya aplicada, en vez de dejar al usuario buscando otra vez.
@@ -5530,10 +5533,18 @@ export default function SomosProTracking() {
 
  return (
   <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#fafafa" }}>
-   <SidebarApp user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
-   <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa" }}>
+   {!esMovil && (
+    <SidebarApp user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
+   )}
+   <main style={{
+    flex: 1, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
+    padding: esMovil ? "16px 16px " + (ALTO_BARRA + 16) + "px" : "28px 24px",
+   }}>
     {renderContent()}
    </main>
+   {esMovil && (
+    <NavegacionMovil user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} />
+   )}
    {modCompartir && <LinkCompartir onClose={()=>setModCompartir(false)} />}
    {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
   </div>
