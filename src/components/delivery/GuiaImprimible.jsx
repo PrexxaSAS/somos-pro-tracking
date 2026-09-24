@@ -297,11 +297,18 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
    .guia-print-portal{display:none}
    @media print{
     @page{size:letter;margin:12mm}
+    html,body{
+     width:auto!important;
+     margin:0!important;
+     padding:0!important;
+     background:#fff!important;
+    }
     body > *:not(.guia-print-portal){display:none!important}
-    .guia-print-portal{display:block!important;background:#fff!important}
+    .guia-print-portal{display:block!important;background:#fff!important;width:100%!important}
     .guia-print-document{
      width:100%!important;
-     max-width:100%!important;
+     max-width:190mm!important;
+     margin:0 auto!important;
      box-sizing:border-box!important;
      border:none!important;
      border-radius:0!important;
@@ -309,6 +316,12 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
      box-shadow:none!important;
      page-break-after:avoid!important;
      break-after:avoid!important;
+    }
+    /* Sin esto el navegador descarta los fondos y el escudo de la marca sale
+       gris. Solo hay dos: el escudo y el codigo, que deben salir como son. */
+    .guia-print-document, .guia-print-document *{
+     -webkit-print-color-adjust:exact!important;
+     print-color-adjust:exact!important;
     }
    }
   `}</style>
