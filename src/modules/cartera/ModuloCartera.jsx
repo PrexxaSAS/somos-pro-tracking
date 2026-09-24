@@ -2,7 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { leerTextoCsv, filasCsv } from '../../utils/files';
 import { P } from '../../Constants';
-import { Card, Btn, Field, Modal } from '../../Subcomponentes';
+import { T, tarjeta } from '../../design/tokens';
+import { Plus, Printer, Trash2, Upload } from 'lucide-react';
+import {
+ Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
+ Segmentado, Paginador,
+ PieTabla, th, td, tdCifra, mono, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion,
+} from '../../components/ui/listas';
+import {
+ ModalForm, ModalGestion, Seccion, FranjaInfo, Resumen, Fila, Texto, Selector, AreaTexto,
+ CasillaNovedad,
+} from '../../components/ui/formularios';
 import emailjs from '@emailjs/browser';
 
 // ── Configuración ──────────────────────────────────────────────────────────────
@@ -18,11 +28,11 @@ const fFecha = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f
 const fFechaHora = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleString('es-CO'); };
 
 const ESTADOS_CARTERA = {
-  pendiente:       {label:"Pendiente",       color:"#d97706",bg:"#fffbeb"},
-  preaprobado:     {label:"Preaprobado",     color:"#059669",bg:"#ecfdf5"},
-  cartera_vencida: {label:"Cartera Vencida", color:"#dc2626",bg:"#fef2f2"},
-  aprobado:        {label:"Aprobado",        color:"#0891b2",bg:"#ecfeff"},
-  rechazado:       {label:"Rechazado",       color:"#64748b",bg:"#f1f5f9"},
+  pendiente:       {label:"Pendiente",       color:T.color.ojo,  bg:T.color.ojoSuave},
+  preaprobado:     {label:"Preaprobado",     color:T.color.bien, bg:T.color.bienSuave},
+  cartera_vencida: {label:"Cartera vencida", color:T.color.mal,  bg:T.color.malSuave},
+  aprobado:        {label:"Aprobado",        color:T.color.info, bg:T.color.infoSuave},
+  rechazado:       {label:"Rechazado",       color:T.color.tinta3, bg:T.color.superficie3},
 };
 
 
@@ -155,66 +165,111 @@ export function GestionSedes({showToast}) {
   };
 
   return (
-    <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-        <h2 style={{margin:0,fontWeight:900}}>🏭 Sedes y Cortes de Despacho</h2>
-        <Btn onClick={()=>{setForm(vacio);setModSede({});}}>+ Nueva Sede</Btn>
-      </div>
-      {sedes.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay sedes registradas. Agrega la primera sede para comenzar.</Card>}
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {sedes.map(s=>(
-          <Card key={s.id} style={{borderLeft:`4px solid ${s.activa?P[600]:"#94a3b8"}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-              <div>
-                <div style={{fontWeight:800,fontSize:16,color:s.activa?P[800]:"#94a3b8"}}>{s.nombre}</div>
-                <div style={{fontSize:13,color:"#64748b",marginTop:4,display:"flex",gap:16,flexWrap:"wrap"}}>
-                  <span>📍 {s.municipio}</span>
-                  <span>🏷️ DANE: {s.dane_code}</span>
-                  <span>📦 {s.capacidad_dia} pedidos/día</span>
-                  <span>⏰ Último corte: {s.hora_ultimo_corte}</span>
-                  <span>🔄 {s.num_cortes} cortes/día</span>
-                  <span style={{color:s.activa?P[600]:"#94a3b8",fontWeight:700}}>{s.activa?"● Activa":"○ Inactiva"}</span>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                <Btn size="sm" variant="secondary" onClick={()=>setModCortes(s)}>⏰ Cortes</Btn>
-                <Btn size="sm" variant="secondary" onClick={()=>{setForm({...s,capacidad_dia:String(s.capacidad_dia),num_cortes:String(s.num_cortes)});setModSede(s);}}>✏️ Editar</Btn>
-                <Btn size="sm" variant="danger" onClick={()=>eliminar(s.id,s.nombre)}>× Eliminar</Btn>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+   <Pagina>
+    <Encabezado
+     titulo="Sedes y cortes"
+     descripcion="Puntos de despacho con su capacidad y sus horarios de corte"
+     acciones={
+      <button onClick={()=>{setForm(vacio);setModSede({});}} style={botonPrincipal}>
+       <Plus size={16}/> Nueva sede
+      </button>
+     }
+    />
 
-      {modSede!==null&&(
-        <Modal title={form.id?"Editar Sede":"Nueva Sede"} onClose={()=>setModSede(null)}>
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <Field label="Nombre de la sede *" value={form.nombre} onChange={f("nombre")} placeholder="Bodega Medellín"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <Field label="Municipio *" value={form.municipio} onChange={f("municipio")} placeholder="Medellín"/>
-              <Field label="Código DANE *" value={form.dane_code} onChange={f("dane_code")} placeholder="05001"/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-              <Field label="Pedidos máx. por día" value={form.capacidad_dia} onChange={f("capacidad_dia")} type="number" placeholder="50"/>
-              <Field label="Número de cortes" value={form.num_cortes} onChange={f("num_cortes")} type="number" placeholder="3"/>
-              <Field label="Hora último corte" value={form.hora_ultimo_corte} onChange={f("hora_ultimo_corte")} type="time"/>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>f("activa")(!form.activa)}>
-              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${form.activa?P[600]:"#94a3b8"}`,background:form.activa?P[600]:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                {form.activa&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
-              </div>
-              <span style={{fontSize:13,fontWeight:600,color:"#334155"}}>Sede activa</span>
-            </div>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>setModSede(null)}>Cancelar</Btn>
-              <Btn disabled={carg} onClick={guardar}>{carg?"Guardando...":"💾 Guardar Sede"}</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+    <Indicadores items={[
+     { label:"Sedes", valor:sedes.length, color:T.color.marca, destacado:true },
+     { label:"Activas", valor:sedes.filter(x=>x.activa).length, color:T.color.bienPunto },
+     { label:"Capacidad por dia", valor:sedes.reduce((a,x)=>a+Number(x.capacidad_dia||0),0), color:T.color.infoPunto },
+    ]}/>
 
-      {modCortes&&<ModalCortes sede={modCortes} onClose={()=>setModCortes(null)} showToast={showToast}/>}
-    </div>
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     {sedes.length === 0 ? (
+      <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+       No hay sedes registradas. Agrega la primera para poder programar cortes.
+      </div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:820 }}>
+        <thead>
+         <tr>
+          <th style={th}>Sede</th>
+          <th style={th}>DANE</th>
+          <th style={{...th, textAlign:"right"}}>Capacidad/dia</th>
+          <th style={{...th, textAlign:"right"}}>Cortes</th>
+          <th style={th}>Ultimo corte</th>
+          <th style={th}>Estado</th>
+          <th style={{...th, textAlign:"right"}}>Acciones</th>
+         </tr>
+        </thead>
+        <tbody>
+         {sedes.map(x => (
+          <tr key={x.id}>
+           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>
+            <div>{x.nombre}</div>
+            <div style={{ ...T.texto.meta, color:T.color.tinta3, fontWeight:400 }}>{x.municipio}</div>
+           </td>
+           <td style={td}><span style={chipMono}>{x.dane_code}</span></td>
+           <td style={tdCifra}>{x.capacidad_dia}</td>
+           <td style={tdCifra}>{x.num_cortes}</td>
+           <td style={td}>{x.hora_ultimo_corte}</td>
+           <td style={td}>
+            <span style={{
+             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+             borderRadius:T.radio.pastilla, fontSize:12, fontWeight:600,
+             background: x.activa ? T.color.bienSuave : T.color.neutroSuave,
+             color: x.activa ? T.color.bien : T.color.tinta3,
+            }}>
+             <span style={{ width:6, height:6, borderRadius:3, background: x.activa ? T.color.bienPunto : T.color.neutroPunto }}/>
+             {x.activa ? "Activa" : "Inactiva"}
+            </span>
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
+             <button style={botonFila} onClick={()=>setModCortes(x)}>Cortes</button>
+             <button style={botonFila}
+              onClick={()=>{setForm({...x, capacidad_dia:String(x.capacidad_dia), num_cortes:String(x.num_cortes)}); setModSede(x);}}>
+              Editar
+             </button>
+             <button title="Eliminar sede" onClick={()=>eliminar(x.id, x.nombre)}
+              style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
+            </div>
+           </td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     )}
+    </section>
+
+    {modSede && (
+     <ModalForm
+      titulo={form.id ? "Editar sede" : "Nueva sede"}
+      descripcion="Punto de despacho con su capacidad diaria"
+      ancho="M"
+      onClose={()=>setModSede(null)}
+      onPrimario={guardar}
+      guardando={carg}
+      textoPrimario={form.id ? "Guardar cambios" : "Crear sede"}
+     >
+      <Texto label="Nombre de la sede" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="CEDI La Estrella" />
+      <Fila>
+       <Texto label="Municipio" valor={form.municipio} onChange={f("municipio")} placeholder="La Estrella" />
+       <Texto label="Codigo DANE" mono valor={form.dane_code} onChange={f("dane_code")} placeholder="05380" />
+      </Fila>
+      <Fila columnas={3}>
+       <Texto label="Capacidad por dia" tipo="number" valor={form.capacidad_dia} onChange={f("capacidad_dia")} />
+       <Texto label="Cortes por dia" tipo="number" valor={form.num_cortes} onChange={f("num_cortes")} />
+       <Texto label="Ultimo corte" tipo="time" valor={form.hora_ultimo_corte} onChange={f("hora_ultimo_corte")} />
+      </Fila>
+      <CasillaNovedad marcada={!form.activa} onChange={v=>f("activa")(!v)}>
+       Sede inactiva (no recibe pedidos nuevos)
+      </CasillaNovedad>
+     </ModalForm>
+    )}
+
+    {modCortes && <ModalCortes sede={modCortes} onClose={()=>setModCortes(null)} showToast={showToast}/>}
+   </Pagina>
   );
 }
 
@@ -250,40 +305,61 @@ export function ModalCortes({sede,onClose,showToast}) {
   };
 
   return (
-    <Modal title={`Cortes — ${sede.nombre}`} onClose={onClose} wide>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <div style={{background:P[50],borderRadius:10,padding:14,border:`1px solid ${P[200]}`}}>
-          <div style={{fontWeight:700,marginBottom:10,fontSize:13}}>➕ Agregar Corte</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:10,alignItems:"end"}}>
-            <Field label="Hora del corte" value={form.hora_corte} onChange={f("hora_corte")} type="time"/>
-            <Field label="Pedidos máx." value={form.capacidad_corte} onChange={f("capacidad_corte")} type="number" placeholder="20"/>
-            <Field label="Orden" value={form.orden} onChange={f("orden")} type="number" placeholder="1"/>
-            <Btn disabled={carg} onClick={agregar} style={{alignSelf:"end"}}>+ Agregar</Btn>
-          </div>
-        </div>
-        {cortes.length===0&&<div style={{textAlign:"center",padding:24,color:"#94a3b8",fontSize:13}}>No hay cortes configurados para esta sede.</div>}
-        {cortes.length>0&&(
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead><tr style={{background:P[50]}}>
-              {["Orden","Hora del Corte","Pedidos Máx.","Eliminar"].map(h=>(
-                <th key={h} style={{padding:"9px 14px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {cortes.map((c,i)=>(
-                <tr key={c.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                  <td style={{padding:"9px 14px",fontWeight:700}}>{c.orden}</td>
-                  <td style={{padding:"9px 14px",fontWeight:700,color:P[700],fontSize:16}}>{c.hora_corte}</td>
-                  <td style={{padding:"9px 14px"}}>{c.capacidad_corte} pedidos</td>
-                  <td style={{padding:"9px 14px"}}><button onClick={()=>eliminar(c.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#dc2626",fontSize:18,padding:0}}>×</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <div style={{display:"flex",justifyContent:"flex-end"}}><Btn variant="secondary" onClick={onClose}>Cerrar</Btn></div>
-      </div>
-    </Modal>
+   <ModalGestion
+    titulo="Cortes de despacho"
+    descripcion={sede.nombre}
+    onClose={onClose}
+    ancho="M"
+    textoCancelar="Cerrar"
+   >
+    <Seccion titulo="Agregar corte"/>
+    <div style={{
+     display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:10, alignItems:"end",
+     background:T.color.superficie2, border:`1px solid ${T.color.borde}`,
+     borderRadius:T.radio.control, padding:14,
+    }}>
+     <Texto label="Hora" tipo="time" valor={form.hora_corte} onChange={f("hora_corte")}/>
+     <Texto label="Pedidos max." tipo="number" valor={form.capacidad_corte} onChange={f("capacidad_corte")} placeholder="20"/>
+     <Texto label="Orden" tipo="number" valor={form.orden} onChange={f("orden")} placeholder="1"/>
+     <button onClick={agregar} disabled={carg} style={{ ...botonPrincipal, height:40 }}>
+      <Plus size={15}/> Agregar
+     </button>
+    </div>
+
+    <Seccion titulo={`Cortes configurados (${cortes.length})`}/>
+    {cortes.length === 0 ? (
+     <div style={{
+      padding:28, textAlign:"center", fontSize:13, color:T.color.tinta3,
+      border:`1px dashed ${T.color.borde2}`, borderRadius:T.radio.control,
+     }}>Esta sede aun no tiene cortes configurados.</div>
+    ) : (
+     <div style={{ border:`1px solid ${T.color.borde}`, borderRadius:T.radio.tarjeta, overflow:"hidden" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead>
+        <tr>
+         <th style={{...th, width:70}}>Orden</th>
+         <th style={th}>Hora</th>
+         <th style={{...th, textAlign:"right"}}>Pedidos max.</th>
+         <th style={{...th, textAlign:"right", width:64}}></th>
+        </tr>
+       </thead>
+       <tbody>
+        {cortes.map(c => (
+         <tr key={c.id}>
+          <td style={{ ...td, fontWeight:700, color:T.color.tinta }}>{c.orden}</td>
+          <td style={td}><span style={chipMono}>{c.hora_corte}</span></td>
+          <td style={tdCifra}>{c.capacidad_corte}</td>
+          <td style={{ ...td, textAlign:"right" }}>
+           <button title="Eliminar corte" onClick={()=>eliminar(c.id)}
+            style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
+          </td>
+         </tr>
+        ))}
+       </tbody>
+      </table>
+     </div>
+    )}
+   </ModalGestion>
   );
 }
 
@@ -347,53 +423,86 @@ export function GestionAsesores({showToast}) {
   };
 
   return (
-    <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-        <h2 style={{margin:0,fontWeight:900}}>👤 Asesores Comerciales</h2>
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" size="sm" onClick={()=>fileRef.current?.click()}>📤 Cargar CSV</Btn>
-          <Btn onClick={()=>{setForm(vacio);setEditando(null);setModNuevo(true);}}>+ Nuevo Asesor</Btn>
-        </div>
+   <Pagina>
+    <Encabezado
+     titulo="Asesores comerciales"
+     descripcion="Destinatarios del correo cuando se rechaza un pedido"
+     acciones={<>
+      <button onClick={()=>fileRef.current?.click()} style={botonBarra}>
+       <Upload size={15}/> Importar CSV
+      </button>
+      <button onClick={()=>{setForm(vacio);setEditando(null);setModNuevo(true);}} style={botonPrincipal}>
+       <Plus size={16}/> Nuevo asesor
+      </button>
+     </>}
+    />
+
+    <Indicadores items={[
+     { label:"Asesores", valor:asesores.length, color:T.color.marca, destacado:true },
+     { label:"Con correo", valor:asesores.filter(a=>a.email).length, color:T.color.bienPunto },
+     { label:"Sin correo", valor:asesores.filter(a=>!a.email).length, color:T.color.ojoPunto },
+    ]}/>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     {asesores.length === 0 ? (
+      <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+       Sin asesores registrados. Sin ellos, el rechazo de un pedido no avisa a nadie.
       </div>
-      <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])cargarCSV(e.target.files[0]);}}/>
-      <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 16px",fontSize:12,color:"#1e40af",marginBottom:16}}>
-        📌 El CSV debe tener estas columnas: <strong>codigo, nombre, email</strong> — separadas por coma o punto y coma.
-      </div>
-      {asesores.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay asesores registrados.</Card>}
-      <Card style={{padding:0,overflow:"hidden"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-          <thead><tr style={{background:P[50]}}>{["Código","Nombre","Correo","Acciones"].map(h=><th key={h} style={{padding:"10px 16px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11}}>{h}</th>)}</tr></thead>
-          <tbody>
-            {asesores.map((a,i)=>(
-              <tr key={a.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                <td style={{padding:"10px 16px",fontFamily:"monospace",fontWeight:700,color:P[700]}}>{a.codigo}</td>
-                <td style={{padding:"10px 16px",fontWeight:600}}>{a.nombre}</td>
-                <td style={{padding:"10px 16px",color:"#64748b"}}>{a.email}</td>
-                <td style={{padding:"10px 16px"}}>
-                  <div style={{display:"flex",gap:8}}>
-                    <Btn size="sm" variant="secondary" onClick={()=>{setForm({...a});setEditando(a.id);setModNuevo(true);}}>✏️</Btn>
-                    <Btn size="sm" variant="danger" onClick={()=>eliminar(a.id,a.nombre)}>×</Btn>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-      {modNuevo&&(
-        <Modal title={editando?"Editar Asesor":"Nuevo Asesor"} onClose={()=>{setModNuevo(false);setEditando(null);}}>
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <Field label="Código del asesor *" value={form.codigo} onChange={f("codigo")} placeholder="34"/>
-            <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} placeholder="Juan Pérez"/>
-            <Field label="Correo electrónico *" value={form.email} onChange={f("email")} placeholder="juan@empresa.com" type="email"/>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="secondary" onClick={()=>{setModNuevo(false);setEditando(null);}}>Cancelar</Btn>
-              <Btn disabled={carg} onClick={guardar}>{carg?"Guardando...":"💾 Guardar"}</Btn>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <thead>
+         <tr>
+          <th style={th}>Codigo</th>
+          <th style={th}>Nombre</th>
+          <th style={th}>Correo</th>
+          <th style={{...th, textAlign:"right"}}>Acciones</th>
+         </tr>
+        </thead>
+        <tbody>
+         {asesores.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(a => (
+          <tr key={a.id}>
+           <td style={td}><span style={chipMono}>{a.codigo}</span></td>
+           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{a.nombre || "-"}</td>
+           <td style={td}>
+            {a.email || <span style={{ color:T.color.ojo }}>Sin correo</span>}
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
+             <button style={botonFila}
+              onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||""}); setEditando(a); setModNuevo(true);}}>
+              Editar
+             </button>
+             <button title="Eliminar asesor" onClick={()=>eliminar(a.id, a.nombre||a.codigo)}
+              style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
             </div>
-          </div>
-        </Modal>
-      )}
-    </div>
+           </td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     )}
+    </section>
+
+    <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
+     onChange={e=>{ if(e.target.files[0]) cargarCSV(e.target.files[0]); }}/>
+
+    {modNuevo && (
+     <ModalForm
+      titulo={editando ? "Editar asesor" : "Nuevo asesor"}
+      descripcion="El correo recibe el aviso cuando se rechaza uno de sus pedidos"
+      onClose={()=>{setModNuevo(false);setEditando(null);}}
+      onPrimario={guardar}
+      guardando={carg}
+      textoPrimario={editando ? "Guardar cambios" : "Crear asesor"}
+     >
+      <Texto label="Codigo del asesor" obligatorio mono valor={form.codigo} onChange={f("codigo")} placeholder="V001" />
+      <Texto label="Nombre" valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
+      <Texto label="Correo" tipo="email" valor={form.email} onChange={f("email")} placeholder="juan.perez@prexxa.com.co" />
+     </ModalForm>
+    )}
+   </Pagina>
   );
 }
 
@@ -471,57 +580,60 @@ export function CargarCarteraVencida({showToast}) {
   };
 
   return (
-    <div>
-      <h2 style={{margin:"0 0 8px",fontWeight:900}}>📋 Cargar Estado de Cartera</h2>
-      <p style={{margin:"0 0 20px",fontSize:13,color:"#64748b"}}>Sube el archivo de cartera vencida. Cada vez que lo subas reemplazará completamente el estado anterior.</p>
+   <Pagina>
+    <Encabezado
+     titulo="Cargar cartera vencida"
+     descripcion="Reemplaza el estado de cartera de todos los clientes"
+    />
 
-      <Card style={{marginBottom:16}}>
-        <div style={{fontWeight:700,marginBottom:10,fontSize:13}}>Columnas requeridas en el archivo:</div>
-        <div style={{fontSize:12,color:"#64748b",display:"flex",gap:16,flexWrap:"wrap"}}>
-          <span>✓ <strong>Cliente</strong> — NIT del cliente</span>
-          <span>✓ <strong>DiasExcedio</strong> — días vencidos (mayor a 0 = vencido)</span>
-          <span>○ RazonSocial, FechaCorte — opcionales</span>
-        </div>
-      </Card>
+    <section style={{ ...tarjeta, padding:20, display:"flex", flexDirection:"column", gap:16 }}>
+     <button onClick={()=>fileRef.current?.click()}
+      onDragOver={e=>e.preventDefault()}
+      onDrop={e=>{e.preventDefault(); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);}}
+      style={{
+       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
+       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
+       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
+      }}>
+      <span style={{
+       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
+       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
+      }}><Upload size={20}/></span>
+      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
+       {archivo || "Arrastra el archivo CSV o haz clic para seleccionarlo"}
+      </span>
+      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
+       Solo archivos .csv · columnas Cliente (NIT) y DiasExcedio
+      </span>
+     </button>
+     <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
+      onChange={e=>{ if(e.target.files[0]) leerArchivo(e.target.files[0]); }}/>
 
-      {!preview&&!resultado&&(
-        <div style={{border:`2px dashed ${P[300]}`,borderRadius:14,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}
-          onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()}
-          onDrop={e=>{e.preventDefault();if(e.dataTransfer.files[0])leerArchivo(e.dataTransfer.files[0]);}}>
-          <div style={{fontSize:40,marginBottom:8}}>📂</div>
-          <div style={{color:"#64748b",fontWeight:600}}>{archivo||"Clic o arrastra el archivo CSV aquí"}</div>
-        </div>
-      )}
-      <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])leerArchivo(e.target.files[0]);}}/>
+     <FranjaInfo>
+      Cada carga <strong>reemplaza</strong> la tabla completa: los clientes que no vengan en el
+      archivo quedan sin cartera vencida.
+     </FranjaInfo>
 
-      {preview&&(
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-            {[{l:"Total clientes",v:preview.total,c:P[600],bg:P[50]},{l:"Con cartera vencida",v:preview.vencidos,c:"#dc2626",bg:"#fef2f2"},{l:"Al día",v:preview.alDia,c:"#059669",bg:"#ecfdf5"}].map(s=>(
-              <div key={s.l} style={{background:s.bg,borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:900,color:s.c}}>{s.v}</div>
-                <div style={{fontSize:11,color:"#64748b",fontWeight:700,marginTop:4}}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:10,padding:"10px 16px",fontSize:12,color:"#92400e"}}>
-            ⚠️ Al confirmar se reemplazará completamente la base de cartera anterior con los {preview.total} clientes de este archivo.
-          </div>
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <Btn variant="secondary" onClick={()=>{setPreview(null);setArchivo('');}}>⬅ Cambiar archivo</Btn>
-            <Btn disabled={carg} onClick={aplicar}>{carg?"Aplicando...":"✅ Confirmar y Reemplazar"}</Btn>
-          </div>
-        </div>
-      )}
+     {preview && (
+      <>
+       <Indicadores items={[
+        { label:"Clientes", valor:preview.total, color:T.color.marca, destacado:true },
+        { label:"Con cartera vencida", valor:preview.vencidos, color:T.color.malPunto },
+        { label:"Al dia", valor:preview.alDia, color:T.color.bienPunto },
+       ]}/>
+       <button onClick={aplicar} disabled={carg} style={{ ...botonPrincipal, alignSelf:"flex-start" }}>
+        {carg ? "Aplicando..." : `Aplicar a ${preview.total} cliente(s)`}
+       </button>
+      </>
+     )}
 
-      {resultado&&(
-        <Card style={{background:"#ecfdf5",border:"2px solid #86efac"}}>
-          <div style={{fontWeight:800,color:"#059669",fontSize:15,marginBottom:8}}>✅ Cartera actualizada correctamente</div>
-          <div style={{fontSize:13,color:"#334155"}}>{resultado.ok} de {resultado.total} clientes actualizados.</div>
-          <Btn size="sm" variant="secondary" style={{marginTop:12}} onClick={()=>setResultado(null)}>Cargar otro archivo</Btn>
-        </Card>
-      )}
-    </div>
+     {resultado && (
+      <FranjaInfo>
+       {resultado.ok} de {resultado.total} cliente(s) cargados.
+      </FranjaInfo>
+     )}
+    </section>
+   </Pagina>
   );
 }
 
@@ -689,78 +801,111 @@ export function CargarPedidos({showToast,onCargado}) {
   };
 
   return (
-    <div>
-      <h2 style={{margin:"0 0 8px",fontWeight:900}}>📤 Cargar Pedidos</h2>
-      <p style={{margin:"0 0 20px",fontSize:13,color:"#64748b"}}>Sube el archivo de pedidos del día en formato CSV. El sistema los clasificará automáticamente según el estado de cartera.</p>
+   <Pagina>
+    <Encabezado
+     titulo="Cargar pedidos"
+     descripcion="Pedidos del dia para revisar contra el estado de cartera"
+    />
 
-      {!pedidos.length&&!resultado&&(
-        <>
-          <div style={{border:`2px dashed ${P[300]}`,borderRadius:14,padding:"40px 20px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}
-            onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()}
-            onDrop={e=>{e.preventDefault();if(e.dataTransfer.files[0])leerArchivo(e.dataTransfer.files[0]);}}>
-            <div style={{fontSize:44,marginBottom:8}}>📊</div>
-            <div style={{color:"#64748b",fontWeight:600,fontSize:15}}>{archivo||"Clic o arrastra el archivo aquí"}</div>
-            <div style={{color:"#94a3b8",fontSize:12,marginTop:6}}>Solo archivos .csv</div>
-          </div>
-          {errMsg&&<div style={{background:"#fef2f2",borderRadius:10,padding:"10px 16px",fontSize:13,color:"#dc2626",fontWeight:600,marginTop:12}}>⚠️ {errMsg}</div>}
-        </>
-      )}
-      <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])leerArchivo(e.target.files[0]);}}/>
+    <section style={{ ...tarjeta, padding:20, display:"flex", flexDirection:"column", gap:16 }}>
+     <button onClick={()=>fileRef.current?.click()}
+      onDragOver={e=>e.preventDefault()}
+      onDrop={e=>{e.preventDefault(); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);}}
+      style={{
+       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
+       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
+       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
+      }}>
+      <span style={{
+       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
+       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
+      }}><Upload size={20}/></span>
+      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
+       {archivo || "Arrastra el archivo CSV o haz clic para seleccionarlo"}
+      </span>
+      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
+       Solo archivos .csv · una linea por referencia del pedido
+      </span>
+     </button>
+     <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
+      onChange={e=>{ if(e.target.files[0]) leerArchivo(e.target.files[0]); }}/>
 
-      {pedidos.length>0&&!resultado&&(
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-            {[{l:"Total pedidos",v:resumen.total,c:P[600],bg:P[50]},{l:"Cartera Vencida",v:resumen.vencida,c:"#dc2626",bg:"#fef2f2"},{l:"Preaprobados",v:resumen.preaprobado,c:"#059669",bg:"#ecfdf5"},{l:"Pendientes",v:resumen.pendiente,c:"#d97706",bg:"#fffbeb"}].map(s=>(
-              <div key={s.l} style={{background:s.bg,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
-                <div style={{fontSize:26,fontWeight:900,color:s.c}}>{s.v}</div>
-                <div style={{fontSize:11,color:"#64748b",fontWeight:700,marginTop:3}}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-          <Card style={{padding:0,overflow:"hidden",maxHeight:320,overflowY:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{position:"sticky",top:0,background:P[50]}}>
-                <tr>{["Pedido","NIT","Cliente","Valor","Plazo","Asesor","Sede Origen","Estado"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {pedidos.map((p,i)=>(
-                  <tr key={p.numero_pedido} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                    <td style={{padding:"8px 12px",fontFamily:"monospace",fontWeight:700,fontSize:11}}>{p.numero_pedido}</td>
-                    <td style={{padding:"8px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
-                    <td style={{padding:"8px 12px",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cliente}</td>
-                    <td style={{padding:"8px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
-                    <td style={{padding:"8px 12px",textAlign:"center"}}>{p.plazo} días</td>
-                    <td style={{padding:"8px 12px"}}>{p.vendedor}</td>
-                    <td style={{padding:"8px 12px",fontSize:11,color:"#64748b"}}>{p.origen?.split('-').pop()||'—'}</td>
-                    <td style={{padding:"8px 12px"}}><BadgeEstado estado={p.estado_cartera}/></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <Btn variant="secondary" onClick={()=>{setPedidos([]);setArchivo('');setErrMsg('');}}>⬅ Cambiar archivo</Btn>
-            <Btn disabled={carg} onClick={confirmar}>{carg?"Cargando...":"✅ Confirmar Carga"}</Btn>
-          </div>
+     {errMsg && (
+      <div style={{
+       background:T.color.malSuave, border:`1px solid ${T.color.malBorde}`,
+       color:T.color.mal, borderRadius:T.radio.control, padding:"10px 12px", fontSize:13,
+      }}>{errMsg}</div>
+     )}
+
+     {pedidos.length > 0 && (
+      <>
+       <Indicadores items={[
+        { label:"Pedidos leidos", valor:resumen.total, color:T.color.marca, destacado:true },
+        { label:"Cartera vencida", valor:resumen.vencida, color:T.color.malPunto },
+        { label:"Preaprobados", valor:resumen.preaprobado, color:T.color.bienPunto },
+        { label:"Pendientes", valor:resumen.pendiente, color:T.color.ojoPunto },
+       ]}/>
+
+       <div style={{ border:`1px solid ${T.color.borde}`, borderRadius:T.radio.tarjeta, overflow:"hidden" }}>
+        <div style={{ maxHeight:280, overflowY:"auto" }}>
+         <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead>
+           <tr>
+            <th style={th}>Pedido</th>
+            <th style={th}>Cliente</th>
+            <th style={{...th, textAlign:"right"}}>Valor</th>
+            <th style={th}>Clasificacion</th>
+           </tr>
+          </thead>
+          <tbody>
+           {pedidos.slice(0, 100).map((x,i) => {
+            const est = ESTADOS_CARTERA[x.estado_cartera] || ESTADOS_CARTERA.pendiente;
+            return (
+             <tr key={i}>
+              <td style={td}><span style={chipMono}>{x.numero_pedido}</span></td>
+              <td style={{ ...td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+               <div style={{ fontWeight:600, color:T.color.tinta }}>{x.cliente}</div>
+               <div style={mono}>{x.nit}</div>
+              </td>
+              <td style={tdCifra}>{fCOP(x.valor_total)}</td>
+              <td style={td}>
+               <span style={{
+                display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+                borderRadius:T.radio.pastilla, background:est.bg, color:est.color,
+                fontSize:12, fontWeight:600, whiteSpace:"nowrap",
+               }}>
+                <span style={{ width:6, height:6, borderRadius:3, background:est.color }}/>
+                {est.label}
+               </span>
+              </td>
+             </tr>
+            );
+           })}
+          </tbody>
+         </table>
         </div>
-      )}
+        {pedidos.length > 100 && (
+         <div style={{ padding:"9px 14px", borderTop:`1px solid ${T.color.divisor}`, fontSize:12.5, color:T.color.tinta3 }}>
+          Mostrando 100 de {pedidos.length}; se cargan todos.
+         </div>
+        )}
+       </div>
 
-      {resultado&&(
-        <Card style={{background:"#ecfdf5",border:"2px solid #86efac"}}>
-          <div style={{fontWeight:800,color:"#059669",fontSize:15,marginBottom:8}}>✅ Pedidos cargados correctamente</div>
-          <div style={{fontSize:13,color:"#334155",display:"flex",flexDirection:"column",gap:4}}>
-            <span>✓ <strong>{resultado.ok}</strong> pedido(s) cargados</span>
-            {resultado.errores>0&&<span>✗ <strong>{resultado.errores}</strong> error(es)</span>}
-            {resultado.duplicados?.length>0&&(
-              <span style={{color:"#d97706"}}>⚠️ <strong>{resultado.duplicados.length}</strong> pedido(s) ya existían y no se volvieron a cargar: {resultado.duplicados.join(', ')}</span>
-            )}
-          </div>
-          <div style={{display:"flex",gap:10,marginTop:12}}>
-            <Btn size="sm" variant="secondary" onClick={()=>setResultado(null)}>Cargar otro archivo</Btn>
-          </div>
-        </Card>
-      )}
-    </div>
+       <button onClick={confirmar} disabled={carg} style={{ ...botonPrincipal, alignSelf:"flex-start" }}>
+        {carg ? "Cargando..." : `Cargar ${pedidos.length} pedido(s)`}
+       </button>
+      </>
+     )}
+
+     {resultado && (
+      <FranjaInfo>
+       {resultado.ok} de {resultado.total} pedido(s) cargados
+       {resultado.duplicados.length > 0 ? `, ${resultado.duplicados.length} ya existian y se omitieron` : ""}
+       {resultado.errores > 0 ? `, ${resultado.errores} con error` : ""}.
+      </FranjaInfo>
+     )}
+    </section>
+   </Pagina>
   );
 }
 
@@ -884,98 +1029,143 @@ export function GestionPedidos({user, showToast}) {
   const conteos={};
   pedidos.forEach(p=>{conteos[p.estado_cartera]=(conteos[p.estado_cartera]||0)+1;});
 
+  const todosVisiblesMarcados = filtrados.length > 0 && filtrados.every(x => seleccion.has(x.id));
+
   return (
-    <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-        <h2 style={{margin:0,fontWeight:900}}>✅ Gestión de Pedidos</h2>
-        <Btn variant="secondary" onClick={cargar}>🔄 Actualizar</Btn>
-      </div>
+   <Pagina>
+    <Encabezado
+     titulo="Gestion de pedidos"
+     descripcion="Aprobacion de pedidos segun el estado de cartera del cliente"
+     acciones={
+      <button onClick={cargar} style={botonBarra} disabled={carg}>
+       {carg ? "Actualizando..." : "Actualizar"}
+      </button>
+     }
+    />
 
-      {/* Tabs de estado */}
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
-        {tabs.map(t=>{
-          const cnt = t.k==='todos'?pedidos.length:(conteos[t.k]||0);
-          const est = ESTADOS_CARTERA[t.k];
+    {/* Los indicadores son el filtro: tocar uno deja solo ese estado. */}
+    <Indicadores items={tabs.map(x => ({
+     label: x.l,
+     valor: x.k === "todos" ? pedidos.length : (conteos[x.k] || 0),
+     color: x.k === "todos" ? T.color.tinta : (ESTADOS_CARTERA[x.k]?.color || T.color.tinta3),
+     activo: filtroEst === x.k,
+     onClick: () => setFiltroEst(x.k),
+    }))}/>
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     {seleccion.size > 0 ? (
+      <BarraSeleccion
+       cantidad={seleccion.size}
+       onLimpiar={()=>setSeleccion(new Set())}
+       acciones={
+        <button onClick={aprobarSeleccionados} disabled={aprobando}
+         style={{ ...botonBarra, background:T.color.bienPunto, border:"none", color:"#fff" }}>
+         {aprobando ? "Aprobando..." : `Aprobar ${seleccion.size} pedido(s)`}
+        </button>
+       }
+      />
+     ) : (
+      <BarraFiltros derecha={`${filtrados.length} de ${pedidos.length}`}>
+       <Buscador valor={busq} onChange={setBusq} placeholder="Buscar pedido, NIT, cliente o asesor" ancho={300}/>
+      </BarraFiltros>
+     )}
+
+     {filtrados.length === 0 ? (
+      <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+       {pedidos.length === 0 ? "Sin pedidos cargados. Empieza por Cargar pedidos." : "Ningun pedido coincide con el filtro."}
+      </div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
+        <thead>
+         <tr>
+          <th style={{ ...th, width:42 }}>
+           <input type="checkbox" checked={todosVisiblesMarcados} onChange={selTodos}
+            title="Seleccionar los visibles"
+            style={{ width:15, height:15, accentColor:T.color.marca, cursor:"pointer" }}/>
+          </th>
+          <th style={th}>Pedido</th>
+          <th style={th}>Cliente</th>
+          <th style={th}>Asesor</th>
+          <th style={{...th, textAlign:"right"}}>Valor</th>
+          <th style={{...th, textAlign:"right"}}>Plazo</th>
+          <th style={th}>Estado</th>
+          <th style={{...th, textAlign:"right"}}>Acciones</th>
+         </tr>
+        </thead>
+        <tbody>
+         {filtrados.map(x => {
+          const marcado = seleccion.has(x.id);
+          const est = ESTADOS_CARTERA[x.estado_cartera] || ESTADOS_CARTERA.pendiente;
+          const decidible = x.estado_cartera !== "aprobado" && x.estado_cartera !== "rechazado";
           return (
-            <button key={t.k} onClick={()=>setFiltroEst(t.k)} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",background:filtroEst===t.k?(est?.bg||P[50]):"#f1f5f9",color:filtroEst===t.k?(est?.color||P[700]):"#64748b",boxShadow:filtroEst===t.k?"0 2px 8px #0002":"none"}}>
-              {t.l} {cnt>0&&<span style={{background:"rgba(0,0,0,0.1)",borderRadius:10,padding:"1px 6px",fontSize:10,marginLeft:4}}>{cnt}</span>}
-            </button>
+           <tr key={x.id} style={{ background: marcado ? T.color.marcaSuave : "transparent" }}>
+            <td style={td}>
+             <input type="checkbox" checked={marcado} onChange={()=>toggleSel(x.id)}
+              style={{ width:15, height:15, accentColor:T.color.marca, cursor:"pointer" }}/>
+            </td>
+            <td style={td}>
+             <span style={chipMono}>{x.numero_pedido}</span>
+             {x.fecha_pedido && <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:3 }}>{x.fecha_pedido}</div>}
+            </td>
+            <td style={{ ...td, maxWidth:220 }}>
+             <div style={{ fontWeight:600, color:T.color.tinta, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {x.cliente}
+             </div>
+             <div style={mono}>{x.nit}</div>
+            </td>
+            <td style={td}>{x.vendedor || <span style={{ color:T.color.tinta3 }}>-</span>}</td>
+            <td style={tdCifra}>{fCOP(x.valor_total)}</td>
+            <td style={tdCifra}>{x.plazo || 0}</td>
+            <td style={td}>
+             <span style={{
+              display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+              borderRadius:T.radio.pastilla, background:est.bg, color:est.color,
+              fontSize:12, fontWeight:600, whiteSpace:"nowrap",
+             }}>
+              <span style={{ width:6, height:6, borderRadius:3, background:est.color }}/>
+              {est.label}
+             </span>
+             {x.motivo_rechazo && (
+              <div style={{ ...T.texto.meta, color:T.color.mal, marginTop:3 }}>{x.motivo_rechazo}</div>
+             )}
+            </td>
+            <td style={{ ...td, textAlign:"right" }}>
+             <div style={{ display:"inline-flex", gap:6 }}>
+              {decidible && (
+               <>
+                <button style={{ ...botonFila, background:T.color.bienPunto, border:"none", color:"#fff" }}
+                 onClick={()=>aprobarUno(x.id)}>Aprobar</button>
+                <button style={{ ...botonFila, color:T.color.mal, borderColor:T.color.malBorde }}
+                 onClick={()=>setModRechazar(x)}>Rechazar</button>
+               </>
+              )}
+              {x.estado_cartera === "rechazado" && (
+               <button style={botonFila} onClick={()=>reactivar(x.id)}>Reactivar</button>
+              )}
+              {x.estado_cartera === "aprobado" && (
+               <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
+                {x.fecha_corte ? fFechaHora(x.fecha_corte) : "En espera de corte"}
+               </span>
+              )}
+             </div>
+            </td>
+           </tr>
           );
-        })}
+         })}
+        </tbody>
+       </table>
       </div>
+     )}
 
-      {/* Barra de búsqueda y acciones */}
-      <Card style={{padding:12,marginBottom:16}}>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-          <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por pedido, NIT, cliente o asesor..."
-            style={{flex:1,minWidth:200,border:`1.5px solid ${P[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafafa"}}/>
-          {seleccion.size>0&&(
-            <Btn onClick={aprobarSeleccionados} disabled={aprobando} variant="success">
-              {aprobando?"Aprobando...":"✅ Aprobar seleccionados ("+seleccion.size+")"}
-            </Btn>
-          )}
-        </div>
-      </Card>
+     <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}/>
+    </section>
 
-      {carg&&<div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>Cargando pedidos...</div>}
-
-      {!carg&&filtrados.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay pedidos con el filtro seleccionado.</Card>}
-
-      {!carg&&filtrados.length>0&&(
-        <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{background:P[50]}}>
-                <tr>
-                  <th style={{padding:"10px 12px",width:36}}>
-                    {pendientesAprobacion.length>0&&(
-                      <input type="checkbox" checked={seleccion.size===pendientesAprobacion.length&&pendientesAprobacion.length>0}
-                        onChange={selTodos} style={{cursor:"pointer",width:15,height:15}}/>
-                    )}
-                  </th>
-                  {["Pedido","NIT","Cliente","Valor Total","Plazo","Asesor","Sede Origen","Estado","Corte Asignado","Acciones"].map(h=>(
-                    <th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtrados.map((p,i)=>{
-                  const esPendiente = ['pendiente','preaprobado','cartera_vencida'].includes(p.estado_cartera);
-                  return (
-                    <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:seleccion.has(p.id)?`${P[100]}`:i%2?"#fafafa":"#fff"}}>
-                      <td style={{padding:"10px 12px"}}>
-                        {esPendiente&&<input type="checkbox" checked={seleccion.has(p.id)} onChange={()=>toggleSel(p.id)} style={{cursor:"pointer",width:15,height:15}}/>}
-                      </td>
-                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,color:P[700],fontSize:11}}>{p.numero_pedido}</td>
-                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
-                      <td style={{padding:"10px 12px",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{p.cliente}</td>
-                      <td style={{padding:"10px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
-                      <td style={{padding:"10px 12px",textAlign:"center"}}>{p.plazo} días</td>
-                      <td style={{padding:"10px 12px"}}>{p.vendedor||'—'}</td>
-                      <td style={{padding:"10px 12px",fontSize:11,color:"#64748b"}}>{p.origen?.split('-').pop()||'—'}</td>
-                      <td style={{padding:"10px 12px"}}><BadgeEstado estado={p.estado_cartera}/></td>
-                      <td style={{padding:"10px 12px",fontSize:11,color:"#64748b"}}>
-                        {p.fecha_corte?<><div style={{fontWeight:600,color:P[700]}}>{fFecha(p.fecha_corte)}</div><div>{new Date(p.fecha_corte).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</div></>:'—'}
-                      </td>
-                      <td style={{padding:"10px 12px",display:"flex",gap:6,flexWrap:"wrap"}}>
-                        {esPendiente&&<Btn size="sm" variant="success" disabled={aprobando} onClick={()=>aprobarUno(p.id)}>✓ Aprobar</Btn>}
-                        {esPendiente&&<Btn size="sm" variant="danger" onClick={()=>setModRechazar(p)}>✗ Rechazar</Btn>}
-                        {p.estado_cartera==='rechazado'&&<Btn size="sm" variant="secondary" onClick={()=>reactivar(p.id)}>↺ Reactivar</Btn>}
-                        {p.estado_cartera==='rechazado'&&p.motivo_rechazo&&<span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>{p.motivo_rechazo.slice(0,30)}...</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {modRechazar&&(
-        <ModalRechazar pedido={modRechazar} onRechazar={rechazar} onClose={()=>setModRechazar(null)}/>
-      )}
-    </div>
+    {modRechazar && (
+     <ModalRechazar pedido={modRechazar} onClose={()=>setModRechazar(null)}
+      onRechazar={(motivo)=>rechazar(modRechazar.id, motivo)}/>
+    )}
+   </Pagina>
   );
 }
 
@@ -989,25 +1179,35 @@ export function ModalRechazar({pedido, onRechazar, onClose}) {
     setCarg(false);
   };
   return (
-    <Modal title="Rechazar Pedido" onClose={onClose}>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:"#fef2f2",borderRadius:10,padding:14,fontSize:13}}>
-          <div style={{fontWeight:700,color:"#dc2626",marginBottom:6}}>Pedido: {pedido.numero_pedido}</div>
-          <div style={{color:"#334155"}}>{pedido.cliente} — {pedido.nit}</div>
-          <div style={{color:"#64748b",marginTop:4}}>Valor: {fCOP(pedido.valor_total)} · Asesor: {pedido.vendedor||'—'}</div>
-        </div>
-        <Field label="Motivo del rechazo *" value={motivo} onChange={setMotivo} as="textarea"
-          placeholder="Explica el motivo del rechazo para notificar al asesor..."/>
-        {!motivo.trim()&&<div style={{fontSize:12,color:"#dc2626"}}>El motivo es obligatorio para rechazar un pedido.</div>}
-        <div style={{background:"#eff6ff",borderRadius:9,padding:"10px 14px",fontSize:12,color:"#1e40af"}}>
-          📧 Se enviará un correo automático al asesor notificando el rechazo con el motivo.
-        </div>
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="danger" disabled={!motivo.trim()||carg} onClick={confirmar}>{carg?"Rechazando...":"✗ Confirmar Rechazo"}</Btn>
-        </div>
-      </div>
-    </Modal>
+   <ModalGestion
+    titulo="Rechazar pedido"
+    descripcion={pedido.numero_pedido}
+    onClose={onClose}
+    onGuardar={confirmar}
+    textoGuardar="Confirmar rechazo"
+    guardando={carg}
+    guardarDeshabilitado={!motivo.trim()}
+   >
+    <Resumen datos={[
+     { label:"Cliente", valor:pedido.cliente },
+     { label:"NIT", valor:pedido.nit, mono:true },
+     { label:"Valor", valor:fCOP(pedido.valor_total) },
+     { label:"Asesor", valor:pedido.vendedor || "Sin asesor" },
+    ]}/>
+
+    <AreaTexto
+     label="Motivo del rechazo"
+     obligatorio
+     valor={motivo}
+     onChange={setMotivo}
+     placeholder="Explica el motivo para notificar al asesor"
+     filas={4}
+    />
+
+    <FranjaInfo>
+     Al confirmar se envia un correo automatico al asesor con el motivo del rechazo.
+    </FranjaInfo>
+   </ModalGestion>
   );
 }
 
@@ -1124,88 +1324,149 @@ export function ModuloLogistica({showToast}) {
   // Pedidos transmitidos y no impresos
   const pedidosTransmitidos = pedidos.filter(p=>p.transmitido_tms);
 
+  const porImprimir = pedidos.filter(x => x.estado_impresion !== "impreso");
+
   return (
-    <div>
-      <h2 style={{margin:"0 0 20px",fontWeight:900}}>🖨️ Logística — Impresión de Pedidos</h2>
+   <Pagina>
+    <Encabezado
+     titulo="Logistica de cartera"
+     descripcion="Pedidos aprobados listos para imprimir y transmitir al TMS"
+     acciones={
+      <button onClick={()=>imprimir(pedidos)} disabled={pedidos.length === 0}
+       style={{ ...botonBarra, opacity: pedidos.length ? 1 : 0.5, cursor: pedidos.length ? "pointer" : "not-allowed" }}>
+       <Printer size={15}/> Imprimir {pedidos.length > 0 ? `(${pedidos.length})` : ""}
+      </button>
+     }
+    />
 
-      {/* Filtros */}
-      <Card style={{padding:14,marginBottom:16}}>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"end"}}>
-          <Field label="Fecha" value={filtroFecha} onChange={setFiltroFecha} type="date" style={{width:160}}/>
-          <Field label="Sede" value={filtroSede} onChange={setFiltroSede} as="select" style={{flex:1,minWidth:180}}
-            options={[{value:'',label:'Todas las sedes'},...sedes.map(s=>({value:s.id,label:s.nombre}))]}/>
-          <Field label="Estado impresión" value={filtroImp} onChange={setFiltroImp} as="select" style={{width:180}}
-            options={[{value:'todos',label:'Todos'},{value:'no_impreso',label:'No impresos'},{value:'impreso',label:'Ya impresos'}]}/>
-        </div>
-      </Card>
+    <Indicadores items={[
+     { label:"Pedidos del corte", valor:pedidos.length, color:T.color.marca, destacado:true },
+     { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojoPunto },
+     { label:"Cortes del dia", valor:cortes.length, color:T.color.infoPunto },
+     { label:"Transmitidos", valor:cortes.filter(c=>c.estado === "transmitido").length, color:T.color.bienPunto },
+    ]}/>
 
-      {/* Cortes del día */}
-      {cortes.length>0&&(
-        <div style={{marginBottom:20}}>
-          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#334155"}}>Cortes del {fFecha(filtroFecha+'T12:00:00')}</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
-            {cortes.map(c=>(
-              <Card key={c.id} style={{borderLeft:`4px solid ${c.estado==='transmitido'?P[600]:c.estado==='cerrado'?"#d97706":"#94a3b8"}`}}>
-                <div style={{fontWeight:700,fontSize:15,color:P[700]}}>{c.hora_corte}</div>
-                <div style={{fontSize:12,color:"#64748b",marginTop:4}}>{c.sedes?.nombre}</div>
-                <div style={{fontSize:12,marginTop:4}}>
-                  <span style={{fontWeight:600}}>{c.pedidos_asignados}</span>/{c.capacidad_max} pedidos
-                </div>
-                <div style={{marginTop:8,display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:12,background:c.estado==='transmitido'?P[100]:c.estado==='cerrado'?"#fffbeb":"#f1f5f9",color:c.estado==='transmitido'?P[700]:c.estado==='cerrado'?"#d97706":"#64748b"}}>{c.estado==='transmitido'?'✓ Transmitido':c.estado==='cerrado'?'Cerrado':'Abierto'}</span>
-                  {c.estado==='abierto'&&<Btn size="sm" disabled={transmitiendo} onClick={()=>transmitirCorte(c.id)}>▶ Transmitir</Btn>}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+    <section style={{ ...tarjeta, padding:14, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+     <SelectFiltro valor={filtroSede} onChange={setFiltroSede} ancho={240}>
+      <option value="">Todas las sedes</option>
+      {sedes.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}
+     </SelectFiltro>
+     <input type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)}
+      style={{
+       height:38, padding:"0 12px", border:`1px solid ${T.color.borde2}`,
+       borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", outline:"none",
+      }}/>
+     <Segmentado valor={filtroImp} onChange={setFiltroImp}
+      opciones={[["no_impreso","Por imprimir"], ["impreso","Impresos"], ["todos","Todos"]]}/>
+    </section>
 
-      {/* Pedidos */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:10}}>
-        <div style={{fontWeight:700,fontSize:13,color:"#334155"}}>{pedidos.length} pedido(s) encontrado(s)</div>
-        {pedidosTransmitidos.length>0&&filtroImp!=='impreso'&&(
-          <Btn onClick={()=>imprimir(pedidosTransmitidos)} variant="success">🖨️ Imprimir todos ({pedidosTransmitidos.length})</Btn>
-        )}
+    {cortes.length > 0 && (
+     <section style={{ ...tarjeta, overflow:"hidden" }}>
+      <div style={{ padding:"13px 18px", borderBottom:`1px solid ${T.color.borde}`, ...T.texto.tarjeta }}>
+       Cortes programados
       </div>
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <thead>
+         <tr>
+          <th style={th}>Hora</th>
+          <th style={{...th, textAlign:"right"}}>Pedidos</th>
+          <th style={{...th, textAlign:"right"}}>Capacidad</th>
+          <th style={th}>Estado</th>
+          <th style={{...th, textAlign:"right"}}>Acciones</th>
+         </tr>
+        </thead>
+        <tbody>
+         {cortes.map(c => (
+          <tr key={c.id}>
+           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.hora_corte}</td>
+           <td style={tdCifra}>{c.pedidos_asignados}</td>
+           <td style={tdCifra}>{c.capacidad_max}</td>
+           <td style={td}>
+            <span style={{
+             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+             borderRadius:T.radio.pastilla, fontSize:12, fontWeight:600,
+             background: c.estado === "transmitido" ? T.color.bienSuave : T.color.ojoSuave,
+             color: c.estado === "transmitido" ? T.color.bien : T.color.ojo,
+            }}>
+             <span style={{ width:6, height:6, borderRadius:3,
+              background: c.estado === "transmitido" ? T.color.bienPunto : T.color.ojoPunto }}/>
+             {c.estado === "transmitido" ? "Transmitido" : "Abierto"}
+            </span>
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            {c.estado !== "transmitido" && (
+             <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
+              onClick={()=>transmitirCorte(c.id)} disabled={transmitiendo}>
+              {transmitiendo ? "Transmitiendo..." : "Transmitir al TMS"}
+             </button>
+            )}
+           </td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     </section>
+    )}
 
-      {pedidos.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay pedidos con los filtros seleccionados.</Card>}
-
-      {pedidos.length>0&&(
-        <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{background:P[50]}}>
-                <tr>{["Pedido","NIT","Cliente","Valor","Corte","Transmitido","Impresión","Acciones"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {pedidos.map((p,i)=>(
-                  <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                    <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,fontSize:11}}>{p.numero_pedido}</td>
-                    <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
-                    <td style={{padding:"10px 12px",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{p.cliente}</td>
-                    <td style={{padding:"10px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
-                    <td style={{padding:"10px 12px",fontSize:11}}>{p.fecha_corte?<><div style={{fontWeight:600}}>{fFecha(p.fecha_corte)}</div><div style={{color:"#64748b"}}>{new Date(p.fecha_corte).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</div></>:'—'}</td>
-                    <td style={{padding:"10px 12px"}}>
-                      {p.transmitido_tms?<span style={{color:P[600],fontWeight:700,fontSize:11}}>✓ {p.fecha_transmision?new Date(p.fecha_transmision).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):''}</span>:<span style={{color:"#94a3b8",fontSize:11}}>Pendiente</span>}
-                    </td>
-                    <td style={{padding:"10px 12px"}}>
-                      <span style={{fontSize:11,fontWeight:700,color:p.estado_impresion==='impreso'?P[600]:"#94a3b8"}}>{p.estado_impresion==='impreso'?'✓ Impreso':'No impreso'}</span>
-                      {p.fecha_impresion&&<div style={{fontSize:10,color:"#94a3b8"}}>{fFechaHora(p.fecha_impresion)}</div>}
-                    </td>
-                    <td style={{padding:"10px 12px"}}>
-                      {p.transmitido_tms
-                        ?<Btn size="sm" variant="secondary" onClick={()=>imprimir([p])}>🖨️ Imprimir</Btn>
-                        :<span style={{fontSize:11,color:"#94a3b8"}}>Esperando transmisión</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-    </div>
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     <div style={{ padding:"13px 18px", borderBottom:`1px solid ${T.color.borde}`, ...T.texto.tarjeta }}>
+      Pedidos del corte
+     </div>
+     {pedidos.length === 0 ? (
+      <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+       No hay pedidos aprobados para esa sede y esa fecha.
+      </div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
+        <thead>
+         <tr>
+          <th style={th}>Pedido</th>
+          <th style={th}>Cliente</th>
+          <th style={th}>Destino</th>
+          <th style={{...th, textAlign:"right"}}>Valor</th>
+          <th style={th}>Impresion</th>
+          <th style={{...th, textAlign:"right"}}>Acciones</th>
+         </tr>
+        </thead>
+        <tbody>
+         {pedidos.map(x => (
+          <tr key={x.id}>
+           <td style={td}><span style={chipMono}>{x.numero_pedido}</span></td>
+           <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {x.cliente}
+           </td>
+           <td style={td}>
+            <div>{x.direccion || "-"}</div>
+            <div style={mono}>{x.sector_dane}</div>
+           </td>
+           <td style={tdCifra}>{fCOP(x.valor_total)}</td>
+           <td style={td}>
+            <span style={{
+             display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5,
+             color: x.estado_impresion === "impreso" ? T.color.bien : T.color.tinta3,
+            }}>
+             <span style={{ width:6, height:6, borderRadius:3,
+              background: x.estado_impresion === "impreso" ? T.color.bienPunto : T.color.neutroPunto }}/>
+             {x.estado_impresion === "impreso" ? "Impreso" : "Sin imprimir"}
+            </span>
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <button style={botonFila} onClick={()=>imprimir([x])}>
+             <Printer size={14}/> Imprimir
+            </button>
+           </td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     )}
+     <PieTabla izquierda={`${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}/>
+    </section>
+   </Pagina>
   );
 }
 
@@ -1228,61 +1489,83 @@ export function ModuloConsultas({showToast}) {
   });
 
   const getEstadoTexto = (p) => {
-    if(p.estado_cartera==='rechazado') return {label:'Rechazado',color:'#dc2626'};
-    if(p.estado_cartera==='aprobado'&&!p.transmitido_tms) return {label:'Aprobado — En espera de corte',color:'#d97706'};
-    if(p.transmitido_tms&&p.estado_impresion==='no_impreso') return {label:'Transmitido a logística',color:P[600]};
-    if(p.estado_impresion==='impreso') return {label:'Impreso — En picking',color:P[700]};
-    return ESTADOS_CARTERA[p.estado_cartera]||{label:p.estado_cartera,color:'#64748b'};
+    if(p.estado_cartera==='rechazado') return {label:'Rechazado',color:T.color.mal};
+    if(p.estado_cartera==='aprobado'&&!p.transmitido_tms) return {label:'Aprobado — En espera de corte',color:T.color.ojo};
+    if(p.transmitido_tms&&p.estado_impresion==='no_impreso') return {label:'Transmitido a logistica',color:T.color.info};
+    if(p.estado_impresion==='impreso') return {label:'Impreso — En picking',color:T.color.marca};
+    return ESTADOS_CARTERA[p.estado_cartera]||{label:p.estado_cartera,color:T.color.tinta3};
   };
 
   return (
-    <div>
-      <h2 style={{margin:"0 0 20px",fontWeight:900}}>🔍 Estado de Pedidos</h2>
-      <Card style={{padding:12,marginBottom:16}}>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por pedido, NIT o cliente..."
-            style={{flex:1,minWidth:200,border:`1.5px solid ${P[200]}`,borderRadius:9,padding:"9px 13px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafafa"}}/>
-          <Field value={filtroEst} onChange={setFiltroEst} as="select" style={{width:200}}
-            options={[{value:'todos',label:'Todos los estados'},{value:'pendiente',label:'Pendiente de aprobación'},{value:'preaprobado',label:'Preaprobado'},{value:'cartera_vencida',label:'Cartera Vencida'},{value:'aprobado',label:'Aprobado — En espera'},{value:'rechazado',label:'Rechazado'}]}/>
-        </div>
-      </Card>
-      {filtrados.length===0&&<Card style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No hay pedidos con el filtro seleccionado.</Card>}
-      {filtrados.length>0&&(
-        <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead style={{background:P[50]}}>
-                <tr>{["Pedido","NIT","Cliente","Valor","Plazo","Fecha Pedido","Estado Actual","Corte / Transmisión"].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:P[700],fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {filtrados.map((p,i)=>{
-                  const est=getEstadoTexto(p);
-                  return (
-                    <tr key={p.id} style={{borderTop:`1px solid ${P[100]}`,background:i%2?"#fafafa":"#fff"}}>
-                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontWeight:700,color:P[700],fontSize:11}}>{p.numero_pedido}</td>
-                      <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11}}>{p.nit}</td>
-                      <td style={{padding:"10px 12px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{p.cliente}</td>
-                      <td style={{padding:"10px 12px",fontWeight:700}}>{fCOP(p.valor_total)}</td>
-                      <td style={{padding:"10px 12px",textAlign:"center"}}>{p.plazo} días</td>
-                      <td style={{padding:"10px 12px",fontSize:11}}>{fFecha(p.fecha_pedido)}</td>
-                      <td style={{padding:"10px 12px"}}>
-                        <span style={{background:est.color+'18',color:est.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{est.label}</span>
-                        {p.motivo_rechazo&&<div style={{fontSize:10,color:"#94a3b8",marginTop:3,fontStyle:"italic"}}>{p.motivo_rechazo}</div>}
-                      </td>
-                      <td style={{padding:"10px 12px",fontSize:11}}>
-                        {p.fecha_corte&&<div style={{color:P[700],fontWeight:600}}>{fFechaHora(p.fecha_corte)}</div>}
-                        {p.fecha_transmision&&<div style={{color:"#059669",marginTop:2}}>Transmitido: {fFechaHora(p.fecha_transmision)}</div>}
-                        {!p.fecha_corte&&'—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-    </div>
+   <Pagina>
+    <Encabezado
+     titulo="Consultas de cartera"
+     descripcion="Estado de aprobacion de los pedidos, solo lectura"
+    />
+
+    <section style={{ ...tarjeta, overflow:"hidden" }}>
+     <BarraFiltros derecha={`${filtrados.length} de ${pedidos.length}`}>
+      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar pedido, cliente o NIT" ancho={280}/>
+      <SelectFiltro valor={filtroEst} onChange={setFiltroEst} ancho={200}>
+       <option value="todos">Todos los estados</option>
+       {Object.entries(ESTADOS_CARTERA).map(([k,v])=>(
+        <option key={k} value={k}>{v.label}</option>
+       ))}
+      </SelectFiltro>
+     </BarraFiltros>
+
+     {filtrados.length === 0 ? (
+      <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+       {pedidos.length === 0 ? "Sin pedidos cargados." : "Ningun pedido coincide con el filtro."}
+      </div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
+        <thead>
+         <tr>
+          <th style={th}>Pedido</th>
+          <th style={th}>Cliente</th>
+          <th style={th}>NIT</th>
+          <th style={{...th, textAlign:"right"}}>Valor</th>
+          <th style={th}>Estado</th>
+          <th style={th}>Corte</th>
+         </tr>
+        </thead>
+        <tbody>
+         {filtrados.slice(0, 300).map(x => {
+          const info = getEstadoTexto(x);
+          return (
+           <tr key={x.id}>
+            <td style={td}><span style={chipMono}>{x.numero_pedido}</span></td>
+            <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+             {x.cliente}
+            </td>
+            <td style={td}><span style={mono}>{x.nit}</span></td>
+            <td style={tdCifra}>{fCOP(x.valor_total)}</td>
+            <td style={td}>
+             <span style={{
+              display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
+              borderRadius:T.radio.pastilla, background:T.color.neutroSuave,
+              fontSize:12, fontWeight:600, color:T.color.tinta2, whiteSpace:"nowrap",
+             }}>
+              <span style={{ width:6, height:6, borderRadius:3, background:info.color }}/>
+              {info.label}
+             </span>
+            </td>
+            <td style={td}>
+             {x.fecha_corte ? fFechaHora(x.fecha_corte) : <span style={{ color:T.color.tinta3 }}>Sin corte</span>}
+            </td>
+           </tr>
+          );
+         })}
+        </tbody>
+       </table>
+      </div>
+     )}
+
+     <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}/>
+    </section>
+   </Pagina>
   );
 }
 

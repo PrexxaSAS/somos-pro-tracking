@@ -275,8 +275,8 @@ export function Adjunto({ label, nombre, onArchivo, acepta = "image/*,.pdf", opc
 // completar, cerrar) va siempre de ultima y en verde.
 export function ModalGestion({
  titulo, id, estado, descripcion, ancho = "M", onClose, children,
- enlaces, textoGuardar = "Guardar", onGuardar, guardando = false,
- textoCierre, onCierre, cierreDeshabilitado = false,
+ enlaces, textoGuardar = "Guardar", onGuardar, guardando = false, guardarDeshabilitado = false,
+ textoCierre, onCierre, cierreDeshabilitado = false, textoCancelar = "Cancelar",
 }) {
  return (
   <div
@@ -332,13 +332,14 @@ export function ModalGestion({
        border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
        color: T.color.tinta2, fontFamily: "inherit", fontSize: 13, fontWeight: 600,
        cursor: guardando ? "not-allowed" : "pointer",
-      }}>Cancelar</button>
+      }}>{textoCancelar}</button>
       {onGuardar && (
-       <button onClick={onGuardar} disabled={guardando} style={{
+       <button onClick={onGuardar} disabled={guardando || guardarDeshabilitado} style={{
         height: 38, padding: "0 18px", borderRadius: T.radio.boton, border: "none",
         background: T.color.marca, color: "#fff", fontFamily: "inherit",
-        fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer",
-        opacity: guardando ? 0.6 : 1,
+        fontSize: 13, fontWeight: 600,
+        cursor: (guardando || guardarDeshabilitado) ? "not-allowed" : "pointer",
+        opacity: (guardando || guardarDeshabilitado) ? 0.5 : 1,
        }}>{guardando ? "Guardando..." : textoGuardar}</button>
       )}
       {onCierre && (
