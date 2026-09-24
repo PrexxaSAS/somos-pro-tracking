@@ -16,11 +16,15 @@ import { renderToString } from 'react-dom/server';
 import { Dashboard } from '${raiz.replace(/\\/g, '/')}/src/modules/dashboard/Dashboard';
 import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/components/layout/NavegacionMovil';
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
+import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 
 const pedidos = [
- { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", cliente:"ACME" },
- { id:"PX000119696", estado:"entregado", fecha_creacion:"2026-09-02", fecha_real:"2026-09-04", ciudad_codigo:"05001", cliente:"Beta" },
- { id:"PX000119693", estado:"sin_asignar", fecha_creacion:"2026-08-20", ciudad_codigo:"05001", cliente:"Gamma" },
+ { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
+ { id:"PX000119696", estado:"entregado", fecha_creacion:"2026-09-02", fecha_real:"2026-09-04", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"Beta", cajas:1 },
+ { id:"PX000119693", estado:"sin_asignar", fecha_creacion:"2026-08-20", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"Gamma", cajas:2 },
+ { id:"PX000119690", estado:"paqueteria", tipo:"paqueteria", paqueteria:"Servientrega", guia_paqueteria:"SRV-1", fecha_creacion:"2026-08-18", ciudad_codigo:"11001", ciudad_nombre:"Bogota", cliente:"Delta", cajas:6 },
+ { id:"PX000119688", estado:"novedad", novedad:true, fecha_creacion:"2026-08-17", ciudad_codigo:"11001", ciudad_nombre:"Bogota", cliente:"Epsilon con un nombre muy largo que no cabe", cajas:3 },
+ { id:"PX000119687", estado:"solo_facturar", fecha_creacion:"2026-08-16", ciudad_codigo:"11001", ciudad_nombre:"Bogota", cliente:"Zeta", cajas:0 },
 ];
 const promesas = [{ ciudad_codigo:"05001", dias_plazo:2 }];
 const pqrs = [{ id:1, estado:"en_gestion" }];
@@ -31,6 +35,29 @@ casos.push(["Dashboard", React.createElement(Dashboard, {
  pedidos, conductores:[], devoluciones:[], recogidas:[], pqrs, promesas,
  ciudades:[{ code:"05001", name:"Medellin" }], setActiveTab(){}, onBuscarPedido(){}, onVerEstado(){},
 })]);
+casos.push(["PedidosMovil", React.createElement(PedidosMovil, {
+ pedidos, filtrados: pedidos,
+ conductores:[{ id:7, nombre:"J. Castrillon", placa:"ABC123" }],
+ ciudades:[{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }],
+ conductoresActivos:[{ id:7, nombre:"J. Castrillon", placa:"ABC123" }],
+ busq:"", setBusq(){}, filtro:"todos", setFiltro(){},
+ conteoPorEstado: () => 3,
+ estadosOrden:["sin_asignar","pendiente","en_transito","paqueteria","entregado","novedad","solo_facturar","cliente_recoge"],
+ rango:"todo", setRango(){}, ciudadF:"", setCiudadF(){},
+ conductorF:"", setConductorF(){}, tipoF:"", setTipoF(){},
+ onAbrir(){}, onNuevo(){}, onPlanilla(){}, onCSV(){}, onCargarGuias(){}, avisos:1,
+})]);
+
+casos.push(["HojaFiltros", React.createElement(HojaFiltros, {
+ pedidos,
+ ciudades:[{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }],
+ conductoresActivos:[{ id:7, nombre:"J. Castrillon" }],
+ total: pedidos.length,
+ rango:"30", setRango(){}, ciudadF:"05001", setCiudadF(){},
+ conductorF:"sin", setConductorF(){}, tipoF:"paqueteria", setTipoF(){},
+ onLimpiar(){}, onClose(){},
+})]);
+
 for (const rol of ROLES_PRUEBA) {
  const user = { nombre:"Oscar Tobon", rol };
  casos.push(["NavegacionMovil/" + rol, React.createElement(NavegacionMovil, {

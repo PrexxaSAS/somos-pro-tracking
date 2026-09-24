@@ -12,6 +12,7 @@ import { CargadorFotos } from './components/delivery/CargadorFotos';
 import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
 import { NavegacionMovil } from './components/layout/NavegacionMovil';
+import { PedidosMovil } from './modules/pedidos/PedidosMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -1616,6 +1617,10 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [rango, setRango] = useState("todo");
  const [ciudadF, setCiudadF] = useState("");
  const [conductorF, setConductorF] = useState("");
+ // Transporte propio o paqueteria. Es filtro propio y no una pestana mas:
+ // se cruza con el estado en vez de reemplazarlo.
+ const [tipoF, setTipoF] = useState("");
+ const esMovil = useEsMovil();
  // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
  // sin seleccion, la planilla sale con todo lo que este filtrado.
  const [seleccion, setSeleccion] = useState(() => new Set());
@@ -1639,7 +1644,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
   const okCond = !conductorF
    || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
-  if (!okFecha || !okCiudad || !okCond) return false;
+  const okTipo = !tipoF
+   || (tipoF === "paqueteria" ? p.tipo === "paqueteria" : p.tipo !== "paqueteria");
+  if (!okFecha || !okCiudad || !okCond || !okTipo) return false;
   const q = busq.toLowerCase();
   const okB = !busq ||
    (p.id || "").toLowerCase().includes(q) ||
@@ -1922,7 +1929,33 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  };
 
  return (
-  <div style={{ minHeight:"100%", background:T.color.fondo, margin:"-28px -24px", padding:"24px 28px 40px", color:T.color.tinta }}>
+  <div style={esMovil
+   ? { color:T.color.tinta }
+   : { minHeight:"100%", background:T.color.fondo, margin:"-28px -24px", padding:"24px 28px 40px", color:T.color.tinta }}>
+
+   {esMovil ? (
+    <PedidosMovil
+     pedidos={pedidos}
+     filtrados={filtrados}
+     conductores={conductores}
+     ciudades={ciudades}
+     conductoresActivos={conductoresActivos}
+     busq={busq} setBusq={setBusq}
+     filtro={filtro} setFiltro={setFiltro}
+     conteoPorEstado={conteoPorEstado}
+     estadosOrden={ORDEN_ESTADOS_PEDIDO}
+     rango={rango} setRango={setRango}
+     ciudadF={ciudadF} setCiudadF={setCiudadF}
+     conductorF={conductorF} setConductorF={setConductorF}
+     tipoF={tipoF} setTipoF={setTipoF}
+     onAbrir={setModDet}
+     onNuevo={() => setModNuevo(true)}
+     onPlanilla={imprimirPlanilla}
+     onCSV={() => setModCSV(true)}
+     onCargarGuias={() => setModGuias(true)}
+     avisos={pedidos.filter(x => x.novedad).length}
+    />
+   ) : (
    <div style={{ maxWidth:1320, margin:"0 auto", display:"flex", flexDirection:"column", gap:16 }}>
 
     <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
@@ -2105,6 +2138,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      </div>
     </section>
    </div>
+   )}
 
    {modNuevo && (
     <ModalForm
