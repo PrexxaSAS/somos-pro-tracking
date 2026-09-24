@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Download, MessageCircle } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { ModalForm, Seccion } from '../ui/formularios';
+import { tarjetaQR, descargarCanvas } from '../../utils/qr';
+import logoSrc from '../../../Logo.png';
 
 // Pasos que sigue el conductor en su celular. Se escriben aqui y no en la
 // pantalla para que la lista no se mezcle con el diseno.
@@ -19,8 +21,20 @@ const ATAJOS = [
 export function LinkCompartir({ onClose }) {
  // La URL sin parametros ni ancla: es la que hay que abrir en el celular.
  const url = window.location.href.split("?")[0].replace(/#.*$/, "");
- const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=8&data=${encodeURIComponent(url)}`;
  const [copiado, setCopiado] = useState(false);
+ const [listo, setListo] = useState(false);
+ const lienzo = useRef(null);
+
+ // La tarjeta se dibuja una vez y sirve para la vista previa y para la
+ // descarga: lo que se ve en el modal es exactamente el archivo que se guarda.
+ useEffect(() => {
+  let vivo = true;
+  setListo(false);
+  tarjetaQR(url, logoSrc, lienzo.current).then(() => { if (vivo) setListo(true); });
+  return () => { vivo = false; };
+ }, [url]);
+
+ const descargar = () => descargarCanvas(lienzo.current, "qr-somos-pro-tracking.png");
 
  const copiar = async () => {
   try {
@@ -52,23 +66,23 @@ export function LinkCompartir({ onClose }) {
    textoPrimario="Listo"
    textoCancelar="Cerrar"
   >
-   <div style={{
-    border: `1px solid ${T.color.borde}`, borderRadius: T.radio.tarjeta,
-    padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-   }}>
-    <img src={qrUrl} alt={`Codigo QR de ${url}`}
-     style={{
-      width: 180, height: 180, display: "block",
-      border: `1px solid ${T.color.borde}`, borderRadius: T.radio.control, background: "#fff",
-     }}/>
-    <span style={{ fontSize: 12.5, color: T.color.tinta3 }}>Escanear con la camara del celular</span>
-    <a href={qrUrl} download="qr-somos-pro-tracking.png" target="_blank" rel="noreferrer"
-     style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
-      fontSize: 13, fontWeight: 600, color: T.color.marca, textDecoration: "none",
-     }}>
-     <Download size={15} /> Descargar QR
-    </a>
+   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+    <div style={{
+     width: 290, border: `1px solid ${T.color.borde}`, borderRadius: T.radio.tarjeta,
+     overflow: "hidden", background: T.color.superficie2,
+     opacity: listo ? 1 : 0, transition: "opacity .2s",
+    }}>
+     <canvas ref={lienzo} style={{ width: "100%", height: "auto", display: "block" }} />
+    </div>
+    <button onClick={descargar} disabled={!listo} style={{
+     display: "inline-flex", alignItems: "center", gap: 7,
+     height: 38, padding: "0 16px", borderRadius: T.radio.boton,
+     border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
+     color: T.color.tinta2, fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+     cursor: listo ? "pointer" : "not-allowed", opacity: listo ? 1 : 0.6,
+    }}>
+     <Download size={15} /> Descargar imagen
+    </button>
    </div>
 
    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
