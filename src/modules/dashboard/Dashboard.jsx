@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { AlertTriangle, Bell, CalendarDays, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
@@ -24,6 +24,40 @@ const botonCabecera = {
  borderRadius: T.radio.control, background: T.color.superficie,
  cursor: "pointer", display: "grid", placeItems: "center", color: T.color.tinta2,
  flexShrink: 0,
+};
+
+// A quien mira el dashboard cuando se busca un cliente, un conductor o un
+// transportista. Cada lista se relaciona con el sujeto por un campo distinto, y
+// algunas no se relacionan: las devoluciones no guardan el cliente, asi que con
+// un cliente enfocado ese dato no se puede filtrar y se dice, en vez de dar un
+// numero que seria el de todos.
+const DEL_FOCO = {
+ cliente: {
+  pedidos: (x, f) => (x.cliente || "") === f.valor,
+  pqrs: (x, f) => (x.cliente || "") === f.valor,
+  devoluciones: null,
+ },
+ conductor: {
+  pedidos: (x, f) => String(x.conductor_id || "") === f.valor,
+  pqrs: (x, f) => String(x.conductor_id || "") === f.valor,
+  devoluciones: (x, f) => String(x.conductor_id || "") === f.valor,
+ },
+ transportista: {
+  pedidos: (x, f) => String(x.nit_proveedor || "") === f.valor
+   || (x.empresa_transporte || "") === f.etiqueta,
+  pqrs: (x, f) => String(x.nit || "") === f.valor,
+  devoluciones: (x, f) => String(x.nit_proveedor || "") === f.valor
+   || (x.empresa || "") === f.etiqueta,
+ },
+};
+
+// Filtra una lista por el sujeto enfocado. Devuelve null cuando esa lista no
+// guarda con que relacionarse, para que la pantalla lo diga en vez de mentir.
+const porFoco = (lista, foco, cual) => {
+ if (!foco) return lista;
+ const prueba = DEL_FOCO[foco.tipo]?.[cual];
+ if (!prueba) return null;
+ return lista.filter(x => prueba(x, foco));
 };
 
 const hoyISO = () => new Date().toISOString().split("T")[0];
@@ -72,26 +106,53 @@ function Enlace({ children, onClick }) {
 
 // ── Controles del encabezado ────────────────────────────────────────────────
 
-function Buscador({ pedidos, onAbrirPedido, compacto = false }) {
+function Buscador({ pedidos, conductores = [], transportistas = [], onAbrirPedido, onFoco, compacto = false }) {
  const [texto, setTexto] = useState("");
  const [abierto, setAbierto] = useState(false);
  const ref = useCerrarAlClicFuera(abierto, () => setAbierto(false));
 
  const consulta = texto.trim().toLowerCase();
+
+ // Se busca primero a quien: los sujetos filtran el tablero entero. Los
+ // pedidos siguen al final, y abren ese pedido como antes.
  const resultados = useMemo(() => {
   if (consulta.length < 2) return [];
-  return pedidos.filter(p =>
-   String(p.id || "").toLowerCase().includes(consulta) ||
-   String(p.guia_interna || "").toLowerCase().includes(consulta) ||
-   String(p.guia_paqueteria || "").toLowerCase().includes(consulta) ||
-   String(p.cliente || "").toLowerCase().includes(consulta)
-  ).slice(0, 6);
- }, [pedidos, consulta]);
+  const coincide = (v) => String(v || "").toLowerCase().includes(consulta);
 
- const elegir = (valor) => {
+  const clientes = [...new Set(pedidos.map(p => p.cliente).filter(Boolean))]
+   .filter(coincide).slice(0, 4)
+   .map(c => ({ clase: "foco", tipo: "cliente", valor: c, etiqueta: c, detalle: "Cliente" }));
+
+  const conds = conductores
+   .filter(c => coincide(c.nombre) || coincide(c.placa) || coincide(c.cedula)).slice(0, 4)
+   .map(c => ({
+    clase: "foco", tipo: "conductor", valor: String(c.id), etiqueta: c.nombre,
+    detalle: ["Conductor", c.placa].filter(Boolean).join(" · "),
+   }));
+
+  const trans = transportistas
+   .filter(x => coincide(x.nombre) || coincide(x.nit)).slice(0, 4)
+   .map(x => ({
+    clase: "foco", tipo: "transportista", valor: String(x.nit || ""), etiqueta: x.nombre,
+    detalle: ["Transportista", x.nit].filter(Boolean).join(" · "),
+   }));
+
+  const peds = pedidos.filter(p =>
+   coincide(p.id) || coincide(p.guia_interna) || coincide(p.guia_paqueteria) || coincide(p.factura)
+  ).slice(0, 4).map(p => ({
+   clase: "pedido", valor: p.id, etiqueta: p.guia_interna || p.id,
+   detalle: [p.cliente, p.factura].filter(Boolean).join(" · "),
+  }));
+
+  return [...clientes, ...conds, ...trans, ...peds].slice(0, 8);
+ }, [pedidos, conductores, transportistas, consulta]);
+
+ const elegir = (r) => {
   setTexto("");
   setAbierto(false);
-  onAbrirPedido(valor);
+  if (typeof r === "string") { onAbrirPedido(r); return; }
+  if (r.clase === "foco") onFoco({ tipo: r.tipo, valor: r.valor, etiqueta: r.etiqueta });
+  else onAbrirPedido(r.valor);
  };
 
  const campo = (
@@ -102,7 +163,7 @@ function Buscador({ pedidos, onAbrirPedido, compacto = false }) {
     autoFocus={compacto}
     onChange={e => { setTexto(e.target.value); setAbierto(true); }}
     onFocus={() => setAbierto(true)}
-    onKeyDown={e => { if (e.key === "Enter" && consulta) elegir(texto.trim()); }}
+    onKeyDown={e => { if (e.key === "Enter" && resultados.length) elegir(resultados[0]); }}
     placeholder="Buscar pedido, guia o cliente"
     style={{
      width: "100%", boxSizing: "border-box",
@@ -133,15 +194,18 @@ function Buscador({ pedidos, onAbrirPedido, compacto = false }) {
        <div style={{ marginTop: 6, maxHeight: 300, overflowY: "auto" }}>
         {resultados.length === 0 ? (
          <div style={{ padding: "10px 12px", fontSize: 13, color: T.color.tinta3 }}>Sin resultados</div>
-        ) : resultados.map(p => (
-         <button key={p.id} onClick={() => elegir(p.id)} style={{
+        ) : resultados.map((r, i) => (
+         <button key={r.clase + r.valor + i} onClick={() => elegir(r)} style={{
           width: "100%", textAlign: "left", border: "none", background: "transparent",
           cursor: "pointer", fontFamily: "inherit", padding: "9px 10px",
           borderRadius: T.radio.chico, display: "block",
          }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{p.id}</div>
+          <div style={{
+           fontSize: 13, fontWeight: 700, color: T.color.tinta,
+           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{r.etiqueta}</div>
           <div style={{ fontSize: 12, color: T.color.tinta3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-           {p.cliente}{p.guia_interna ? ` · ${p.guia_interna}` : ""}
+           {r.detalle}
           </div>
          </button>
         ))}
@@ -163,15 +227,18 @@ function Buscador({ pedidos, onAbrirPedido, compacto = false }) {
     }}>
      {resultados.length === 0 ? (
       <div style={{ padding: "10px 12px", fontSize: 13, color: T.color.tinta3 }}>Sin resultados</div>
-     ) : resultados.map(p => (
-      <button key={p.id} onClick={() => elegir(p.id)} style={{
+     ) : resultados.map((r, i) => (
+      <button key={r.clase + r.valor + i} onClick={() => elegir(r)} style={{
        width: "100%", textAlign: "left", border: "none", background: "transparent",
        cursor: "pointer", fontFamily: "inherit", padding: "8px 10px",
        borderRadius: T.radio.chico, display: "block",
       }}>
-       <div style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta }}>{p.id}</div>
+       <div style={{
+        fontSize: 13, fontWeight: 700, color: T.color.tinta,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+       }}>{r.etiqueta}</div>
        <div style={{ fontSize: 12, color: T.color.tinta3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {p.cliente}{p.guia_interna ? ` · ${p.guia_interna}` : ""}
+        {r.detalle}
        </div>
       </button>
      ))}
@@ -403,15 +470,55 @@ function BarraEstados({ conteos, total, onIrAEstado }) {
  );
 }
 
+// Sin esto, con un cliente enfocado las cifras bajan y no hay como saber por
+// que: la franja dice a quien se esta mirando y como volver a verlo todo.
+function FranjaFoco({ foco, cuantos, onQuitar }) {
+ const comoSeLlama = { cliente: "Cliente", conductor: "Conductor", transportista: "Transportista" };
+ return (
+  <div style={{
+   display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+   padding: "10px 14px", borderRadius: T.radio.control,
+   background: T.color.marcaSuave, border: `1px solid ${T.color.marcaBorde}`,
+  }}>
+   <span style={{ ...T.texto.seccion, color: T.color.marca, whiteSpace: "nowrap" }}>
+    {comoSeLlama[foco.tipo] || "Foco"}
+   </span>
+   <span style={{
+    fontSize: 14, fontWeight: 700, color: T.color.tinta, minWidth: 0,
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+   }}>{foco.etiqueta}</span>
+   <span style={{ fontSize: 12.5, color: T.color.tinta3, whiteSpace: "nowrap" }}>
+    {cuantos.toLocaleString("es-CO")} {cuantos === 1 ? "pedido" : "pedidos"}
+   </span>
+   <button onClick={onQuitar} style={{
+    marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+    height: 30, padding: "0 10px", borderRadius: T.radio.chico,
+    border: `1px solid ${T.color.marcaBorde}`, background: T.color.superficie,
+    color: T.color.marca, fontFamily: "inherit", fontSize: 12.5, fontWeight: 600,
+    cursor: "pointer", flexShrink: 0,
+   }}>
+    <X size={14} /> Ver todo
+   </button>
+  </div>
+ );
+}
+
 // ── Dashboard ───────────────────────────────────────────────────────────────
 
 export function Dashboard({
  pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [],
- promesas = [], ciudades = [], setActiveTab, onBuscarPedido, onVerEstado,
+ promesas = [], ciudades = [], transportistas = [],
+ setActiveTab, onBuscarPedido, onVerEstado,
+ // Con que sujeto abrir. Siempre vacio en la aplicacion; existe para que la
+ // prueba pueda dibujar el tablero ya enfocado sin simular la busqueda.
+ focoInicial = null,
 }) {
  // El dashboard abre con todo el historico: es la foto completa de la operacion.
  // Los rangos cortos sirven para mirar un periodo, no para ser el punto de partida.
  const [rango, setRango] = useState("todo");
+ // A quien se esta mirando. Sin foco, la operacion entera; con foco, solo lo
+ // de ese cliente, conductor o transportista.
+ const [foco, setFoco] = useState(focoInicial);
  const esMovil = useEsMovil();
 
  const irA = (tab) => { if (setActiveTab) setActiveTab(tab); };
@@ -423,9 +530,10 @@ export function Dashboard({
  const m = useMemo(() => {
   const dias = (RANGOS.find(r => r.id === rango) || RANGOS[3]).dias;
   const desde = dias ? restarDias(dias) : null;
+  const suyos = porFoco(pedidos, foco, "pedidos") || [];
   const enRango = desde
-   ? pedidos.filter(p => (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde)
-   : pedidos;
+   ? suyos.filter(p => (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde)
+   : suyos;
 
   const hoy = hoyISO();
   const promMap = Object.fromEntries((promesas || []).map(p => [p.ciudad_codigo, Number(p.dias_plazo || 0)]));
@@ -476,11 +584,17 @@ export function Dashboard({
    enRango, entregados, activos, vencidos, enRiesgo,
    promedio, promesaProm, aTiempo, tarde, pctCumpl, totalCumpl, conteos,
   };
- }, [pedidos, promesas, rango]);
+ }, [pedidos, promesas, rango, foco]);
 
- const pqrsAbiertas = pqrs.filter(p => p.estado === "abierta").length;
- const pqrsGestion = pqrs.filter(p => p.estado === "en_gestion").length;
- const pqrsCerradas = pqrs.filter(p => p.estado === "cerrada").length;
+ // Las PQRS y las devoluciones del sujeto. Las devoluciones no guardan el
+ // cliente: con un cliente enfocado no hay con que filtrarlas, y porFoco
+ // devuelve null para que el indicador lo diga.
+ const pqrsFoco = porFoco(pqrs, foco, "pqrs") || [];
+ const devolucionesFoco = porFoco(devoluciones, foco, "devoluciones");
+
+ const pqrsAbiertas = pqrsFoco.filter(p => p.estado === "abierta").length;
+ const pqrsGestion = pqrsFoco.filter(p => p.estado === "en_gestion").length;
+ const pqrsCerradas = pqrsFoco.filter(p => p.estado === "cerrada").length;
 
  // Cada aviso lista sus primeros pedidos para poder abrir uno directamente; el
  // titulo del grupo sigue llevando a la vista completa.
@@ -504,7 +618,12 @@ export function Dashboard({
   { label: "Entregados", valor: m.entregados.length, color: T.color.bien },
   { label: "En riesgo", valor: m.enRiesgo.length, color: T.color.ojo, resalta: true },
   { label: "Vencidos", valor: m.vencidos.length, color: T.color.mal, resalta: true },
-  { label: "Devoluciones", valor: devoluciones.length, color: T.color.tinta3 },
+  {
+   label: "Devoluciones",
+   valor: devolucionesFoco ? devolucionesFoco.length : null,
+   nota: "Las devoluciones no registran el cliente",
+   color: T.color.tinta3,
+  },
  ];
 
  const pie = ALTO_BARRA + 16;
@@ -530,10 +649,12 @@ export function Dashboard({
         <div style={{ fontSize: 11.5, color: T.color.tinta3, lineHeight: 1.2 }}>Somos PRO · Tracking</div>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>Dashboard</h1>
        </div>
-       <Buscador pedidos={pedidos} onAbrirPedido={abrirPedido} compacto />
+       <Buscador pedidos={pedidos} conductores={conductores} transportistas={transportistas}
+       onAbrirPedido={abrirPedido} onFoco={setFoco} compacto />
        <Campana avisos={avisos} onIr={irA} />
       </header>
       <SelectorRango rango={rango} setRango={setRango} ancho />
+      {foco && <FranjaFoco foco={foco} cuantos={m.enRango.length} onQuitar={() => setFoco(null)} />}
      </>
     ) : (
      <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
@@ -544,11 +665,16 @@ export function Dashboard({
        </p>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-       <Buscador pedidos={pedidos} onAbrirPedido={abrirPedido} />
+       <Buscador pedidos={pedidos} conductores={conductores} transportistas={transportistas}
+        onAbrirPedido={abrirPedido} onFoco={setFoco} />
        <SelectorRango rango={rango} setRango={setRango} />
        <Campana avisos={avisos} onIr={irA} />
       </div>
      </header>
+    )}
+
+    {!esMovil && foco && (
+     <FranjaFoco foco={foco} cuantos={m.enRango.length} onQuitar={() => setFoco(null)} />
     )}
 
     {esMovil ? (
@@ -563,10 +689,11 @@ export function Dashboard({
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
          }}>{k.label}</span>
         </div>
-        <div style={{
+        <div title={k.valor === null ? k.nota : undefined} style={{
          fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.1,
-         color: k.destacado ? T.color.marca : k.resalta ? k.color : T.color.tinta,
-        }}>{k.valor.toLocaleString("es-CO")}</div>
+         color: k.valor === null ? T.color.tenue
+          : k.destacado ? T.color.marca : k.resalta ? k.color : T.color.tinta,
+        }}>{k.valor === null ? "—" : k.valor.toLocaleString("es-CO")}</div>
        </div>
       ))}
      </div>
@@ -582,8 +709,9 @@ export function Dashboard({
           <span style={{ width: 7, height: 7, borderRadius: 4, background: k.color, flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: T.color.tinta2, whiteSpace: "nowrap" }}>{k.label}</span>
          </div>
-         <div style={{ ...T.texto.cifra, color: k.destacado ? T.color.marca : T.color.tinta }}>
-          {k.valor.toLocaleString("es-CO")}
+         <div title={k.valor === null ? k.nota : undefined}
+          style={{ ...T.texto.cifra, color: k.valor === null ? T.color.tenue : k.destacado ? T.color.marca : T.color.tinta }}>
+          {k.valor === null ? "—" : k.valor.toLocaleString("es-CO")}
          </div>
         </div>
        ))}

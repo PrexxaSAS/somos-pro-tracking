@@ -5506,7 +5506,7 @@ export default function SomosProTracking() {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
-   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
+   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} transportistas={transportistas} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
     onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setEstadoPedidos(""); setTab("pedidos"); }}
     onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
