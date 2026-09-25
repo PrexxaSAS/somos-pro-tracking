@@ -72,7 +72,7 @@ export const ROLES_CARTERA = ["cartera"];
 // esto apagado sus menus no se dibujan y el modulo queda inalcanzable, aunque
 // el codigo viaje. Para encenderlo basta ponerlo en true: nada mas depende de
 // esta bandera, y las dos ramas llevan el mismo codigo.
-export const CARTERA_ACTIVA = false;
+export const CARTERA_ACTIVA = true;
 
 // Sedes a donde se lleva la mercancia de una devolucion. Se guarda el texto
 // completo en devoluciones.dir_entrega. Para agregar una sede basta con sumarla aqui.
