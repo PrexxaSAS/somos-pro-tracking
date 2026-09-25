@@ -218,6 +218,19 @@ create policy cartera_operador_update on public.pedidos_cartera
   using (public.current_user_role() = 'operador')
   with check (public.current_user_role() = 'operador');
 
+-- Al cargar, el pedido con plazo entra aprobado. Aprobar asigna corte: crea el
+-- corte del dia si no existe y le suma uno a pedidos_asignados (el update ya lo
+-- tenia por cartera_operador_cortes), y deja el rastro en historial_cartera.
+drop policy if exists cartera_operador_crear_corte on public.cortes_programados;
+create policy cartera_operador_crear_corte on public.cortes_programados
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');
+
+drop policy if exists cartera_operador_historial on public.historial_cartera;
+create policy cartera_operador_historial on public.historial_cartera
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');
+
 drop policy if exists cartera_logistica_cortes on public.cortes_programados;
 drop policy if exists cartera_operador_cortes on public.cortes_programados;
 create policy cartera_operador_cortes on public.cortes_programados

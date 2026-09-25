@@ -13,6 +13,9 @@
 --
 -- El admin no necesita nada: cartera_escritura ya lo cubre.
 --
+-- El cargue ademas APRUEBA los pedidos que traen plazo, y aprobar asigna
+-- corte y escribe historial: por eso tambien van esos dos permisos.
+--
 -- Correr en los DOS proyectos de Supabase: prueba y produccion.
 -- ---------------------------------------------------------------------------
 
@@ -38,3 +41,16 @@ drop policy if exists cartera_operador_vencida_delete on public.cartera_clientes
 create policy cartera_operador_vencida_delete on public.cartera_clientes
   for delete to authenticated
   using (public.current_user_role() = 'operador');
+
+-- Al cargar, el pedido con plazo entra aprobado. Aprobar asigna corte: crea el
+-- corte del dia si no existe y le suma uno a pedidos_asignados (el update ya lo
+-- tenia por cartera_operador_cortes), y deja el rastro en historial_cartera.
+drop policy if exists cartera_operador_crear_corte on public.cortes_programados;
+create policy cartera_operador_crear_corte on public.cortes_programados
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');
+
+drop policy if exists cartera_operador_historial on public.historial_cartera;
+create policy cartera_operador_historial on public.historial_cartera
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');

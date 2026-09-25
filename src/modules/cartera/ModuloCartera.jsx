@@ -653,7 +653,7 @@ export function CargarCarteraVencida({showToast}) {
 }
 
 // ── CARGAR PEDIDOS ─────────────────────────────────────────────────────────────
-export function CargarPedidos({showToast,onCargado}) {
+export function CargarPedidos({user,showToast,onCargado}) {
   const [archivo,   setArchivo]  = useState('');
   const [pedidos,   setPedidos]  = useState([]);
   const [errMsg,    setErrMsg]   = useState('');
@@ -671,10 +671,13 @@ export function CargarPedidos({showToast,onCargado}) {
     });
   },[]);
 
+  // El pedido con plazo entra aprobado: el plazo es justamente la autorizacion
+  // de credito, asi que no tiene a quien esperarle. La cartera vencida sigue
+  // mandando: al cliente que ya debe no se le aprueba nada por tener plazo.
   const clasificar = (nit, plazo) => {
     const nitStr = String(nit||'').trim();
     if(cartera[nitStr]?.tiene_vencidos) return 'cartera_vencida';
-    if(parseInt(plazo||0)>0) return 'preaprobado';
+    if(parseInt(plazo||0)>0) return 'aprobado';
     return 'pendiente';
   };
 
@@ -788,7 +791,7 @@ export function CargarPedidos({showToast,onCargado}) {
     const {data:existentes} = await supabase.from('pedidos_cartera').select('numero_pedido').in('numero_pedido',numeros);
     const yaExisten = new Set((existentes||[]).map(e=>e.numero_pedido));
 
-    let ok=0, errores=0;
+    let ok=0, errores=0, sinCorte=0;
     const duplicados=[];
     for(const p of pedidos) {
       if(yaExisten.has(p.numero_pedido)){ duplicados.push(p.numero_pedido); continue; }
@@ -798,12 +801,32 @@ export function CargarPedidos({showToast,onCargado}) {
       if(lineas.length>0){
         await supabase.from('pedidos_cartera_detalle').insert(lineas.map(l=>({...l,pedido_id:inserted.id})));
       }
+      // Poner el estado en 'aprobado' no basta: logistica solo ve los aprobados
+      // que tienen corte, asi que el que entra aprobado recibe el mismo corte y
+      // deja el mismo rastro que deja la aprobacion a mano. El corte se pide
+      // despues de insertar para no gastarle un cupo a un pedido que no entro.
+      if(pedData.estado_cartera==='aprobado'){
+        const corte = await asignarCorte(p.dane_origen);
+        if(!corte) sinCorte++;
+        const upd = {
+          fecha_aprobacion:new Date().toISOString(),
+          aprobado_por:user?.id||null,
+          estado_impresion:'no_impreso',
+        };
+        if(corte){upd.corte_id=corte.corteId;upd.fecha_corte=corte.fechaCorte;}
+        await supabase.from('pedidos_cartera').update(upd).eq('id',inserted.id);
+        await supabase.from('historial_cartera').insert({
+          pedido_id:inserted.id, decision:'aprobado', usuario_id:user?.id||null,
+          motivo:'Aprobado en el cargue: el pedido tiene plazo',
+        });
+      }
       ok++;
     }
     setCarg(false);
     setResultado({ok,errores,total:pedidos.length,duplicados});
     let msg=`✓ ${ok} pedido(s) cargados`;
     if(duplicados.length>0) msg+=` · ${duplicados.length} ya existían (omitidos)`;
+    if(sinCorte>0) msg+=` · ${sinCorte} aprobado(s) sin sede configurada (verificar DANE Origen)`;
     showToast(msg,"success");
     if(ok>0 && onCargado) onCargado();
   };
@@ -811,7 +834,7 @@ export function CargarPedidos({showToast,onCargado}) {
   const resumen = {
     total:pedidos.length,
     vencida:pedidos.filter(p=>p.estado_cartera==='cartera_vencida').length,
-    preaprobado:pedidos.filter(p=>p.estado_cartera==='preaprobado').length,
+    aprobado:pedidos.filter(p=>p.estado_cartera==='aprobado').length,
     pendiente:pedidos.filter(p=>p.estado_cartera==='pendiente').length,
   };
 
@@ -857,7 +880,7 @@ export function CargarPedidos({showToast,onCargado}) {
        <Indicadores items={[
         { label:"Pedidos leidos", valor:resumen.total, color:T.color.marca, destacado:true },
         { label:"Cartera vencida", valor:resumen.vencida, color:T.color.malPunto },
-        { label:"Preaprobados", valor:resumen.preaprobado, color:T.color.bienPunto },
+        { label:"Aprobados", valor:resumen.aprobado, color:T.color.bienPunto },
         { label:"Pendientes", valor:resumen.pendiente, color:T.color.ojoPunto },
        ]}/>
 
@@ -1594,7 +1617,7 @@ export function ModuloCartera({ tab, user, showToast, setTab }) {
   case "cartera_sedes":     return <GestionSedes showToast={showToast}/>;
   case "cartera_asesores":  return <GestionAsesores showToast={showToast} soloCrear={user?.rol === "cliente"}/>;
   case "cartera_vencida":   return <CargarCarteraVencida showToast={showToast}/>;
-  case "cartera_cargar":    return <CargarPedidos showToast={showToast} onCargado={()=>setTab("cartera_pedidos")}/>;
+  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")}/>;
   case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast}/>;
   case "cartera_logistica": return <ModuloLogistica showToast={showToast}/>;
   case "cartera_consultas": return <ModuloConsultas showToast={showToast}/>;
