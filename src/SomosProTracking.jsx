@@ -278,6 +278,15 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
     { label:"Ciudad destino", valor:ciudad?.name || pedido.ciudad_nombre || "Sin definir", falta:!pedido.ciudad_codigo },
     { label:"Factura", valor:pedido.factura || "Sin registrar", falta:!pedido.factura, mono:!!pedido.factura },
     { label:"Estimado", valor:pedido.fecha_estimada || "Sin fecha", falta:!pedido.fecha_estimada },
+    {
+     // El dia que salio a ruta. En paqueteria no se marca nunca -- el pedido
+     // pasa a "paqueteria", no a "en transito" -- asi que ahi no es un hueco.
+     label:"Despachado",
+     valor: pedido.fecha_despacho
+      || (pedido.tipo === "paqueteria" ? "No aplica" : "Sin despachar"),
+     falta: !pedido.fecha_despacho && pedido.tipo !== "paqueteria"
+      && ["en_transito","entregado","novedad"].includes(pedido.estado),
+    },
     { label:"Real", valor:pedido.fecha_real || "Pendiente", falta:!pedido.fecha_real },
     { label:"Fuente de riesgo", valor:fuenteRiesgo },
     { label:"Cajas", valor:pedido.cajas || 0 },
