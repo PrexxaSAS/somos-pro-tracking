@@ -38,12 +38,16 @@ function Titulo({ children, ayuda }) {
 }
 
 export function RegistrarEntregaMovil({
- pedido, promesa, onConfirmar, onNovedad, onClose,
- // Por que paso abrir. Siempre es 0 en la aplicacion; existe para que la
- // prueba pueda dibujar los tres sin tener que simular los toques.
- pasoInicial = 0,
+ pedido, promesa, onConfirmar, onClose,
+ // Por que paso abrir y con que novedad. En la aplicacion son siempre 0 y
+ // false; existen para que la prueba pueda dibujar cada caso sin simular los
+ // toques.
+ pasoInicial = 0, novedadInicial = false,
 }) {
  const [paso, setPaso] = useState(pasoInicial);
+ // La novedad viaja con la confirmacion, no aparte: el conductor la marca, la
+ // ve en el resumen y confirma una sola vez.
+ const [novedad, setNovedad] = useState(novedadInicial);
  const [fotos, setFotos] = useState([]);
  const [observaciones, setObservaciones] = useState("");
  const [ubicacion, setUbicacion] = useState(null);
@@ -78,6 +82,7 @@ export function RegistrarEntregaMovil({
   setGuardando(true);
   await onConfirmar({
    fotos: fotos.map(f => ({ data: f.data, nombre: f.nombre })),
+   conNovedad: novedad,
    entrega_observaciones: observaciones.trim(),
    entrega_lat: ubicacion?.lat ?? null,
    entrega_lng: ubicacion?.lng ?? null,
@@ -243,19 +248,24 @@ export function RegistrarEntregaMovil({
         }}/>
       </div>
 
-      <button onClick={onNovedad} style={{
+      <button onClick={() => setNovedad(!novedad)} style={{
        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-       minHeight: 44, border: "none", background: "transparent", cursor: "pointer",
+       minHeight: 44, padding: "0 12px", borderRadius: T.radio.control, cursor: "pointer",
        fontFamily: "inherit", fontSize: 14, fontWeight: 600, color: T.color.mal,
+       background: novedad ? T.color.malSuave : "transparent",
+       border: `1px solid ${novedad ? T.color.malBorde : "transparent"}`,
       }}>
-       <AlertTriangle size={16} /> No se pudo entregar · reportar novedad
+       <AlertTriangle size={16} />
+       {novedad ? "Se reportara con novedad · quitar" : "No se pudo entregar · reportar novedad"}
       </button>
      </>
     )}
 
     {paso === 1 && (
      <>
-      <Titulo ayuda="Al confirmar, el pedido pasa a Entregado.">Revisa y confirma</Titulo>
+      <Titulo ayuda={novedad
+       ? "Al confirmar, el pedido queda Con Novedad."
+       : "Al confirmar, el pedido pasa a Entregado."}>Revisa y confirma</Titulo>
 
       <section style={{
        background: T.color.superficie, border: `1px solid ${T.color.borde}`,
@@ -264,6 +274,7 @@ export function RegistrarEntregaMovil({
       }}>
        {[
         ["Observaciones", observaciones || "Sin observaciones", 0],
+        ["Estado", novedad ? "Con novedad" : "Entregado", 0],
        ].map(([k, v, volver]) => (
         <div key={k} style={{
          display: "flex", alignItems: "center", gap: 12, minHeight: 48, padding: "6px 0",

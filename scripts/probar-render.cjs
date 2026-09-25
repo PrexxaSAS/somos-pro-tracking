@@ -196,6 +196,24 @@ for (const [nombre, elemento] of casos) {
  exigir(!htmlCliente.includes("Acciones"), "el cliente ve la columna de editar y borrar");
 }
 
+// La novedad del conductor se marca en el paso 1 y se confirma en el 2. Antes
+// el boton llamaba a un onNovedad que no hacia nada visible y la confirmacion
+// mandaba false fijo, asi que el pedido se guardaba Entregado. Si el estado
+// deja de viajar hasta el resumen, esto lo dice.
+{
+ const entrega = (props) => renderToString(React.createElement(RegistrarEntregaMovil, {
+  pedido: pedidos[0], promesa: promesas[0],
+  onConfirmar(){}, onClose(){}, ...props,
+ }));
+ const conNovedad = entrega({ pasoInicial: 1, novedadInicial: true });
+ const sinNovedad = entrega({ pasoInicial: 1, novedadInicial: false });
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  novedad: " + queja); fallos++; } };
+ exigir(conNovedad.includes("Con Novedad"), "el paso de confirmar no avisa que queda con novedad");
+ exigir(conNovedad.includes("Con novedad"), "el resumen no muestra el estado con novedad");
+ exigir(sinNovedad.includes("Entregado"), "sin novedad el resumen no dice Entregado");
+ exigir(!sinNovedad.includes("Con novedad"), "sin marcarla el resumen ya dice con novedad");
+}
+
 globalThis.__fallos = fallos;
 `;
 

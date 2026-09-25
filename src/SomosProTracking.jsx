@@ -3419,8 +3419,9 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
     <RegistrarEntregaMovil
      pedido={modFotos}
      promesa={(promesas || []).find(x => x.ciudad_codigo === modFotos.ciudad_codigo)}
-     onConfirmar={async ({ fotos, ...datos }) => { await marcarEntregado(modFotos, fotos, false, datos); }}
-     onNovedad={() => { setNovedad(true); }}
+     onConfirmar={async ({ fotos, conNovedad, ...datos }) => {
+      await marcarEntregado(modFotos, fotos, conNovedad, datos);
+     }}
      onClose={() => setModFotos(null)}
     />
    )}
