@@ -22,7 +22,7 @@ import {
   Wallet,
   Warehouse,
 } from 'lucide-react';
-import { ROLES } from '../../Constants';
+import { ROLES, CARTERA_ACTIVA } from '../../Constants';
 import { T } from '../../design/tokens';
 
 // El menu va agrupado por secciones: con quince opciones seguidas nadie encuentra
@@ -43,11 +43,11 @@ export const MENUS = {
       ["resumen", "Resumen transportador", ClipboardList],
       ["paqueterias", "Paqueterias", Warehouse],
     ]],
-    ["Cartera", [
+    ...(CARTERA_ACTIVA ? [["Cartera", [
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
       ["cartera_sedes", "Sedes y cortes", Warehouse],
       ["cartera_asesores", "Asesores", Users],
-    ]],
+    ]]] : []),
     ["Configuracion", [
       ["ciudades", "Ciudades / DANE", Building2],
       ["promesas", "Promesas de servicio", CalendarClock],
@@ -68,22 +68,22 @@ export const MENUS = {
       ["conductores", "Conductores", Users],
       ["resumen", "Resumen transportador", ClipboardList],
     ]],
-    ["Cartera", [
+    ...(CARTERA_ACTIVA ? [["Cartera", [
       ["cartera_logistica", "Logistica cartera", Printer],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
-    ]],
+    ]]] : []),
     ["Configuracion", [
       ["promesas", "Promesas de servicio", CalendarClock],
       ["facturas", "Facturas proveedor", FileText],
     ]],
   ],
-  cartera: [
+  cartera: CARTERA_ACTIVA ? [
     ["Cartera", [
       ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_pedidos", "Gestion de pedidos", Wallet],
       ["cartera_vencida", "Cartera vencida", FileText],
     ]],
-  ],
+  ] : [],
   transportista: [
     ["Mi operacion", [["mi_empresa", "Mi empresa", Truck]]],
   ],
@@ -101,7 +101,7 @@ export const MENUS = {
       ["devoluciones", "Mis devoluciones", RotateCcw],
       ["recogidas", "Mis recogidas", PackageCheck],
       ["pqrs", "PQRS", HelpCircle],
-      ["cartera_consultas", "Consultas cartera", Search],
+      ...(CARTERA_ACTIVA ? [["cartera_consultas", "Consultas cartera", Search]] : []),
     ]],
   ],
 };
