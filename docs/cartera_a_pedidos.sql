@@ -20,6 +20,9 @@
 --   ciudad_codigo               <- sector_dane (destino), a 5 digitos
 --   ciudad_origen_codigo        <- dane_origen
 --   los nombres de ciudad se resuelven contra public.ciudades
+--   guia_interna                <- SPT-<anio>-<consecutivo>, como la genera la app
+--   fecha_estimada              <- la fecha del corte mas los dias de la promesa
+--                                  de servicio de la ciudad destino
 --   cajas    entra en 0
 --   factura  y  tipo  entran vacios: se llenan a mano desde la edicion
 --
@@ -39,6 +42,13 @@ declare
   nombre_destino  text;
   nombre_origen   text;
   cuando          timestamptz;
+  dia_pedido      date;
+  dias_promesa    integer;
+  anio            text;
+  consecutivo     integer;
+  guia            text;
+  patron_entero   text;
+  patron_captura  text;
 begin
   -- Solo los aprobados, y solo la primera vez que lo son.
   if new.estado_cartera is distinct from 'aprobado' then
@@ -70,15 +80,38 @@ begin
   -- (el DANE origen no tiene sede configurada), quedan vacias y se ven vacias,
   -- en vez de inventar la fecha de hoy.
   cuando := new.fecha_corte;
+  dia_pedido := (cuando at time zone 'America/Bogota')::date;
+
+  -- La fecha estimada es la del corte mas los dias de la promesa de servicio de
+  -- la ciudad destino. Si esa ciudad no tiene promesa configurada no se inventa
+  -- ningun plazo: queda vacia, igual que hoy al crear el pedido a mano.
+  select dias_plazo into dias_promesa
+  from public.promesas_servicio
+  where ciudad_codigo = dane_destino;
+
+  -- La guia interna la venia generando la aplicacion al crear el pedido. Se
+  -- arma igual (SPT-<anio>-<consecutivo de 4 digitos>), pero con un candado por
+  -- transaccion: dos aprobaciones simultaneas se turnan en vez de sacar las dos
+  -- el mismo numero, que es lo que si podia pasar desde el navegador.
+  anio := to_char(now() at time zone 'America/Bogota', 'YYYY');
+  patron_entero  := '^SPT-' || anio || '-[0-9]+$';
+  patron_captura := '^SPT-' || anio || '-([0-9]+)$';
+  perform pg_advisory_xact_lock(hashtext('pedidos.guia_interna'));
+  select coalesce(max(substring(guia_interna from patron_captura)::integer), 0) + 1
+    into consecutivo
+  from public.pedidos
+  where guia_interna ~ patron_entero;
+  guia := 'SPT-' || anio || '-' || lpad(consecutivo::text, 4, '0');
 
   insert into public.pedidos (
-    id, cliente, direccion,
+    id, guia_interna, cliente, direccion,
     ciudad_codigo, ciudad_nombre,
     ciudad_origen_codigo, ciudad_origen_nombre,
     cajas, factura, tipo, estado,
-    fecha_pedido, hora_pedido, notas
+    fecha_pedido, hora_pedido, fecha_estimada, notas
   ) values (
     numero,
+    guia,
     coalesce(
       nullif(btrim(coalesce(new.cliente, '')), ''),
       nullif(btrim(coalesce(new.nit, '')), ''),
@@ -91,8 +124,9 @@ begin
     null,         -- factura: se pone cuando se facture
     null,         -- tipo: propio o paqueteria, se elige a mano
     'sin_asignar',
-    (cuando at time zone 'America/Bogota')::date,
+    dia_pedido,
     to_char(cuando at time zone 'America/Bogota', 'HH24:MI'),
+    case when dias_promesa is not null then dia_pedido + dias_promesa end,
     nullif(btrim(coalesce(new.observacion, '')), '')
   );
 
@@ -112,7 +146,8 @@ create trigger trg_cartera_crear_pedido
 -- Comprobacion: aprobar un pedido de cartera debe dejar su gemelo en pedidos.
 -- ---------------------------------------------------------------------------
 -- select pc.numero_pedido, pc.estado_cartera, pc.fecha_corte,
---        p.id, p.fecha_pedido, p.hora_pedido, p.ciudad_nombre
+--        p.id, p.guia_interna, p.fecha_pedido, p.hora_pedido,
+--        p.fecha_estimada, p.ciudad_nombre
 -- from public.pedidos_cartera pc
 -- left join public.pedidos p on p.id = pc.numero_pedido
 -- where pc.estado_cartera = 'aprobado'
