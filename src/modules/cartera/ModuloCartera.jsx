@@ -46,6 +46,8 @@ const etapaCartera = (p) => {
 const ESTADOS_CARTERA = {
   pendiente:       {label:"Pendiente",       color:T.color.ojo,  bg:T.color.ojoSuave},
   preaprobado:     {label:"Preaprobado",     color:T.color.bien, bg:T.color.bienSuave},
+  // Ya no se produce: la cartera vencida se elimino. Se conserva la etiqueta
+  // para que los pedidos que quedaron con ese estado se sigan leyendo bien.
   cartera_vencida: {label:"Cartera vencida", color:T.color.mal,  bg:T.color.malSuave},
   aprobado:        {label:"Aprobado",        color:T.color.info, bg:T.color.infoSuave},
   rechazado:       {label:"Rechazado",       color:T.color.tinta3, bg:T.color.superficie3},
@@ -543,136 +545,6 @@ export function GestionAsesores({showToast, soloCrear = false}) {
 }
 
 // ── GESTIÓN USUARIOS ───────────────────────────────────────────────────────────
-// ── CARGAR CARTERA VENCIDA ─────────────────────────────────────────────────────
-export function CargarCarteraVencida({showToast}) {
-  const [archivo,  setArchivo]  = useState('');
-  const [preview,  setPreview]  = useState(null);
-  const [carg,     setCarg]     = useState(false);
-  const [resultado,setResultado]= useState(null);
-  const fileRef = useRef(null);
-
-  const parsearCSV = (text) => {
-    const filas = filasCsv(text);
-    if(filas.length<2) throw new Error("Archivo vacío");
-    const hdrs = filas[0].map(h=>h.toLowerCase());
-    const iNit  = hdrs.findIndex(h=>h==='cliente'||h.includes('nit'));
-    const iRaz  = hdrs.findIndex(h=>h.includes('razonsocial')||h.includes('razon'));
-    const iDias = hdrs.findIndex(h=>h.includes('diasexcedio')||h.includes('dias'));
-    const iFCor = hdrs.findIndex(h=>h.includes('fechacorte')||h.includes('corte'));
-    if(iNit===-1||iDias===-1) throw new Error("No se encontraron columnas requeridas: Cliente (NIT) y DiasExcedio");
-
-    const porNit = {};
-    for(const c of filas.slice(1)) {
-      const nit  = c[iNit]||'';
-      const dias = parseInt(c[iDias])||0;
-      const raz  = iRaz!==-1?c[iRaz]||'':'';
-      const fcor = iFCor!==-1?c[iFCor]||'':'';
-      if(!nit) continue;
-      if(!porNit[nit]) porNit[nit]={nit,razon_social:raz,max_dias:dias,fecha_corte:fcor};
-      else if(dias>porNit[nit].max_dias) porNit[nit].max_dias=dias;
-    }
-    return Object.values(porNit).map(r=>({
-      nit: r.nit,
-      razon_social: r.razon_social,
-      tiene_vencidos: r.max_dias>0,
-      dias_max_vencido: r.max_dias,
-      fecha_corte: r.fecha_corte||new Date().toISOString().split('T')[0],
-    }));
-  };
-
-  const leerArchivo = async (file) => {
-    setArchivo(file.name); setPreview(null); setResultado(null);
-    if(!/\.(csv|txt)$/i.test(file.name)) {
-      showToast("Solo se aceptan archivos .CSV","error");
-      setArchivo('');
-      return;
-    }
-    try {
-      const datos = parsearCSV(await leerTextoCsv(file));
-      const vencidos = datos.filter(d=>d.tiene_vencidos).length;
-      setPreview({total:datos.length, vencidos, alDia:datos.length-vencidos, datos});
-    } catch(ex) { showToast("Error: "+ex.message,"error"); setArchivo(''); }
-  };
-
-  const aplicar = async () => {
-    if(!preview) return;
-    setCarg(true);
-    try {
-      // Delete all and replace
-      await supabase.from('cartera_clientes').delete().neq('id','00000000-0000-0000-0000-000000000000');
-      // Insert in chunks of 100
-      const CHUNK=100;
-      let ok=0;
-      for(let i=0;i<preview.datos.length;i+=CHUNK){
-        const chunk=preview.datos.slice(i,i+CHUNK);
-        const {error}=await supabase.from('cartera_clientes').insert(chunk);
-        if(!error) ok+=chunk.length;
-      }
-      setResultado({ok, total:preview.datos.length});
-      showToast(`✓ ${ok} clientes actualizados en cartera`,"success");
-      setPreview(null); setArchivo('');
-    } catch(e){showToast("Error de conexión","error");}
-    setCarg(false);
-  };
-
-  return (
-   <Pagina>
-    <Encabezado
-     titulo="Cargar cartera vencida"
-     descripcion="Reemplaza el estado de cartera de todos los clientes"
-    />
-
-    <section style={{ ...tarjeta, padding:20, display:"flex", flexDirection:"column", gap:16 }}>
-     <button onClick={()=>fileRef.current?.click()}
-      onDragOver={e=>e.preventDefault()}
-      onDrop={e=>{e.preventDefault(); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);}}
-      style={{
-       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
-       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
-       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
-      }}>
-      <span style={{
-       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
-       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
-      }}><Upload size={20}/></span>
-      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
-       {archivo || "Arrastra el archivo CSV o haz clic para seleccionarlo"}
-      </span>
-      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
-       Solo archivos .csv · columnas Cliente (NIT) y DiasExcedio
-      </span>
-     </button>
-     <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
-      onChange={e=>{ if(e.target.files[0]) leerArchivo(e.target.files[0]); }}/>
-
-     <FranjaInfo>
-      Cada carga <strong>reemplaza</strong> la tabla completa: los clientes que no vengan en el
-      archivo quedan sin cartera vencida.
-     </FranjaInfo>
-
-     {preview && (
-      <>
-       <Indicadores items={[
-        { label:"Clientes", valor:preview.total, color:T.color.marca, destacado:true },
-        { label:"Con cartera vencida", valor:preview.vencidos, color:T.color.malPunto },
-        { label:"Al dia", valor:preview.alDia, color:T.color.bienPunto },
-       ]}/>
-       <button onClick={aplicar} disabled={carg} style={{ ...botonPrincipal, alignSelf:"flex-start" }}>
-        {carg ? "Aplicando..." : `Aplicar a ${preview.total} cliente(s)`}
-       </button>
-      </>
-     )}
-
-     {resultado && (
-      <FranjaInfo>
-       {resultado.ok} de {resultado.total} cliente(s) cargados.
-      </FranjaInfo>
-     )}
-    </section>
-   </Pagina>
-  );
-}
-
 // ── CARGAR PEDIDOS ─────────────────────────────────────────────────────────────
 export function CargarPedidos({user,showToast,onCargado}) {
   const [archivo,   setArchivo]  = useState('');
@@ -680,27 +552,11 @@ export function CargarPedidos({user,showToast,onCargado}) {
   const [errMsg,    setErrMsg]   = useState('');
   const [carg,      setCarg]     = useState(false);
   const [resultado, setResultado]= useState(null);
-  const [cartera,   setCartera]  = useState({});
   const fileRef = useRef(null);
 
-  // Cargar estado de cartera para clasificar
-  useEffect(()=>{
-    supabase.from('cartera_clientes').select('nit,tiene_vencidos').then(({data})=>{
-      const mapa={};
-      (data||[]).forEach(c=>{mapa[c.nit]={tiene_vencidos:c.tiene_vencidos};});
-      setCartera(mapa);
-    });
-  },[]);
-
   // El pedido con plazo entra aprobado: el plazo es justamente la autorizacion
-  // de credito, asi que no tiene a quien esperarle. La cartera vencida sigue
-  // mandando: al cliente que ya debe no se le aprueba nada por tener plazo.
-  const clasificar = (nit, plazo) => {
-    const nitStr = String(nit||'').trim();
-    if(cartera[nitStr]?.tiene_vencidos) return 'cartera_vencida';
-    if(parseInt(plazo||0)>0) return 'aprobado';
-    return 'pendiente';
-  };
+  // de credito, asi que no tiene a quien esperarle.
+  const clasificar = (plazo) => parseInt(plazo||0)>0 ? 'aprobado' : 'pendiente';
 
   // Solo CSV. leerTextoCsv resuelve el encoding (UTF-8 y, si no, Windows-1252) y
   // filasCsv respeta las comillas, asi que un campo con comas o saltos de linea
@@ -784,7 +640,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
 
         const lista = Object.values(grupos).map(p=>({
           ...p,
-          estado_cartera: clasificar(p.nit, p.plazo),
+          estado_cartera: clasificar(p.plazo),
         }));
 
         if(lista.length===0){setErrMsg("No se encontraron pedidos en el archivo");return;}
@@ -853,7 +709,6 @@ export function CargarPedidos({user,showToast,onCargado}) {
 
   const resumen = {
     total:pedidos.length,
-    vencida:pedidos.filter(p=>p.estado_cartera==='cartera_vencida').length,
     aprobado:pedidos.filter(p=>p.estado_cartera==='aprobado').length,
     pendiente:pedidos.filter(p=>p.estado_cartera==='pendiente').length,
   };
@@ -899,7 +754,6 @@ export function CargarPedidos({user,showToast,onCargado}) {
       <>
        <Indicadores items={[
         { label:"Pedidos leidos", valor:resumen.total, color:T.color.marca, destacado:true },
-        { label:"Cartera vencida", valor:resumen.vencida, color:T.color.malPunto },
         { label:"Aprobados", valor:resumen.aprobado, color:T.color.bienPunto },
         { label:"Pendientes", valor:resumen.pendiente, color:T.color.ojoPunto },
        ]}/>
@@ -1079,7 +933,6 @@ export function GestionPedidos({user, showToast}) {
     {k:'todos',l:'Todos'},
     {k:'preaprobado',l:'Preaprobados'},
     {k:'pendiente',l:'Pendientes'},
-    {k:'cartera_vencida',l:'Cartera Vencida'},
     {k:'aprobado',l:'Aprobados'},
     {k:'rechazado',l:'Rechazados'},
   ];
@@ -1692,7 +1545,6 @@ export function ModuloCartera({ tab, user, showToast, setTab }) {
  switch (tab) {
   case "cartera_sedes":     return <GestionSedes showToast={showToast}/>;
   case "cartera_asesores":  return <GestionAsesores showToast={showToast} soloCrear={user?.rol === "cliente"}/>;
-  case "cartera_vencida":   return <CargarCarteraVencida showToast={showToast}/>;
   case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")}/>;
   case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast}/>;
   case "cartera_logistica": return <ModuloLogistica showToast={showToast}/>;

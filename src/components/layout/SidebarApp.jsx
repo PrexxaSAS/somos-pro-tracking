@@ -46,7 +46,6 @@ export const MENUS = {
     ...(CARTERA_ACTIVA ? [["Cartera", [
       ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
-      ["cartera_vencida", "Cartera vencida", FileText],
       ["cartera_sedes", "Sedes y cortes", Warehouse],
       ["cartera_asesores", "Asesores", Users],
     ]]] : []),
@@ -74,7 +73,6 @@ export const MENUS = {
       ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_logistica", "Logistica cartera", Printer],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
-      ["cartera_vencida", "Cartera vencida", FileText],
     ]]] : []),
     ["Configuracion", [
       ["promesas", "Promesas de servicio", CalendarClock],
@@ -85,7 +83,6 @@ export const MENUS = {
     ["Cartera", [
       ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_pedidos", "Gestion de pedidos", Wallet],
-      ["cartera_vencida", "Cartera vencida", FileText],
     ]],
   ] : [],
   transportista: [

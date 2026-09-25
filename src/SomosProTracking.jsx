@@ -5529,7 +5529,6 @@ export default function SomosProTracking() {
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.
    case "cartera_sedes":
    case "cartera_asesores":
-   case "cartera_vencida":
    case "cartera_cargar":
    case "cartera_pedidos":
    case "cartera_logistica":

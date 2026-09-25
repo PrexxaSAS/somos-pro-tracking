@@ -66,17 +66,6 @@ create table if not exists public.asesores (
   created_at timestamptz default now()
 );
 
--- Estado de cartera por cliente (se reemplaza completo en cada carga)
-create table if not exists public.cartera_clientes (
-  id               uuid primary key default gen_random_uuid(),
-  nit              text not null,
-  razon_social     text,
-  tiene_vencidos   boolean default false,
-  dias_max_vencido integer default 0,
-  fecha_corte      text,                     -- text: llega tal cual del CSV
-  created_at       timestamptz default now()
-);
-create index if not exists idx_cartera_clientes_nit on public.cartera_clientes(nit);
 
 -- Pedidos en revision de cartera
 create table if not exists public.pedidos_cartera (
@@ -157,8 +146,8 @@ do $$
 declare t text;
 begin
   foreach t in array array['sedes','cortes_sede','cortes_programados','asesores',
-                           'cartera_clientes','pedidos_cartera',
-                           'pedidos_cartera_detalle','historial_cartera']
+                           'pedidos_cartera','pedidos_cartera_detalle',
+                           'historial_cartera']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists acceso_app on public.%I', t);
@@ -201,16 +190,6 @@ create policy cartera_operador_insert_detalle on public.pedidos_cartera_detalle
   for insert to authenticated
   with check (public.current_user_role() = 'operador');
 
-drop policy if exists cartera_operador_vencida_insert on public.cartera_clientes;
-create policy cartera_operador_vencida_insert on public.cartera_clientes
-  for insert to authenticated
-  with check (public.current_user_role() = 'operador');
-
-drop policy if exists cartera_operador_vencida_delete on public.cartera_clientes;
-create policy cartera_operador_vencida_delete on public.cartera_clientes
-  for delete to authenticated
-  using (public.current_user_role() = 'operador');
-
 drop policy if exists cartera_logistica_update on public.pedidos_cartera;
 drop policy if exists cartera_operador_update on public.pedidos_cartera;
 create policy cartera_operador_update on public.pedidos_cartera
@@ -250,6 +229,5 @@ from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public'
   and c.relname in ('sedes','cortes_sede','cortes_programados','asesores',
-                    'cartera_clientes','pedidos_cartera',
-                    'pedidos_cartera_detalle','historial_cartera')
+                    'pedidos_cartera','pedidos_cartera_detalle','historial_cartera')
 order by c.relname;
