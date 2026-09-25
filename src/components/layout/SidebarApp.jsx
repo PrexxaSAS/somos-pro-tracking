@@ -101,7 +101,10 @@ export const MENUS = {
       ["devoluciones", "Mis devoluciones", RotateCcw],
       ["recogidas", "Mis recogidas", PackageCheck],
       ["pqrs", "PQRS", HelpCircle],
-      ...(CARTERA_ACTIVA ? [["cartera_consultas", "Consultas cartera", Search]] : []),
+      ...(CARTERA_ACTIVA ? [
+        ["cartera_consultas", "Consultas cartera", Search],
+        ["cartera_asesores", "Asesores", Users],
+      ] : []),
     ]],
   ],
 };

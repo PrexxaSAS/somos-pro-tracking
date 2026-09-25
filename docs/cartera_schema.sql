@@ -149,7 +149,7 @@ create index if not exists idx_historial_pedido on public.historial_cartera(pedi
 --      admin      -> todo
 --      cartera    -> carga y decide pedidos; lee la configuracion
 --      operador   -> lee todo y actualiza pedidos y cortes (impresion, transmision)
---      cliente    -> solo lectura
+--      cliente    -> lee todo y ademas puede CREAR asesores (no editarlos)
 --      anon       -> nada
 -- ---------------------------------------------------------------------------
 do $$
@@ -177,7 +177,16 @@ begin
         with check (public.current_user_role() in ('admin','cartera'));
     $p$, t, t);
   end loop;
-end $$;
+end $;
+
+-- El cliente puede crear asesores, pero no editarlos ni borrarlos. La tabla no
+-- guarda a quien pertenece cada asesor, asi que quien pueda escribir escribe
+-- sobre los de todos: con insert solo, un cliente agrega los suyos sin poder
+-- tocar los que ya estan. Se suma a cartera_escritura (se combinan con OR).
+drop policy if exists asesores_cliente_insert on public.asesores;
+create policy asesores_cliente_insert on public.asesores
+  for insert to authenticated
+  with check (public.current_user_role() = 'cliente');
 
 drop policy if exists cartera_logistica_update on public.pedidos_cartera;
 drop policy if exists cartera_operador_update on public.pedidos_cartera;

@@ -23,6 +23,7 @@ import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
+import { GestionAsesores } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -166,6 +167,9 @@ for (const rol of ROLES_PRUEBA) {
  })]);
 }
 
+casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
+casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
+
 let fallos = 0;
 for (const [nombre, elemento] of casos) {
  try {
@@ -177,6 +181,21 @@ for (const [nombre, elemento] of casos) {
   fallos++;
  }
 }
+// El cliente puede crear asesores y nada mas. El importador de CSV hace upsert:
+// sobre un codigo que ya existe sobrescribe el asesor de otro, que es justo lo
+// que no se le concedio, asi que no debe verlo. Si alguien quita el recorte, la
+// pantalla seguiria dibujando y solo fallaria contra la base; esto lo dice aqui.
+{
+ const dibujar = (props) => renderToString(React.createElement(GestionAsesores, props));
+ const htmlAdmin = dibujar({ showToast(){} });
+ const htmlCliente = dibujar({ showToast(){}, soloCrear:true });
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  asesores: " + queja); fallos++; } };
+ exigir(htmlAdmin.includes("Importar CSV"), "el admin perdio el importador");
+ exigir(!htmlCliente.includes("Importar CSV"), "el cliente ve el importador");
+ exigir(htmlCliente.includes("Nuevo asesor"), "el cliente no puede crear");
+ exigir(!htmlCliente.includes("Acciones"), "el cliente ve la columna de editar y borrar");
+}
+
 globalThis.__fallos = fallos;
 `;
 

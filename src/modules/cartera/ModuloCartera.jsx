@@ -364,7 +364,11 @@ export function ModalCortes({sede,onClose,showToast}) {
 }
 
 // ── GESTIÓN ASESORES ───────────────────────────────────────────────────────────
-export function GestionAsesores({showToast}) {
+// soloCrear: el cliente agrega asesores pero no toca los que ya estan. La base
+// tampoco se lo permite (la politica asesores_cliente_insert le da insert y nada
+// mas); aqui se esconde lo que no puede hacer para que no descubra el limite
+// cuando ya escribio el formulario.
+export function GestionAsesores({showToast, soloCrear = false}) {
   const [asesores, setAsesores] = useState([]);
   const [modNuevo, setModNuevo] = useState(false);
   const [editando, setEditando] = useState(null);
@@ -384,10 +388,17 @@ export function GestionAsesores({showToast}) {
     if(!form.codigo||!form.nombre||!form.email){showToast("Completa todos los campos","error");return;}
     setCarg(true);
     const datos = {codigo:form.codigo.trim(),nombre:form.nombre.trim(),email:form.email.trim()};
+    // El upsert sobre un codigo existente es un update encubierto, y a quien
+    // solo puede crear la base se lo rechaza: se inserta derecho y el codigo
+    // repetido se avisa como lo que es.
     const {error} = editando
       ? await supabase.from('asesores').update(datos).eq('id',editando)
-      : await supabase.from('asesores').upsert(datos,{onConflict:'codigo'});
-    if(error)showToast("Error: "+error.message,"error");
+      : soloCrear
+        ? await supabase.from('asesores').insert(datos)
+        : await supabase.from('asesores').upsert(datos,{onConflict:'codigo'});
+    if(error)showToast(error.code === '23505'
+      ? `Ya existe un asesor con el codigo ${datos.codigo}`
+      : "Error: "+error.message, "error");
     else{showToast("✓ Asesor guardado","success");setModNuevo(false);setEditando(null);setForm(vacio);cargar();}
     setCarg(false);
   };
@@ -428,9 +439,11 @@ export function GestionAsesores({showToast}) {
      titulo="Asesores comerciales"
      descripcion="Destinatarios del correo cuando se rechaza un pedido"
      acciones={<>
-      <button onClick={()=>fileRef.current?.click()} style={botonBarra}>
-       <Upload size={15}/> Importar CSV
-      </button>
+      {!soloCrear && (
+       <button onClick={()=>fileRef.current?.click()} style={botonBarra}>
+        <Upload size={15}/> Importar CSV
+       </button>
+      )}
       <button onClick={()=>{setForm(vacio);setEditando(null);setModNuevo(true);}} style={botonPrincipal}>
        <Plus size={16}/> Nuevo asesor
       </button>
@@ -456,7 +469,7 @@ export function GestionAsesores({showToast}) {
           <th style={th}>Codigo</th>
           <th style={th}>Nombre</th>
           <th style={th}>Correo</th>
-          <th style={{...th, textAlign:"right"}}>Acciones</th>
+          {!soloCrear && <th style={{...th, textAlign:"right"}}>Acciones</th>}
          </tr>
         </thead>
         <tbody>
@@ -467,16 +480,18 @@ export function GestionAsesores({showToast}) {
            <td style={td}>
             {a.email || <span style={{ color:T.color.ojo }}>Sin correo</span>}
            </td>
-           <td style={{ ...td, textAlign:"right" }}>
-            <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
-             <button style={botonFila}
-              onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||""}); setEditando(a); setModNuevo(true);}}>
-              Editar
-             </button>
-             <button title="Eliminar asesor" onClick={()=>eliminar(a.id, a.nombre||a.codigo)}
-              style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
-            </div>
-           </td>
+           {!soloCrear && (
+            <td style={{ ...td, textAlign:"right" }}>
+             <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
+              <button style={botonFila}
+               onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||""}); setEditando(a); setModNuevo(true);}}>
+               Editar
+              </button>
+              <button title="Eliminar asesor" onClick={()=>eliminar(a.id, a.nombre||a.codigo)}
+               style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
+             </div>
+            </td>
+           )}
           </tr>
          ))}
         </tbody>
@@ -1577,7 +1592,7 @@ export function ModuloConsultas({showToast}) {
 export function ModuloCartera({ tab, user, showToast, setTab }) {
  switch (tab) {
   case "cartera_sedes":     return <GestionSedes showToast={showToast}/>;
-  case "cartera_asesores":  return <GestionAsesores showToast={showToast}/>;
+  case "cartera_asesores":  return <GestionAsesores showToast={showToast} soloCrear={user?.rol === "cliente"}/>;
   case "cartera_vencida":   return <CargarCarteraVencida showToast={showToast}/>;
   case "cartera_cargar":    return <CargarPedidos showToast={showToast} onCargado={()=>setTab("cartera_pedidos")}/>;
   case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast}/>;
