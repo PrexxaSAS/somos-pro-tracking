@@ -1027,8 +1027,9 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
 // errores se vean y se corrijan sin dejar la base a medias. Lo que la base decide
 // (RLS, triggers, choques) se sigue reportando durante la importacion.
 const MODOS_IMPORTACION = [
- { id: "crear", titulo: "Crear pedidos nuevos",
-   detalle: "Importa todas las filas como pedidos nuevos. Las que ya existan se omiten." },
+ // Crear pedidos desde el plano se quito: los pedidos entran por el cargue de
+ // cartera y nacen en produccion al aprobarse. Lo que queda son reparaciones
+ // sobre pedidos que ya existen.
  { id: "completar", titulo: "Completar datos de pedidos existentes",
    detalle: "Llena solo ciudad, direccion, cajas, factura y fecha/hora que esten vacias. No cambia estado, conductor ni guia." },
  { id: "fechahora", titulo: "Cargar unicamente fecha y hora",
@@ -1063,7 +1064,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
  const [validando, setValidando] = useState(false);
  const [archivo, setArchivo] = useState(null);   // { nombre, filas, tam, sep }
  const [validacion, setValidacion] = useState(null);
- const [modo, setModo] = useState("crear");
+ const [modo, setModo] = useState("completar");
  const [verFormato, setVerFormato] = useState(true);
  const [verPegar, setVerPegar] = useState(false);
  const [aviso, setAviso] = useState("");
@@ -1235,9 +1236,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
 
  const filasConError = new Set((validacion?.errores || []).map(e => e.fila));
  const filasValidas = prev.filter((_, i) => !filasConError.has(i + 2));
- const aImportar = modo === "crear"
-  ? filasValidas.length - (validacion?.existentes || 0)
-  : (validacion?.existentes || 0);
+ const aImportar = validacion?.existentes || 0;
 
  const descargarErrores = () => {
   const filas = (validacion?.errores || []).map(e =>
@@ -1250,7 +1249,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   setCargando(true);
   try {
    await onImportar(filasValidas, {
-    completarExistentes: modo !== "crear",
+    completarExistentes: true,
     soloFechaHora: modo === "fechahora",
     actualizarNotas: modo === "notas",
    });
@@ -1400,7 +1399,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
         {[
          { label:"Filas leidas", valor:validacion.total, color:T.color.neutroPunto },
          { label:"Pedidos existentes", valor:validacion.existentes, color:T.color.marca, destacado:true },
-         { label: modo === "crear" ? "Nuevos" : "Nuevos (se omiten)", valor:validacion.nuevos, color:T.color.tinta3 },
+         { label:"Nuevos (se omiten)", valor:validacion.nuevos, color:T.color.tinta3 },
          { label:"Con errores", valor:validacion.errores.length, color:T.color.malPunto, malo:true },
         ].map((k, i) => (
          <div key={k.label} style={{ padding:"14px 16px", borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}` }}>
@@ -1673,58 +1672,34 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const duplicadosSet = new Set(duplicadosUnicos.map(String));
   const paraCompletar = [];
 
-  const baseGuias = [...pedidos];
-  const conGuias = rows.map((r) => {
+  // El plano ya no crea pedidos: los pedidos nacen en produccion cuando cartera
+  // los aprueba. Aqui solo se reparan los que ya existen, asi que una fila sin
+  // pedido en la base es un error que se reporta, no un pedido nuevo.
+  rows.forEach((r) => {
    const pedidoId = String(r.id || "").trim();
    if (!pedidoId) {
     registrarError(r, "Sin ID", "El pedido no tiene numero de pedido.");
-    return null;
+    return;
    }
    if (idsProcesadosCsv.has(pedidoId)) {
     registrarError(r, pedidoId, "Esta repetido dentro del CSV.");
-    return null;
+    return;
    }
    idsProcesadosCsv.add(pedidoId);
    if (duplicadosSet.has(pedidoId)) {
     registrarError(r, pedidoId, "Tiene mas de una fila en el CSV; se omitio para evitar inconsistencias.");
-    return null;
+    return;
    }
    if (existentesSet.has(pedidoId)) {
-    if (completarExistentes) paraCompletar.push({ r, actual: existentesPorId.get(pedidoId) });
-    else registrarError(r, pedidoId, "Ya existe en la base de datos. Marca \"Completar datos de pedidos existentes\" para rellenar sus campos vacios.");
-    return null;
+    paraCompletar.push({ r, actual: existentesPorId.get(pedidoId) });
+    return;
    }
-   // Modos acotados: el plano no puede crear pedidos.
-   if (soloFechaHora || actualizarNotas) {
-    registrarError(r, pedidoId, actualizarNotas
-     ? "No existe en la base de datos y la carga es solo de notas: no se creo nada."
-     : "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada.");
-    return null;
-   }
-   const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
-   const pedidoConGuia = {
-    ...limpiarFilaPedidoCSV(r),
-    guia_interna: guiaInterna,
-    estado_despacho: r.estado_despacho || "despachado",
-    novedad: false,
-    soportes_data: [],
-   };
-   baseGuias.push(pedidoConGuia);
-   return pedidoConGuia;
-  }).filter(Boolean);
-
-  let insertados = 0;
-  const pedidosInsertados = [];
-  for (const p of conGuias) {
-   const { error } = await supabase.from("pedidos").insert(p);
-   if (error) {
-    const rowOriginal = rows.find(r => String(r.id || "").trim() === String(p.id));
-    registrarError(rowOriginal || p, p.id, error.message);
-   } else {
-    insertados += 1;
-    pedidosInsertados.push(p);
-   }
-  }
+   registrarError(r, pedidoId, actualizarNotas
+    ? "No existe en la base de datos y la carga es solo de notas: no se creo nada."
+    : soloFechaHora
+    ? "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada."
+    : "No existe en la base de datos. Los pedidos entran por el cargue de cartera, no por el plano.");
+  });
 
   // Completar pedidos existentes: solo llena campos vacios. Nunca sobrescribe un
   // dato ya cargado ni toca estado, conductor, guia o soportes.
@@ -1760,15 +1735,15 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    ? `${completados} nota(s) actualizadas, ${sinCambios} sin cambios`
    : soloFechaHora
    ? `${completados} pedido(s) con fecha y hora, ${sinCambios} sin cambios`
-   : `${insertados} pedido(s) creados` + (completarExistentes ? `, ${completados} completados, ${sinCambios} sin cambios` : "");
+   : `${completados} pedido(s) completados, ${sinCambios} sin cambios`;
   if (erroresImportacion.length > 0) {
-   setReporteImportacion({ insertados, completados, sinCambios, completar: completarExistentes, errores: erroresImportacion, headers: csvHeaders });
-   showToast(`${resumen}. ${erroresImportacion.length} con error.`, insertados + completados > 0 ? "info" : "error");
+   setReporteImportacion({ completados, sinCambios, errores: erroresImportacion, headers: csvHeaders });
+   showToast(`${resumen}. ${erroresImportacion.length} con error.`, completados > 0 ? "info" : "error");
   } else {
    setReporteImportacion(null);
    showToast(resumen, "success");
   }
-  if ((insertados > 0 || completados > 0) && recargar) await recargar();
+  if (completados > 0 && recargar) await recargar();
  };
 
  const pageBg = "#fafafa";
@@ -1930,6 +1905,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
          <th style={th2}>Factura</th>
          <th style={th2}>Cliente</th>
          <th style={th2}>Ciudad / DANE</th>
+         <th style={th2}>Fecha pedido</th>
          <th style={{ ...th2, textAlign:"right" }}>Cajas</th>
          <th style={th2}>Estado</th>
          <th style={th2}>Conductor</th>
@@ -1938,7 +1914,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        </thead>
        <tbody>
         {filtrados.length === 0 && (
-         <tr><td colSpan={9} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
+         <tr><td colSpan={10} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
           Ningun pedido coincide con los filtros.
          </td></tr>
         )}
@@ -1967,6 +1943,16 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
            <td style={td2}>
             {p.ciudad_nombre
              ? <><div>{p.ciudad_nombre}</div><div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.ciudad_codigo}</div></>
+             : <span style={{ color:T.color.tinta3 }}>-</span>}
+           </td>
+           <td style={td2}>
+            {p.fecha_pedido
+             ? <><div>{p.fecha_pedido}</div>
+                {p.hora_pedido && (
+                 <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>
+                  {String(p.hora_pedido).slice(0, 5)}
+                 </div>
+                )}</>
              : <span style={{ color:T.color.tinta3 }}>-</span>}
            </td>
            <td style={{ ...td2, textAlign:"right", fontWeight:700, color:T.color.tinta }}>{p.cajas || 0}</td>
@@ -2158,8 +2144,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     <Modal title="Resultado de importacion CSV" onClose={async () => { setReporteImportacion(null); if (recargar) await recargar(); }} wide>
      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ background:"#fffbeb", border:"1px solid #fde68a", color:"#92400e", borderRadius:12, padding:14, fontSize:14 }}>
-       <strong>{reporteImportacion.insertados}</strong> pedido(s) creados.{" "}
-       {reporteImportacion.completar && <><strong>{reporteImportacion.completados}</strong> completados, <strong>{reporteImportacion.sinCambios}</strong> sin cambios.{" "}</>}
+       <strong>{reporteImportacion.completados}</strong> pedido(s) completados, <strong>{reporteImportacion.sinCambios}</strong> sin cambios.{" "}
        <strong>{reporteImportacion.errores.length}</strong> pedido(s) quedaron con error.
       </div>
       <div style={{ maxHeight:280, overflow:"auto", border:"1px solid #e5e7eb", borderRadius:12 }}>

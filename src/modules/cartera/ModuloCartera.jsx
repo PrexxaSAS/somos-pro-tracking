@@ -796,25 +796,24 @@ export function CargarPedidos({user,showToast,onCargado}) {
     for(const p of pedidos) {
       if(yaExisten.has(p.numero_pedido)){ duplicados.push(p.numero_pedido); continue; }
       const {lineas,...pedData} = p;
+      // Poner el estado en 'aprobado' no basta: logistica solo ve los aprobados
+      // que tienen corte, y el trigger de la base crea el pedido de produccion a
+      // partir de esta fila y le saca de ahi la fecha y la hora. Por eso el
+      // corte se pide ANTES de insertar: la fila tiene que nacer completa.
+      if(pedData.estado_cartera==='aprobado'){
+        const corte = await asignarCorte(p.dane_origen);
+        if(!corte) sinCorte++;
+        pedData.fecha_aprobacion = new Date().toISOString();
+        pedData.aprobado_por = user?.id||null;
+        pedData.estado_impresion = 'no_impreso';
+        if(corte){pedData.corte_id=corte.corteId; pedData.fecha_corte=corte.fechaCorte;}
+      }
       const {data:inserted,error} = await supabase.from('pedidos_cartera').insert(pedData).select().single();
       if(error||!inserted){errores++;continue;}
       if(lineas.length>0){
         await supabase.from('pedidos_cartera_detalle').insert(lineas.map(l=>({...l,pedido_id:inserted.id})));
       }
-      // Poner el estado en 'aprobado' no basta: logistica solo ve los aprobados
-      // que tienen corte, asi que el que entra aprobado recibe el mismo corte y
-      // deja el mismo rastro que deja la aprobacion a mano. El corte se pide
-      // despues de insertar para no gastarle un cupo a un pedido que no entro.
       if(pedData.estado_cartera==='aprobado'){
-        const corte = await asignarCorte(p.dane_origen);
-        if(!corte) sinCorte++;
-        const upd = {
-          fecha_aprobacion:new Date().toISOString(),
-          aprobado_por:user?.id||null,
-          estado_impresion:'no_impreso',
-        };
-        if(corte){upd.corte_id=corte.corteId;upd.fecha_corte=corte.fechaCorte;}
-        await supabase.from('pedidos_cartera').update(upd).eq('id',inserted.id);
         await supabase.from('historial_cartera').insert({
           pedido_id:inserted.id, decision:'aprobado', usuario_id:user?.id||null,
           motivo:'Aprobado en el cargue: el pedido tiene plazo',
