@@ -173,7 +173,10 @@ export function NavegacionMovil({ user, activeTab, setActiveTab, onLogout, onSha
  const [hoja, setHoja] = useState(false);
  const grupos = MENUS[user.rol] || [];
  const todas = aplanar(grupos);
- if (!todas.length) return null;
+ // Sin salida temprana aunque el rol no tenga ninguna pantalla: la barra
+ // sigue siendo el unico sitio desde donde cerrar sesion en el celular, y un
+ // rol puede quedarse sin menus -- por ejemplo cartera, mientras su modulo
+ // este apagado. Quedaria una pantalla sin forma de salir.
 
  // La hoja esta siempre: aunque el rol tenga pocas pantallas, es el unico sitio
  // desde donde cerrar sesion en el celular.
