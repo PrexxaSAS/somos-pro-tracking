@@ -68,7 +68,14 @@ const asignarCorte = async (daneOrigen) => {
     return cNorm === daneNorm;
   });
   if (!sede) return null;
-  const cortesOrdenados = (sede.cortes_sede||[]).sort((a,b)=>a.orden-b.orden);
+  // Por hora y no por la columna "orden": esa la digitaba una persona y no
+  // tenia por que coincidir con el reloj. Si alguien registraba el corte de las
+  // 16:00 antes que el de las 08:00, este recorrido tomaba el de las 16:00
+  // primero y el pedido salia mas tarde de lo que debia; y como orden venia con
+  // 1 por defecto, varios cortes empatados quedaban en un orden cualquiera.
+  const cortesOrdenados = (sede.cortes_sede||[])
+    .slice()
+    .sort((a,b)=>String(a.hora_corte||'').localeCompare(String(b.hora_corte||'')));
   if (cortesOrdenados.length === 0) return null;
 
   // Intentar en los cortes de hoy
@@ -291,12 +298,14 @@ export function GestionSedes({showToast}) {
 
 export function ModalCortes({sede,onClose,showToast}) {
   const [cortes, setCortes] = useState([]);
-  const [form,   setForm]   = useState({hora_corte:'09:00',capacidad_corte:'20',orden:'1'});
+  // Sin "orden": el orden de un corte es su hora. La columna sigue en la base
+  // con su valor por defecto, pero ya nadie la lee.
+  const [form,   setForm]   = useState({hora_corte:'09:00',capacidad_corte:'20'});
   const f = k => v => setForm(p=>({...p,[k]:v}));
   const [carg, setCarg] = useState(false);
 
   const cargar = async () => {
-    const {data} = await supabase.from('cortes_sede').select('*').eq('sede_id',sede.id).order('orden');
+    const {data} = await supabase.from('cortes_sede').select('*').eq('sede_id',sede.id).order('hora_corte');
     setCortes(data||[]);
   };
   useEffect(()=>{cargar();},[]);
@@ -306,11 +315,10 @@ export function ModalCortes({sede,onClose,showToast}) {
     setCarg(true);
     const {error} = await supabase.from('cortes_sede').insert({
       sede_id:sede.id,hora_corte:form.hora_corte,
-      capacidad_corte:parseInt(form.capacidad_corte)||20,
-      orden:parseInt(form.orden)||cortes.length+1
+      capacidad_corte:parseInt(form.capacidad_corte)||20
     });
     if(error)showToast("Error: "+error.message,"error");
-    else{showToast("✓ Corte agregado","success");setForm({hora_corte:'09:00',capacidad_corte:'20',orden:String(cortes.length+2)});cargar();}
+    else{showToast("✓ Corte agregado","success");setForm({hora_corte:'09:00',capacidad_corte:'20'});cargar();}
     setCarg(false);
   };
 
@@ -330,13 +338,12 @@ export function ModalCortes({sede,onClose,showToast}) {
    >
     <Seccion titulo="Agregar corte"/>
     <div style={{
-     display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:10, alignItems:"end",
+     display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:10, alignItems:"end",
      background:T.color.superficie2, border:`1px solid ${T.color.borde}`,
      borderRadius:T.radio.control, padding:14,
     }}>
      <Texto label="Hora" tipo="time" valor={form.hora_corte} onChange={f("hora_corte")}/>
      <Texto label="Pedidos max." tipo="number" valor={form.capacidad_corte} onChange={f("capacidad_corte")} placeholder="20"/>
-     <Texto label="Orden" tipo="number" valor={form.orden} onChange={f("orden")} placeholder="1"/>
      <button onClick={agregar} disabled={carg} style={{ ...botonPrincipal, height:40 }}>
       <Plus size={15}/> Agregar
      </button>
@@ -353,7 +360,6 @@ export function ModalCortes({sede,onClose,showToast}) {
       <table style={{ width:"100%", borderCollapse:"collapse" }}>
        <thead>
         <tr>
-         <th style={{...th, width:70}}>Orden</th>
          <th style={th}>Hora</th>
          <th style={{...th, textAlign:"right"}}>Pedidos max.</th>
          <th style={{...th, textAlign:"right", width:64}}></th>
@@ -362,7 +368,6 @@ export function ModalCortes({sede,onClose,showToast}) {
        <tbody>
         {cortes.map(c => (
          <tr key={c.id}>
-          <td style={{ ...td, fontWeight:700, color:T.color.tinta }}>{c.orden}</td>
           <td style={td}><span style={chipMono}>{c.hora_corte}</span></td>
           <td style={tdCifra}>{c.capacidad_corte}</td>
           <td style={{ ...td, textAlign:"right" }}>
