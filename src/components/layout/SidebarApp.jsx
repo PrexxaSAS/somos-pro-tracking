@@ -44,7 +44,9 @@ export const MENUS = {
       ["paqueterias", "Paqueterias", Warehouse],
     ]],
     ...(CARTERA_ACTIVA ? [["Cartera", [
+      ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
+      ["cartera_vencida", "Cartera vencida", FileText],
       ["cartera_sedes", "Sedes y cortes", Warehouse],
       ["cartera_asesores", "Asesores", Users],
     ]]] : []),
@@ -69,8 +71,10 @@ export const MENUS = {
       ["resumen", "Resumen transportador", ClipboardList],
     ]],
     ...(CARTERA_ACTIVA ? [["Cartera", [
+      ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_logistica", "Logistica cartera", Printer],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
+      ["cartera_vencida", "Cartera vencida", FileText],
     ]]] : []),
     ["Configuracion", [
       ["promesas", "Promesas de servicio", CalendarClock],

@@ -148,7 +148,8 @@ create index if not exists idx_historial_pedido on public.historial_cartera(pedi
 -- 2) Politicas por rol
 --      admin      -> todo
 --      cartera    -> carga y decide pedidos; lee la configuracion
---      operador   -> lee todo y actualiza pedidos y cortes (impresion, transmision)
+--      operador   -> lee todo, actualiza pedidos y cortes (impresion,
+--                    transmision) y carga pedidos y cartera vencida
 --      cliente    -> lee todo y ademas puede CREAR asesores (no editarlos)
 --      anon       -> nada
 -- ---------------------------------------------------------------------------
@@ -187,6 +188,28 @@ drop policy if exists asesores_cliente_insert on public.asesores;
 create policy asesores_cliente_insert on public.asesores
   for insert to authenticated
   with check (public.current_user_role() = 'cliente');
+
+-- El operador tambien carga: las dos pantallas de cargue insertan, y la de
+-- cartera vencida ademas borra porque reemplaza la tabla entera.
+drop policy if exists cartera_operador_insert_pedidos on public.pedidos_cartera;
+create policy cartera_operador_insert_pedidos on public.pedidos_cartera
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');
+
+drop policy if exists cartera_operador_insert_detalle on public.pedidos_cartera_detalle;
+create policy cartera_operador_insert_detalle on public.pedidos_cartera_detalle
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');
+
+drop policy if exists cartera_operador_vencida_insert on public.cartera_clientes;
+create policy cartera_operador_vencida_insert on public.cartera_clientes
+  for insert to authenticated
+  with check (public.current_user_role() = 'operador');
+
+drop policy if exists cartera_operador_vencida_delete on public.cartera_clientes;
+create policy cartera_operador_vencida_delete on public.cartera_clientes
+  for delete to authenticated
+  using (public.current_user_role() = 'operador');
 
 drop policy if exists cartera_logistica_update on public.pedidos_cartera;
 drop policy if exists cartera_operador_update on public.pedidos_cartera;
