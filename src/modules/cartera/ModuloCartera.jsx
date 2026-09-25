@@ -27,6 +27,18 @@ const fCOP = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'
 const fFecha = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleDateString('es-CO'); };
 const fFechaHora = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleString('es-CO'); };
 
+// Por donde va un pedido ya aprobado. El camino es siempre el mismo: se le
+// asigna un corte, el corte se transmite a logistica y alli se imprime. Vive
+// aqui porque lo dicen dos pantallas, la de cartera y la de consultas, y antes
+// cada una contaba una version distinta: consultas decia "En espera de corte"
+// para todo lo aprobado, aunque el corte ya estuviera asignado.
+const etapaCartera = (p) => {
+  if(p.estado_impresion==='impreso') return {corto:'Impreso', label:'Impreso — En picking', color:T.color.marca};
+  if(p.transmitido_tms)              return {corto:'Transmitido', label:'Transmitido a logistica', color:T.color.info};
+  if(p.fecha_corte)                  return {corto:'En corte', label:'Aprobado — En corte', color:T.color.bien};
+  return {corto:'Sin corte', label:'Aprobado — En espera de corte', color:T.color.ojo};
+};
+
 const ESTADOS_CARTERA = {
   pendiente:       {label:"Pendiente",       color:T.color.ojo,  bg:T.color.ojoSuave},
   preaprobado:     {label:"Preaprobado",     color:T.color.bien, bg:T.color.bienSuave},
@@ -1127,6 +1139,7 @@ export function GestionPedidos({user, showToast}) {
           <th style={{...th, textAlign:"right"}}>Valor</th>
           <th style={{...th, textAlign:"right"}}>Plazo</th>
           <th style={th}>Estado</th>
+          <th style={th}>Corte</th>
           <th style={{...th, textAlign:"right"}}>Acciones</th>
          </tr>
         </thead>
@@ -1167,6 +1180,19 @@ export function GestionPedidos({user, showToast}) {
               <div style={{ ...T.texto.meta, color:T.color.mal, marginTop:3 }}>{x.motivo_rechazo}</div>
              )}
             </td>
+            <td style={td}>
+             {x.estado_cartera !== "aprobado" ? (
+              <span style={{ color:T.color.tinta3 }}>—</span>
+             ) : (() => {
+              const etapa = etapaCartera(x);
+              return (
+               <>
+                <div>{x.fecha_corte ? fFechaHora(x.fecha_corte) : <span style={{ color:T.color.ojo }}>Sin corte asignado</span>}</div>
+                <div style={{ ...T.texto.meta, color:etapa.color, marginTop:3 }}>{etapa.corto}</div>
+               </>
+              );
+             })()}
+            </td>
             <td style={{ ...td, textAlign:"right" }}>
              <div style={{ display:"inline-flex", gap:6 }}>
               {decidible && (
@@ -1179,11 +1205,6 @@ export function GestionPedidos({user, showToast}) {
               )}
               {x.estado_cartera === "rechazado" && (
                <button style={botonFila} onClick={()=>reactivar(x.id)}>Reactivar</button>
-              )}
-              {x.estado_cartera === "aprobado" && (
-               <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
-                {x.fecha_corte ? fFechaHora(x.fecha_corte) : "En espera de corte"}
-               </span>
               )}
              </div>
             </td>
@@ -1527,9 +1548,7 @@ export function ModuloConsultas({showToast}) {
 
   const getEstadoTexto = (p) => {
     if(p.estado_cartera==='rechazado') return {label:'Rechazado',color:T.color.mal};
-    if(p.estado_cartera==='aprobado'&&!p.transmitido_tms) return {label:'Aprobado — En espera de corte',color:T.color.ojo};
-    if(p.transmitido_tms&&p.estado_impresion==='no_impreso') return {label:'Transmitido a logistica',color:T.color.info};
-    if(p.estado_impresion==='impreso') return {label:'Impreso — En picking',color:T.color.marca};
+    if(p.estado_cartera==='aprobado') return etapaCartera(p);
     return ESTADOS_CARTERA[p.estado_cartera]||{label:p.estado_cartera,color:T.color.tinta3};
   };
 
