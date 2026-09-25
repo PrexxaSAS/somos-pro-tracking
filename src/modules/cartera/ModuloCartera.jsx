@@ -25,6 +25,10 @@ const EJS_PUBLIC    = 'ZMsvylkrklU4MQ-Bx';
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const fCOP = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(n||0);
 const fFecha = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleDateString('es-CO'); };
+// cortes_programados.fecha es una fecha sola ("2026-09-25"), y asi la lee Date
+// como medianoche UTC: en Colombia eso cae el dia anterior. Se ancla al mediodia
+// para que el dia mostrado sea el que dice la cadena.
+const fFechaDia = d => { if(!d) return '—'; const f = new Date(String(d).slice(0,10)+'T12:00:00'); return isNaN(f)?'—':f.toLocaleDateString('es-CO'); };
 const fFechaHora = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleString('es-CO'); };
 
 // Por donde va un pedido ya aprobado. El camino es siempre el mismo: se le
@@ -1275,6 +1279,11 @@ export function ModuloLogistica({showToast}) {
   const [cortes,  setCortes]  = useState([]);
   const [filtroSede, setFiltroSede] = useState('');
   const [filtroFecha,setFiltroFecha]= useState(new Date().toISOString().split('T')[0]);
+  // La pantalla arranca en "pendientes" y no en el dia de hoy porque su trabajo
+  // es imprimir lo que falte, no mirar una fecha. Cuando los cortes de hoy se
+  // llenan o ya pasaron, el pedido cae en el primer corte de manana: mirando un
+  // solo dia esos quedaban invisibles y nadie los imprimia.
+  const [modoFecha,  setModoFecha]  = useState('pendientes');
   const [filtroImp,  setFiltroImp]  = useState('no_impreso');
   const [pedidos,    setPedidos]    = useState([]);
   const [transmitiendo,setTransmitiendo]=useState(false);
@@ -1284,6 +1293,31 @@ export function ModuloLogistica({showToast}) {
   },[]);
 
   const cargar = async () => {
+    // En "pendientes" se arranca por los pedidos, no por la fecha: se traen
+    // todos los aprobados sin imprimir y despues los cortes a los que
+    // pertenecen, vengan del dia que vengan.
+    if(modoFecha==='pendientes'){
+      const {data:pend} = await supabase.from('pedidos_cartera')
+        .select('*, pedidos_cartera_detalle(*)')
+        .eq('estado_cartera','aprobado')
+        .not('corte_id','is',null)
+        .or('estado_impresion.eq.no_impreso,estado_impresion.is.null')
+        .order('fecha_corte');
+      const ids=[...new Set((pend||[]).map(x=>x.corte_id))];
+      let cortesPend=[];
+      if(ids.length){
+        let qc=supabase.from('cortes_programados').select('*, sedes(nombre,municipio)')
+          .in('id',ids).order('fecha').order('hora_corte');
+        if(filtroSede) qc=qc.eq('sede_id',filtroSede);
+        const res=await qc;
+        cortesPend=res.data||[];
+      }
+      const suyos=new Set(cortesPend.map(c=>c.id));
+      setCortes(cortesPend);
+      setPedidos((pend||[]).filter(x=>suyos.has(x.corte_id)));
+      return;
+    }
+
     let q = supabase.from('cortes_programados').select('*, sedes(nombre,municipio)')
       .eq('fecha',filtroFecha).order('hora_corte');
     if(filtroSede) q=q.eq('sede_id',filtroSede);
@@ -1304,7 +1338,7 @@ export function ModuloLogistica({showToast}) {
     }
     setPedidos(peds);
   };
-  useEffect(()=>{cargar();},[filtroSede,filtroFecha,filtroImp]);
+  useEffect(()=>{cargar();},[filtroSede,filtroFecha,filtroImp,modoFecha]);
 
   const transmitirCorte = async (corteId) => {
     setTransmitiendo(true);
@@ -1398,9 +1432,11 @@ export function ModuloLogistica({showToast}) {
     />
 
     <Indicadores items={[
-     { label:"Pedidos del corte", valor:pedidos.length, color:T.color.marca, destacado:true },
+     { label: modoFecha==='pendientes' ? "Pedidos sin imprimir" : "Pedidos del corte",
+       valor:pedidos.length, color:T.color.marca, destacado:true },
      { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojoPunto },
-     { label:"Cortes del dia", valor:cortes.length, color:T.color.infoPunto },
+     { label: modoFecha==='pendientes' ? "Cortes con pendientes" : "Cortes del dia",
+       valor:cortes.length, color:T.color.infoPunto },
      { label:"Transmitidos", valor:cortes.filter(c=>c.estado === "transmitido").length, color:T.color.bienPunto },
     ]}/>
 
@@ -1409,13 +1445,26 @@ export function ModuloLogistica({showToast}) {
       <option value="">Todas las sedes</option>
       {sedes.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}
      </SelectFiltro>
-     <input type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)}
-      style={{
-       height:38, padding:"0 12px", border:`1px solid ${T.color.borde2}`,
-       borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", outline:"none",
-      }}/>
-     <Segmentado valor={filtroImp} onChange={setFiltroImp}
-      opciones={[["no_impreso","Por imprimir"], ["impreso","Impresos"], ["todos","Todos"]]}/>
+     <Segmentado valor={modoFecha} onChange={setModoFecha}
+      opciones={[["pendientes","Pendientes"], ["fecha","Por fecha"]]}/>
+     {modoFecha==='fecha' && (
+      <input type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)}
+       style={{
+        height:38, padding:"0 12px", border:`1px solid ${T.color.borde2}`,
+        borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", outline:"none",
+       }}/>
+     )}
+     {/* En pendientes el filtro de impresion no aplica: pendiente ya quiere
+         decir sin imprimir, y dejarlo puesto invitaria a pedir "impresos
+         pendientes", que no existe. */}
+     {modoFecha==='fecha' ? (
+      <Segmentado valor={filtroImp} onChange={setFiltroImp}
+       opciones={[["no_impreso","Por imprimir"], ["impreso","Impresos"], ["todos","Todos"]]}/>
+     ) : (
+      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
+       Todo lo aprobado que falta por imprimir, de cualquier fecha
+      </span>
+     )}
     </section>
 
     {cortes.length > 0 && (
@@ -1427,6 +1476,8 @@ export function ModuloLogistica({showToast}) {
        <table style={{ width:"100%", borderCollapse:"collapse" }}>
         <thead>
          <tr>
+          <th style={th}>Fecha</th>
+          <th style={th}>Sede</th>
           <th style={th}>Hora</th>
           <th style={{...th, textAlign:"right"}}>Pedidos</th>
           <th style={{...th, textAlign:"right"}}>Capacidad</th>
@@ -1437,6 +1488,8 @@ export function ModuloLogistica({showToast}) {
         <tbody>
          {cortes.map(c => (
           <tr key={c.id}>
+           <td style={td}>{fFechaDia(c.fecha)}</td>
+           <td style={td}>{c.sedes?.nombre || <span style={{ color:T.color.tinta3 }}>—</span>}</td>
            <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.hora_corte}</td>
            <td style={tdCifra}>{c.pedidos_asignados}</td>
            <td style={tdCifra}>{c.capacidad_max}</td>
