@@ -50,6 +50,9 @@ import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
 import { hoyLocal, hoyMas } from './utils/fechas';
+import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
+import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
+import { EstadoPedidosMovil } from './modules/cliente/EstadoPedidosMovil';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -4314,7 +4317,7 @@ function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) 
 
 // ModuloDevoluciones 
 
-function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
+export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, paqueterias = [], pedidos = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -4473,6 +4476,29 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
+ // Disenios 22a, 24a y 25a: en el celular la lista va en tarjetas, el
+ // formulario a pantalla completa y la gestion (19) tambien. Todo llama a los
+ // mismos crear, asignar y marcarEntregado del escritorio.
+ if (esMovil) return (
+  <Pagina>
+   <EnviosMovil tipo="devolucion" conductores={conductores} vistaCliente={esCliente}
+    items={devoluciones.filter(d => !esCliente || [user.nombre, user.user].includes(d.solicitado_por))}
+    sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
+    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
+   {(modNueva||modEditar)&&(
+    <FormDevolucionMovil form={form} setForm={setForm} ciudades={ciudades} pedidos={pedidos} sedes={SEDES_DESTINO}
+     editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
+     onArchivo={(file)=>cargarDoc([file])} onEnviar={crear} onClose={cerrarFormulario} />
+   )}
+   {modDet&&(
+    <GestionEnvioMovil tipo="devolucion" item={modDet} conductores={conductores}
+     transportistas={transportistas} paqueterias={paqueterias}
+     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
+     showToast={showToast} canEdit={user.rol!=="cliente"}/>
+   )}
+  </Pagina>
+ );
+
  return (
   <Pagina>
    <Encabezado
@@ -4620,15 +4646,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
      <Adjunto label="Soporte" nombre={form.soporte_nombre} onArchivo={(file)=>cargarDoc([file])} />
     </ModalForm>
    )}
-   {/* Disenio 19: en el celular la gestion va a pantalla completa. Llama a los
-       mismos asignar y marcarEntregado que el modal de escritorio. */}
-   {modDet&&esMovil&&(
-    <GestionEnvioMovil tipo="devolucion" item={modDet} conductores={conductores}
-     transportistas={transportistas} paqueterias={paqueterias}
-     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
-     showToast={showToast} canEdit={user.rol!=="cliente"}/>
-   )}
-   {modDet&&!esMovil&&(
+   {modDet&&(
     <ModalDetalleDV dev={modDet} conductores={conductores} ciudades={ciudades}
      transportistas={transportistas} paqueterias={paqueterias}
      onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
@@ -4752,7 +4770,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
 
 // ModuloRecogidas 
 
-function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
+export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -4912,6 +4930,27 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
+ // Disenios 22b, 24b y 25b, con los mismos crear, asignar y marcarEntregado.
+ if (esMovil) return (
+  <Pagina>
+   <EnviosMovil tipo="recogida" conductores={conductores} vistaCliente={esCliente}
+    items={recogidas.filter(r => !esCliente || [user.nombre, user.user].includes(r.solicitado_por))}
+    sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
+    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
+   {(modNueva||modEditar)&&(
+    <FormRecogidaMovil form={form} setForm={setForm} ciudades={ciudades}
+     editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
+     onArchivo={(file)=>cargarDoc([file])} onEnviar={crear} onClose={cerrarFormulario} />
+   )}
+   {modDet&&(
+    <GestionEnvioMovil tipo="recogida" item={modDet} conductores={conductores}
+     transportistas={transportistas} paqueterias={paqueterias}
+     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
+     showToast={showToast} canEdit={user.rol!=="cliente"}/>
+   )}
+  </Pagina>
+ );
+
  return (
   <Pagina>
    <Encabezado
@@ -5055,15 +5094,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
      <Adjunto label="Documento de soporte" nombre={form.doc_nombre} onArchivo={(file)=>cargarDoc([file])} />
     </ModalForm>
    )}
-   {/* Disenio 19: en el celular la gestion va a pantalla completa. Llama a los
-       mismos asignar y marcarEntregado que el modal de escritorio. */}
-   {modDet&&esMovil&&(
-    <GestionEnvioMovil tipo="recogida" item={modDet} conductores={conductores}
-     transportistas={transportistas} paqueterias={paqueterias}
-     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
-     showToast={showToast} canEdit={user.rol!=="cliente"}/>
-   )}
-   {modDet&&!esMovil&&(
+   {modDet&&(
     <Modal title={`Recogida ${modDet.guia}`} onClose={()=>setModDet(null)} wide>
      <ModalDetalleRC rec={modDet} conductores={conductores} ciudades={ciudades}
       transportistas={transportistas} paqueterias={paqueterias}
@@ -5188,7 +5219,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
 
 // ModuloPQRS 
 
-function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva }) {
+export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva }) {
  const esMovil = useEsMovil();
  const MOTIVOS = [
   "Entrega tarda fuera de tiempo estimado",
@@ -5339,6 +5370,31 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = f
  const pageItems = filt.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, filtroEst, pageSize]);
 
+ // Disenios 22c, 24c y 25c. Toda la tarjeta abre la gestion (20); para quien
+ // no gestiona, o si el caso ya esta cerrado, esa misma pantalla es de solo
+ // lectura. Crear y editar usan el mismo crear del escritorio.
+ if (esMovil) return (
+  <Pagina>
+   <PqrsMovil vistaCliente={esCliente}
+    items={pqrs.filter(p => !esCliente || [user.nombre, user.user].includes(p.solicitado_por))}
+    sobre={esCliente ? (user.nombre || user.user) : "Peticiones, quejas, reclamos y sugerencias"}
+    onAbrir={x => { setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}
+    onNueva={() => setModNueva(true)} onEditar={abrirEditarCliente} />
+   {(modNueva||modEditar)&&(
+    <FormPqrsMovil form={form} setForm={setForm} pedidos={pedidos || []} motivos={MOTIVOS}
+     editando={Boolean(modEditar)} onEnviar={crear} onClose={cerrarFormulario} />
+   )}
+   {modGestion&&(
+    <GestionPqrsMovil item={modGestion} puedeGestionar={puedeGestionar}
+     onClose={()=>setModGestion(null)}
+     onRegistrar={(texto, soporte)=>guardarGestion(texto, soporte)}
+     onCerrar={async ()=>{ await cerrar(modGestion.id, "cerrada"); setModGestion(null); }}
+     onSoporte={(x)=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}
+     showToast={showToast}/>
+   )}
+  </Pagina>
+ );
+
  return (
   <Pagina>
    <Encabezado
@@ -5477,17 +5533,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = f
       placeholder="Describe la situacion, la fecha del evento y las personas involucradas..." />
     </ModalForm>
    )}
-   {/* Disenio 20: en el celular la gestion va a pantalla completa. Llama a los
-       mismos guardarGestion y cerrar que el modal de escritorio. */}
-   {modGestion&&esMovil&&(
-    <GestionPqrsMovil item={modGestion} puedeGestionar={puedeGestionar}
-     onClose={()=>setModGestion(null)}
-     onRegistrar={(texto, soporte)=>guardarGestion(texto, soporte)}
-     onCerrar={async ()=>{ await cerrar(modGestion.id, "cerrada"); setModGestion(null); }}
-     onSoporte={(x)=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}
-     showToast={showToast}/>
-   )}
-   {modGestion&&!esMovil&&(
+   {modGestion&&(
    <ModalGestion
     titulo="PQRS"
     id={modGestion.id}
@@ -5727,19 +5773,12 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
 
 // Consultas (cliente interno) 
 
-// "J. E. Castrillon": las iniciales de los nombres y el primer apellido.
-const nombreCorto = (nombre) => {
- const partes = String(nombre || "").trim().split(/\s+/).filter(Boolean);
- if (partes.length <= 2) return partes.join(" ");
- const apellido = partes[partes.length - 2];
- return partes.slice(0, partes.length - 2).map(x => x[0].toUpperCase() + ".").join(" ") + " " + apellido;
-};
-
 // Estado de pedidos para el rol cliente. Lo que ve el cliente es lo suyo: sus
 // pedidos, en que van y con quien. Los indicadores de arriba son tambien el
 // filtro por estado; el rastreo abre el mapa debajo de la fila, en vivo si el
 // conductor tiene el GPS encendido y sobre el destino si no.
-export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast, onNuevaPQRS }) {
+export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast, onNuevaPQRS, user }) {
+ const esMovil = useEsMovil();
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
  const [busq, setBusq] = useState("");
@@ -5820,6 +5859,19 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
   label, valor: conteo[clave], color, activo: filtro === clave,
   onClick: () => setFiltro(filtro === clave && clave !== "todos" ? "todos" : clave),
  });
+
+ // Disenio 23: los mismos filtros y conteos, dibujados en tarjetas.
+ if (esMovil) return (
+  <Pagina>
+   <EstadoPedidosMovil sobre={user?.nombre || user?.user || "Mis pedidos"}
+    conteo={conteo} filtro={filtro} setFiltro={setFiltro} busq={busq} setBusq={setBusq}
+    rango={rango} setRango={setRango} rangos={RANGOS_PEDIDOS}
+    filtrados={filtP} totalCajas={totalCajas} conductores={conductores}
+    onNuevaPQRS={onNuevaPQRS} onGuia={setModGuia} onSoportes={(p)=>verPDFSoportes(p, showToast)}
+    renderMapa={(p, cond)=>renderMapa(p, cond, (ciudades||[]).find(c => c.code === p.ciudad_codigo))} />
+   {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -6252,7 +6304,7 @@ export default function SomosProTracking() {
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
     ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
-    : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
+    : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}/>;
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} pedidos={pedidos} showToast={showToast} recargar={recargarCiudades}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} recargar={recargarPaqueterias}/>;
@@ -6268,11 +6320,11 @@ export default function SomosProTracking() {
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
    case "mi_ubicacion":  return <MiUbicacion user={user} pedidos={pedidos} promesas={promesas}/>;
-   case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}
+   case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}
     onNuevaPQRS={() => { navegar("pqrs"); setPqrsNueva(true); }}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
     nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}/>;
-   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
+   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
    case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.
    case "cartera_sedes":

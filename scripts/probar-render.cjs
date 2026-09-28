@@ -18,7 +18,7 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
-import { ModalDetalle, Consultas, Transportistas } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
+import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
@@ -30,6 +30,7 @@ import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/
 import { NuevoPedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/NuevoPedidoMovil';
 import { GestionEnvioMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionEnvioMovil';
 import { GestionPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionPqrsMovil';
+import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/SolicitudesMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -277,6 +278,44 @@ casos.push(["Transportista/empresa", transp("empresa")]);
 casos.push(["Transportista/conductores", transp("conductores")]);
 casos.push(["Transportista/pedidos", transp("pedidos")]);
 
+// Disenios 22 a 25: Devoluciones, Recogidas y PQRS de la central y del
+// cliente, y los formularios del cliente.
+const usuarioAdmin = { nombre:"Admin", rol:"admin" };
+const usuarioCliente = { nombre:"Cliente Prueba", rol:"cliente" };
+const hace = (dias) => { const d = new Date(); d.setDate(d.getDate() - dias);
+ return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const devsPrueba = [
+ { id:"d1", guia:"DV-2026-0001", estado:"sin_asignar", factura:"FAC-001", pedido_ref:"PED-001", dir_recogida:"Calle 52 #45-30", ciudad_nombre:"Medellin", motivo:"Incidente", unidades:5, volumen_m3:0, peso_kg:20, solicitado_por:"Cliente Prueba", fecha_creacion: hace(2) },
+ { id:"d2", guia:"DV-2026-0002", estado:"en_transito", factura:"FAC-2981", pedido_ref:"PED-002", dir_recogida:"Cra 15 #93-47", ciudad_nombre:"Bogota", motivo:"Referencia equivocada", unidades:16, volumen_m3:6, peso_kg:6, conductor_id:7, placa:"NLX290", solicitado_por:"Cliente Prueba", fecha_creacion: hace(1) },
+ { id:"d3", guia:"DV-2026-0003", estado:"entregado", factura:"FAC-2944", pedido_ref:"PED-003", dir_recogida:"Cra 43A #1-50", ciudad_nombre:"Medellin", motivo:"Incidente", unidades:1, volumen_m3:0.2, peso_kg:5, solicitado_por:"Otro Cliente", fecha_creacion: hace(9) },
+];
+const recsPrueba = [
+ { id:"r1", guia:"RC-2026-0004", estado:"sin_asignar", dir_recogida:"Cl 80 #65-10", ciudad_recogida_nombre:"Medellin", dir_entrega:"CEDI Itagui", ciudad_entrega_nombre:"Itagui", unidades:8, volumen_m3:1.2, peso_kg:30, solicitado_por:"Cliente Prueba", fecha_creacion: hace(0) },
+ { id:"r2", guia:"RC-2026-0003", estado:"en_transito", dir_recogida:"Cl 33 #74-15", ciudad_recogida_nombre:"Medellin", dir_entrega:"CEDI Itagui", ciudad_entrega_nombre:"Itagui", unidades:4, volumen_m3:0.3, peso_kg:6, tipo:"paqueteria", paqueteria:"Servientrega", guia_paqueteria:"GU-88213", solicitado_por:"Otro Cliente", fecha_creacion: hace(3) },
+];
+const pqrsPrueba = [
+ { id:"PQRS-2026-0006", estado:"abierta", motivo:"Entrega incompleta faltan unidades", factura:"FAC-3021", pedido_ref:"PED-098", solicitado_por:"Otro Cliente", fecha_creacion: hace(10), descripcion:"Faltaba una caja" },
+ { id:"PQRS-2026-0008", estado:"abierta", motivo:"Error en la factura asociada al pedido", factura:"FAC-3044", pedido_ref:"PED-125", solicitado_por:"Cliente Prueba", fecha_creacion: hace(0), descripcion:"Factura con otro valor" },
+ { id:"PQRS-2026-0002", estado:"en_gestion", motivo:"Sin comunicacion del conductor durante el transito", factura:"FAC-02", pedido_ref:"PED-02", solicitado_por:"Cliente Prueba", fecha_creacion: hace(5), respuesta:"Se envio la guia firmada a tu correo.", gestionado_por:"Operador", fecha_gestion: hace(1) },
+];
+const moduloDev = (user) => React.createElement(ModuloDevoluciones, { devoluciones: devsPrueba, conductores: conductoresPrueba, ciudades: ciudadesPrueba, transportistas:[], paqueterias:["Servientrega"], pedidos, showToast(){}, user });
+const moduloRec = (user) => React.createElement(ModuloRecogidas, { recogidas: recsPrueba, conductores: conductoresPrueba, ciudades: ciudadesPrueba, transportistas:[], paqueterias:["Servientrega"], showToast(){}, user });
+const moduloPqrs = (user) => React.createElement(ModuloPQRS, { pqrs: pqrsPrueba, pedidos, showToast(){}, user });
+casos.push(["Devoluciones/admin", moduloDev(usuarioAdmin)]);
+casos.push(["Devoluciones/cliente", moduloDev(usuarioCliente)]);
+casos.push(["Recogidas/admin", moduloRec(usuarioAdmin)]);
+casos.push(["Recogidas/cliente", moduloRec(usuarioCliente)]);
+casos.push(["PQRS/admin", moduloPqrs(usuarioAdmin)]);
+casos.push(["PQRS/cliente", moduloPqrs(usuarioCliente)]);
+const formDev = { factura:"", pedido_ref:"", unidades:"", volumen_m3:"", peso_kg:"", dir_recogida:"", dir_entrega:"", ciudad_codigo:"", motivo:"Motivo viejo escrito a mano", tipo_envio:"conductor", conductor_id:"", paqueteria:"", guia_paqueteria:"", soporte_data:null, soporte_nombre:"" };
+const formRec = { dir_recogida:"", ciudad_recogida_cod:"", dir_entrega:"", ciudad_entrega_cod:"05001", unidades:"3", volumen_m3:"", peso_kg:"", observaciones:"", tipo_envio:"paqueteria", conductor_id:"", paqueteria:"", guia_paqueteria:"", doc_data:null, doc_nombre:"remision.pdf" };
+const formPqrs = { factura:"", pedido_ref:"PX000119704", motivo:"", descripcion:"Llegaron 4 de 5 cajas." };
+const solicitud = (C, props) => React.createElement(C, { setForm(){}, ciudades: ciudadesPrueba, pedidos, conductores: conductoresPrueba, paqueterias:["Servientrega"], sedes:["CEDI Itagui"], motivos:["Incidente"], onArchivo(){}, onEnviar(){}, onClose(){}, ...props });
+casos.push(["FormDevolucionMovil/cliente", solicitud(FormDevolucionMovil, { form: formDev })]);
+casos.push(["FormDevolucionMovil/central", solicitud(FormDevolucionMovil, { form: formDev, conTransporte: true })]);
+casos.push(["FormRecogidaMovil/central", solicitud(FormRecogidaMovil, { form: formRec, conTransporte: true })]);
+casos.push(["FormPqrsMovil/cliente", solicitud(FormPqrsMovil, { form: formPqrs })]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -402,9 +441,11 @@ for (const [nombre, elemento] of casos) {
  exigir(!gestionada.includes("Que se hizo y que se le respondio") && gestionada.includes("ya fue registrada"), "la gestionada deja escribir otra respuesta");
  exigir(!cerrada.includes("Registrar gestion") && !cerrada.includes("Cerrar PQRS"), "la cerrada ofrece acciones");
  const consultas = renderToString(React.createElement(Consultas, { pedidos, conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){} }));
- exigir(consultas.includes("Estado de pedidos") && consultas.includes("Nueva PQRS") && consultas.includes("Exportar"), "estado de pedidos sin cabecera");
- exigir(consultas.includes("Total pedidos") && consultas.includes("Novedades"), "estado de pedidos sin indicadores");
- exigir(consultas.includes("Rastrear") && consultas.includes("Guia"), "estado de pedidos sin acciones por fila");
+ if (!window.matchMedia("").matches) {
+  exigir(consultas.includes("Estado de pedidos") && consultas.includes("Nueva PQRS") && consultas.includes("Exportar"), "estado de pedidos sin cabecera");
+  exigir(consultas.includes("Total pedidos") && consultas.includes("Novedades"), "estado de pedidos sin indicadores");
+  exigir(consultas.includes("Rastrear") && consultas.includes("Guia"), "estado de pedidos sin acciones por fila");
+ }
 }
 
 // Transportista: la empresa no se edita; el soporte solo se ofrece en pedidos
@@ -426,6 +467,47 @@ for (const [nombre, elemento] of casos) {
  exigir(pedidosT.includes("Sin soporte") && (movil || pedidosT.includes("Exportar")), "pedidos sin columna de soporte o sin exportar");
  exigir(conds.includes("Disponible") && (movil ? conds.includes("pedidos activos") || conds.includes("pedido activo") : conds.includes("Inscrito")), "conductores sin inscripcion o estado");
  exigir(!movil || !empresa.includes("Editar empresa"), "el celular ofrece editar la empresa");
+}
+
+// Disenios 22 a 25 en el celular. La central ve "Sin asignar" y "Asignar"; el
+// cliente, "Solicitada" y "Esperando transporte", y solo lo suyo. Rastrear solo
+// en lo que se mueve. El formulario del cliente no trae transporte.
+if (window.matchMedia("").matches) {
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  movil 22-25: " + queja); fallos++; } };
+ const devAdmin = renderToString(moduloDev(usuarioAdmin));
+ const devCliente = renderToString(moduloDev(usuarioCliente));
+ exigir(devAdmin.includes("Somos PRO · Tracking") && devAdmin.includes("Sin asignar") && devAdmin.includes("Asignar") && devAdmin.includes('title="Nueva devolucion"'), "22a sin estado, sin Asignar o sin +");
+ exigir(devAdmin.includes("J. Esteban"), "22a no muestra el conductor");
+ exigir(devAdmin.includes("2 abiertas · 1 sin asignar"), "22a sin resumen de abiertas");
+ exigir(!devAdmin.includes("DV-2026-0003"), "22a muestra la cerrada en Abiertas");
+ exigir(devCliente.includes("Mis devoluciones") && devCliente.includes("Solicitar") && devCliente.includes("Solicitada") && devCliente.includes("Esperando transporte"), "24a sin lenguaje del cliente");
+ exigir(!devCliente.includes("Sin asignar") && !devCliente.includes(">Asignar<") && !devCliente.includes('title="Nueva devolucion"'), "24a le muestra al cliente cosas de la central");
+ exigir(devCliente.includes("NLX290") && devCliente.includes("Editar solicitud"), "24a sin placa o sin editar la solicitada");
+ const recAdmin = renderToString(moduloRec(usuarioAdmin));
+ const recCliente = renderToString(moduloRec(usuarioCliente));
+ exigir(recAdmin.includes("Servientrega · GU-88213") && recAdmin.includes("RC-2026-0004"), "22b sin paqueteria o sin recogidas");
+ exigir(recCliente.includes("RC-2026-0004") && !recCliente.includes("RC-2026-0003"), "24b muestra recogidas de otro cliente");
+ const pqAdmin = renderToString(moduloPqrs(usuarioAdmin));
+ const pqCliente = renderToString(moduloPqrs(usuarioCliente));
+ exigir(pqAdmin.includes("con mas de 3 dias") && pqAdmin.includes("10 dias") && pqAdmin.includes('title="Nueva PQRS"'), "22c sin antiguedad o sin +");
+ exigir(pqAdmin.includes("Otro Cliente") && pqAdmin.includes("En gestion"), "22c sin quien reporto o sin pestania En gestion");
+ exigir(pqCliente.includes("Mis PQRS") && pqCliente.includes("Nueva") && pqCliente.includes("Central:") && pqCliente.includes("Se envio la guia firmada"), "24c sin respuesta de la central");
+ exigir(!pqCliente.includes("PQRS-2026-0006"), "24c muestra PQRS de otro cliente");
+ const consultasM = renderToString(React.createElement(Consultas, { pedidos, conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){}, user: usuarioCliente }));
+ const enRango = pedidos.filter(p => p.fecha_creacion >= hace(30));
+ const rastreables = enRango.filter(p => ["en_transito", "paqueteria"].includes(p.estado)).length;
+ exigir(consultasM.includes("Cliente Prueba") && consultasM.includes("PQRS") && consultasM.includes("Activos") && consultasM.includes("Novedades"), "23 sin cabecera o sin conteos");
+ exigir((consultasM.match(/title="Rastrear"/g) || []).length === rastreables, "23 ofrece Rastrear en pedidos quietos");
+ exigir((consultasM.match(/title="Guia"/g) || []).length === enRango.length, "23 sin Guia en cada pedido");
+ const fDevCli = renderToString(solicitud(FormDevolucionMovil, { form: formDev }));
+ const fDevCen = renderToString(solicitud(FormDevolucionMovil, { form: formDev, conTransporte: true }));
+ exigir(!fDevCli.includes("Tipo de envio") && fDevCen.includes("Tipo de envio"), "25a: transporte donde no va");
+ exigir(fDevCli.includes("Sede destino") && fDevCli.includes("Solicitar devolucion") && fDevCli.includes("Otro motivo"), "25a sin sede destino u opciones de motivo");
+ exigir(fDevCli.includes("Motivo viejo escrito a mano"), "25a pierde el motivo libre al editar");
+ const fRec = renderToString(solicitud(FormRecogidaMovil, { form: formRec, conTransporte: true }));
+ exigir(fRec.includes("Medellin · DANE 05001") && fRec.includes("remision.pdf") && fRec.includes("No. guia de paqueteria"), "25b sin ciudad, adjunto o paqueteria");
+ const fPq = renderToString(solicitud(FormPqrsMovil, { form: formPqrs }));
+ exigir(fPq.includes("PX000119704") && fPq.includes("22 caracteres") && fPq.includes("Enviar PQRS"), "25c sin pedido, contador o envio");
 }
 
 globalThis.__fallos = fallos;
