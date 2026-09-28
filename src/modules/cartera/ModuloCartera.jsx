@@ -3,7 +3,7 @@ import { supabase } from '../../supabase';
 import { leerTextoCsv, filasCsv } from '../../utils/files';
 import { P } from '../../Constants';
 import { T, tarjeta } from '../../design/tokens';
-import { Plus, Printer, Trash2, Upload } from 'lucide-react';
+import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
  Segmentado, Paginador,
@@ -15,6 +15,7 @@ import {
 } from '../../components/ui/formularios';
 import emailjs from '@emailjs/browser';
 import { hoyLocal, hoyMas } from '../../utils/fechas';
+import { useEsMovil } from '../../design/responsive';
 
 // ── Configuración ──────────────────────────────────────────────────────────────
 
@@ -165,7 +166,9 @@ function BadgeEstado({estado}) {
 // ── LOGIN ──────────────────────────────────────────────────────────────────────
 // ── GESTIÓN SEDES ──────────────────────────────────────────────────────────────
 export function GestionSedes({showToast}) {
+  const esMovil = useEsMovil();
   const [sedes,     setSedes]     = useState([]);
+  const [menuSede, setMenuSede] = useState(null);
   const [modSede,   setModSede]   = useState(null); // null=cerrado, {}=nueva, {id...}=editar
   const [modCortes, setModCortes] = useState(null); // sede para gestionar cortes
   const [carg,      setCarg]      = useState(false);
@@ -174,7 +177,7 @@ export function GestionSedes({showToast}) {
   const f = k => v => setForm(p=>({...p,[k]:v}));
 
   const cargar = async () => {
-    const {data} = await supabase.from('sedes').select('*').order('nombre');
+    const {data} = await supabase.from('sedes').select('*, cortes_sede(*)').order('nombre');
     setSedes(data||[]);
   };
   useEffect(()=>{cargar();},[]);
@@ -202,7 +205,11 @@ export function GestionSedes({showToast}) {
 
   return (
    <Pagina>
-    <Encabezado
+    {esMovil ? <header style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:10}}>
+     <div><div style={{fontSize:12,color:T.color.tinta3}}>{sedes.length} sedes · {sedes.filter(x=>x.activa).length} activas · {sedes.reduce((a,x)=>a+Number(x.capacidad_dia||0),0)} pedidos/día</div>
+      <h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Sedes y cortes</h1></div>
+     <button aria-label="Nueva sede" onClick={()=>{setForm(vacio);setModSede({});}} style={{...botonPrincipal,width:38,height:38,padding:0,display:'grid',placeItems:'center'}}><Plus size={20}/></button>
+    </header> : <Encabezado
      titulo="Sedes y cortes"
      descripcion="Puntos de despacho con su capacidad y sus horarios de corte"
      acciones={
@@ -210,15 +217,37 @@ export function GestionSedes({showToast}) {
        <Plus size={16}/> Nueva sede
       </button>
      }
-    />
+    />}
 
-    <Indicadores items={[
+    {!esMovil && <Indicadores items={[
      { label:"Sedes", valor:sedes.length, color:T.color.marca, destacado:true },
      { label:"Activas", valor:sedes.filter(x=>x.activa).length, color:T.color.bienPunto },
      { label:"Capacidad por dia", valor:sedes.reduce((a,x)=>a+Number(x.capacidad_dia||0),0), color:T.color.infoPunto },
-    ]}/>
+    ]}/>}
 
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
+    {esMovil ? <div style={{display:'grid',gap:8}}>
+     {sedes.length===0 && <div style={{...tarjeta,padding:24,textAlign:'center',color:T.color.tinta3}}>No hay sedes registradas.</div>}
+     {sedes.map(x=><article key={x.id} style={{...tarjeta,padding:'12px 13px',opacity:x.activa?1:.65}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+       <span style={{width:36,height:36,borderRadius:10,display:'grid',placeItems:'center',background:T.color.marcaSuave,color:T.color.marca,flexShrink:0}}>▣</span>
+       <div style={{minWidth:0,flex:1}}><strong style={{fontSize:13.5}}>{x.nombre}</strong><div style={{fontSize:11.5,color:T.color.tinta3}}>{x.municipio} · DANE {x.dane_code}</div></div>
+       <span style={{fontSize:11,color:x.activa?T.color.bien:T.color.tinta3,whiteSpace:'nowrap'}}>● {x.activa?'Activa':'Inactiva'}</span>
+      </div>
+      <div style={{display:'flex',gap:5,overflowX:'auto',marginTop:11,paddingBottom:3}}>
+       {(x.cortes_sede||[]).length ? x.cortes_sede.slice().sort((a,b)=>String(a.hora_corte).localeCompare(String(b.hora_corte))).map(c=><span key={c.id} style={{background:T.color.superficie2,border:`1px solid ${T.color.borde}`,borderRadius:5,padding:'3px 6px',fontSize:11.5,whiteSpace:'nowrap'}}><strong>{String(c.hora_corte).slice(0,5)}</strong> · {c.capacidad_corte}</span>) : <span style={{fontSize:11.5,color:T.color.ojo}}>⚠ Sin cortes configurados</span>}
+      </div>
+      <div style={{borderTop:`1px solid ${T.color.divisor}`,marginTop:8,paddingTop:9,display:'flex',alignItems:'center',gap:6}}>
+       <span style={{flex:1,fontSize:11.5,color:T.color.tinta3}}>{x.capacidad_dia} pedidos/día</span>
+       <div style={{position:'relative'}}><button aria-label={`Opciones de ${x.nombre}`} onClick={()=>setMenuSede(menuSede===x.id?null:x.id)} style={{...botonBarra,padding:'6px 10px'}}>···</button>
+        {menuSede===x.id&&<div style={{position:'absolute',right:0,bottom:'100%',zIndex:20,...tarjeta,padding:5,minWidth:110,boxShadow:T.sombra.flotante}}>
+         <button onClick={()=>{setForm({...x,capacidad_dia:String(x.capacidad_dia),num_cortes:String(x.num_cortes)});setModSede(x);setMenuSede(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none'}}>Editar</button>
+         <button onClick={()=>{eliminar(x.id,x.nombre);setMenuSede(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none',color:T.color.mal}}>Eliminar</button>
+        </div>}
+       </div>
+       <button onClick={()=>setModCortes(x)} style={{...botonBarra,padding:'6px 9px',background:T.color.marcaSuave,color:T.color.marca,border:'none'}}>◷ Cortes</button>
+      </div>
+     </article>)}
+    </div> : <section style={{ ...tarjeta, overflow:"hidden" }}>
      {sedes.length === 0 ? (
       <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
        No hay sedes registradas. Agrega la primera para poder programar cortes.
@@ -276,7 +305,7 @@ export function GestionSedes({showToast}) {
        </table>
       </div>
      )}
-    </section>
+    </section>}
 
     {modSede && (
      <ModalForm
@@ -304,12 +333,13 @@ export function GestionSedes({showToast}) {
      </ModalForm>
     )}
 
-    {modCortes && <ModalCortes sede={modCortes} onClose={()=>setModCortes(null)} showToast={showToast}/>}
+    {modCortes && <ModalCortes sede={modCortes} onClose={()=>{setModCortes(null);cargar();}} showToast={showToast} onCambiar={cargar}/>}
    </Pagina>
   );
 }
 
-export function ModalCortes({sede,onClose,showToast}) {
+export function ModalCortes({sede,onClose,showToast,onCambiar}) {
+  const esMovil = useEsMovil();
   const [cortes, setCortes] = useState([]);
   // Sin "orden": el orden de un corte es su hora. La columna sigue en la base
   // con su valor por defecto, pero ya nadie la lee.
@@ -331,7 +361,7 @@ export function ModalCortes({sede,onClose,showToast}) {
       capacidad_corte:parseInt(form.capacidad_corte)||20
     });
     if(error)showToast("Error: "+error.message,"error");
-    else{showToast("✓ Corte agregado","success");setForm({hora_corte:'09:00',capacidad_corte:'20'});cargar();}
+    else{showToast("✓ Corte agregado","success");setForm({hora_corte:'09:00',capacidad_corte:'20'});cargar();onCambiar?.();}
     setCarg(false);
   };
 
@@ -339,7 +369,24 @@ export function ModalCortes({sede,onClose,showToast}) {
     await supabase.from('cortes_sede').delete().eq('id',id);
     showToast("Corte eliminado","info");
     cargar();
+    onCambiar?.();
   };
+
+  if(esMovil) return <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:150,background:'rgba(23,20,31,.45)',display:'flex',alignItems:'flex-end'}}>
+   <div onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Cortes de ${sede.nombre}`} style={{width:'100%',boxSizing:'border-box',maxHeight:'85vh',overflowY:'auto',background:T.color.superficie,borderRadius:'20px 20px 0 0',padding:'9px 16px calc(16px + env(safe-area-inset-bottom, 0px))'}}>
+    <div style={{width:36,height:4,background:T.color.tenue,borderRadius:4,margin:'0 auto 14px'}}/>
+    <h2 style={{fontSize:17,margin:'0 0 2px'}}>Cortes · {sede.nombre}</h2>
+    <p style={{fontSize:12,color:T.color.tinta3,margin:'0 0 12px'}}>Ordenados por hora. Se agregan y eliminan; no se editan.</p>
+    {cortes.map(c=><div key={c.id} style={{display:'flex',alignItems:'center',gap:9,padding:'12px 0',borderBottom:`1px solid ${T.color.divisor}`,fontSize:13}}><Clock size={15} color={T.color.tinta3}/><strong style={{minWidth:54}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{flex:1,color:T.color.tinta3}}>{c.capacidad_corte} pedidos máximo</span><button aria-label={`Eliminar corte ${c.hora_corte}`} onClick={()=>eliminar(c.id)} style={{border:'none',background:'transparent',color:T.color.tinta3}}><Trash2 size={16}/></button></div>)}
+    {cortes.length===0&&<p style={{fontSize:13,color:T.color.tinta3}}>Esta sede aún no tiene cortes.</p>}
+    <div style={{background:T.color.superficie2,borderRadius:10,padding:10,marginTop:12}}><div style={{fontSize:12,fontWeight:600,marginBottom:8}}>Agregar corte</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:6}}>
+     <input aria-label="Hora del corte" type="time" value={form.hora_corte} onChange={e=>f('hora_corte')(e.target.value)} style={{minWidth:0,width:'100%',boxSizing:'border-box',padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:8}}/>
+     <input aria-label="Máximo de pedidos" type="number" min="1" value={form.capacidad_corte} onChange={e=>f('capacidad_corte')(e.target.value)} placeholder="Máx. pedidos" style={{minWidth:0,width:'100%',boxSizing:'border-box',padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:8}}/>
+     <button onClick={agregar} disabled={carg} aria-label="Agregar corte" style={{...botonPrincipal,padding:'0 11px'}}><Plus size={18}/></button>
+    </div></div>
+    <button onClick={onClose} style={{...botonBarra,width:'100%',justifyContent:'center',marginTop:12}}>Cerrar</button>
+   </div>
+  </div>;
 
   return (
    <ModalGestion
@@ -403,7 +450,10 @@ export function ModalCortes({sede,onClose,showToast}) {
 // mas); aqui se esconde lo que no puede hacer para que no descubra el limite
 // cuando ya escribio el formulario.
 export function GestionAsesores({showToast, soloCrear = false}) {
+  const esMovil = useEsMovil();
   const [asesores, setAsesores] = useState([]);
+  const [busq, setBusq] = useState('');
+  const [menuAsesor, setMenuAsesor] = useState(null);
   const [modNuevo, setModNuevo] = useState(false);
   const [editando, setEditando] = useState(null);
   const vacio = {codigo:'',nombre:'',email:''};
@@ -469,7 +519,11 @@ export function GestionAsesores({showToast, soloCrear = false}) {
 
   return (
    <Pagina anchoCompleto>
-    <Encabezado
+    {esMovil ? <header style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:8}}>
+     <div><div style={{fontSize:12,color:T.color.tinta3}}>{asesores.length} asesores · {asesores.filter(a=>!a.email).length} sin correo</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Asesores</h1></div>
+     <div style={{display:'flex',gap:7}}>{!soloCrear&&<button aria-label="Importar CSV" onClick={()=>fileRef.current?.click()} style={{...botonBarra,width:38,height:38,padding:0,display:'grid',placeItems:'center'}}><Upload size={17}/></button>}
+      <button aria-label="Nuevo asesor" onClick={()=>{setForm(vacio);setEditando(null);setModNuevo(true);}} style={{...botonPrincipal,width:38,height:38,padding:0,display:'grid',placeItems:'center'}}><Plus size={19}/></button></div>
+    </header> : <Encabezado
      titulo="Asesores comerciales"
      descripcion="Destinatarios del correo cuando se rechaza un pedido"
      acciones={<>
@@ -482,15 +536,28 @@ export function GestionAsesores({showToast, soloCrear = false}) {
        <Plus size={16}/> Nuevo asesor
       </button>
      </>}
-    />
+    />}
 
-    <Indicadores items={[
+    {!esMovil && <Indicadores items={[
      { label:"Asesores", valor:asesores.length, color:T.color.marca, destacado:true },
      { label:"Con correo", valor:asesores.filter(a=>a.email).length, color:T.color.bienPunto },
      { label:"Sin correo", valor:asesores.filter(a=>!a.email).length, color:T.color.ojoPunto },
-    ]}/>
+    ]}/>}
 
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
+    {esMovil ? <>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Código, nombre o correo" ancho="100%"/>
+     <section style={{...tarjeta,overflow:'hidden'}}>
+      {asesores.filter(a=>`${a.codigo} ${a.nombre||''} ${a.email||''}`.toLowerCase().includes(busq.toLowerCase())).length===0 ? <div style={{padding:25,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Sin asesores para mostrar.</div> :
+       asesores.filter(a=>`${a.codigo} ${a.nombre||''} ${a.email||''}`.toLowerCase().includes(busq.toLowerCase())).slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(a=><div key={a.id} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 13px',borderBottom:`1px solid ${T.color.divisor}`}}>
+        <span style={{width:36,height:36,flexShrink:0,borderRadius:9,display:'grid',placeItems:'center',background:T.color.marcaSuave,color:T.color.marca,fontSize:11,fontWeight:700}}>{a.codigo}</span>
+        <div style={{minWidth:0,flex:1}}><strong style={{fontSize:13}}>{a.nombre||'—'}</strong><div style={{fontSize:11.5,color:a.email?T.color.tinta3:T.color.ojo,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.email?<><Mail size={11} style={{verticalAlign:'middle',marginRight:3}}/>{a.email}</>:'✉ Sin correo'}</div></div>
+        {!soloCrear&&<div style={{position:'relative'}}><button aria-label={`Opciones de ${a.nombre}`} onClick={()=>setMenuAsesor(menuAsesor===a.id?null:a.id)} style={{border:'none',background:'transparent',color:T.color.tinta3,fontSize:20,padding:5}}>···</button>
+         {menuAsesor===a.id&&<div style={{...tarjeta,position:'absolute',right:0,top:'100%',zIndex:20,padding:5,minWidth:105,boxShadow:T.sombra.flotante}}><button onClick={()=>{setForm({codigo:a.codigo,nombre:a.nombre||'',email:a.email||''});setEditando(a.id);setModNuevo(true);setMenuAsesor(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none'}}>Editar</button><button onClick={()=>{eliminar(a.id,a.nombre||a.codigo);setMenuAsesor(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none',color:T.color.mal}}>Eliminar</button></div>}
+        </div>}
+       </div>)}
+     </section>
+     {asesores.filter(a=>!a.email).length>0&&<div style={{background:T.color.ojoSuave,color:T.color.ojo,borderRadius:10,padding:12,fontSize:12,lineHeight:1.5}}><Mail size={14} style={{verticalAlign:'middle',marginRight:5}}/>{asesores.filter(a=>!a.email).length} asesor(es) sin correo: si se rechaza un pedido suyo, el aviso no les llega.</div>}
+    </> : <section style={{ ...tarjeta, overflow:"hidden" }}>
      {asesores.length === 0 ? (
       <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
        Sin asesores registrados. Sin ellos, el rechazo de un pedido no avisa a nadie.
@@ -518,7 +585,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
             <td style={{ ...td, textAlign:"right" }}>
              <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
               <button style={botonFila}
-               onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||""}); setEditando(a); setModNuevo(true);}}>
+               onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||""}); setEditando(a.id); setModNuevo(true);}}>
                Editar
               </button>
               <button title="Eliminar asesor" onClick={()=>eliminar(a.id, a.nombre||a.codigo)}
@@ -532,7 +599,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
        </table>
       </div>
      )}
-    </section>
+    </section>}
 
     <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
      onChange={e=>{ if(e.target.files[0]) cargarCSV(e.target.files[0]); }}/>
@@ -558,7 +625,9 @@ export function GestionAsesores({showToast, soloCrear = false}) {
 // ── GESTIÓN USUARIOS ───────────────────────────────────────────────────────────
 // ── CARGAR PEDIDOS ─────────────────────────────────────────────────────────────
 export function CargarPedidos({user,showToast,onCargado}) {
+  const esMovil = useEsMovil();
   const [archivo,   setArchivo]  = useState('');
+  const [filasLeidas, setFilasLeidas] = useState(0);
   const [pedidos,   setPedidos]  = useState([]);
   const [errMsg,    setErrMsg]   = useState('');
   const [carg,      setCarg]     = useState(false);
@@ -573,7 +642,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
   // filasCsv respeta las comillas, asi que un campo con comas o saltos de linea
   // adentro ya no corre las columnas.
   const leerArchivo = async (file) => {
-    setArchivo(file.name); setPedidos([]); setErrMsg(''); setResultado(null);
+    setArchivo(file.name); setPedidos([]); setFilasLeidas(0); setErrMsg(''); setResultado(null);
     if(!/\.(csv|txt)$/i.test(file.name)) {
       setErrMsg("Solo se aceptan archivos .CSV. Si tienes un Excel, guardalo como CSV y vuelve a subirlo.");
       setArchivo('');
@@ -582,6 +651,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
       try {
         const rows = filasCsv(await leerTextoCsv(file));
         if(rows.length<2){setErrMsg("El archivo está vacío o solo tiene encabezado");return;}
+        setFilasLeidas(rows.length - 1);
 
         // Sin tildes: el plano escribe "Direccion" o "Condicion de pago" con o
         // sin ellas segun quien lo genere, y una columna que no se reconoce se
@@ -743,6 +813,13 @@ export function CargarPedidos({user,showToast,onCargado}) {
     pendiente:pedidos.filter(p=>p.estado_cartera==='pendiente').length,
   };
 
+  if (esMovil) return <CargarPedidosMovil
+    archivo={archivo} pedidos={pedidos} filasLeidas={filasLeidas} errMsg={errMsg}
+    resultado={resultado} resumen={resumen} carg={carg} fileRef={fileRef}
+    leerArchivo={leerArchivo} confirmar={confirmar}
+    cancelar={()=>{setArchivo('');setPedidos([]);setFilasLeidas(0);setErrMsg('');setResultado(null);}}
+  />;
+
   return (
    <Pagina anchoCompleto>
     <Encabezado
@@ -851,8 +928,81 @@ export function CargarPedidos({user,showToast,onCargado}) {
   );
 }
 
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar }) {
+  return (
+   <Pagina anchoCompleto>
+    <header>
+     <div style={{ fontSize:12, color:T.color.tinta3 }}>{pedidos.length ? 'Revisa antes de cargar' : 'Plano CSV del día'}</div>
+     <h1 style={{ ...T.texto.titulo, fontSize:23, margin:0 }}>Cargar pedidos</h1>
+    </header>
+    <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:'none'}}
+     onChange={e=>{if(e.target.files[0]) leerArchivo(e.target.files[0]);e.target.value='';}}/>
+
+    {!pedidos.length ? <>
+     <section style={{ ...tarjeta, padding:20 }}>
+      <button onClick={()=>fileRef.current?.click()} style={{
+       width:'100%', minHeight:225, padding:'24px 20px', background:T.color.superficie,
+       border:`1px dashed ${T.color.tenue}`, borderRadius:T.radio.tarjeta,
+       display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center',
+       gap:11, textAlign:'center', fontFamily:'inherit', cursor:'pointer',
+      }}>
+       <span style={{ width:48, height:48, borderRadius:12, display:'grid', placeItems:'center', background:T.color.marcaSuave, color:T.color.marca }}><Upload size={23}/></span>
+       <strong style={{ fontSize:15, color:T.color.tinta }}>Elige el archivo CSV</strong>
+       <span style={{ fontSize:12.5, color:T.color.tinta3, maxWidth:260 }}>Solo archivos .csv · una línea por referencia del pedido</span>
+       <span style={{ ...botonPrincipal, display:'inline-flex', alignItems:'center', gap:7, marginTop:3 }}><FolderOpen size={17}/> Seleccionar archivo</span>
+      </button>
+     </section>
+     <section style={{ ...tarjeta, padding:'14px 16px', display:'grid', gap:13, fontSize:12.5, lineHeight:1.5, color:T.color.tinta2 }}>
+      <div><Check size={14} color={T.color.info} style={{verticalAlign:'middle', marginRight:7}}/>Con plazo mayor a 0 días entra Aprobado y toma el siguiente corte de su sede.</div>
+      <div><Clock size={14} color={T.color.ojoPunto} style={{verticalAlign:'middle', marginRight:7}}/>De contado entra Pendiente para revisión en Gestión.</div>
+      <div><span style={{color:T.color.info,marginRight:8}}>ⓘ</span>Obligatorias: Pedido, Fecha pedido y Condición de pago.</div>
+     </section>
+    </> : <>
+     <section style={{ ...tarjeta, padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+      <span style={{ width:36, height:36, flexShrink:0, borderRadius:10, display:'grid', placeItems:'center', background:T.color.bienSuave, color:T.color.bien }}><Check size={18}/></span>
+      <div style={{minWidth:0,flex:1}}>
+       <div style={{fontWeight:700,fontSize:13.5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{archivo}</div>
+       <div style={{fontSize:11.5,color:T.color.tinta3}}>{filasLeidas} filas · {pedidos.length} pedidos</div>
+      </div>
+      <button onClick={()=>fileRef.current?.click()} style={{border:'none',background:'transparent',color:T.color.marca,fontWeight:700,cursor:'pointer'}}>Cambiar</button>
+     </section>
+     <section style={{ ...tarjeta, display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))' }}>
+      {[["Leídos",resumen.total,T.color.tinta],["Aprobados",resumen.aprobado,T.color.info],["Pendientes",resumen.pendiente,T.color.ojoPunto]].map(([label,valor,color],i)=>(
+       <div key={label} style={{padding:'11px 10px',borderLeft:i?`1px solid ${T.color.borde}`:'none'}}>
+        <div style={{fontSize:11,color:T.color.tinta3}}><span style={{color}}>●</span> {label}</div>
+        <strong style={{fontSize:19,color:T.color.tinta}}>{valor}</strong>
+       </div>
+      ))}
+     </section>
+     <section style={{ ...tarjeta, padding:'2px 14px' }}>
+      {pedidos.slice(0,100).map(p=>{
+       const est=ESTADOS_CARTERA[p.estado_cartera]||ESTADOS_CARTERA.pendiente;
+       return <div key={p.numero_pedido} style={{padding:'12px 0',borderBottom:`1px solid ${T.color.divisor}`,display:'flex',gap:12,justifyContent:'space-between'}}>
+        <div style={{minWidth:0}}><strong style={{fontSize:13}}>{p.numero_pedido}</strong>
+         <div style={{fontSize:12.5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div>
+         <div style={{fontSize:11.5,color:T.color.tinta3}}>NIT {p.nit}</div></div>
+        <div style={{textAlign:'right',flexShrink:0}}><strong style={{fontSize:13}}>{fCOP(p.valor_total)}</strong>
+         <div style={{fontSize:11.5,color:est.color,background:est.bg,borderRadius:20,padding:'2px 7px',marginTop:5}}>● {est.label}</div></div>
+       </div>;
+      })}
+      {pedidos.length>100 && <div style={{padding:10,fontSize:12,color:T.color.tinta3}}>Mostrando 100 de {pedidos.length}; se cargan todos.</div>}
+     </section>
+     <p style={{textAlign:'center',fontSize:12,color:T.color.tinta3,margin:0}}>Se carga tal como viene; no se puede editar aquí.</p>
+    </>}
+    {errMsg && <div role="alert" style={{background:T.color.malSuave,color:T.color.mal,padding:12,borderRadius:10,fontSize:13}}>{errMsg}</div>}
+    {resultado && <FranjaInfo>{resultado.ok} de {resultado.total} pedidos cargados.</FranjaInfo>}
+    {pedidos.length>0 && <div style={{height:65}}/>}
+    {pedidos.length>0 && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
+     <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
+     <button onClick={confirmar} disabled={carg} style={{...botonPrincipal,justifyContent:'center'}}><Upload size={16}/> {carg?'Cargando...':`Cargar ${pedidos.length} pedidos`}</button>
+    </div>}
+   </Pagina>
+  );
+}
+
 // ── GESTIÓN PEDIDOS (CARTERA) ──────────────────────────────────────────────────
 export function GestionPedidos({user, showToast}) {
+  const esMovil = useEsMovil();
   const [pedidos,    setPedidos]    = useState([]);
   const [filtroEst,  setFiltroEst]  = useState('todos');
   const [busq,       setBusq]       = useState('');
@@ -971,6 +1121,16 @@ export function GestionPedidos({user, showToast}) {
   pedidos.forEach(p=>{conteos[p.estado_cartera]=(conteos[p.estado_cartera]||0)+1;});
 
   const todosVisiblesMarcados = filtrados.length > 0 && filtrados.every(x => seleccion.has(x.id));
+
+  if (esMovil) return <GestionPedidosMovil
+    pedidos={pedidos} filtrados={filtrados} tabs={tabs} conteos={conteos}
+    filtroEst={filtroEst} setFiltroEst={setFiltroEst} busq={busq} setBusq={setBusq}
+    seleccion={seleccion} toggleSel={toggleSel} setSeleccion={setSeleccion}
+    cargar={cargar} carg={carg} aprobando={aprobando}
+    aprobarUno={aprobarUno} aprobarSeleccionados={aprobarSeleccionados}
+    reactivar={reactivar} setModRechazar={setModRechazar}
+    modRechazar={modRechazar} rechazar={rechazar}
+  />;
 
   return (
    <Pagina>
@@ -1119,15 +1279,104 @@ export function GestionPedidos({user, showToast}) {
   );
 }
 
+function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, setFiltroEst, busq, setBusq,
+ seleccion, toggleSel, setSeleccion, cargar, carg, aprobando, aprobarUno, aprobarSeleccionados,
+ reactivar, setModRechazar, modRechazar, rechazar }) {
+ const espera = useRef(null);
+ const omitirClick = useRef(0);
+ const pendientes = pedidos.filter(p=>['pendiente','preaprobado','cartera_vencida'].includes(p.estado_cartera)).length;
+ const ordenados = filtrados.slice().sort((a,b)=>{
+  const aPend = ['pendiente','preaprobado','cartera_vencida'].includes(a.estado_cartera);
+  const bPend = ['pendiente','preaprobado','cartera_vencida'].includes(b.estado_cartera);
+  return Number(bPend)-Number(aPend);
+ });
+ const detenerPulsacion = () => { if(espera.current){clearTimeout(espera.current);espera.current=null;} };
+ useEffect(()=>()=>detenerPulsacion(),[]);
+
+ return <Pagina anchoCompleto>
+  <header style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:10}}>
+   <div><div style={{fontSize:12,color:T.color.tinta3}}>{pedidos.length} pedidos · {pendientes} por revisar</div>
+    <h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Gestión de pedidos</h1></div>
+   <button onClick={cargar} disabled={carg} aria-label="Actualizar pedidos" style={{...botonBarra,width:38,height:38,padding:0,display:'grid',placeItems:'center',flexShrink:0}}><RefreshCw size={17}/></button>
+  </header>
+
+  <Buscador valor={busq} onChange={setBusq} placeholder="Pedido, NIT, cliente o asesor" ancho="100%"/>
+  <div style={{display:'flex',gap:6,overflowX:'auto',margin:'0 -16px',padding:'0 16px 2px',scrollbarWidth:'none'}}>
+   {tabs.filter(t=>t.k!=='preaprobado'||conteos.preaprobado).map(t=>{
+    const activo=filtroEst===t.k;
+    return <button key={t.k} onClick={()=>setFiltroEst(t.k)} style={{padding:'8px 12px',whiteSpace:'nowrap',borderRadius:99,border:`1px solid ${activo?T.color.marca:T.color.borde2}`,background:activo?T.color.marca:T.color.superficie,color:activo?'#fff':T.color.tinta2,fontFamily:'inherit',fontSize:12.5,fontWeight:600,cursor:'pointer'}}>{t.l} <span style={{marginLeft:4,opacity:.75}}>{t.k==='todos'?pedidos.length:conteos[t.k]||0}</span></button>;
+   })}
+  </div>
+
+  {seleccion.size>0 && <div style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:8,position:'sticky',top:0,zIndex:10}}>
+   <strong style={{flex:1,fontSize:13}}>{seleccion.size} seleccionado(s)</strong>
+   <button onClick={()=>setSeleccion(new Set())} style={{...botonBarra,padding:'7px 9px'}}>Limpiar</button>
+   <button onClick={aprobarSeleccionados} disabled={aprobando} style={{...botonPrincipal,padding:'8px 10px',background:T.color.bien}}>{aprobando?'Aprobando...':`Aprobar (${seleccion.size})`}</button>
+  </div>}
+
+  {ordenados.length===0 ? <div style={{...tarjeta,padding:30,textAlign:'center',color:T.color.tinta3,fontSize:13}}>Ningún pedido coincide con el filtro.</div> :
+   <div style={{display:'grid',gap:8}}>{ordenados.map(x=>{
+    const est=ESTADOS_CARTERA[x.estado_cartera]||ESTADOS_CARTERA.pendiente;
+    const decidible=x.estado_cartera!=='aprobado'&&x.estado_cartera!=='rechazado';
+    const marcado=seleccion.has(x.id);
+    const etapa=x.estado_cartera==='aprobado'?etapaCartera(x):null;
+    return <article key={x.id}
+     onPointerDown={e=>{if(!decidible||e.pointerType!=='touch'||e.target.closest('button'))return;detenerPulsacion();espera.current=setTimeout(()=>{toggleSel(x.id);omitirClick.current=Date.now()+700;espera.current=null;},500);}}
+     onPointerUp={detenerPulsacion} onPointerCancel={detenerPulsacion} onPointerLeave={detenerPulsacion}
+     onContextMenu={e=>{if(decidible){e.preventDefault();detenerPulsacion();if(Date.now()>omitirClick.current){toggleSel(x.id);omitirClick.current=Date.now()+700;}}}}
+     onClick={()=>{if(Date.now()<omitirClick.current)return;if(seleccion.size>0&&decidible)toggleSel(x.id);}}
+     style={{...tarjeta,padding:'12px 13px',background:marcado?T.color.marcaSuave:T.color.superficie,borderColor:marcado?T.color.marca:T.color.borde,touchAction:'pan-y'}}>
+     <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'flex-start'}}>
+      <div style={{display:'flex',gap:6,alignItems:'baseline'}}><strong style={{fontSize:13.5}}>{x.numero_pedido}</strong><span style={{fontSize:11,color:T.color.tinta3}}>{x.fecha_pedido?fFechaDia(x.fecha_pedido):''}</span></div>
+      <strong style={{fontSize:13.5,whiteSpace:'nowrap'}}>{fCOP(x.valor_total)}</strong>
+     </div>
+     <div style={{fontSize:12.5,fontWeight:600,marginTop:7,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{x.cliente}</div>
+     <div style={{fontSize:11.5,color:T.color.tinta3,marginTop:2}}>NIT {x.nit} · Asesor {x.vendedor||'—'} · {x.plazo>0?`${x.plazo} días`:'Contado'}</div>
+     <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,minWidth:0,fontSize:11.5}}>
+      <span style={{background:est.bg,color:est.color,borderRadius:99,padding:'3px 7px',fontWeight:700,whiteSpace:'nowrap'}}>● {est.label}</span>
+      <span style={{color:etapa?.color||T.color.tinta3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{etapa?(x.fecha_corte?`${fFechaHora(x.fecha_corte)} · ${etapa.corto}`:'Sin corte asignado'):x.estado_cartera==='rechazado'?(x.motivo_rechazo||'Rechazado'):'Contado · requiere revisión'}</span>
+     </div>
+     {decidible && seleccion.size===0 && <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,borderTop:`1px solid ${T.color.divisor}`,marginTop:9,paddingTop:9}}>
+      <button onClick={e=>{e.stopPropagation();setModRechazar(x);}} disabled={aprobando} style={{border:'none',borderRadius:9,padding:'10px 6px',background:T.color.malSuave,color:T.color.mal,fontWeight:700,fontFamily:'inherit'}}><X size={14} style={{verticalAlign:'middle',marginRight:4}}/> Rechazar</button>
+      <button onClick={e=>{e.stopPropagation();aprobarUno(x.id);}} disabled={aprobando} style={{border:'none',borderRadius:9,padding:'10px 6px',background:T.color.bien,color:'#fff',fontWeight:700,fontFamily:'inherit'}}><Check size={14} style={{verticalAlign:'middle',marginRight:4}}/> Aprobar</button>
+     </div>}
+     {x.estado_cartera==='rechazado' && <button onClick={e=>{e.stopPropagation();reactivar(x.id);}} style={{...botonBarra,marginTop:9}}>Reactivar</button>}
+     {decidible&&seleccion.size>0&&<div style={{fontSize:11,color:T.color.marca,marginTop:7}}>{marcado?'✓ Seleccionado':'Toca para seleccionar'}</div>}
+    </article>;
+   })}</div>}
+  {modRechazar && <ModalRechazar pedido={modRechazar} onClose={()=>setModRechazar(null)} onRechazar={motivo=>rechazar(modRechazar.id,motivo)}/>}
+ </Pagina>;
+}
+
 export function ModalRechazar({pedido, onRechazar, onClose}) {
+  const esMovil = useEsMovil();
   const [motivo, setMotivo] = useState('');
   const [carg,   setCarg]   = useState(false);
   const confirmar = async () => {
     if(!motivo.trim()){return;}
     setCarg(true);
-    await onRechazar(pedido.id, motivo.trim());
+    await onRechazar(motivo.trim());
     setCarg(false);
   };
+  if(esMovil) return <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:150,background:'rgba(23,20,31,.45)',display:'flex',alignItems:'flex-end'}}>
+   <div onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Rechazar pedido ${pedido.numero_pedido}`} style={{width:'100%',boxSizing:'border-box',maxHeight:'90vh',overflowY:'auto',background:T.color.superficie,borderRadius:'20px 20px 0 0',padding:'9px 16px calc(16px + env(safe-area-inset-bottom, 0px))'}}>
+    <div style={{width:36,height:4,background:T.color.tenue,borderRadius:4,margin:'0 auto 14px'}}/>
+    <h2 style={{fontSize:17,margin:'0 0 3px'}}>Rechazar pedido {pedido.numero_pedido}</h2>
+    <p style={{margin:'0 0 15px',fontSize:12.5,color:T.color.tinta3}}>No pasa a logística. Se puede reactivar después.</p>
+    <div style={{background:T.color.superficie2,borderRadius:11,padding:12,display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,fontSize:12.5}}>
+     <div style={{gridColumn:'1 / -1'}}><span style={{color:T.color.tinta3}}>Cliente</span><div>{pedido.cliente}</div></div>
+     <div><span style={{color:T.color.tinta3}}>NIT</span><div>{pedido.nit}</div></div><div><span style={{color:T.color.tinta3}}>Valor</span><div style={{fontWeight:700}}>{fCOP(pedido.valor_total)}</div></div>
+     <div><span style={{color:T.color.tinta3}}>Asesor</span><div>{pedido.vendedor||'Sin asesor'}</div></div><div><span style={{color:T.color.tinta3}}>Plazo</span><div>{pedido.plazo>0?`${pedido.plazo} días`:'Contado'}</div></div>
+    </div>
+    <label style={{display:'block',fontSize:13,fontWeight:600,margin:'14px 0 5px'}}>Motivo del rechazo <span style={{color:T.color.mal}}>•</span></label>
+    <textarea value={motivo} onChange={e=>setMotivo(e.target.value)} rows={4} placeholder="Explica el motivo" style={{width:'100%',boxSizing:'border-box',border:`1px solid ${T.color.marca}`,borderRadius:10,padding:12,font:'inherit',fontSize:14,resize:'vertical'}}/>
+    <div style={{display:'flex',gap:8,background:T.color.ojoSuave,color:T.color.ojo,borderRadius:10,padding:11,fontSize:12,marginTop:10,lineHeight:1.4}}><Mail size={16} style={{flexShrink:0}}/>Al confirmar se envía un correo automático al asesor con el motivo del rechazo.</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',gap:8,marginTop:14}}>
+     <button onClick={onClose} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
+     <button onClick={confirmar} disabled={carg||!motivo.trim()} style={{...botonPrincipal,background:T.color.mal,justifyContent:'center',opacity:motivo.trim()?1:.55}}>{carg?'Rechazando...':'Rechazar pedido'}</button>
+    </div>
+   </div>
+  </div>;
   return (
    <ModalGestion
     titulo="Rechazar pedido"
@@ -1163,6 +1412,7 @@ export function ModalRechazar({pedido, onRechazar, onClose}) {
 
 // ── MÓDULO LOGÍSTICA ───────────────────────────────────────────────────────────
 export function ModuloLogistica({showToast}) {
+  const esMovil = useEsMovil();
   const [sedes,   setSedes]   = useState([]);
   const [cortes,  setCortes]  = useState([]);
   const [filtroSede, setFiltroSede] = useState('');
@@ -1305,6 +1555,13 @@ export function ModuloLogistica({showToast}) {
   const pedidosTransmitidos = pedidos.filter(p=>p.transmitido_tms);
 
   const porImprimir = pedidos.filter(x => x.estado_impresion !== "impreso");
+
+  if(esMovil) return <LogisticaMovil
+   sedes={sedes} cortes={cortes} pedidos={pedidos} porImprimir={porImprimir}
+   filtroSede={filtroSede} setFiltroSede={setFiltroSede} filtroFecha={filtroFecha} setFiltroFecha={setFiltroFecha}
+   modoFecha={modoFecha} setModoFecha={setModoFecha} filtroImp={filtroImp} setFiltroImp={setFiltroImp}
+   transmitiendo={transmitiendo} transmitirCorte={transmitirCorte} imprimir={imprimir}
+  />;
 
   return (
    <Pagina anchoCompleto>
@@ -1469,8 +1726,39 @@ export function ModuloLogistica({showToast}) {
   );
 }
 
+function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSede,filtroFecha,setFiltroFecha,
+ modoFecha,setModoFecha,filtroImp,setFiltroImp,transmitiendo,transmitirCorte,imprimir}) {
+ return <Pagina anchoCompleto>
+  <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>c.estado!=='transmitido').length} cortes abiertos</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Logística de cartera</h1></header>
+  <div style={{display:'flex',gap:7}}>
+   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,background:T.color.superficie,border:`1px solid ${T.color.borde2}`,borderRadius:9,padding:3,flex:1}}>
+    {[["pendientes","Pendientes"],["fecha","Por fecha"]].map(([valor,label])=><button key={valor} onClick={()=>setModoFecha(valor)} style={{border:'none',borderRadius:7,padding:'8px 5px',background:modoFecha===valor?T.color.marca:'transparent',color:modoFecha===valor?'#fff':T.color.tinta2,fontFamily:'inherit',fontWeight:600,fontSize:12}}>{label}</button>)}
+   </div>
+   <select aria-label="Filtrar sede" value={filtroSede} onChange={e=>setFiltroSede(e.target.value)} style={{maxWidth:105,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9,background:T.color.superficie,fontSize:12,color:T.color.tinta2}}><option value="">Todas</option>{sedes.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}</select>
+  </div>
+  {modoFecha==='fecha'&&<div style={{display:'flex',gap:7}}><input aria-label="Fecha del corte" type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)} style={{flex:1,minWidth:0,padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:9}}/><select aria-label="Estado de impresión" value={filtroImp} onChange={e=>setFiltroImp(e.target.value)} style={{flex:1,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9}}><option value="no_impreso">Por imprimir</option><option value="impreso">Impresos</option><option value="todos">Todos</option></select></div>}
+  <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>Cortes programados</h2>
+   {cortes.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay cortes para mostrar.</div>:<div style={{display:'flex',gap:7,overflowX:'auto',margin:'0 -16px',padding:'0 16px 3px',scrollbarWidth:'none'}}>{cortes.map(c=><article key={c.id} style={{...tarjeta,minWidth:188,padding:10,flexShrink:0}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:7}}><strong style={{fontSize:17}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{fontSize:10.5,color:c.estado==='transmitido'?T.color.bien:T.color.ojo,background:c.estado==='transmitido'?T.color.bienSuave:T.color.ojoSuave,padding:'3px 6px',borderRadius:20}}>{c.estado==='transmitido'?'● Transmitido':'● Abierto'}</span></div>
+    <div style={{fontSize:11,color:T.color.tinta3,marginTop:5}}>{fFechaDia(c.fecha)} · {c.sedes?.nombre||'Sin sede'}</div>
+    <div style={{height:4,background:T.color.superficie3,borderRadius:4,marginTop:10}}><div style={{height:'100%',width:`${Math.min(100,Math.round(100*Number(c.pedidos_asignados||0)/Math.max(1,Number(c.capacidad_max||1))))}%`,background:T.color.marca,borderRadius:4}}/></div>
+    <div style={{fontSize:11,color:T.color.tinta3,textAlign:'right',margin:'3px 0 7px'}}>{c.pedidos_asignados}/{c.capacidad_max}</div>
+    {c.estado!=='transmitido'?<button onClick={()=>transmitirCorte(c.id)} disabled={transmitiendo} style={{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}>➤ Transmitir al TMS</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Ya transmitido</div>}
+   </article>)}</div>}
+  </section>
+  <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>{modoFecha==='pendientes'?'Pedidos sin imprimir':'Pedidos del corte'}</h2>
+   {pedidos.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay pedidos para mostrar.</div>:<div style={{display:'grid',gap:7}}>{pedidos.map(p=><article key={p.id} style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:9}}>
+    <div style={{minWidth:0,flex:1}}><div style={{display:'flex',justifyContent:'space-between',gap:6,fontSize:13}}><strong>{p.numero_pedido}</strong><strong>{fCOP(p.valor_total)}</strong></div><div style={{fontSize:12,marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div><div style={{fontSize:11,color:T.color.tinta3,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.direccion||'—'} · {p.sector_dane||'—'} · {p.fecha_corte?fFechaHora(p.fecha_corte):'Sin corte'}</div></div>
+    <button aria-label={`Imprimir pedido ${p.numero_pedido}`} onClick={()=>imprimir([p])} style={{...botonBarra,width:40,height:40,padding:0,display:'grid',placeItems:'center',flexShrink:0}}><Printer size={17}/></button>
+   </article>)}</div>}
+  </section>
+  {porImprimir.length>0&&<><div style={{height:58}}/><div style={{position:'fixed',left:0,right:0,bottom:'calc(62px + env(safe-area-inset-bottom, 0px))',zIndex:60,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'9px 16px'}}><button onClick={()=>imprimir(porImprimir)} style={{...botonPrincipal,width:'100%',justifyContent:'center'}}><Printer size={16}/> Imprimir ({porImprimir.length})</button></div></>}
+ </Pagina>;
+}
+
 // ── MÓDULO CONSULTAS ───────────────────────────────────────────────────────────
 export function ModuloConsultas({showToast}) {
+  const esMovil = useEsMovil();
   const [pedidos, setPedidos] = useState([]);
   const [busq,    setBusq]    = useState('');
   const [filtroEst,setFiltroEst]=useState('todos');
@@ -1482,7 +1770,12 @@ export function ModuloConsultas({showToast}) {
   useEffect(()=>{cargar();},[]);
 
   const filtrados=pedidos.filter(p=>{
-    if(filtroEst!=='todos'&&p.estado_cartera!==filtroEst) return false;
+    if(filtroEst!=='todos'){
+      if(filtroEst==='en_corte'&&!(p.estado_cartera==='aprobado'&&p.fecha_corte&&!p.transmitido_tms&&p.estado_impresion!=='impreso'))return false;
+      else if(filtroEst==='logistica'&&!(p.estado_cartera==='aprobado'&&p.transmitido_tms&&p.estado_impresion!=='impreso'))return false;
+      else if(filtroEst==='impreso'&&!(p.estado_cartera==='aprobado'&&p.estado_impresion==='impreso'))return false;
+      else if(!['en_corte','logistica','impreso'].includes(filtroEst)&&p.estado_cartera!==filtroEst)return false;
+    }
     if(busq){const q=busq.toLowerCase();return p.numero_pedido?.toLowerCase().includes(q)||p.cliente?.toLowerCase().includes(q)||p.nit?.toLowerCase().includes(q);}
     return true;
   });
@@ -1492,6 +1785,32 @@ export function ModuloConsultas({showToast}) {
     if(p.estado_cartera==='aprobado') return etapaCartera(p);
     return ESTADOS_CARTERA[p.estado_cartera]||{label:p.estado_cartera,color:T.color.tinta3};
   };
+
+  if(esMovil) return <Pagina anchoCompleto>
+   <header><div style={{fontSize:12,color:T.color.tinta3}}>Últimos 500 pedidos · solo lectura</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Consultas de cartera</h1></header>
+   <Buscador valor={busq} onChange={setBusq} placeholder="Pedido, cliente o NIT" ancho="100%"/>
+   <div style={{display:'flex',gap:6,overflowX:'auto',margin:'0 -16px',padding:'0 16px 2px',scrollbarWidth:'none'}}>{[
+    ['todos','Todos',pedidos.length],['pendiente','Pendiente',pedidos.filter(p=>p.estado_cartera==='pendiente').length],
+    ['aprobado','Aprobado',pedidos.filter(p=>p.estado_cartera==='aprobado').length],
+    ['en_corte','En corte',pedidos.filter(p=>p.estado_cartera==='aprobado'&&p.fecha_corte&&!p.transmitido_tms&&p.estado_impresion!=='impreso').length],
+    ['logistica','En logística',pedidos.filter(p=>p.transmitido_tms&&p.estado_impresion!=='impreso').length],
+    ['impreso','Impreso',pedidos.filter(p=>p.estado_impresion==='impreso').length],
+    ['rechazado','Rechazado',pedidos.filter(p=>p.estado_cartera==='rechazado').length],
+   ].map(([clave,label,conteo])=><button key={clave} onClick={()=>setFiltroEst(clave)} style={{whiteSpace:'nowrap',borderRadius:99,border:`1px solid ${filtroEst===clave?T.color.marca:T.color.borde2}`,background:filtroEst===clave?T.color.marca:T.color.superficie,color:filtroEst===clave?'#fff':T.color.tinta2,padding:'8px 11px',fontFamily:'inherit',fontSize:12,fontWeight:600}}>{label} <span style={{opacity:.75}}>{conteo}</span></button>)}</div>
+   {filtrados.length===0?<div style={{...tarjeta,padding:24,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Ningún pedido coincide con el filtro.</div>:<div style={{display:'grid',gap:8}}>{filtrados.map(p=>{
+    const info=getEstadoTexto(p);
+    const bg=p.estado_cartera==='rechazado'?T.color.neutroSuave:p.estado_cartera==='aprobado'?p.estado_impresion==='impreso'||p.transmitido_tms?T.color.bienSuave:T.color.infoSuave:T.color.ojoSuave;
+    return <article key={p.id} style={{...tarjeta,padding:'12px 13px'}}>
+     <div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:13}}><strong>{p.numero_pedido}</strong><strong>{fCOP(p.valor_total)}</strong></div>
+     <div style={{fontSize:12.5,fontWeight:600,marginTop:7,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div>
+     <div style={{fontSize:11.5,color:T.color.tinta3,marginTop:2}}>NIT {p.nit}</div>
+     <div style={{borderTop:`1px solid ${T.color.divisor}`,marginTop:9,paddingTop:9,display:'flex',justifyContent:'space-between',gap:6,alignItems:'center'}}>
+      <span style={{background:bg,color:info.color,borderRadius:99,padding:'4px 8px',fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>● {info.label}</span>
+      <span style={{fontSize:11,color:T.color.tinta3,whiteSpace:'nowrap'}}><Clock size={11} style={{verticalAlign:'middle',marginRight:3}}/>{p.fecha_corte?fFechaHora(p.fecha_corte):'Sin corte'}</span>
+     </div>
+    </article>;
+   })}</div>}
+  </Pagina>;
 
   return (
    <Pagina anchoCompleto>

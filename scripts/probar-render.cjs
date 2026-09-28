@@ -23,7 +23,7 @@ import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
-import { GestionAsesores } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
+import { GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
 import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
@@ -366,8 +366,34 @@ casos.push(["Usuarios", usuarios27()]);
 
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
+casos.push(["CargarPedidos/cartera", React.createElement(CargarPedidos, { user:{ id:'u1', rol:'cartera' }, showToast(){} })]);
+casos.push(["GestionPedidos/cartera", React.createElement(GestionPedidos, { user:{ id:'u1', rol:'cartera' }, showToast(){} })]);
+casos.push(["ModalRechazar/cartera", React.createElement(ModalRechazar, {
+ pedido:{ id:'p1', numero_pedido:'4582920', cliente:'Cliente prueba', nit:'900123', valor_total:3200000, vendedor:'023', plazo:0 },
+ onRechazar(){}, onClose(){},
+})]);
+casos.push(["GestionSedes/admin", React.createElement(GestionSedes, { showToast(){} })]);
+casos.push(["ModalCortes/admin", React.createElement(ModalCortes, { sede:{id:'s1',nombre:'CEDI La Estrella'}, onClose(){}, showToast(){} })]);
+casos.push(["Logistica/operador", React.createElement(ModuloLogistica, { showToast(){} })]);
+casos.push(["Consultas/cliente", React.createElement(ModuloConsultas, { showToast(){} })]);
 
 let fallos = 0;
+if (window.matchMedia("").matches) {
+ const htmlCartera = renderToString(React.createElement(NavegacionMovil, {
+  user:{ rol:"cartera", nombre:"Cartera" }, activeTab:"cartera_pedidos", setActiveTab(){}, onLogout(){},
+ }));
+ const htmlCortes = renderToString(React.createElement(ModalCortes, {
+  sede:{ id:"s1", nombre:"CEDI La Estrella" }, onClose(){}, showToast(){},
+ }));
+ if (!htmlCartera.includes("Cargar") || !htmlCartera.includes("Gestión") || !htmlCartera.includes("Perfil")) {
+  console.log("FALLA  cartera movil: falta una pestaña principal");
+  fallos++;
+ }
+ if (!htmlCortes.includes("no se editan") || !htmlCortes.includes("Agregar corte")) {
+  console.log("FALLA  cortes movil: falta la hoja de administración");
+  fallos++;
+ }
+}
 for (const [nombre, elemento] of casos) {
  try {
   const html = renderToString(elemento);

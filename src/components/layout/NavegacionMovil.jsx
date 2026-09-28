@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid, LogOut, Menu, Share2, X } from 'lucide-react';
+import { LayoutGrid, LogOut, Menu, Share2, User, X } from 'lucide-react';
 import { ROLES } from '../../Constants';
 import { T } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
@@ -207,14 +207,14 @@ export function NavegacionMovil({ user, activeTab, setActiveTab, onLogout, onSha
      <Casilla
       key={tab}
       icono={ICONO[tab] || Icono}
-      etiqueta={CORTO[tab] || label}
+      etiqueta={user.rol === 'cartera' && tab === 'cartera_pedidos' ? 'Gestión' : CORTO[tab] || label}
       activo={activeTab === tab}
       onClick={() => setActiveTab(tab)}
      />
     ))}
     <Casilla
-     icono={hoja ? X : Menu}
-     etiqueta="Mas"
+     icono={user.rol === 'cartera' ? User : hoja ? X : Menu}
+     etiqueta={user.rol === 'cartera' ? 'Perfil' : 'Mas'}
      activo={hoja || !enBarra.has(activeTab)}
      onClick={() => setHoja(true)}
     />
