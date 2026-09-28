@@ -69,9 +69,12 @@ begin
     return new;
   end if;
 
-  -- El DANE viaja sin el cero de la izquierda ("5380" es "05380").
-  dane_destino  := nullif(lpad(btrim(coalesce(new.sector_dane, '')), 5, '0'), '00000');
-  dane_origen_n := nullif(lpad(btrim(coalesce(new.dane_origen, '')), 5, '0'), '00000');
+  -- El DANE de municipio son 5 digitos. Puede llegar sin el cero de la
+  -- izquierda ("5380" es "05380") o con el corregimiento pegado ("05001001"):
+  -- se queda con los 5 que identifican al municipio. El cargue ya lo normaliza,
+  -- pero las filas cargadas antes de eso pasan por aqui igual.
+  dane_destino  := nullif(lpad(left(regexp_replace(coalesce(new.sector_dane, ''), '[^0-9]', '', 'g'), 5), 5, '0'), '00000');
+  dane_origen_n := nullif(lpad(left(regexp_replace(coalesce(new.dane_origen, ''), '[^0-9]', '', 'g'), 5), 5, '0'), '00000');
 
   select name into nombre_destino from public.ciudades where code = dane_destino;
   select name into nombre_origen  from public.ciudades where code = dane_origen_n;

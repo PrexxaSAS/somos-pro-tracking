@@ -54,6 +54,17 @@ const ESTADOS_CARTERA = {
 };
 
 
+// El DANE de municipio son 5 digitos: 2 de departamento y 3 de municipio. El
+// plano puede traerlo sin el cero de la izquierda ("5380") o con el
+// corregimiento pegado ("05001001"); si se guarda tal cual, no cruza contra
+// ciudades ni contra promesas_servicio y el pedido se queda sin nombre de
+// ciudad, sin fecha estimada y, en el origen, sin sede que le asigne corte.
+const dane5 = (v) => {
+  const d = String(v||'').replace(/[^0-9]/g,'');
+  if(!d) return '';
+  return d.length < 5 ? d.padStart(5,'0') : d.slice(0,5);
+};
+
 // ── Asignar corte ──────────────────────────────────────────────────────────────
 const asignarCorte = async (daneOrigen) => {
   if (!daneOrigen) return null;
@@ -572,11 +583,15 @@ export function CargarPedidos({user,showToast,onCargado}) {
         const rows = filasCsv(await leerTextoCsv(file));
         if(rows.length<2){setErrMsg("El archivo está vacío o solo tiene encabezado");return;}
 
-        const hdrs = rows[0].map(h=>String(h||'').trim().toLowerCase().replace(/\s+/g,'_'));
+        // Sin tildes: el plano escribe "Direccion" o "Condicion de pago" con o
+        // sin ellas segun quien lo genere, y una columna que no se reconoce se
+        // pierde en silencio. Comparar sin tildes evita adivinar cada variante.
+        const sinTildes = x => String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        const hdrs = rows[0].map(h=>sinTildes(h).trim().toLowerCase().replace(/\s+/g,'_'));
         const col = (...names)=>{for(const n of names){const i=hdrs.findIndex(h=>h.includes(n));if(i!==-1)return i;}return -1;};
 
         const iCia   = col('cia');
-        const iFech  = col('fecha');
+        const iFech  = col('fecha_pedido','fecha_del_pedido','fecha');
         const iPed   = col('pedido');
         const iNit   = col('nit');
         const iCli   = col('nombre_cliente','cliente');
@@ -584,7 +599,9 @@ export function CargarPedidos({user,showToast,onCargado}) {
         const iDane  = col('sector_dane');
         const iValDec= col('valor_declarado');
         const iCodMsg= col('codigo_mensaje','código_mensaje');
-        const iPlazo = col('plazo');
+        // La condicion de pago es el plazo: es la que decide si el pedido entra
+        // aprobado. Se busca con sus dos nombres porque el plano usa uno u otro.
+        const iPlazo = col('plazo','condicion_de_pago','condicion_pago','condicion');
         const iObs   = col('observacion','observación');
         const iVend  = col('vendedor');
         const iOrig  = col('origen');
@@ -599,6 +616,17 @@ export function CargarPedidos({user,showToast,onCargado}) {
         const iVTotal= col('valor_total');
 
         if(iPed===-1) {setErrMsg("No se encontró la columna 'Pedido'");return;}
+        // La fecha y la condicion de pago van siempre en el plano. Si faltan se
+        // para aqui: sin condicion de pago todo entraria como pendiente, y
+        // serian cientos de pedidos sin aprobar sin que nada lo dijera.
+        const faltan = [
+          iFech===-1  && "Fecha del pedido",
+          iPlazo===-1 && "Condición de pago (plazo)",
+        ].filter(Boolean);
+        if(faltan.length) {
+          setErrMsg(`Al archivo le falta: ${faltan.join(" y ")}. Esas columnas siempre vienen en el plano.`);
+          return;
+        }
 
         // Group rows by pedido
         const grupos = {};
@@ -613,13 +641,15 @@ export function CargarPedidos({user,showToast,onCargado}) {
               nit:          String(row[iNit]||'').trim(),
               cliente:      String(row[iCli]||'').trim(),
               direccion:    String(row[iDir]||'').trim(),
-              sector_dane:  String(row[iDane]||'').trim(),
+              sector_dane:  dane5(row[iDane]),
               codigo_mensaje:String(row[iCodMsg]||'').trim(),
-              plazo:        parseInt(row[iPlazo]||0)||0,
+              // "30", "30 DIAS" o "CREDITO 30" dan 30; "CONTADO" da 0, que es
+              // justo lo que significa: sin plazo, el pedido no se autoaprueba.
+              plazo:        parseInt(String(row[iPlazo]||'').replace(/[^0-9]/g,''),10)||0,
               observacion:  String(row[iObs]||'').trim(),
               vendedor:     String(row[iVend]||'').trim(),
               origen:       String(row[iOrig]||'').trim(),
-              dane_origen:  String(row[iDaneO]||'').trim(),
+              dane_origen:  dane5(row[iDaneO]),
               valor_total:  0,
               lineas:[],
             };
