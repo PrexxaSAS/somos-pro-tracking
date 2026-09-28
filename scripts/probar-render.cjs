@@ -416,13 +416,16 @@ for (const [nombre, elemento] of casos) {
  const conds = renderToString(transp("conductores"));
  exigir(!empresa.includes("Editar empresa"), "ofrece editar la empresa sin permiso");
  exigir(empresa.includes("NIT 900111222-1") && empresa.includes("Inscribir conductor"), "mi empresa sin NIT o sin inscribir");
- exigir(empresa.includes("En ruta · 2 pedidos") || empresa.includes("En ruta · 1 pedido"), "el conductor en ruta no dice cuantos pedidos lleva");
+ // En el celular (disenio 21) la cuenta va aparte del chip; en escritorio, dentro.
+ const movil = window.matchMedia("").matches;
+ exigir(movil ? (empresa.includes("En ruta") && /[0-9]+ pedidos? activos?/.test(empresa)) : (empresa.includes("En ruta · 2 pedidos") || empresa.includes("En ruta · 1 pedido")), "el conductor en ruta no dice cuantos pedidos lleva");
  const cargar = (pedidosT.match(/Cargar/g) || []).length;
  const reemplazar = (pedidosT.match(/Reemplazar/g) || []).length;
  exigir(reemplazar === 1, "Reemplazar deberia salir solo en el entregado con soportes: " + reemplazar);
  exigir(cargar === 1, "Cargar deberia salir solo en el de novedad sin soportes (no en transito): " + cargar);
- exigir(pedidosT.includes("Sin soporte") && pedidosT.includes("Exportar"), "pedidos sin columna de soporte o sin exportar");
- exigir(conds.includes("Inscrito") && conds.includes("Disponible"), "conductores sin inscripcion o estado");
+ exigir(pedidosT.includes("Sin soporte") && (movil || pedidosT.includes("Exportar")), "pedidos sin columna de soporte o sin exportar");
+ exigir(conds.includes("Disponible") && (movil ? conds.includes("pedidos activos") || conds.includes("pedido activo") : conds.includes("Inscrito")), "conductores sin inscripcion o estado");
+ exigir(!movil || !empresa.includes("Editar empresa"), "el celular ofrece editar la empresa");
 }
 
 globalThis.__fallos = fallos;

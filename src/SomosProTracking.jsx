@@ -21,6 +21,7 @@ import { RegistrarEntregaOperador } from './modules/pedidos/RegistrarEntregaOper
 import { NuevoPedidoMovil } from './modules/pedidos/NuevoPedidoMovil';
 import { GestionEnvioMovil } from './modules/gestion/GestionEnvioMovil';
 import { GestionPqrsMovil } from './modules/gestion/GestionPqrsMovil';
+import { ConteosTransp, BloqueTransp, TarjetaConductorTransp, TarjetaPedidoTransp } from './modules/transportista/TransportistaMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -2297,7 +2298,9 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  // rama para que los hooks se llamen siempre en el mismo orden.
  const [busqT, setBusqT] = useState("");
  const [condT, setCondT] = useState(conductorInicial || "");
- const [rangoT, setRangoT] = useState("30");
+ // Arranca en todo el historico: con "ultimos 30 dias" Pedidos escondia lo que
+ // Mi empresa si mostraba, y parecia que no hubiera pedidos.
+ const [rangoT, setRangoT] = useState("todo");
  const [pestanaT, setPestanaT] = useState("todos");
  const [pageT, setPageT] = useState(1);
  const [verPed, setVerPed] = useState(null);
@@ -2305,6 +2308,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  const [filtroCond, setFiltroCond] = useState("todos");
  useEffect(() => { setPageT(1); }, [busqT, condT, rangoT, pestanaT]);
  useEffect(() => { setCondT(conductorInicial || ""); }, [conductorInicial]);
+ const esMovil = useEsMovil();
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
  const [modCond, setModCond] = useState(null);
@@ -2752,6 +2756,33 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     : misCon;
    const lista = base.filter(c => !qc || [c.nombre, c.cedula, c.placa].some(v => String(v || "").toLowerCase().includes(qc)));
    const kpi = (clave, label, valor, color) => ({ label, valor, color, activo: filtroCond === clave, onClick: () => setFiltroCond(clave) });
+   // Disenio 21b: tarjetas con pestanias Todos · En ruta · Disponibles.
+   if (esMovil) return (
+    <Pagina>
+     <CabeceraConductor user={{ nombre: nombreEmpresa }} sobre={nombreEmpresa} titulo="Conductores" />
+     <BuscadorConductor valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" />
+     <Pestanas valor={filtroCond} onChange={setFiltroCond} opciones={[
+      { clave:"todos", label:"Todos", n: misCon.length },
+      { clave:"en_ruta", label:"En ruta", n: enRuta.length },
+      { clave:"disponibles", label:"Disponibles", n: misCon.length - enRuta.length },
+      ...(inactivos.length ? [{ clave:"inactivos", label:"Inactivos", n: inactivos.length }] : []),
+     ]}/>
+     {lista.length === 0 ? (
+      <ListaVacia>{misCon.length === 0 && filtroCond === "todos" ? "Aun no tienes conductores inscritos." : "Ningun conductor coincide."}</ListaVacia>
+     ) : (
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+       {lista.map(c => (
+        <TarjetaConductorTransp key={c.id} c={c} activos={pedidosDe(c)} completa
+         onVer={x => onIr && onIr("mis_pedidos_transp", String(x.id))} onEditar={editarCond} />
+       ))}
+      </div>
+     )}
+     <button onClick={() => abrirInscribir({ nit: miNit, nombre: nombreEmpresa })} style={{ ...botonPrincipal, justifyContent:"center", display:"flex", alignItems:"center", gap:6, height:48 }}>
+      <UserPlus size={16}/> Inscribir conductor
+     </button>
+     {modales}
+    </Pagina>
+   );
    return (
     <Pagina>
      <Encabezado titulo="Conductores" descripcion={`Conductores inscritos por ${nombreEmpresa}`} acciones={botonInscribir}/>
@@ -2817,6 +2848,41 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     });
     descargarCSV(`pedidos_${hoyLocal()}.csv`, "pedido,guia,cliente,direccion,ciudad,cajas,conductor,estado,soportes,fecha_creacion,fecha_real", filas.join("\n"));
    };
+   // Disenio 21c: tarjetas con el conductor y el soporte al pie.
+   if (esMovil) return (
+    <Pagina>
+     <CabeceraConductor user={{ nombre: nombreEmpresa }} sobre={nombreEmpresa} titulo="Pedidos" />
+     <div style={{ display:"flex", gap:8 }}>
+      <div style={{ flex:1, minWidth:0 }}><BuscadorConductor valor={busqT} onChange={setBusqT} placeholder="Buscar pedido o cliente" /></div>
+      <select value={condT} onChange={e => setCondT(e.target.value)} style={{
+       height:40, maxWidth:140, padding:"0 10px", border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
+       background:T.color.superficie, fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.tinta2,
+      }}>
+       <option value="">Conductor</option>
+       {misCon.map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+      </select>
+     </div>
+     <Pestanas valor={pestanaT} onChange={setPestanaT} opciones={PESTANAS_T.map(([clave, label, prueba]) => ({ clave, label, n: baseT.filter(prueba).length }))}/>
+     <LineaResumen izquierda={`${filtradosT.length} ${filtradosT.length === 1 ? "pedido" : "pedidos"} · ${cajasT} cajas`} derecha={rangoT === "todo" ? "Todo el historico" : `Ultimos ${rangoT} dias`} />
+     {filtradosT.length === 0 ? (
+      <ListaVacia>{pedidosMisConductores.length === 0 ? "Aun no hay pedidos asociados a tus conductores." : "Ningun pedido coincide con los filtros."}</ListaVacia>
+     ) : (
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+       {filtradosT.slice(0, pageT * 20).map(p => (
+        <TarjetaPedidoTransp key={p.id} p={p} completa
+         conductor={conductores.find(c => String(c.id) === String(p.conductor_id))}
+         soportes={soportesDe(p)} puedeSoporte={puedeSoporte(p)}
+         onVer={setVerPed} onSoporte={setModSoportes} />
+       ))}
+       {filtradosT.length > pageT * 20 && (
+        <button onClick={() => setPageT(x => x + 1)} style={{ minHeight:46, borderRadius:T.radio.control, border:`1px solid ${T.color.borde2}`, background:T.color.superficie, color:T.color.tinta2, fontFamily:"inherit", fontSize:13.5, fontWeight:600, cursor:"pointer" }}>Ver mas pedidos</button>
+       )}
+      </div>
+     )}
+     {detalle}
+     {modales}
+    </Pagina>
+   );
    return (
     <Pagina>
      <Encabezado titulo="Pedidos" descripcion="Pedidos asignados a los conductores de tu empresa"
@@ -2868,6 +2934,46 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
 
   // ── Mi empresa ──────────────────────────────────────────────────────────
   const primeros = misCon.slice(0, 5);
+  // Disenio 21a: el inicio del transportista. NIT, cuatro conteos en 2x2, y
+  // un resumen de conductores y de pedidos con "Ver todos" hacia sus pestanias.
+  if (esMovil) return (
+   <Pagina>
+    <CabeceraConductor user={{ nombre: nombreEmpresa }} sobre={miNit ? `Mi empresa · NIT ${miNit}` : "Mi empresa"} titulo={nombreEmpresa} />
+    <ConteosTransp items={[
+     { label:"Conductores", valor:misCon.length, color:T.color.tinta },
+     { label:"Pedidos asignados", valor:pedidosMisConductores.length, color:T.color.marca },
+     { label:"En transito", valor:pedidosMisConductores.filter(p => p.estado === "en_transito").length, color:T.color.ojo, punto:T.color.ojoPunto },
+     { label:"Entregados", valor:pedidosMisConductores.filter(p => p.estado === "entregado").length, color:T.color.tinta, punto:T.color.bienPunto },
+    ]}/>
+    <button onClick={() => abrirInscribir({ nit: miNit, nombre: nombreEmpresa })} style={{ ...botonPrincipal, justifyContent:"center", display:"flex", alignItems:"center", gap:6, height:48 }}>
+     <UserPlus size={16}/> Inscribir conductor
+    </button>
+    <BloqueTransp titulo="Conductores" onVerTodos={misCon.length ? () => onIr && onIr("mis_conductores_transp") : null}>
+     {misCon.length === 0 ? <ListaVacia>Aun no tienes conductores inscritos.</ListaVacia> : (
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+       {misCon.slice(0, 3).map(c => (
+        <TarjetaConductorTransp key={c.id} c={c} activos={pedidosDe(c)}
+         onVer={x => onIr && onIr("mis_pedidos_transp", String(x.id))} onEditar={editarCond} />
+       ))}
+      </div>
+     )}
+    </BloqueTransp>
+    <BloqueTransp titulo="Pedidos de mis conductores" onVerTodos={pedidosMisConductores.length ? () => onIr && onIr("mis_pedidos_transp") : null}>
+     {pedidosMisConductores.length === 0 ? <ListaVacia>Aun no hay pedidos asociados a tus conductores.</ListaVacia> : (
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+       {pedidosMisConductores.slice(0, 3).map(p => (
+        <TarjetaPedidoTransp key={p.id} p={p}
+         conductor={conductores.find(c => String(c.id) === String(p.conductor_id))}
+         soportes={soportesDe(p)} puedeSoporte={puedeSoporte(p)}
+         onVer={setVerPed} onSoporte={setModSoportes} />
+       ))}
+      </div>
+     )}
+    </BloqueTransp>
+    {detalle}
+    {modales}
+   </Pagina>
+  );
   return (
    <Pagina>
     <Encabezado
