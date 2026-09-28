@@ -3,7 +3,6 @@ import {
  AlertTriangle, Check, ChevronDown, MessageSquare, PackageCheck, Search, Undo2, UserPlus, X,
 } from 'lucide-react';
 import { T } from '../../design/tokens';
-import { docReferencia } from '../../utils/solicitudes';
 import { ESTADOS_PEDIDO } from '../../Constants';
 import { HojaConductores } from '../pedidos/EditarPedidoMovil';
 import { fechaCorta } from '../pedidos/DetallePedidoMovil';
@@ -123,15 +122,14 @@ export function GestionEnvioMovil({
  const faltaConductor = canEdit && !cerrado && !esPaq && !cond;
  const Icono = esDev ? Undo2 : PackageCheck;
  const titulo = esDev
-  ? (docReferencia(item) || item.guia)
+  ? (item.factura ? `Factura ${item.factura}` : item.guia)
   : [item.ciudad_recogida_nombre, item.ciudad_entrega_nombre].filter(Boolean).join(" → ") || item.guia;
  const filas = esDev ? [
-  ["Doc. referencia", docReferencia(item) || "Sin registrar", !docReferencia(item), true],
+  ["Pedido", item.pedido_ref || "Sin registrar", !item.pedido_ref, true],
   ["Carga", `${item.unidades || 0} uds · ${item.peso_kg || 0} kg`],
   ["Ciudad", item.ciudad_nombre || "Sin definir", !item.ciudad_nombre],
   ["Recoge en", item.dir_recogida || "Sin registrar", !item.dir_recogida],
  ] : [
-  ["Doc. referencia", docReferencia(item) || "Sin registrar", !docReferencia(item), true],
   ["Recoge en", [item.dir_recogida, item.ciudad_recogida_nombre].filter(Boolean).join(" · ") || "Sin registrar", !item.dir_recogida],
   ["Entrega en", [item.dir_entrega, item.ciudad_entrega_nombre].filter(Boolean).join(" · ") || "Sin registrar", !item.dir_entrega],
   ["Carga", `${item.unidades || 0} uds · ${item.peso_kg || 0} kg`],

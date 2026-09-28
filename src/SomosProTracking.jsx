@@ -40,9 +40,8 @@ import { ordenarRuta, useRutaConductor } from './modules/conductor/ruta';
 import { DetallePedidoConductor } from './modules/conductor/DetallePedidoConductor';
 import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
- Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto, DocReferencia,
+ Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto, SelectorPedido,
 } from './components/ui/formularios';
-import { docReferencia } from './utils/solicitudes';
 import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
@@ -93,13 +92,13 @@ const COLUMNAS_PEDIDOS = [
  "ciudad_origen_nombre","direccion_origen","created_at",
 ].join(",");
 const COLUMNAS_DEVOLUCIONES = [
- "id","guia","factura","pedido_ref","doc_referencia","unidades","volumen_m3","peso_kg",
+ "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
  "dir_recogida","dir_entrega","ciudad_codigo","ciudad_nombre","motivo","conductor_id",
  "placa","nit_proveedor","estado","novedad","tipo","paqueteria","guia_paqueteria",
  "soporte_nombre","fecha_creacion","fecha_real","solicitado_por","created_at",
 ].join(",");
 const COLUMNAS_RECOGIDAS = [
- "id","guia","doc_referencia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
+ "id","guia","dir_recogida","ciudad_recogida_cod","ciudad_recogida_nombre",
  "dir_entrega","ciudad_entrega_cod","ciudad_entrega_nombre","unidades",
  "volumen_m3","peso_kg","observaciones","conductor_id","placa","nit_proveedor",
  "estado","novedad","tipo","paqueteria","guia_paqueteria","doc_nombre",
@@ -4010,7 +4009,7 @@ function MisDevolucionesConductor({ devoluciones = [], user }) {
  const conNovedad = items.filter(d => d.estado === "novedad" || d.novedad);
  const q = busq.trim().toLowerCase();
  const lista = (pestana === "transito" ? enTransito : pestana === "completadas" ? completadas : conNovedad)
-  .filter(d => !q || [d.guia, docReferencia(d), d.dir_recogida].some(v => String(v || "").toLowerCase().includes(q)));
+  .filter(d => !q || [d.guia, d.factura, d.pedido_ref, d.dir_recogida].some(v => String(v || "").toLowerCase().includes(q)));
  const uds = lista.reduce((n, d) => n + (Number(d.unidades) || 0), 0);
  return (
   <Pagina>
@@ -4047,7 +4046,7 @@ function MisRecogidasConductor({ recogidas = [], user }) {
  const conNovedad = items.filter(r => r.estado === "novedad" || r.novedad);
  const q = busq.trim().toLowerCase();
  const lista = (pestana === "transito" ? enTransito : pestana === "completadas" ? completadas : conNovedad)
-  .filter(r => !q || [r.guia, docReferencia(r), r.dir_recogida, r.dir_entrega, r.ciudad_recogida_nombre, r.ciudad_entrega_nombre].some(v => String(v || "").toLowerCase().includes(q)));
+  .filter(r => !q || [r.guia, r.dir_recogida, r.dir_entrega, r.ciudad_recogida_nombre, r.ciudad_entrega_nombre].some(v => String(v || "").toLowerCase().includes(q)));
  const uds = lista.reduce((n, r) => n + (Number(r.unidades) || 0), 0);
  return (
   <Pagina>
@@ -4415,7 +4414,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  const fileRef = useRef(null);
 
  const vacio = {
-  doc_referencia:"", unidades:"", volumen_m3:"", peso_kg:"",
+  factura:"", pedido_ref:"", unidades:"", volumen_m3:"", peso_kg:"",
   dir_recogida:"", dir_entrega:"", ciudad_codigo:"", motivo:"",
   tipo_envio:"conductor", conductor_id:"", paqueteria:"", guia_paqueteria:"",
   soporte_data:null, soporte_nombre:"",
@@ -4430,8 +4429,8 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
   setModEditar(dev);
   setForm({
    ...vacio,
-   // Las viejas traen factura y pedido por separado: se editan como uno solo.
-   doc_referencia: docReferencia(dev),
+   factura: dev.factura||"",
+   pedido_ref: dev.pedido_ref||"",
    unidades: numTexto(dev.unidades),
    volumen_m3: numTexto(dev.volumen_m3),
    peso_kg: numTexto(dev.peso_kg),
@@ -4458,7 +4457,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  };
 
  const crear = async () => {
-  const req = ["doc_referencia","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
+  const req = ["factura","pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
   for (const k of req) {
    if (!form[k].toString().trim()) { showToast("Todos los campos son obligatorios","error"); return; }
   }
@@ -4468,7 +4467,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
   const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
   if (modEditar) {
    const cambios = {
-    doc_referencia: form.doc_referencia.trim(),
+    factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
     unidades: parseInt(form.unidades)||0,
     volumen_m3: parseFloat(form.volumen_m3)||0,
     peso_kg: parseFloat(form.peso_kg)||0,
@@ -4487,7 +4486,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
    return;
   }
   const nueva = {
-   doc_referencia: form.doc_referencia.trim(),
+   factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
    unidades: parseInt(form.unidades)||0,
    volumen_m3: parseFloat(form.volumen_m3)||0,
    peso_kg: parseFloat(form.peso_kg)||0,
@@ -4553,7 +4552,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  const filtradas = devoluciones.filter(d=>{
   if (esCliente && ![user.nombre, user.user].includes(d.solicitado_por)) return false;
   const q=busq.toLowerCase();
-  return !busq||d.guia.toLowerCase().includes(q)||docReferencia(d).toLowerCase().includes(q);
+  return !busq||d.guia.toLowerCase().includes(q)||d.factura.toLowerCase().includes(q)||d.pedido_ref.toLowerCase().includes(q);
  });
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
@@ -4604,7 +4603,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
 
    <section style={{ ...tarjeta, overflow:"hidden" }}>
     <BarraFiltros derecha={`${filtradas.length} de ${devoluciones.length}`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia o doc. referencia" ancho={300}/>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, factura, pedido o ciudad" ancho={300}/>
     </BarraFiltros>
 
     <div style={{ overflowX:"auto" }}>
@@ -4612,7 +4611,8 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
       <thead>
        <tr>
         <th style={th}>Guia</th>
-        <th style={th}>Doc. referencia</th>
+        <th style={th}>Factura</th>
+        <th style={th}>Pedido</th>
         <th style={th}>Recogida</th>
         <th style={th}>Sede destino</th>
         <th style={{...th, textAlign:"right"}}>Unidades</th>
@@ -4622,14 +4622,15 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
       </thead>
       <tbody>
        {pageItems.length===0 && (
-        <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
+        <tr><td colSpan={8} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
          {devoluciones.length===0 ? "Sin devoluciones registradas." : "Ninguna devolucion coincide con la busqueda."}
         </td></tr>
        )}
        {pageItems.map(d=>(
         <tr key={d.id} style={{ cursor:"pointer" }} onClick={()=>setModDet(d)}>
          <td style={td}><span style={chipMono}>{d.guia}</span></td>
-         <td style={td}><span style={mono}>{docReferencia(d) || "-"}</span></td>
+         <td style={td}><span style={mono}>{d.factura || "-"}</span></td>
+         <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{d.pedido_ref || "-"}</td>
          <td style={td}>
           <div style={{ color:T.color.tinta, fontWeight:600 }}>{d.ciudad_nombre || "-"}</div>
           <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{d.dir_recogida}</div>
@@ -4673,12 +4674,14 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
       <FranjaInfo>Se generara automaticamente la guia DV-{new Date().getFullYear()}-XXXX</FranjaInfo>
      )}
 
-     {/* Un solo documento: se elige el pedido de la lista o se escribe la
-         factura. Al elegir un pedido se llenan la direccion y la ciudad de
-         recogida con las suyas, como en el celular; se pueden corregir. */}
-     <DocReferencia obligatorio valor={form.doc_referencia} onChange={f("doc_referencia")} pedidos={pedidos}
-      ayuda="Pedido o factura. Al elegir un pedido se completan la direccion y la ciudad de recogida."
-      onElegirPedido={p=>setForm(x=>({ ...x, dir_recogida: p.direccion || x.dir_recogida, ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo }))} />
+     {/* Como en el celular: el pedido se elige de la lista (o se escribe) y al
+         elegirlo se llenan la factura, la direccion y la ciudad de recogida con
+         las suyas; todo se puede corregir despues. */}
+     <Fila>
+      <SelectorPedido label="N pedido de referencia" obligatorio valor={form.pedido_ref} onChange={f("pedido_ref")} pedidos={pedidos}
+       onElegirPedido={p=>setForm(x=>({ ...x, factura: p.factura || x.factura, dir_recogida: p.direccion || x.dir_recogida, ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo }))} />
+      <Texto label="N factura" obligatorio mono valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" />
+     </Fila>
 
      <Seccion titulo="Carga" />
      <Fila columnas={3}>
@@ -4799,7 +4802,8 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
    onCierre={canEdit ? marcar : null}
   >
    <Resumen datos={[
-    { label:"Doc. referencia", valor:docReferencia(dev) || "-", mono:true },
+    { label:"Factura", valor:dev.factura || "-", mono:true },
+    { label:"Pedido", valor:dev.pedido_ref || "-", mono:true },
     { label:"Unidades · peso", valor:`${dev.unidades} uds · ${dev.peso_kg} kg` },
     { label:"Ciudad", valor:ciudad?.name || dev.ciudad_nombre || "Sin definir", falta:!dev.ciudad_nombre },
     { label:"Recogida", valor:dev.dir_recogida || "Sin registrar", falta:!dev.dir_recogida },
@@ -4857,7 +4861,7 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
 
 // ModuloRecogidas 
 
-export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], pedidos = [], showToast, user, recargar }) {
+export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -4867,7 +4871,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const fileRef = useRef(null);
 
  const vacio = {
-  doc_referencia:"", dir_recogida:"", ciudad_recogida_cod:"", dir_entrega:"", ciudad_entrega_cod:"",
+  dir_recogida:"", ciudad_recogida_cod:"", dir_entrega:"", ciudad_entrega_cod:"",
   unidades:"", volumen_m3:"", peso_kg:"", observaciones:"",
   tipo_envio:"conductor", conductor_id:"", paqueteria:"", guia_paqueteria:"",
   doc_data:null, doc_nombre:"",
@@ -4882,7 +4886,6 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
   setModEditar(rec);
   setForm({
    ...vacio,
-   doc_referencia: rec.doc_referencia||"",
    dir_recogida: rec.dir_recogida||"",
    ciudad_recogida_cod: rec.ciudad_recogida_cod||"",
    dir_entrega: rec.dir_entrega||"",
@@ -4920,7 +4923,6 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
   const cond = user.rol!=="cliente" && form.tipo_envio==="conductor" ? conductores.find(c=>String(c.id)===String(form.conductor_id)) : null;
   if (modEditar) {
    const cambios = {
-    doc_referencia: form.doc_referencia.trim() || null,
     dir_recogida: form.dir_recogida.trim(),
     ciudad_recogida_cod: form.ciudad_recogida_cod,
     ciudad_recogida_nombre: crec?.name||"",
@@ -4941,7 +4943,6 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
    return;
   }
   const nueva = {
-   doc_referencia: form.doc_referencia.trim() || null,
    dir_recogida: form.dir_recogida.trim(),
    ciudad_recogida_cod: form.ciudad_recogida_cod,
    ciudad_recogida_nombre: crec?.name||"",
@@ -5009,7 +5010,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const filtradas = recogidas.filter(r=>{
   if (esCliente && ![user.nombre, user.user].includes(r.solicitado_por)) return false;
   const q=busq.toLowerCase();
-  return !busq||r.guia.toLowerCase().includes(q)||docReferencia(r).toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
+  return !busq||r.guia.toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
  });
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
@@ -5028,7 +5029,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
     sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
     onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
    {(modNueva||modEditar)&&(
-    <FormRecogidaMovil form={form} setForm={setForm} ciudades={ciudades} pedidos={pedidos}
+    <FormRecogidaMovil form={form} setForm={setForm} ciudades={ciudades}
      editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
      onArchivo={(file)=>cargarDoc([file])} onEnviar={crear} onClose={cerrarFormulario} />
    )}
@@ -5058,7 +5059,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
 
    <section style={{ ...tarjeta, overflow:"hidden" }}>
     <BarraFiltros derecha={`${filtradas.length} de ${recogidas.length}`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, doc. referencia o ciudad" ancho={280}/>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, ciudad o direccion" ancho={280}/>
     </BarraFiltros>
 
     <div style={{ overflowX:"auto" }}>
@@ -5083,10 +5084,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
        )}
        {pageItems.map(r=>(
         <tr key={r.id} style={{ cursor:"pointer" }} onClick={()=>setModDet(r)}>
-         <td style={td}>
-          <span style={chipMono}>{r.guia}</span>
-          {docReferencia(r) && <div style={{ ...mono, color:T.color.tinta3, marginTop:4 }}>{docReferencia(r)}</div>}
-         </td>
+         <td style={td}><span style={chipMono}>{r.guia}</span></td>
          <td style={td}>
           <div style={{ color:T.color.tinta, fontWeight:600 }}>{r.ciudad_recogida_nombre || "-"}</div>
           <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{r.dir_recogida}</div>
@@ -5132,10 +5130,6 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
      onPrimario={crear}
      textoPrimario={modEditar ? "Guardar cambios" : "Registrar recogida"}
     >
-     <DocReferencia opcional valor={form.doc_referencia} onChange={f("doc_referencia")} pedidos={pedidos}
-      placeholder="Elige un pedido o escribe la orden de compra"
-      ayuda="Orden de compra o pedido." />
-
      <Seccion titulo="Recogida" />
      <Fila>
       <Texto label="Direccion de recogida" obligatorio valor={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47" />
@@ -5257,7 +5251,6 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
    onCierre={canEdit ? marcar : null}
   >
    <Resumen datos={[
-    { label:"Doc. referencia", valor:docReferencia(rec) || "Sin registrar", mono:true, falta:!docReferencia(rec) },
     { label:"Recogida", valor:rec.ciudad_recogida_nombre || "Sin definir", falta:!rec.ciudad_recogida_nombre },
     { label:"Entrega", valor:rec.ciudad_entrega_nombre || "Sin definir", falta:!rec.ciudad_entrega_nombre },
     { label:"Carga", valor:`${rec.unidades} uds · ${rec.peso_kg} kg` },
@@ -6423,7 +6416,7 @@ export default function SomosProTracking() {
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
     nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
-   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
+   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.
    case "cartera_sedes":
    case "cartera_asesores":

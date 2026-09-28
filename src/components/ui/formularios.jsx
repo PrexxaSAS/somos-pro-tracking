@@ -187,12 +187,11 @@ export function Texto({ label, valor, onChange, placeholder, obligatorio, opcion
  );
 }
 
-// Doc. referencia: campo de texto con un desplegable de pedidos, como la hoja
-// del celular. Se elige un pedido de la lista (busca por pedido, guia, factura
-// o cliente) o se escribe cualquier numero: una factura o una orden de compra.
-// Al elegir un pedido, onElegirPedido recibe el pedido completo por si el
-// formulario quiere llenar otros campos con el.
-export function DocReferencia({ label = "Doc. referencia", valor, onChange, pedidos = [], onElegirPedido, obligatorio, opcional, ayuda, placeholder = "Elige un pedido o escribe el numero" }) {
+// Campo de texto con un desplegable de pedidos, como la hoja del celular: se
+// elige un pedido de la lista (busca por pedido, guia, factura o cliente) o se
+// escribe el numero a mano. Al elegirlo, onElegirPedido recibe el pedido
+// completo para que el formulario llene otros campos con el.
+export function SelectorPedido({ label = "N pedido", valor, onChange, pedidos = [], onElegirPedido, obligatorio, opcional, ayuda, placeholder = "Elige o escribe el pedido" }) {
  const [abierto, setAbierto] = useState(false);
  const q = String(valor || "").trim().toLowerCase();
  const elegido = pedidos.some(p => String(p.id) === String(valor));

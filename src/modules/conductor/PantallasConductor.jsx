@@ -6,7 +6,6 @@ import {
 import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO } from '../../Constants';
 import { fechaCorta, sumarDias } from '../pedidos/DetallePedidoMovil';
-import { docReferencia } from '../../utils/solicitudes';
 
 // Las pantallas del conductor siguen los disenios 15 y 16: el conductor ve solo
 // lo suyo, en tarjetas orientadas a la ruta. Arriba lo que necesita para
@@ -312,7 +311,8 @@ export function TarjetaDevolucion({ d, onSoporte }) {
    <Destino direccion={d.dir_recogida} ciudad={d.ciudad_nombre} />
 
    <div style={{ display: "flex", gap: 12, fontSize: 12, color: T.color.tinta3, flexWrap: "wrap" }}>
-    <span>Doc. referencia <span style={{ fontFamily: T.fuente.mono, color: T.color.tinta2 }}>{docReferencia(d) || "-"}</span></span>
+    <span>Factura <span style={{ fontFamily: T.fuente.mono, color: T.color.tinta2 }}>{d.factura || "-"}</span></span>
+    <span>Pedido <span style={{ fontFamily: T.fuente.mono, color: T.color.tinta2 }}>{d.pedido_ref || "-"}</span></span>
    </div>
 
    {d.motivo && (
@@ -352,7 +352,6 @@ export function TarjetaRecogida({ r, onDocumento }) {
      <PackageCheck size={14} />
     </span>
     <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: "tabular-nums" }}>{r.guia}</span>
-    {docReferencia(r) && <span style={{ fontFamily: T.fuente.mono, fontSize: 11.5, color: T.color.tinta3 }}>{docReferencia(r)}</span>}
     <Chip estado={r.estado} actual={r.estado === "en_transito"} />
    </div>
 
