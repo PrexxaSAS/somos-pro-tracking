@@ -27,6 +27,8 @@ import { GestionAsesores } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera
 import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
+import { NuevoPedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/NuevoPedidoMovil';
+import { GestionEnvioMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionEnvioMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -210,6 +212,34 @@ casos.push(["DetallePedidoConductor/cerrado", React.createElement(DetallePedidoC
  pedido: { ...pedidos[1], soportes:["a.jpg","b.jpg"] }, onCerrar(){}, onGuia(){}, onEntregar(){}, onVerSoportes(){},
 })]);
 
+// Disenio 12: nuevo pedido en dos pasos.
+const formNuevo = { id:"PED-012", cliente:"Empresa Destino S.A.S", ciudad_codigo:"05001", direccion:"Cra 15 #93-47", cajas:"10",
+ factura:"FAC-3000", fecha_estimada:"", notas:"", conductor_id:"", tipo:"propio", paqueteria:"", guia_paqueteria:"" };
+const ciudadesPrueba = [{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }];
+const conductoresPrueba = [{ id:7, nombre:"Juan Esteban Castrillon", placa:"NLX290", activo:true, nit_proveedor:"900" }];
+casos.push(["NuevoPedidoMovil/paso1", React.createElement(NuevoPedidoMovil, {
+ form: formNuevo, setForm(){}, ciudades: ciudadesPrueba, conductores: conductoresPrueba, conductoresActivos: conductoresPrueba,
+ paqueterias: ["Servientrega"], transportistas: [], onCrear(){}, onClose(){},
+})]);
+casos.push(["NuevoPedidoMovil/paso2", React.createElement(NuevoPedidoMovil, {
+ form: formNuevo, setForm(){}, ciudades: ciudadesPrueba, conductores: conductoresPrueba, conductoresActivos: conductoresPrueba,
+ paqueterias: ["Servientrega"], transportistas: [], onCrear(){}, onClose(){}, pasoInicial: 1,
+})]);
+
+// Disenio 19: gestionar devolucion y recogida.
+const devSinAsignar = { id:"DV-1", guia:"DV-2026-0001", estado:"sin_asignar", factura:"FAC-001", pedido_ref:"PED-001",
+ unidades:5, peso_kg:20, volumen_m3:1, ciudad_nombre:"Medellin", dir_recogida:"Calle 52 #45-30, Centro", motivo:"Producto averiado en transporte" };
+const recEnTransito = { id:"RC-1", guia:"RC-2026-0001", estado:"en_transito", conductor_id:7, tipo:"propio",
+ dir_recogida:"Calle 45 #22-10", ciudad_recogida_nombre:"Abriaqui", dir_entrega:"Cra 43A #1-50, Of. 302", ciudad_entrega_nombre:"Medellin",
+ unidades:5, peso_kg:10, volumen_m3:0.5, fecha_creacion:"2026-09-23", solicitado_por:"Operador", observaciones:"Fragil, llevar carretilla" };
+const gestion = (props) => React.createElement(GestionEnvioMovil, {
+ conductores: conductoresPrueba, transportistas: [{ nit:"900", nombre:"Transportes Andina" }], paqueterias: ["Servientrega"],
+ onClose(){}, onAsignar(){}, onEntregado(){}, showToast(){}, ...props,
+});
+casos.push(["GestionEnvioMovil/devolucion_sin_asignar", gestion({ tipo:"devolucion", item: devSinAsignar })]);
+casos.push(["GestionEnvioMovil/recogida_en_transito", gestion({ tipo:"recogida", item: recEnTransito })]);
+casos.push(["GestionEnvioMovil/solo_lectura", gestion({ tipo:"devolucion", item: devSinAsignar, canEdit: false })]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -299,6 +329,25 @@ for (const [nombre, elemento] of casos) {
  exigir(!reord.includes("Volver al orden por promesa"), "ofrece volver a la promesa cuando ya esta por promesa");
  const reord2 = renderToString(React.createElement(ReordenarRuta, { pedidos: [A, B], aMano: true, onGuardar(){}, onCancelar(){}, onRestablecer(){} }));
  exigir(reord2.includes("Volver al orden por promesa"), "con orden a mano no deja volver a la promesa");
+}
+
+// Disenio 19: sin conductor se ofrece elegirlo y se avisa; con conductor se
+// muestra con su placa y se puede cambiar; el cliente solo lee. Disenio 12: el
+// paso 2 se puede saltar y crea; el paso 1 solo continua.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  gestion: " + queja); fallos++; } };
+ const sin = renderToString(gestion({ tipo:"devolucion", item: devSinAsignar }));
+ const con = renderToString(gestion({ tipo:"recogida", item: recEnTransito }));
+ const lectura = renderToString(gestion({ tipo:"devolucion", item: devSinAsignar, canEdit: false }));
+ exigir(sin.includes("Elegir conductor") && sin.includes("Sin conductor asignado"), "sin conductor no ofrece elegirlo");
+ exigir(sin.includes("Motivo:") && sin.includes("Producto averiado"), "la devolucion no muestra el motivo");
+ exigir(con.includes("Cambiar") && con.includes("NLX290") && !con.includes("Elegir conductor"), "con conductor no lo muestra con su placa");
+ exigir(con.includes("Observaciones:"), "la recogida no muestra las observaciones");
+ exigir(!lectura.includes("Guardar asignacion") && !lectura.includes("Completada") && lectura.includes("Cerrar"), "el cliente puede gestionar");
+ const paso1 = renderToString(React.createElement(NuevoPedidoMovil, { form: formNuevo, setForm(){}, ciudades: ciudadesPrueba, conductores: conductoresPrueba, onCrear(){}, onClose(){} }));
+ const paso2 = renderToString(React.createElement(NuevoPedidoMovil, { form: formNuevo, setForm(){}, ciudades: ciudadesPrueba, conductores: conductoresPrueba, onCrear(){}, onClose(){}, pasoInicial: 1 }));
+ exigir(paso1.includes("Continuar") && !paso1.includes("Saltar"), "el paso 1 no continua o deja saltar");
+ exigir(paso2.includes("Saltar") && paso2.includes("Crear pedido"), "el paso 2 no deja saltar ni crear");
 }
 
 globalThis.__fallos = fallos;

@@ -154,8 +154,11 @@ export function HojaCiudades({ ciudades, titulo = "Buscar ciudad", seleccionada,
 export function NuevoPedidoMovil({
  form, setForm, ciudades, conductores, conductoresActivos, paqueterias = [],
  transportistas = [], pedidos = [], onCrear, onClose, guardando = false,
+ // Por que paso abrir. Siempre es 0 en la aplicacion; existe para que la
+ // prueba pueda dibujar los dos sin tener que simular los toques.
+ pasoInicial = 0,
 }) {
- const [paso, setPaso] = useState(0);
+ const [paso, setPaso] = useState(pasoInicial);
  const [hoja, setHoja] = useState(null); // "destino" | "origen" | "conductor"
 
  const f = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
@@ -193,7 +196,16 @@ export function NuevoPedidoMovil({
       <span style={{ fontSize: 14, fontWeight: 700 }}>Nuevo pedido</span>
       <span style={{ fontSize: 12, color: T.color.tinta3 }}>Paso {paso + 1} de 2</span>
      </div>
-     <span style={{ width: 38, flexShrink: 0 }} />
+     {/* El segundo paso es opcional: se puede saltar y el pedido entra sin
+         transporte, "Sin asignar" hasta que alguien elija conductor. */}
+     {paso === 1 ? (
+      <button onClick={onCrear} disabled={guardando} title="Crear sin transporte" style={{
+       width: 38, flexShrink: 0, border: "none", background: "transparent", padding: 0, cursor: "pointer",
+       fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: T.color.marca, textAlign: "right",
+      }}>Saltar</button>
+     ) : (
+      <span style={{ width: 38, flexShrink: 0 }} />
+     )}
     </div>
 
     <div style={{ display: "flex", gap: 6 }}>
@@ -352,8 +364,10 @@ export function NuevoPedidoMovil({
          <select value={form.paqueteria || ""} onChange={e => f("paqueteria")(e.target.value)}
           style={{ ...entrada, appearance: "none" }}>
           <option value="">Seleccionar transportadora</option>
-          {(paqueterias || []).map(p => (
-           <option key={p.id || p.nombre} value={p.nombre}>{p.nombre}</option>
+          {/* Las paqueterias llegan como cadenas, igual que las lee el
+              formulario de escritorio. */}
+          {(paqueterias || []).filter(x => typeof x === "string" && x).map(x => (
+           <option key={x} value={x}>{x}</option>
           ))}
          </select>
         </Campo>

@@ -18,6 +18,8 @@ import { usePedidoEditable } from './modules/pedidos/usePedidoEditable';
 import { EditarPedidoMovil } from './modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from './modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from './modules/pedidos/RegistrarEntregaOperador';
+import { NuevoPedidoMovil } from './modules/pedidos/NuevoPedidoMovil';
+import { GestionEnvioMovil } from './modules/gestion/GestionEnvioMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -2077,7 +2079,18 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     );
    })()}
 
-   {modNuevo && (
+   {/* Disenio 12: en el celular el formulario va en dos pasos y a pantalla
+       completa. Crea con el mismo guardar que el modal de escritorio. */}
+   {modNuevo && esMovil && (
+    <NuevoPedidoMovil
+     form={form} setForm={setForm}
+     ciudades={ciudades} conductores={conductores} conductoresActivos={conductoresActivos}
+     paqueterias={paqueterias} transportistas={transportistas} pedidos={pedidos}
+     onCrear={guardar}
+     onClose={() => { setModNuevo(false); setForm(vacio); }}
+    />
+   )}
+   {modNuevo && !esMovil && (
     <ModalForm
      titulo="Nuevo pedido"
      descripcion="Registra un pedido y su destino de entrega"
@@ -3970,6 +3983,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const esCliente = user.rol==="cliente";
+ const esMovil = useEsMovil();
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
  const abrirEditarCliente = (dev) => {
@@ -4257,7 +4271,15 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
      <Adjunto label="Soporte" nombre={form.soporte_nombre} onArchivo={(file)=>cargarDoc([file])} />
     </ModalForm>
    )}
-   {modDet&&(
+   {/* Disenio 19: en el celular la gestion va a pantalla completa. Llama a los
+       mismos asignar y marcarEntregado que el modal de escritorio. */}
+   {modDet&&esMovil&&(
+    <GestionEnvioMovil tipo="devolucion" item={modDet} conductores={conductores}
+     transportistas={transportistas} paqueterias={paqueterias}
+     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
+     showToast={showToast} canEdit={user.rol!=="cliente"}/>
+   )}
+   {modDet&&!esMovil&&(
     <ModalDetalleDV dev={modDet} conductores={conductores} ciudades={ciudades}
      transportistas={transportistas} paqueterias={paqueterias}
      onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
@@ -4399,6 +4421,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const esCliente = user.rol==="cliente";
+ const esMovil = useEsMovil();
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
  const abrirEditarCliente = (rec) => {
@@ -4683,7 +4706,15 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
      <Adjunto label="Documento de soporte" nombre={form.doc_nombre} onArchivo={(file)=>cargarDoc([file])} />
     </ModalForm>
    )}
-   {modDet&&(
+   {/* Disenio 19: en el celular la gestion va a pantalla completa. Llama a los
+       mismos asignar y marcarEntregado que el modal de escritorio. */}
+   {modDet&&esMovil&&(
+    <GestionEnvioMovil tipo="recogida" item={modDet} conductores={conductores}
+     transportistas={transportistas} paqueterias={paqueterias}
+     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
+     showToast={showToast} canEdit={user.rol!=="cliente"}/>
+   )}
+   {modDet&&!esMovil&&(
     <Modal title={`Recogida ${modDet.guia}`} onClose={()=>setModDet(null)} wide>
      <ModalDetalleRC rec={modDet} conductores={conductores} ciudades={ciudades}
       transportistas={transportistas} paqueterias={paqueterias}
