@@ -210,12 +210,21 @@ export function SelectorPedido({ label = "N pedido", valor, onChange, pedidos = 
      onBlur={e => { setTimeout(() => setAbierto(false), 150); e.target.style.borderColor = T.color.borde2; e.target.style.boxShadow = "none"; }}
      style={{ ...baseEntrada, fontFamily: T.fuente.mono, paddingRight: 34 }}/>
     <ChevronDown size={16} style={{ position: "absolute", right: 12, top: 12, color: T.color.tinta4, pointerEvents: "none" }} />
-    {abierto && lista.length > 0 && (
+    {/* Se abre siempre, aunque no haya pedidos: asi se ve que el campo es un
+        desplegable y por que esta vacio, como la hoja del celular. */}
+    {abierto && !elegido && (
      <div style={{
       position: "absolute", top: 44, left: 0, right: 0, zIndex: 30, maxHeight: 280, overflowY: "auto",
       background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: T.radio.control,
       boxShadow: T.sombra.flotante, padding: 4,
      }}>
+      {lista.length === 0 && (
+       <div style={{ padding: "14px 10px", fontSize: 13, color: T.color.tinta3, textAlign: "center", lineHeight: 1.45 }}>
+        {pedidos.length === 0
+         ? "No hay pedidos para elegir. Escribe el numero del pedido."
+         : `Ningun pedido coincide. Se usara "${String(valor || "").trim()}" tal como lo escribiste.`}
+       </div>
+      )}
       {lista.map(p => (
        <button key={p.id} type="button" onMouseDown={e => { e.preventDefault(); elegir(p); }} style={{
         display: "flex", flexDirection: "column", gap: 2, width: "100%", padding: "8px 10px", border: "none",
