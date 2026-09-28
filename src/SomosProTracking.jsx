@@ -28,8 +28,10 @@ import {
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
- TarjetaPedidoConductor, TarjetaEnvio, Bloque, ListaVacia,
+ CabeceraConductor, ProgresoRuta, BuscadorConductor, Pestanas, LineaResumen, ListaVacia,
+ TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, fechaLarga, iniciales, abrirEnMapa,
 } from './modules/conductor/PantallasConductor';
+import { DetallePedidoConductor } from './modules/conductor/DetallePedidoConductor';
 import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
@@ -3204,6 +3206,14 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
  const [modDet,  setModDet]  = useState(null);
  const [modFotos, setModFotos] = useState(null); // pedido para cargar soportes
  const [novedad,  setNovedad]  = useState(false);
+ // Solo en el celular (disenio 15 y 18): la pestania, la busqueda, el pedido
+ // abierto en el detalle del conductor, la guia y lo que el detalle ya eligio
+ // (fotos, novedad, motivo) para que el flujo de entrega arranque con eso.
+ const [pestana,  setPestana]  = useState("pendientes");
+ const [busqCond, setBusqCond] = useState("");
+ const [detCond,  setDetCond]  = useState(null);
+ const [guiaCond, setGuiaCond] = useState(null);
+ const [entregaInicial, setEntregaInicial] = useState(null);
  const condId = user.conductor_db_id || user.id;
  const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
  const activos = misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado));
@@ -3277,10 +3287,15 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
      <RegistrarEntregaMovil
       pedido={modFotos}
       promesa={(promesas || []).find(x => x.ciudad_codigo === modFotos.ciudad_codigo)}
+      fotosInicial={entregaInicial?.fotos || []}
+      novedadInicial={!!entregaInicial?.conNovedad}
+      observacionesInicial={entregaInicial?.observaciones || ""}
       onConfirmar={async ({ fotos, conNovedad, ...datos }) => {
        await marcarEntregado(modFotos, fotos, conNovedad, datos);
+       setEntregaInicial(null);
+       setDetCond(null);
       }}
-      onClose={() => setModFotos(null)}
+      onClose={() => { setModFotos(null); setEntregaInicial(null); }}
      />
     )}
  
@@ -3319,43 +3334,71 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
   </>
  );
 
- // En el celular no hay tablas: el conductor lee la pantalla en la calle y con
- // una mano, y una tabla ahi obliga a desplazarse de lado para una sola fila.
+ // En el celular (disenio 15): solo lo suyo, en tarjetas orientadas a la ruta,
+ // con el avance del dia y tres pestanias por estado. Sin indicadores globales
+ // ni crear: eso es de la central.
+ // Las cerradas, de la mas reciente a la mas vieja: es lo que dice la linea de
+ // resumen y lo que el conductor espera al revisar lo que ya hizo.
+ const masReciente = (a, b) => String(b.fecha_real || "").localeCompare(String(a.fecha_real || ""));
+ const entregados = misPeds.filter(p => p.estado === "entregado").sort(masReciente);
+ const conNovedad = misPeds.filter(p => p.estado === "novedad").sort(masReciente);
+ const promesaDe = (p) => (promesas || []).find(x => x.ciudad_codigo === p.ciudad_codigo);
+ const coincide = (p) => {
+  const q = busqCond.trim().toLowerCase();
+  if (!q) return true;
+  return [p.id, p.guia_interna, p.cliente, p.factura].some(v => String(v || "").toLowerCase().includes(q));
+ };
+ const lista = (pestana === "pendientes" ? activos : pestana === "entregadas" ? entregados : conNovedad).filter(coincide);
+ const cajasDe = (xs) => xs.reduce((n, p) => n + (Number(p.cajas) || 0), 0);
+ const abrirEntrega = (p, inicial) => { setEntregaInicial(inicial || null); setModFotos(p); setNovedad(false); };
+ const paradaDe = (p) => activos.findIndex(x => x.id === p.id) + 1;
+
  if (esMovil) return (
   <Pagina>
-   <Encabezado titulo="Mis pedidos" descripcion={user.placa ? `Vehiculo ${user.placa}` : "Pedidos asignados para entrega"} />
-
-   <Indicadores items={[
-    { label: "Asignados", valor: misPeds.length },
-    { label: "Activos", valor: activos.length, destacado: true, color: T.color.marca },
-    { label: "Entregados", valor: completados.length, color: T.color.bienPunto },
+   <CabeceraConductor user={user} sobre={fechaLarga()} titulo="Mis entregas" />
+   <ProgresoRuta hechas={entregados.length} total={misPeds.length} placa={user.placa} />
+   <BuscadorConductor valor={busqCond} onChange={setBusqCond} placeholder="Buscar pedido o cliente" />
+   <Pestanas valor={pestana} onChange={setPestana} opciones={[
+    { clave: "pendientes", label: "Pendientes", n: activos.length },
+    { clave: "entregadas", label: "Entregadas", n: entregados.length },
+    { clave: "novedad", label: "Novedad", n: conNovedad.length },
    ]}/>
 
-   <Bloque titulo="Por entregar" cuenta={`${activos.length} ${activos.length === 1 ? "pedido" : "pedidos"}`}>
-    {activos.length === 0 ? (
-     <ListaVacia>No tienes pedidos activos por el momento.</ListaVacia>
-    ) : (
-     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {activos.map(p => (
-       <TarjetaPedidoConductor key={p.id} pedido={p}
-        onVer={setModDet}
-        onEntregar={x => { setModFotos(x); setNovedad(false); }}/>
-      ))}
-     </div>
-    )}
-   </Bloque>
+   <LineaResumen
+    izquierda={`${lista.length} ${pestana === "pendientes" ? "pendientes" : pestana === "entregadas" ? "entregadas" : "con novedad"} · ${cajasDe(lista)} cajas`}
+    derecha={pestana === "pendientes" ? "Orden de ruta" : "Mas reciente"} />
 
-   <Bloque titulo="Entregados" cuenta={`${completados.length} ${completados.length === 1 ? "pedido" : "pedidos"}`}>
-    {completados.length === 0 ? (
-     <ListaVacia>Aun no tienes pedidos entregados.</ListaVacia>
-    ) : (
-     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {completados.map(p => (
-       <TarjetaPedidoConductor key={p.id} pedido={p} cerrado onVer={setModDet} onEntregar={() => {}}/>
-      ))}
-     </div>
-    )}
-   </Bloque>
+   {lista.length === 0 ? (
+    <ListaVacia>
+     {busqCond ? "Ningun pedido coincide con la busqueda."
+      : pestana === "pendientes" ? "No tienes pedidos pendientes. Ruta terminada."
+      : pestana === "entregadas" ? "Aun no tienes pedidos entregados."
+      : "Sin pedidos con novedad."}
+    </ListaVacia>
+   ) : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+     {lista.map((p, i) => pestana === "pendientes"
+      ? <TarjetaEntrega key={p.id} pedido={p} parada={paradaDe(p)} actual={i === 0 && !busqCond}
+         promesa={promesaDe(p)} onAbrir={setDetCond} />
+      : <TarjetaEntregada key={p.id} pedido={p} onAbrir={setDetCond}
+         onSoporte={x => verPDFSoportes(x, showToast)} />
+     )}
+    </div>
+   )}
+
+   {detCond && (
+    <DetallePedidoConductor
+     pedido={pedidos.find(x => x.id === detCond.id) || detCond}
+     parada={paradaDe(detCond) || null}
+     totalParadas={activos.length}
+     promesa={promesaDe(detCond)}
+     onCerrar={() => setDetCond(null)}
+     onGuia={() => setGuiaCond(detCond)}
+     onVerSoportes={x => verPDFSoportes(x, showToast)}
+     onEntregar={inicial => abrirEntrega(detCond, inicial)}
+    />
+   )}
+   {guiaCond && <GuiaImprimible pedido={guiaCond} conductores={conductores} ciudades={ciudades} onClose={() => setGuiaCond(null)} />}
 
    {modales}
   </Pagina>
@@ -3501,34 +3544,37 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
  );
 }
 
+// Disenio 16a. Tres pestanias por estado y busqueda; la tarjeta trae el motivo
+// visible, porque es lo que el conductor verifica al recoger.
 function MisDevolucionesConductor({ devoluciones = [], user }) {
+ const [pestana, setPestana] = useState("transito");
+ const [busq, setBusq] = useState("");
  const condId = user.conductor_db_id || user.id;
  const items = devoluciones.filter(d => String(d.conductor_id) === String(condId));
+ const enTransito = items.filter(d => ["sin_asignar", "pendiente", "en_transito"].includes(d.estado));
+ const completadas = items.filter(d => d.estado === "entregado");
+ const conNovedad = items.filter(d => d.estado === "novedad" || d.novedad);
+ const q = busq.trim().toLowerCase();
+ const lista = (pestana === "transito" ? enTransito : pestana === "completadas" ? completadas : conNovedad)
+  .filter(d => !q || [d.guia, d.factura, d.pedido_ref, d.dir_recogida].some(v => String(v || "").toLowerCase().includes(q)));
+ const uds = lista.reduce((n, d) => n + (Number(d.unidades) || 0), 0);
  return (
   <Pagina>
-   <Encabezado titulo="Mis devoluciones" descripcion="Devoluciones asignadas a tu ruta" />
-   {items.length === 0 ? (
-    <ListaVacia>No tienes devoluciones asignadas.</ListaVacia>
+   <CabeceraConductor user={user} sobre="Asignadas a tu ruta" titulo="Mis devoluciones" />
+   <BuscadorConductor valor={busq} onChange={setBusq} placeholder="Buscar devolucion, factura o pedido" />
+   <Pestanas valor={pestana} onChange={setPestana} opciones={[
+    { clave: "transito", label: "En transito", n: enTransito.length },
+    { clave: "completadas", label: "Completadas", n: completadas.length },
+    { clave: "novedad", label: "Novedad", n: conNovedad.length },
+   ]}/>
+   <LineaResumen izquierda={`${lista.length} ${pestana === "transito" ? "en transito" : pestana === "completadas" ? "completadas" : "con novedad"} · ${uds} uds`} derecha="Mas reciente" />
+   {lista.length === 0 ? (
+    <ListaVacia>{q ? "Ninguna devolucion coincide." : "No tienes devoluciones aqui."}</ListaVacia>
    ) : (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-     {items.map(d => (
-      <TarjetaEnvio
-       key={d.id}
-       guia={d.guia}
-       estado={d.estado}
-       novedad={d.novedad}
-       acento={T.color.mal}
-       lineas={[
-        `Factura ${d.factura || "-"} · Pedido ${d.pedido_ref || "-"}`,
-        d.dir_recogida ? `Recoge en ${d.dir_recogida}${d.ciudad_nombre ? " · " + d.ciudad_nombre : ""}` : null,
-       ]}
-       medidas={`${d.unidades || 0} uds · ${d.volumen_m3 || 0} m3 · ${d.peso_kg || 0} kg`}
-       nota={d.motivo ? `Motivo: ${d.motivo}` : null}
-       adjunto={(d.soporte_nombre || d.soporte_data) ? {
-        texto: "Soporte",
-        onClick: () => abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`),
-       } : null}
-      />
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+     {lista.map(d => (
+      <TarjetaDevolucion key={d.id} d={d}
+       onSoporte={x => abrirArchivoRemoto('devoluciones', x.id, 'soporte_data', 'soporte_nombre', `soporte-${x.guia}`)} />
      ))}
     </div>
    )}
@@ -3536,35 +3582,36 @@ function MisDevolucionesConductor({ devoluciones = [], user }) {
  );
 }
 
+// Disenio 16b. Dos paradas en una tarjeta: de donde sale y a donde llega.
 function MisRecogidasConductor({ recogidas = [], user }) {
+ const [pestana, setPestana] = useState("transito");
+ const [busq, setBusq] = useState("");
  const condId = user.conductor_db_id || user.id;
  const items = recogidas.filter(r => String(r.conductor_id) === String(condId));
+ const enTransito = items.filter(r => ["sin_asignar", "pendiente", "en_transito"].includes(r.estado));
+ const completadas = items.filter(r => r.estado === "entregado");
+ const conNovedad = items.filter(r => r.estado === "novedad" || r.novedad);
+ const q = busq.trim().toLowerCase();
+ const lista = (pestana === "transito" ? enTransito : pestana === "completadas" ? completadas : conNovedad)
+  .filter(r => !q || [r.guia, r.dir_recogida, r.dir_entrega, r.ciudad_recogida_nombre, r.ciudad_entrega_nombre].some(v => String(v || "").toLowerCase().includes(q)));
+ const uds = lista.reduce((n, r) => n + (Number(r.unidades) || 0), 0);
  return (
   <Pagina>
-   <Encabezado titulo="Mis recogidas" descripcion="Recogidas asignadas a tu ruta" />
-   {items.length === 0 ? (
-    <ListaVacia>No tienes recogidas asignadas.</ListaVacia>
+   <CabeceraConductor user={user} sobre="Asignadas a tu ruta" titulo="Mis recogidas" />
+   <BuscadorConductor valor={busq} onChange={setBusq} placeholder="Buscar recogida o direccion" />
+   <Pestanas valor={pestana} onChange={setPestana} opciones={[
+    { clave: "transito", label: "En transito", n: enTransito.length },
+    { clave: "completadas", label: "Completadas", n: completadas.length },
+    { clave: "novedad", label: "Novedad", n: conNovedad.length },
+   ]}/>
+   <LineaResumen izquierda={`${lista.length} ${pestana === "transito" ? "en transito" : pestana === "completadas" ? "completadas" : "con novedad"} · ${uds} uds`} derecha="Mas reciente" />
+   {lista.length === 0 ? (
+    <ListaVacia>{q ? "Ninguna recogida coincide." : "No tienes recogidas aqui."}</ListaVacia>
    ) : (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-     {items.map(r => (
-      <TarjetaEnvio
-       key={r.id}
-       guia={r.guia}
-       estado={r.estado}
-       novedad={r.novedad}
-       acento={T.color.info}
-       lineas={[
-        `${r.ciudad_recogida_nombre || "-"} → ${r.ciudad_entrega_nombre || "-"}`,
-        r.dir_recogida ? `Recoge en ${r.dir_recogida}` : null,
-        r.dir_entrega ? `Entrega en ${r.dir_entrega}` : null,
-       ]}
-       medidas={`${r.unidades || 0} uds · ${r.volumen_m3 || 0} m3 · ${r.peso_kg || 0} kg`}
-       nota={r.observaciones ? `Obs: ${r.observaciones}` : null}
-       adjunto={(r.doc_nombre || r.doc_data) ? {
-        texto: "Documento",
-        onClick: () => abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`),
-       } : null}
-      />
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+     {lista.map(r => (
+      <TarjetaRecogida key={r.id} r={r}
+       onDocumento={x => abrirArchivoRemoto('recogidas', x.id, 'doc_data', 'doc_nombre', `documento-${x.guia}`)} />
      ))}
     </div>
    )}
@@ -5060,30 +5107,46 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
 
 // SidebarApp 
 
-function MiUbicacion({ user }) {
+// Disenio 17: el mapa manda. Ocupa toda la pantalla y el estado del GPS va en
+// una tarjeta flotante abajo. Apagado, una sola accion en purpura de marca
+// (verde es estado, no accion). Activo, el punto verde, hace cuanto y con que
+// precision, y la parada que sigue. La distancia no se muestra: los destinos
+// no tienen coordenadas y no se inventa.
+function MiUbicacion({ user, pedidos = [] }) {
  const esMovil = useEsMovil();
  const [lat, setLat] = useState(window._gpsLat || null);
  const [lng, setLng] = useState(window._gpsLng || null);
  const [on, setOn] = useState(window._gpsOn || false);
+ const [precision, setPrecision] = useState(window._gpsAcc || null);
+ const [ultima, setUltima] = useState(window._gpsTs || null);
+ const [tick, setTick] = useState(0);
  const [err, setErr] = useState("");
+ const [claveMapa, setClaveMapa] = useState(0);
  const watchRef = useRef(window._gpsWatch || null);
 
+ // "hace 8 s" se recalcula solo mientras el GPS esta activo.
+ useEffect(() => {
+  if (!on) return undefined;
+  const t = setInterval(() => setTick(n => n + 1), 1000);
+  return () => clearInterval(t);
+ }, [on]);
+
  // Sync state to window globals so GPS persists when switching tabs
- const updateGps = (lat, lng) => {
-  window._gpsLat = lat; window._gpsLng = lng;
+ const updateGps = (lat, lng, acc) => {
+  window._gpsLat = lat; window._gpsLng = lng; window._gpsAcc = acc; window._gpsTs = Date.now();
   // Also store by conductor ID for multi-conductor tracking
   if (!window._gpsData) window._gpsData = {};
   const condId = user?.conductor_db_id || user?.id;
   if (condId) window._gpsData[String(condId)] = { lat, lng, ts: Date.now() };
-  setLat(lat); setLng(lng);
+  setLat(lat); setLng(lng); setPrecision(acc); setUltima(Date.now());
  };
 
  const iniciar = () => {
   if (!navigator.geolocation) { setErr("GPS no disponible en este dispositivo."); return; }
   setErr("");
   watchRef.current = navigator.geolocation.watchPosition(
-   pos => { updateGps(pos.coords.latitude, pos.coords.longitude); },
-   e => setErr("Error GPS: "+e.message),
+   pos => { updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+   e => setErr(e.code === 1 ? "El navegador no dio permiso de ubicacion. Activalo en los ajustes del sitio." : "Error GPS: " + e.message),
    { enableHighAccuracy:true, timeout:10000 }
   );
   window._gpsOn = true; window._gpsWatch = watchRef.current;
@@ -5096,56 +5159,114 @@ function MiUbicacion({ user }) {
   setOn(false);
  };
 
+ const condId = user?.conductor_db_id || user?.id;
+ const siguiente = pedidos.find(p => String(p.conductor_id) === String(condId) && ["en_transito", "pendiente", "sin_asignar"].includes(p.estado)) || null;
+
+ const segundos = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
+ const haceTexto = segundos == null ? "" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
+ const precisionTexto = precision ? ` · ±${Math.round(precision)} m` : "";
+
  const mapUrl = lat&&lng ? `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16` : `https://maps.google.com/maps?q=4.711,-74.072&output=embed&z=11`;
+
+ const tarjetaFlotante = (
+  <section style={{
+   background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: 16, padding: 16,
+   display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 12px 32px -12px rgba(23,20,31,.25)",
+  }}>
+   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <span style={{
+     width: 10, height: 10, borderRadius: 5, flexShrink: 0,
+     background: on ? T.color.bienPunto : T.color.tenue,
+     boxShadow: on ? `0 0 0 4px ${T.color.bienSuave}` : "none",
+    }}/>
+    <span style={{ fontSize: 16, fontWeight: 700 }}>{on ? "GPS activo" : "GPS apagado"}</span>
+    {on && ultima && (
+     <span style={{ marginLeft: "auto", fontSize: 12, color: T.color.tinta3 }}>{haceTexto}{precisionTexto}</span>
+    )}
+   </div>
+
+   {!on && (
+    <span style={{ fontSize: 13, color: T.color.tinta2, lineHeight: 1.5 }}>
+     {lat && lng ? "Ultima posicion guardada. Activa el GPS para volver a compartirla." : "Todavia no hay posicion. Activa el GPS y dale permiso de ubicacion al navegador."}
+    </span>
+   )}
+
+   {on && siguiente && (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: T.color.superficie2, borderRadius: 10 }}>
+     <span style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, background: T.color.tinta, color: "#fff", flexShrink: 0 }}>1</span>
+     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+      <span style={{ ...T.texto.seccion, color: T.color.placeholder }}>Siguiente parada</span>
+      <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{siguiente.cliente || siguiente.guia_interna || siguiente.id}</span>
+      <span style={{ fontSize: 12, color: T.color.tinta3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[siguiente.direccion, siguiente.ciudad_nombre].filter(Boolean).join(" · ")}</span>
+     </div>
+    </div>
+   )}
+
+   {err && (
+    <div style={{ background: T.color.malSuave, border: `1px solid ${T.color.malBorde}`, color: T.color.mal, borderRadius: T.radio.control, padding: "10px 12px", fontSize: 13 }}>{err}</div>
+   )}
+
+   {on ? (
+    <div style={{ display: "flex", gap: 8 }}>
+     <button onClick={detener} style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12,
+      background: T.color.superficie, border: `1px solid ${T.color.borde2}`, color: T.color.tinta2,
+      fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
+     }}>Pausar</button>
+     {siguiente?.direccion && (
+      <button onClick={() => abrirEnMapa(siguiente.direccion, siguiente.ciudad_nombre)} style={{
+       flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12,
+       background: T.color.marcaSuave, border: "none", color: T.color.marca,
+       fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
+      }}>Ir a la parada</button>
+     )}
+    </div>
+   ) : (
+    <button onClick={iniciar} style={{
+     display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 12,
+     background: T.color.marca, border: "none", color: "#fff",
+     fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
+    }}>Activar GPS</button>
+   )}
+  </section>
+ );
+
+ if (esMovil) return (
+  <div style={{
+   position: "relative", overflow: "hidden", background: T.color.fondo, color: T.color.tinta,
+   margin: `-16px -16px -${ALTO_BARRA + 16}px`, height: `calc(100vh - ${ALTO_BARRA}px)`,
+  }}>
+   <iframe key={claveMapa} title="Mi ubicacion" src={mapUrl} loading="lazy" allowFullScreen
+    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none", display: "block" }}/>
+   <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 130, pointerEvents: "none", background: `linear-gradient(${T.color.fondo} 40%, rgba(247,246,250,0))` }} />
+   <header style={{ position: "absolute", left: 16, right: 16, top: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+     <span style={{ fontSize: 12, color: T.color.tinta3 }}>{on ? "Compartiendo con la central" : "Para que la central te ubique"}</span>
+     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Mi ubicacion</h1>
+    </div>
+    <span style={{ width: 38, height: 38, borderRadius: 19, background: T.color.marcaAvatar, color: T.color.marca, display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+     {iniciales(user?.nombre)}
+    </span>
+   </header>
+   {lat && lng && (
+    <button onClick={() => setClaveMapa(k => k + 1)} title="Centrar en mi posicion" style={{
+     position: "absolute", right: 16, bottom: on ? 226 : 176, width: 44, height: 44, display: "grid", placeItems: "center",
+     background: T.color.superficie, border: `1px solid ${T.color.borde2}`, borderRadius: 12, color: T.color.tinta2,
+     boxShadow: "0 4px 12px -4px rgba(23,20,31,.2)", cursor: "pointer",
+    }}><MapPin size={19} /></button>
+   )}
+   <div style={{ position: "absolute", left: 16, right: 16, bottom: 16 }}>{tarjetaFlotante}</div>
+  </div>
+ );
+
  return (
   <Pagina>
    <Encabezado titulo="Mi ubicacion GPS"
     descripcion={on ? "Compartiendo tu posicion con la central" : "Activa el GPS para que la central te ubique"} />
-
-   <section style={{
-    ...tarjeta, padding: 16, display: "flex", flexDirection: "column", gap: 12,
-   }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-     <span style={{
-      width: 10, height: 10, borderRadius: 5, flexShrink: 0,
-      background: on ? T.color.bienPunto : T.color.tenue,
-     }}/>
-     <span style={{ fontSize: 14, fontWeight: 600, color: on ? T.color.bien : T.color.tinta3 }}>
-      {on ? "GPS activo" : "GPS apagado"}
-     </span>
-    </div>
-
-    {lat && lng ? (
-     <div style={{ display: "flex", gap: 18, fontFamily: T.fuente.mono, fontSize: 13, color: T.color.tinta2 }}>
-      <span><span style={{ color: T.color.tinta3 }}>Lat </span>{lat.toFixed(6)}</span>
-      <span><span style={{ color: T.color.tinta3 }}>Lng </span>{lng.toFixed(6)}</span>
-     </div>
-    ) : (
-     <span style={{ fontSize: 13, color: T.color.tinta3 }}>
-      Todavia no hay posicion. Activa el GPS y dale permiso al navegador.
-     </span>
-    )}
-
-    {/* Alto 48 y ancho completo: se pulsa con el telefono en una mano. */}
-    <button onClick={on ? detener : iniciar} style={{
-     width: "100%", minHeight: 48, borderRadius: T.radio.control, border: "none",
-     cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 700, color: "#fff",
-     background: on ? T.color.mal : T.color.bienPunto,
-    }}>
-     {on ? "Detener GPS" : "Activar GPS"}
-    </button>
-
-    {err && (
-     <div style={{
-      background: T.color.malSuave, border: `1px solid ${T.color.malBorde}`,
-      color: T.color.mal, borderRadius: T.radio.control, padding: "10px 12px", fontSize: 13,
-     }}>{err}</div>
-    )}
-   </section>
-
+   {tarjetaFlotante}
    <section style={{ ...tarjeta, padding: 0, overflow: "hidden" }}>
-    <iframe title="Mi ubicacion" src={mapUrl} loading="lazy" allowFullScreen
-     style={{ width: "100%", height: esMovil ? "48vh" : 380, border: "none", display: "block" }}/>
+    <iframe key={claveMapa} title="Mi ubicacion" src={mapUrl} loading="lazy" allowFullScreen
+     style={{ width: "100%", height: 380, border: "none", display: "block" }}/>
    </section>
   </Pagina>
  );
@@ -5592,7 +5713,7 @@ export default function SomosProTracking() {
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} promesas={promesas} showToast={showToast} recargar={recargarPedidos}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
-   case "mi_ubicacion":  return <MiUbicacion user={user}/>;
+   case "mi_ubicacion":  return <MiUbicacion user={user} pedidos={pedidos}/>;
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;

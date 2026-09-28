@@ -44,13 +44,17 @@ export function RegistrarEntregaMovil({
  // false; existen para que la prueba pueda dibujar cada caso sin simular los
  // toques.
  pasoInicial = 0, novedadInicial = false,
+ // El detalle del conductor (disenio 18) deja tomar las fotos y marcar la
+ // novedad antes de abrir este flujo: lo que ya eligio entra aqui como punto
+ // de partida en vez de pedirselo dos veces.
+ fotosInicial = [], observacionesInicial = "",
 }) {
  const [paso, setPaso] = useState(pasoInicial);
  // La novedad viaja con la confirmacion, no aparte: el conductor la marca, la
  // ve en el resumen y confirma una sola vez.
  const [novedad, setNovedad] = useState(novedadInicial);
- const [fotos, setFotos] = useState([]);
- const [observaciones, setObservaciones] = useState("");
+ const [fotos, setFotos] = useState(fotosInicial);
+ const [observaciones, setObservaciones] = useState(observacionesInicial);
  const [ubicacion, setUbicacion] = useState(null);
  const [permisoUbicacion, setPermisoUbicacion] = useState("pidiendo");
  const [guardando, setGuardando] = useState(false);

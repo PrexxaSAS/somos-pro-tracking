@@ -24,7 +24,8 @@ import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/p
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
 import { GestionAsesores } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
-import { TarjetaPedidoConductor, TarjetaEnvio, Bloque, ListaVacia } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
+import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
+import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -180,25 +181,31 @@ const recogida = {
  unidades:8, volumen_m3:1.2, peso_kg:45, observaciones:"Llamar antes de llegar",
 };
 
-casos.push(["TarjetaPedidoConductor/activo", React.createElement(TarjetaPedidoConductor, {
- pedido: pedidos[0], onVer(){}, onEntregar(){},
+const usuarioCond = { nombre:"Juan Esteban Castrillon", rol:"conductor", placa:"NLX290" };
+casos.push(["CabeceraConductor", React.createElement(CabeceraConductor, { user: usuarioCond, sobre:"Martes 23 de septiembre", titulo:"Mis entregas" })]);
+casos.push(["ProgresoRuta", React.createElement(ProgresoRuta, { hechas: 4, total: 9, placa: "NLX290" })]);
+casos.push(["Pestanas", React.createElement(Pestanas, { valor:"pendientes", onChange(){}, opciones:[
+ { clave:"pendientes", label:"Pendientes", n:5 }, { clave:"entregadas", label:"Entregadas", n:4 }, { clave:"novedad", label:"Novedad", n:0 },
+] })]);
+casos.push(["TarjetaEntrega/actual", React.createElement(TarjetaEntrega, { pedido: pedidos[0], parada: 5, actual: true, promesa: promesas[0], onAbrir(){} })]);
+casos.push(["TarjetaEntrega/siguiente", React.createElement(TarjetaEntrega, { pedido: pedidos[2], parada: 6, onAbrir(){} })]);
+casos.push(["TarjetaEntregada/entregado", React.createElement(TarjetaEntregada, { pedido: { ...pedidos[1], soportes:["a.jpg"], recibe_nombre:"Carolina Rios" }, onAbrir(){}, onSoporte(){} })]);
+casos.push(["TarjetaEntregada/novedad", React.createElement(TarjetaEntregada, { pedido: pedidos[4], onAbrir(){}, onSoporte(){} })]);
+casos.push(["TarjetaDevolucion", React.createElement(TarjetaDevolucion, { d: devolucion, onSoporte(){} })]);
+casos.push(["TarjetaRecogida", React.createElement(TarjetaRecogida, { r: recogida, onDocumento(){} })]);
+casos.push(["ListaVacia", React.createElement(ListaVacia, null, "No tienes pedidos pendientes. Ruta terminada.")]);
+casos.push(["DetallePedidoConductor/en_transito", React.createElement(DetallePedidoConductor, {
+ pedido: pedidos[0], parada: 5, totalParadas: 9, promesa: promesas[0],
+ onCerrar(){}, onGuia(){}, onEntregar(){}, onVerSoportes(){},
 })]);
-casos.push(["TarjetaPedidoConductor/cerrado", React.createElement(TarjetaPedidoConductor, {
- pedido: { ...pedidos[1], soportes:["a.jpg","b.jpg"] }, cerrado: true, onVer(){}, onEntregar(){},
+casos.push(["DetallePedidoConductor/con_novedad", React.createElement(DetallePedidoConductor, {
+ pedido: pedidos[0], parada: 5, totalParadas: 9, novedadInicial: true,
+ fotosInicial: [{ data:"data:image/png;base64,iVBORw0KGgo=", nombre:"a.png", hora:"10:41" }],
+ onCerrar(){}, onGuia(){}, onEntregar(){}, onVerSoportes(){},
 })]);
-casos.push(["TarjetaEnvio/devolucion", React.createElement(TarjetaEnvio, {
- guia: devolucion.guia, estado: devolucion.estado, acento: "#dc2626",
- lineas: ["Factura F-991 · Pedido PX000119704", "Recoge en Cra 43A 1-50 · Medellin"],
- medidas: "3 uds · 0.4 m3 · 12 kg", nota: "Motivo: Producto averiado",
- adjunto: { texto: "Soporte", onClick(){} },
+casos.push(["DetallePedidoConductor/cerrado", React.createElement(DetallePedidoConductor, {
+ pedido: { ...pedidos[1], soportes:["a.jpg","b.jpg"] }, onCerrar(){}, onGuia(){}, onEntregar(){}, onVerSoportes(){},
 })]);
-casos.push(["TarjetaEnvio/recogida", React.createElement(TarjetaEnvio, {
- guia: recogida.guia, estado: recogida.estado, novedad: true, acento: "#0891b2",
- lineas: ["Bogota → Medellin", "Recoge en Calle 100 15-20", "Entrega en Cra 43A 1-50"],
- medidas: "8 uds · 1.2 m3 · 45 kg",
-})]);
-casos.push(["Bloque/vacio", React.createElement(Bloque, { titulo:"Por entregar", cuenta:"0 pedidos" },
- React.createElement(ListaVacia, null, "No tienes pedidos activos por el momento."))]);
 
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
@@ -247,19 +254,26 @@ for (const [nombre, elemento] of casos) {
  exigir(!sinNovedad.includes("Con novedad"), "sin marcarla el resumen ya dice con novedad");
 }
 
-// La tarjeta del conductor: el pedido abierto ofrece registrar la entrega y el
-// cerrado no, porque un pedido entregado ya no se toca. Si las acciones se
-// cuelan en el historial, el conductor puede reabrir algo que ya cerro.
+// Disenio 18: el pedido abierto ofrece registrar la entrega; con la novedad
+// marcada la primaria cambia a "con novedad" y pide el motivo; el cerrado no
+// ofrece nada, porque un pedido entregado ya no se toca. Si las acciones se
+// cuelan en el cerrado, el conductor puede reabrir algo que ya cerro.
 {
- const dibujar = (props) => renderToString(React.createElement(TarjetaPedidoConductor, {
-  pedido: pedidos[0], onVer(){}, onEntregar(){}, ...props,
+ const dibujar = (props) => renderToString(React.createElement(DetallePedidoConductor, {
+  pedido: pedidos[0], onCerrar(){}, onGuia(){}, onEntregar(){}, onVerSoportes(){}, ...props,
  }));
- const abierto = dibujar({});
- const cerrado = dibujar({ pedido: pedidos[1], cerrado: true });
+ const abierto = dibujar({ parada: 5, totalParadas: 9 });
+ const conNovedad = dibujar({ novedadInicial: true });
+ const cerrado = dibujar({ pedido: { ...pedidos[1], soportes:["a.jpg"] } });
  const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  conductor: " + queja); fallos++; } };
  exigir(abierto.includes("Registrar entrega"), "el pedido activo no ofrece registrar la entrega");
- exigir(!cerrado.includes("Registrar entrega"), "el pedido cerrado deja registrar la entrega otra vez");
- exigir(abierto.includes(pedidos[0].direccion || "Medellin"), "la tarjeta no muestra a donde ir");
+ exigir(abierto.includes("Parada 5 de 9"), "el detalle no dice en que parada va");
+ exigir(conNovedad.includes("Registrar con novedad"), "con novedad la primaria no cambia");
+ exigir(conNovedad.includes("Elige el motivo"), "con novedad no pide el motivo");
+ exigir(!cerrado.includes("Registrar entrega") && !cerrado.includes("Registrar con novedad"), "el pedido cerrado deja registrar la entrega otra vez");
+ exigir(cerrado.includes("Ver soporte"), "el pedido cerrado con soportes no deja verlos");
+ const tarjeta = renderToString(React.createElement(TarjetaEntrega, { pedido: pedidos[0], parada: 5, onAbrir(){} }));
+ exigir(tarjeta.includes(pedidos[0].cliente) && tarjeta.includes("Medellin"), "la tarjeta no muestra a quien y a donde");
 }
 
 globalThis.__fallos = fallos;

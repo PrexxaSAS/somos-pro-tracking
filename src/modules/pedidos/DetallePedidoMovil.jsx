@@ -28,7 +28,7 @@ const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "o
 
 // "2026-09-23" -> "23 sep". Se parte el texto en vez de usar Date porque
 // new Date("2026-09-23") se interpreta en UTC y en Colombia resta un dia.
-const fechaCorta = (iso) => {
+export const fechaCorta = (iso) => {
  if (!iso) return null;
  const [a, m, d] = String(iso).slice(0, 10).split("-");
  if (!a || !m || !d) return String(iso);
@@ -37,7 +37,7 @@ const fechaCorta = (iso) => {
 
 const hoyISO = hoyLocal;
 
-const sumarDias = (iso, dias) => {
+export const sumarDias = (iso, dias) => {
  if (!iso) return null;
  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
  d.setDate(d.getDate() + Number(dias || 0));
@@ -54,7 +54,9 @@ const botonCabecera = {
 };
 
 // ── Bloque de datos ─────────────────────────────────────────────────────────
-function Bloque({ icono: Icono, titulo, accion, onAccion, children }) {
+// Se exportan porque el detalle del conductor (disenio 18) esta hecho con las
+// mismas piezas: misma tarjeta, misma fila, distinto orden y distintas acciones.
+export function Bloque({ icono: Icono, titulo, accion, onAccion, children }) {
  return (
   <section style={{
    background: T.color.superficie, border: `1px solid ${T.color.borde}`,
@@ -77,7 +79,7 @@ function Bloque({ icono: Icono, titulo, accion, onAccion, children }) {
 }
 
 // Una fila etiqueta/valor. Sin valor, el texto sale en rojo como pendiente.
-function Fila({ etiqueta, valor, falta, mono, icono: Icono, onIcono }) {
+export function Fila({ etiqueta, valor, falta, mono, icono: Icono, onIcono }) {
  return (
   <div style={{
    display: "flex", alignItems: "center", gap: 12, minHeight: 44, padding: "6px 0",
