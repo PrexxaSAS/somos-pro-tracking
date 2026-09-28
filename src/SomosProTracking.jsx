@@ -6420,7 +6420,7 @@ export default function SomosProTracking() {
    case "cartera_pedidos":
    case "cartera_logistica":
    case "cartera_consultas":
-    return <ModuloCartera tab={tab} user={user} showToast={showToast} setTab={setTab}/>;
+    return <ModuloCartera tab={tab} user={user} showToast={showToast} setTab={setTab} onPedidosCambiaron={recargarPedidos}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
  };

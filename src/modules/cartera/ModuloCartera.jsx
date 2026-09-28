@@ -68,7 +68,7 @@ const dane5 = (v) => {
 };
 
 // ── Asignar corte ──────────────────────────────────────────────────────────────
-const asignarCorte = async (daneOrigen) => {
+export const asignarCorte = async (daneOrigen) => {
   if (!daneOrigen) return null;
   const hoy = hoyLocal();
   const ahora = new Date();
@@ -139,6 +139,78 @@ const asignarCorte = async (daneOrigen) => {
     return {corteId:cp.id, fechaCorte:new Date(manStr+'T'+primerCorte.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:primerCorte.hora_corte};
   }
   return null;
+};
+
+// ── Asignar cortes a muchos pedidos (el cargue) ──────────────────────────────
+// Misma regla que asignarCorte: la sede sale del DANE de origen; el pedido
+// toma el primer corte de hoy que no haya pasado, este abierto y tenga cupo; si
+// ninguno, el primer corte de manana. La diferencia es de cuantas veces se va
+// a la base: las sedes se leen una vez, cada corte programado se busca (o se
+// crea) una vez, y los cupos usados se cuentan en memoria y se guardan al
+// final con guardar(), sumandolos a lo que el corte tenga en ese momento.
+export const crearAsignadorCortes = async () => {
+  const hoy = hoyLocal();
+  const ahora = new Date();
+  const manStr = hoyMas(1);
+  const {data:sedesAll} = await supabase.from('sedes').select('*, cortes_sede(*)').eq('activa',true);
+  const sedes = sedesAll || [];
+  const programados = {}; // "sede|corte|fecha" -> {cp, usados} o null
+
+  const programado = async (sede, cs, fecha) => {
+    const k = `${sede.id}|${cs.id}|${fecha}`;
+    if (k in programados) return programados[k];
+    let {data:cp} = await supabase.from('cortes_programados')
+      .select('*').eq('sede_id',sede.id).eq('corte_sede_id',cs.id).eq('fecha',fecha).maybeSingle();
+    if (!cp) {
+      const {data:nuevo} = await supabase.from('cortes_programados').insert({
+        sede_id:sede.id, corte_sede_id:cs.id, fecha,
+        hora_corte:cs.hora_corte, capacidad_max:cs.capacidad_corte,
+        pedidos_asignados:0, estado:'abierto'
+      }).select().single();
+      cp = nuevo;
+    }
+    programados[k] = cp ? { cp, usados:0 } : null;
+    return programados[k];
+  };
+
+  const asignar = async (daneOrigen) => {
+    if (!daneOrigen) return null;
+    const daneNorm = daneOrigen.trim().padStart(5,'0');
+    const sede = sedes.find(s => String(s.dane_code||'').trim().padStart(5,'0') === daneNorm);
+    if (!sede) return null;
+    const cortesOrdenados = (sede.cortes_sede||[]).slice()
+      .sort((a,b)=>String(a.hora_corte||'').localeCompare(String(b.hora_corte||'')));
+    if (cortesOrdenados.length === 0) return null;
+
+    for (const cs of cortesOrdenados) {
+      if (new Date(hoy+'T'+cs.hora_corte) <= ahora) continue;
+      const e = await programado(sede, cs, hoy);
+      if (e && e.cp.pedidos_asignados + e.usados < e.cp.capacidad_max && e.cp.estado==='abierto') {
+        e.usados++;
+        return {corteId:e.cp.id, fechaCorte:new Date(hoy+'T'+cs.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:cs.hora_corte};
+      }
+    }
+    const primerCorte = cortesOrdenados[0];
+    const e = await programado(sede, primerCorte, manStr);
+    if (e) {
+      e.usados++;
+      return {corteId:e.cp.id, fechaCorte:new Date(manStr+'T'+primerCorte.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:primerCorte.hora_corte};
+    }
+    return null;
+  };
+
+  // Se relee el contador justo antes de sumar, por si otra persona cargo o
+  // aprobo pedidos en ese corte mientras tanto.
+  const guardar = async () => {
+    for (const e of Object.values(programados)) {
+      if (!e || !e.usados) continue;
+      const {data:actual} = await supabase.from('cortes_programados').select('pedidos_asignados').eq('id',e.cp.id).maybeSingle();
+      const base = actual ? (actual.pedidos_asignados||0) : e.cp.pedidos_asignados;
+      await supabase.from('cortes_programados').update({pedidos_asignados: base + e.usados}).eq('id',e.cp.id);
+    }
+  };
+
+  return { asignar, guardar };
 };
 
 // ── Enviar correo de rechazo ───────────────────────────────────────────────────
@@ -698,7 +770,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
 
 // ── GESTIÓN USUARIOS ───────────────────────────────────────────────────────────
 // ── CARGAR PEDIDOS ─────────────────────────────────────────────────────────────
-export function CargarPedidos({user,showToast,onCargado}) {
+export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
   const esMovil = useEsMovil();
   const [archivo,   setArchivo]  = useState('');
   const [filasLeidas, setFilasLeidas] = useState(0);
@@ -835,50 +907,99 @@ export function CargarPedidos({user,showToast,onCargado}) {
     return s;
   };
 
+  // El cargue va por lotes. Antes iba pedido por pedido, con 6 a 8 llamadas a
+  // la base cada uno (sedes, corte, contador, pedido, lineas, historial): un
+  // plano de 200 pedidos eran unas 1.500 llamadas seguidas y tardaba minutos.
+  // Ahora las sedes se leen una vez, los cupos de cada corte se llevan en
+  // memoria y los pedidos, sus lineas y su historial se insertan de a LOTE.
+  // Lo que se guarda y como se asigna el corte no cambia.
+  const LOTE = 50;
+  const [progreso, setProgreso] = useState(null); // {hechos, total}
+
   const confirmar = async () => {
     if(!pedidos.length) return;
     setCarg(true);
-    // Verificar cuáles números de pedido ya existen en la base, antes de insertar
-    const numeros = pedidos.map(p=>p.numero_pedido);
-    const {data:existentes} = await supabase.from('pedidos_cartera').select('numero_pedido').in('numero_pedido',numeros);
-    const yaExisten = new Set((existentes||[]).map(e=>e.numero_pedido));
+    setProgreso({hechos:0,total:pedidos.length});
+    const trozos = (lista, n) => { const t=[]; for(let i=0;i<lista.length;i+=n) t.push(lista.slice(i,i+n)); return t; };
 
-    let ok=0, errores=0, sinCorte=0, aprobados=0, pendientes=0;
-    const duplicados=[];
-    for(const p of pedidos) {
-      if(yaExisten.has(p.numero_pedido)){ duplicados.push(p.numero_pedido); continue; }
-      const {lineas,...pedData} = p;
-      // Poner el estado en 'aprobado' no basta: logistica solo ve los aprobados
-      // que tienen corte, y el trigger de la base crea el pedido de produccion a
-      // partir de esta fila y le saca de ahi la fecha y la hora. Por eso el
-      // corte se pide ANTES de insertar: la fila tiene que nacer completa.
-      if(pedData.estado_cartera==='aprobado'){
-        const corte = await asignarCorte(p.dane_origen);
-        if(!corte) sinCorte++;
-        pedData.fecha_aprobacion = new Date().toISOString();
-        pedData.aprobado_por = user?.id||null;
-        pedData.estado_impresion = 'no_impreso';
-        if(corte){pedData.corte_id=corte.corteId; pedData.fecha_corte=corte.fechaCorte;}
-      }
-      const {data:inserted,error} = await supabase.from('pedidos_cartera').insert(pedData).select().single();
-      if(error||!inserted){errores++;continue;}
-      if(lineas.length>0){
-        await supabase.from('pedidos_cartera_detalle').insert(lineas.map(l=>({...l,pedido_id:inserted.id})));
-      }
-      if(pedData.estado_cartera==='aprobado'){
-        await supabase.from('historial_cartera').insert({
-          pedido_id:inserted.id, decision:'aprobado', usuario_id:user?.id||null,
-          motivo:'Aprobado en el cargue: el pedido tiene plazo',
-        });
-      }
-      ok++;
-      if(pedData.estado_cartera==='aprobado') aprobados++; else pendientes++;
+    // Verificar cuáles números de pedido ya existen en la base, antes de insertar
+    const yaExisten = new Set();
+    for(const numeros of trozos(pedidos.map(p=>p.numero_pedido), 150)){
+      const {data:existentes} = await supabase.from('pedidos_cartera').select('numero_pedido').in('numero_pedido',numeros);
+      (existentes||[]).forEach(e=>yaExisten.add(e.numero_pedido));
     }
-    setCarg(false);
+    const duplicados = pedidos.filter(p=>yaExisten.has(p.numero_pedido)).map(p=>p.numero_pedido);
+    const nuevos = pedidos.filter(p=>!yaExisten.has(p.numero_pedido));
+
+    let ok=0, errores=0, sinCorte=0, aprobados=0, pendientes=0, hechos=duplicados.length;
+    setProgreso({hechos,total:pedidos.length});
+    const asignador = await crearAsignadorCortes();
+    try {
+      for(const lote of trozos(nuevos, LOTE)){
+        const filas = [];
+        for(const p of lote){
+          const {lineas,...pedData} = p;
+          // Poner el estado en 'aprobado' no basta: logistica solo ve los aprobados
+          // que tienen corte, y el trigger de la base crea el pedido de produccion a
+          // partir de esta fila y le saca de ahi la fecha y la hora. Por eso el
+          // corte se pide ANTES de insertar: la fila tiene que nacer completa.
+          if(pedData.estado_cartera==='aprobado'){
+            const corte = await asignador.asignar(p.dane_origen);
+            if(!corte) sinCorte++;
+            pedData.fecha_aprobacion = new Date().toISOString();
+            pedData.aprobado_por = user?.id||null;
+            pedData.estado_impresion = 'no_impreso';
+            if(corte){pedData.corte_id=corte.corteId; pedData.fecha_corte=corte.fechaCorte;}
+          }
+          filas.push({pedData, lineas});
+        }
+
+        // Todo el lote en una llamada. Las filas no traen las mismas columnas (los
+        // pendientes no llevan corte ni aprobacion): missing=default hace que lo
+        // que falta tome el valor por defecto de la columna, igual que al
+        // insertar de a uno. Si el lote falla, se reintenta fila por fila para
+        // que un pedido malo no tumbe a los demas.
+        let insertados = [];
+        const {data, error} = await supabase.from('pedidos_cartera')
+          .insert(filas.map(f=>f.pedData), {defaultToNull:false}).select('id,numero_pedido,estado_cartera');
+        if(!error && data){ insertados = data; }
+        else {
+          for(const f of filas){
+            const {data:uno, error:e1} = await supabase.from('pedidos_cartera')
+              .insert(f.pedData).select('id,numero_pedido,estado_cartera').single();
+            if(e1||!uno) errores++; else insertados.push(uno);
+          }
+        }
+
+        const idDe = Object.fromEntries(insertados.map(x=>[x.numero_pedido, x.id]));
+        const lineas = filas.flatMap(f => idDe[f.pedData.numero_pedido]
+          ? f.lineas.map(l=>({...l, pedido_id:idDe[f.pedData.numero_pedido]})) : []);
+        for(const tramo of trozos(lineas, 500)){
+          await supabase.from('pedidos_cartera_detalle').insert(tramo);
+        }
+        const historial = insertados.filter(x=>x.estado_cartera==='aprobado').map(x=>({
+          pedido_id:x.id, decision:'aprobado', usuario_id:user?.id||null,
+          motivo:'Aprobado en el cargue: el pedido tiene plazo',
+        }));
+        if(historial.length) await supabase.from('historial_cartera').insert(historial);
+
+        ok += insertados.length;
+        insertados.forEach(x=>{ if(x.estado_cartera==='aprobado') aprobados++; else pendientes++; });
+        hechos += lote.length;
+        setProgreso({hechos,total:pedidos.length});
+      }
+    } finally {
+      // Los cupos usados se guardan al final, pase lo que pase con los lotes.
+      await asignador.guardar();
+      setCarg(false);
+      setProgreso(null);
+    }
     // El resultado se queda en pantalla con sus numeros; antes la pantalla
     // saltaba sola a Gestion y el aviso duraba lo que dura un toast.
     setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte});
+    if(aprobados>0) onPedidosCambiaron?.();
   };
+  const textoCargando = progreso ? `Cargando ${progreso.hechos} de ${progreso.total}...` : "Cargando...";
 
   const empezarDeNuevo = () => { setArchivo(''); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null); };
 
@@ -892,7 +1013,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
     archivo={archivo} pedidos={pedidos} filasLeidas={filasLeidas} errMsg={errMsg}
     resultado={resultado} resumen={resumen} carg={carg} fileRef={fileRef}
     leerArchivo={leerArchivo} confirmar={confirmar}
-    cancelar={empezarDeNuevo} onIrGestion={onCargado}
+    cancelar={empezarDeNuevo} onIrGestion={onCargado} textoCargando={textoCargando}
   />;
 
   // Clasificacion con su razon, para que se lea por que entro asi.
@@ -991,7 +1112,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
         <span style={{ fontSize:12.5, color:T.color.tinta3, flex:1 }}>Se carga tal como viene; la vista previa no se puede editar.</span>
         <button onClick={empezarDeNuevo} disabled={carg} style={botonBarra}>Cancelar</button>
         <button onClick={confirmar} disabled={carg} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: carg ? 0.6 : 1 }}>
-         <Upload size={16}/> {carg ? "Cargando..." : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+         <Upload size={16}/> {carg ? textoCargando : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
         </button>
        </div>
       </>
@@ -1096,7 +1217,7 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, compacto = fal
   );
 }
 
-function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion }) {
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando..." }) {
   return (
    <Pagina anchoCompleto>
     <header>
@@ -1162,14 +1283,16 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
     {pedidos.length>0 && !resultado && <div style={{height:65}}/>}
     {pedidos.length>0 && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
      <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
-     <button onClick={confirmar} disabled={carg} style={{...botonPrincipal,justifyContent:'center'}}><Upload size={16}/> {carg?'Cargando...':`Cargar ${pedidos.length} pedidos`}</button>
+     <button onClick={confirmar} disabled={carg} style={{...botonPrincipal,justifyContent:'center'}}><Upload size={16}/> {carg?textoCargando:`Cargar ${pedidos.length} pedidos`}</button>
     </div>}
    </Pagina>
   );
 }
 
 // ── GESTIÓN PEDIDOS (CARTERA) ──────────────────────────────────────────────────
-export function GestionPedidos({user, showToast}) {
+// onPedidosCambiaron: al aprobar, la base crea el pedido en Pedidos; la app
+// vuelve a leer esa lista para que aparezca sin recargar la pagina.
+export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const esMovil = useEsMovil();
   const [pedidos,    setPedidos]    = useState([]);
   const [filtroEst,  setFiltroEst]  = useState('todos');
@@ -1229,6 +1352,7 @@ export function GestionPedidos({user, showToast}) {
     setAprobando(false);
     showToast("✓ Pedido aprobado"+(sinCorte?" · Sin sede configurada (verificar DANE Origen)":""),"success");
     cargar();
+    onPedidosCambiaron?.();
   };
 
   const aprobarSeleccionados = async () => {
@@ -1244,6 +1368,7 @@ export function GestionPedidos({user, showToast}) {
     if(sinCorte>0) msg+=` · ${sinCorte} sin sede configurada (verificar DANE Origen)`;
     showToast(msg,"success");
     cargar();
+    if(ok>0) onPedidosCambiaron?.();
   };
 
   const reactivar = async (id) => {
@@ -2058,12 +2183,12 @@ export function ModuloConsultas({showToast}) {
 // pestana a la vista correspondiente. Las pestanas llevan prefijo "cartera_"
 // para no chocar con las que ya existen (por ejemplo "consultas", que el rol
 // cliente usa para ver sus pedidos).
-export function ModuloCartera({ tab, user, showToast, setTab }) {
+export function ModuloCartera({ tab, user, showToast, setTab, onPedidosCambiaron }) {
  switch (tab) {
   case "cartera_sedes":     return <GestionSedes showToast={showToast}/>;
   case "cartera_asesores":  return <GestionAsesores showToast={showToast} soloCrear={user?.rol === "cliente"}/>;
-  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")}/>;
-  case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast}/>;
+  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")} onPedidosCambiaron={onPedidosCambiaron}/>;
+  case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast} onPedidosCambiaron={onPedidosCambiaron}/>;
   case "cartera_logistica": return <ModuloLogistica showToast={showToast}/>;
   case "cartera_consultas": return <ModuloConsultas showToast={showToast}/>;
   default: return null;
