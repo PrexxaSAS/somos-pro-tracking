@@ -86,7 +86,11 @@ export const MENUS = {
     ]],
   ] : [],
   transportista: [
-    ["Mi operacion", [["mi_empresa", "Mi empresa", Truck]]],
+    ["Mi operacion", [
+      ["mi_empresa", "Mi empresa", Truck],
+      ["mis_conductores_transp", "Conductores", Users],
+      ["mis_pedidos_transp", "Pedidos", Box],
+    ]],
   ],
   conductor: [
     ["Mi operacion", [

@@ -18,7 +18,7 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
-import { ModalDetalle, Consultas } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
+import { ModalDetalle, Consultas, Transportistas } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
@@ -258,6 +258,25 @@ casos.push(["Consultas/cliente", React.createElement(Consultas, {
  pedidos, conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){},
 })]);
 
+// Rol transportista: Mi empresa, Conductores y Pedidos.
+const usuarioTransp = { nombre:"Transportes Prueba S.A.S", rol:"transportista", nit:"900111222-1", empresa:"Transportes Prueba S.A.S" };
+const condTransp = [
+ { id:"c1", nombre:"Conductor Prueba", placa:"ABC123", cedula:"1010101011", celular:"3001234567", nit_proveedor:"900111222-1", activo:true, created_at:"2026-03-12T10:00:00Z" },
+ { id:"c2", nombre:"Conductor Autenticado", placa:"FGF355", cedula:"234323453", celular:"4354345000", nit_proveedor:"900111222-1", activo:true, created_at:"2026-02-02T10:00:00Z" },
+];
+const pedTransp = [
+ { id:"PX1", guia_interna:"SPT-2026-0138", cliente:"INVERSIONES MK", direccion:"CR 65 C 32 D 08", ciudad_nombre:"Medellin", cajas:5, conductor_id:"c2", estado:"en_transito", nit_proveedor:"900111222-1", soportes:[], fecha_creacion:"2099-01-01" },
+ { id:"PX2", guia_interna:"SPT-2026-0063", cliente:"OPTICA VISION", direccion:"Cl 33 #74-15", ciudad_nombre:"Medellin", cajas:6, conductor_id:"c1", estado:"entregado", nit_proveedor:"900111222-1", soportes:["a.jpg","b.jpg"], fecha_creacion:"2099-01-01" },
+ { id:"PX3", guia_interna:"SPT-2026-0071", cliente:"DISTRIBUIDORA", direccion:"", ciudad_nombre:"Cali", cajas:2, conductor_id:"c2", estado:"novedad", nit_proveedor:"900111222-1", soportes:[], fecha_creacion:"2099-01-01" },
+];
+const transp = (vista) => React.createElement(Transportistas, {
+ transportistas:[{ nit:"900111222-1", nombre:"Transportes Prueba S.A.S" }], conductores: condTransp, pedidos: pedTransp,
+ showToast(){}, user: usuarioTransp, vista, onIr(){},
+});
+casos.push(["Transportista/empresa", transp("empresa")]);
+casos.push(["Transportista/conductores", transp("conductores")]);
+casos.push(["Transportista/pedidos", transp("pedidos")]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -386,6 +405,24 @@ for (const [nombre, elemento] of casos) {
  exigir(consultas.includes("Estado de pedidos") && consultas.includes("Nueva PQRS") && consultas.includes("Exportar"), "estado de pedidos sin cabecera");
  exigir(consultas.includes("Total pedidos") && consultas.includes("Novedades"), "estado de pedidos sin indicadores");
  exigir(consultas.includes("Rastrear") && consultas.includes("Guia"), "estado de pedidos sin acciones por fila");
+}
+
+// Transportista: la empresa no se edita; el soporte solo se ofrece en pedidos
+// cerrados (entregado o novedad) de su NIT: en transito el trigger lo rechaza.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  transportista: " + queja); fallos++; } };
+ const empresa = renderToString(transp("empresa"));
+ const pedidosT = renderToString(transp("pedidos"));
+ const conds = renderToString(transp("conductores"));
+ exigir(!empresa.includes("Editar empresa"), "ofrece editar la empresa sin permiso");
+ exigir(empresa.includes("NIT 900111222-1") && empresa.includes("Inscribir conductor"), "mi empresa sin NIT o sin inscribir");
+ exigir(empresa.includes("En ruta · 2 pedidos") || empresa.includes("En ruta · 1 pedido"), "el conductor en ruta no dice cuantos pedidos lleva");
+ const cargar = (pedidosT.match(/Cargar/g) || []).length;
+ const reemplazar = (pedidosT.match(/Reemplazar/g) || []).length;
+ exigir(reemplazar === 1, "Reemplazar deberia salir solo en el entregado con soportes: " + reemplazar);
+ exigir(cargar === 1, "Cargar deberia salir solo en el de novedad sin soportes (no en transito): " + cargar);
+ exigir(pedidosT.includes("Sin soporte") && pedidosT.includes("Exportar"), "pedidos sin columna de soporte o sin exportar");
+ exigir(conds.includes("Inscrito") && conds.includes("Disponible"), "conductores sin inscripcion o estado");
 }
 
 globalThis.__fallos = fallos;

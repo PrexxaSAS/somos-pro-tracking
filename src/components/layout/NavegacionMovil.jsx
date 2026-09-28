@@ -28,6 +28,8 @@ const CORTO = {
  mis_recogidas: "Recogidas",
  mi_ubicacion: "Ubicacion",
  mi_empresa: "Empresa",
+ mis_conductores_transp: "Conductores",
+ mis_pedidos_transp: "Pedidos",
  consultas: "Pedidos",
  devoluciones: "Devoluciones",
  recogidas: "Recogidas",

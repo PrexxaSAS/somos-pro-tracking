@@ -13,7 +13,7 @@ import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
 import { NavegacionMovil } from './components/layout/NavegacionMovil';
 import { PedidosMovil } from './modules/pedidos/PedidosMovil';
-import { DetallePedidoMovil } from './modules/pedidos/DetallePedidoMovil';
+import { DetallePedidoMovil, fechaCorta } from './modules/pedidos/DetallePedidoMovil';
 import { usePedidoEditable } from './modules/pedidos/usePedidoEditable';
 import { EditarPedidoMovil } from './modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from './modules/pedidos/RegistrarEntregaMovil';
@@ -41,7 +41,7 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, MapPin, Plus, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -2292,7 +2292,19 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  );
 }
 
-function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno }) {
+export function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno, vista = "empresa", conductorInicial = "", onIr }) {
+ // Filtros de las pantallas del transportista. Viven arriba y no dentro de su
+ // rama para que los hooks se llamen siempre en el mismo orden.
+ const [busqT, setBusqT] = useState("");
+ const [condT, setCondT] = useState(conductorInicial || "");
+ const [rangoT, setRangoT] = useState("30");
+ const [pestanaT, setPestanaT] = useState("todos");
+ const [pageT, setPageT] = useState(1);
+ const [verPed, setVerPed] = useState(null);
+ const [busqC, setBusqC] = useState("");
+ const [filtroCond, setFiltroCond] = useState("todos");
+ useEffect(() => { setPageT(1); }, [busqT, condT, rangoT, pestanaT]);
+ useEffect(() => { setCondT(conductorInicial || ""); }, [conductorInicial]);
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
  const [modCond, setModCond] = useState(null);
@@ -2588,61 +2600,320 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
  };
 
  // ── Vista del propio transportista ────────────────────────────────────────
+ // Tres pantallas segun `vista`: Mi empresa, Conductores y Pedidos. Solo se
+ // ofrece lo que los permisos dejan hacer: la empresa no se edita (el
+ // transportista solo lee su fila de transportistas), los conductores si, y el
+ // soporte se carga o reemplaza unicamente en pedidos cerrados de su NIT, que
+ // es lo que permite docs/transportista_pedidos_soportes.sql. En un pedido en
+ // transito el trigger lo rechazaria, asi que ahi no se ofrece.
  if (esMia) {
-  const miEmpresa = empresas[0];
+  const nombreEmpresa = user.empresa || empresas[0]?.nombre || user.nombre;
+  const inactivos = conductores.filter(c => c.nit_proveedor === miNit && c.activo === false);
+  const pedidosDe = (c) => pedidosMisConductores.filter(p => String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
+  const soportesDe = (p) => (p.soportes || p.soportes_data || []).length;
+  const puedeSoporte = (p) => ["entregado", "novedad"].includes(p.estado) && p.nit_proveedor === miNit;
+  const enRuta = misCon.filter(c => pedidosDe(c) > 0);
+
+  const avatar = (nombre) => (
+   <span style={{
+    width:30, height:30, borderRadius:15, flexShrink:0, display:"grid", placeItems:"center",
+    background:T.color.marcaAvatar, color:T.color.marca, fontSize:11.5, fontWeight:700,
+   }}>{iniciales(nombre)}</span>
+  );
+  const chipCond = (c, conCuenta) => {
+   const n = pedidosDe(c);
+   const [bg, color, punto, texto] = c.activo === false
+    ? [T.color.superficie3, T.color.tinta3, T.color.neutroPunto, "Inactivo"]
+    : n > 0
+     ? [T.color.marcaSuave, T.color.marca, T.estado.en_transito, conCuenta ? `En ruta · ${n} ${n === 1 ? "pedido" : "pedidos"}` : "En ruta"]
+     : [T.color.bienSuave, T.color.bien, T.color.bienPunto, "Disponible"];
+   return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 9px", borderRadius:T.radio.pastilla, background:bg, color, fontSize:12, fontWeight:600, whiteSpace:"nowrap" }}>
+     <span style={{ width:6, height:6, borderRadius:3, background:punto }}/>{texto}
+    </span>
+   );
+  };
+  const editarCond = (c) => {
+   setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" });
+   setModEdit(c);
+  };
+  const accionesCond = (c) => (
+   <div style={{ display:"inline-flex", gap:6 }}>
+    <button style={botonFila} title="Ver sus pedidos" onClick={() => onIr && onIr("mis_pedidos_transp", String(c.id))}>Ver</button>
+    <button style={{ ...botonFila, display:"inline-flex", alignItems:"center", gap:5 }} onClick={() => editarCond(c)}><Pencil size={12}/> Editar</button>
+   </div>
+  );
+
+  // ── Pedidos: filtros compartidos por Mi empresa y Pedidos ───────────────
+  const desdeT = (() => { const r = RANGOS_PEDIDOS.find(x => x.id === rangoT); return vista === "pedidos" && r && r.dias ? hoyMas(-r.dias) : null; })();
+  const baseT = pedidosMisConductores
+   .filter(p => !desdeT || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeT)
+   .filter(p => !condT || String(p.conductor_id) === String(condT));
+  const PESTANAS_T = [
+   ["todos", "Todos", () => true],
+   ["en_transito", "En transito", p => p.estado === "en_transito"],
+   ["novedad", "Con novedad", p => p.estado === "novedad"],
+   ["entregado", "Entregado", p => p.estado === "entregado"],
+   ["sin_soporte", "Sin soporte", p => soportesDe(p) === 0],
+  ];
+  const pruebaPestana = (PESTANAS_T.find(x => x[0] === pestanaT) || PESTANAS_T[0])[2];
+  const q = busqT.trim().toLowerCase();
+  const filtradosT = baseT
+   .filter(p => vista !== "pedidos" || pruebaPestana(p))
+   .filter(p => {
+    if (!q) return true;
+    const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+    return [p.id, p.guia_interna, p.cliente, p.ciudad_nombre, p.direccion, cond?.nombre].some(v => String(v || "").toLowerCase().includes(q));
+   });
+  const porPaginaT = 10;
+  const itemsT = filtradosT.slice((pageT - 1) * porPaginaT, pageT * porPaginaT);
+  const desdeN = filtradosT.length === 0 ? 0 : (pageT - 1) * porPaginaT + 1;
+  const hastaN = Math.min(filtradosT.length, pageT * porPaginaT);
+  const cajasT = filtradosT.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
+
+  const filaPedido = (p, completa) => {
+   const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+   const n = soportesDe(p);
+   return (
+    <tr key={p.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+     <td style={td}>
+      <div style={{ color:T.color.marca, fontWeight:700, fontSize:13.5 }}>{p.guia_interna || p.id}</div>
+      {completa && p.guia_interna && p.guia_interna !== p.id && <div style={{ ...mono, color:T.color.tinta3, fontSize:11.5 }}>{p.id}</div>}
+     </td>
+     <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
+     <td style={{ ...td, maxWidth:220 }}>
+      <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color: p.direccion ? T.color.tinta2 : T.color.tinta4 }}>{p.direccion || "Sin direccion"}</div>
+      <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{p.ciudad_nombre || ""}</div>
+     </td>
+     {completa && <td style={{ ...td, textAlign:"right", fontWeight:700, color: p.cajas ? T.color.tinta : T.color.tinta4 }}>{p.cajas || 0}</td>}
+     <td style={td}>
+      {completa && cond
+       ? <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>{avatar(cond.nombre)}{cond.nombre}</span>
+       : (cond?.nombre || "—")}
+     </td>
+     <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
+     <td style={{ ...td, color: n ? T.color.tinta2 : T.color.tinta4, whiteSpace:"nowrap" }}>
+      {n ? `${n} ${n === 1 ? "foto" : "fotos"}` : "Sin soporte"}
+     </td>
+     <td style={{ ...td, textAlign:"right" }}>
+      <div style={{ display:"inline-flex", gap:6 }}>
+       <button style={botonFila} onClick={() => setVerPed(p)}>Ver</button>
+       {puedeSoporte(p) && (
+        <button onClick={() => setModSoportes(p)} style={{
+         ...botonFila, display:"inline-flex", alignItems:"center", gap:5,
+         ...(n ? {} : { color:T.color.marca, borderColor:T.color.marcaBorde, background:T.color.marcaSuave }),
+        }}>
+         {n ? <><RefreshCw size={12}/> Reemplazar</> : <><Upload size={12}/> Cargar</>}
+        </button>
+       )}
+      </div>
+     </td>
+    </tr>
+   );
+  };
+
+  const vacioPedidos = (cols) => (
+   <tr><td colSpan={cols} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>
+    {pedidosMisConductores.length === 0 ? "Aun no hay pedidos asociados a tus conductores." : "Ningun pedido coincide con los filtros."}
+   </td></tr>
+  );
+
+  const selectorConductor = (
+   <SelectFiltro valor={condT} onChange={setCondT} ancho={190}>
+    <option value="">Conductor</option>
+    {misCon.map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+   </SelectFiltro>
+  );
+
+  const pie = (
+   <PieTabla
+    izquierda={`Mostrando ${desdeN}–${hastaN} de ${filtradosT.length} pedidos${vista === "pedidos" ? ` · ${cajasT} cajas` : ""}`}
+    derecha={filtradosT.length > porPaginaT ? <Paginador total={filtradosT.length} page={pageT} setPage={setPageT} pageSize={porPaginaT}/> : null}
+   />
+  );
+
+  const botonInscribir = (
+   <button onClick={() => abrirInscribir({ nit: miNit, nombre: nombreEmpresa })} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:6 }}>
+    <UserPlus size={16}/> Inscribir conductor
+   </button>
+  );
+
+  const detalle = verPed && (
+   <ModalDetalle pedido={pedidos.find(x => x.id === verPed.id) || verPed} conductores={conductores} ciudades={[]} transportistas={[]}
+    onClose={() => setVerPed(null)} setPedidos={() => {}} showToast={showToast} canEdit={false}/>
+  );
+
+  // ── Conductores ─────────────────────────────────────────────────────────
+  if (vista === "conductores") {
+   const qc = busqC.trim().toLowerCase();
+   const base = filtroCond === "inactivos" ? inactivos
+    : filtroCond === "en_ruta" ? enRuta
+    : filtroCond === "disponibles" ? misCon.filter(c => pedidosDe(c) === 0)
+    : misCon;
+   const lista = base.filter(c => !qc || [c.nombre, c.cedula, c.placa].some(v => String(v || "").toLowerCase().includes(qc)));
+   const kpi = (clave, label, valor, color) => ({ label, valor, color, activo: filtroCond === clave, onClick: () => setFiltroCond(clave) });
+   return (
+    <Pagina>
+     <Encabezado titulo="Conductores" descripcion={`Conductores inscritos por ${nombreEmpresa}`} acciones={botonInscribir}/>
+     <Indicadores items={[
+      kpi("todos", "Conductores", misCon.length, T.color.tinta),
+      kpi("en_ruta", "En ruta", enRuta.length, T.color.marca),
+      kpi("disponibles", "Disponibles", misCon.length - enRuta.length, T.color.bienPunto),
+      kpi("inactivos", "Inactivos", inactivos.length, T.color.neutroPunto),
+     ]}/>
+     <section style={{ ...tarjeta, overflow:"hidden" }}>
+      <BarraFiltros derecha={`${lista.length} en esta pagina`}>
+       <Buscador valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" ancho={400}/>
+      </BarraFiltros>
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <thead><tr>
+         <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
+         <th style={{ ...th, textAlign:"right" }}>Activos</th><th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
+        </tr></thead>
+        <tbody>
+         {lista.length === 0 && (
+          <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>
+           {misCon.length === 0 && filtroCond === "todos" ? "Aun no tienes conductores inscritos." : "Ningun conductor coincide."}
+          </td></tr>
+         )}
+         {lista.map(c => (
+          <tr key={c.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+           <td style={td}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+             {avatar(c.nombre)}
+             <div>
+              <div style={{ fontWeight:600, color:T.color.tinta }}>{c.nombre}</div>
+              {c.created_at && <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>Inscrito {fechaCorta(c.created_at)}</div>}
+             </div>
+            </div>
+           </td>
+           <td style={td}><span style={chipMono}>{c.placa || "—"}</span></td>
+           <td style={td}>{c.cedula || "—"}</td>
+           <td style={td}>{c.celular || "—"}</td>
+           <td style={{ ...td, textAlign:"right", fontWeight:700, color: pedidosDe(c) ? T.color.tinta : T.color.tinta4 }}>{pedidosDe(c)}</td>
+           <td style={td}>{chipCond(c, false)}</td>
+           <td style={{ ...td, textAlign:"right" }}>{accionesCond(c)}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+      <PieTabla izquierda={`Mostrando ${lista.length} de ${base.length} conductores`}/>
+     </section>
+     {modales}
+    </Pagina>
+   );
+  }
+
+  // ── Pedidos ─────────────────────────────────────────────────────────────
+  if (vista === "pedidos") {
+   const exportar = () => {
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const filas = filtradosT.map(p => {
+     const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+     return [p.id, p.guia_interna, p.cliente, p.direccion, p.ciudad_nombre, p.cajas || 0, cond?.nombre,
+      ESTADOS_PEDIDO[p.estado]?.label || p.estado, soportesDe(p), p.fecha_creacion, p.fecha_real].map(esc).join(",");
+    });
+    descargarCSV(`pedidos_${hoyLocal()}.csv`, "pedido,guia,cliente,direccion,ciudad,cajas,conductor,estado,soportes,fecha_creacion,fecha_real", filas.join("\n"));
+   };
+   return (
+    <Pagina>
+     <Encabezado titulo="Pedidos" descripcion="Pedidos asignados a los conductores de tu empresa"
+      acciones={<button onClick={exportar} disabled={filtradosT.length === 0} style={{ ...botonBarra, display:"inline-flex", alignItems:"center", gap:6 }}><Download size={15}/> Exportar</button>}/>
+
+     <div style={{ display:"flex", gap:4, borderBottom:`1px solid ${T.color.borde}`, overflowX:"auto" }}>
+      {PESTANAS_T.map(([clave, label, prueba]) => {
+       const activo = pestanaT === clave;
+       return (
+        <button key={clave} onClick={() => setPestanaT(clave)} style={{
+         display:"flex", alignItems:"center", gap:7, padding:"10px 12px", border:"none", background:"transparent",
+         borderBottom:`2px solid ${activo ? T.color.tinta : "transparent"}`, marginBottom:-1, cursor:"pointer",
+         fontFamily:"inherit", fontSize:13.5, fontWeight: activo ? 700 : 500, color: activo ? T.color.tinta : T.color.tinta3, whiteSpace:"nowrap",
+        }}>
+         {label}
+         <span style={{ fontSize:11, fontWeight:700, padding:"0 6px", borderRadius:T.radio.pastilla, background:T.color.superficie3, color:T.color.tinta3 }}>{baseT.filter(prueba).length}</span>
+        </button>
+       );
+      })}
+     </div>
+
+     <section style={{ ...tarjeta, overflow:"hidden" }}>
+      <BarraFiltros derecha={`${itemsT.length} en esta pagina`}>
+       <Buscador valor={busqT} onChange={setBusqT} placeholder="Buscar por N° pedido, cliente o ciudad" ancho={400}/>
+       <SelectFiltro valor={rangoT} onChange={setRangoT} ancho={170}>
+        {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+       </SelectFiltro>
+       {selectorConductor}
+      </BarraFiltros>
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <thead><tr>
+         <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={{ ...th, textAlign:"right" }}>Cajas</th>
+         <th style={th}>Conductor</th><th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
+        </tr></thead>
+        <tbody>
+         {filtradosT.length === 0 && vacioPedidos(8)}
+         {itemsT.map(p => filaPedido(p, true))}
+        </tbody>
+       </table>
+      </div>
+      {pie}
+     </section>
+     {detalle}
+     {modales}
+    </Pagina>
+   );
+  }
+
+  // ── Mi empresa ──────────────────────────────────────────────────────────
+  const primeros = misCon.slice(0, 5);
   return (
    <Pagina>
     <Encabezado
-     titulo="Mi empresa"
+     titulo={<span style={{ display:"inline-flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+      {nombreEmpresa}
+      {miNit && <span style={{ ...chipMono, fontSize:12, fontWeight:500 }}>{`NIT ${miNit}`}</span>}
+     </span>}
      descripcion="Conductores asociados a tu empresa y sus pedidos"
-     acciones={
-      <button onClick={() => abrirInscribir({ nit: miNit, nombre: user.empresa || user.nombre })} style={botonPrincipal}>
-       <Plus size={16} /> Inscribir conductor
-      </button>
-     }
+     acciones={botonInscribir}
     />
 
     <Indicadores items={[
-     { label: "Conductores", valor: misCon.length, color: T.color.marca, destacado: true },
-     { label: "Pedidos asignados", valor: pedidosMisConductores.length, color: T.color.bien },
-     { label: "En transito", valor: pedidosMisConductores.filter(p => p.estado === "en_transito").length, color: T.color.ojo },
-     { label: "Entregados", valor: pedidosMisConductores.filter(p => p.estado === "entregado").length },
+     { label:"Conductores", valor:misCon.length, color:T.color.tinta },
+     { label:"Pedidos asignados", valor:pedidosMisConductores.length, color:T.color.marca, destacado:true },
+     { label:"En transito", valor:pedidosMisConductores.filter(p => p.estado === "en_transito").length, color:T.color.ojoPunto },
+     { label:"Entregados", valor:pedidosMisConductores.filter(p => p.estado === "entregado").length, color:T.color.bienPunto },
     ]}/>
 
     <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
-      <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>{user.empresa || user.nombre}</div>
-      <div style={{ ...mono, marginTop:2 }}>NIT {miNit}</div>
+     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+      <div>
+       <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Conductores</div>
+       <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>{misCon.length} inscritos · {enRuta.length} en ruta</div>
+      </div>
+      {misCon.length > 0 && (
+       <button onClick={() => onIr && onIr("mis_conductores_transp")} style={{ border:"none", background:"transparent", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca }}>Ver todos</button>
+      )}
      </div>
      <div style={{ overflowX:"auto" }}>
       <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead>
-        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-         <th style={th}>Conductor</th>
-         <th style={th}>Placa</th>
-         <th style={th}>Cedula</th>
-         <th style={th}>Telefono</th>
-         <th style={{ ...th, textAlign:"right" }}>Acciones</th>
-        </tr>
-       </thead>
+       <thead><tr>
+        <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
+        <th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
+       </tr></thead>
        <tbody>
         {misCon.length === 0 && (
-         <tr><td colSpan={5} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>
-          Aun no tienes conductores inscritos.
-         </td></tr>
+         <tr><td colSpan={6} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>Aun no tienes conductores inscritos.</td></tr>
         )}
-        {misCon.map(c => (
+        {primeros.map(c => (
          <tr key={c.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-          <td style={{ ...td, fontWeight:700, color:T.color.tinta }}>{c.nombre}</td>
-          <td style={td}><span style={{ ...mono, background:T.color.superficie2, padding:"3px 9px", borderRadius:T.radio.chico }}>{c.placa}</span></td>
-          <td style={td}>{c.cedula || "-"}</td>
-          <td style={td}>{c.celular || "-"}</td>
-          <td style={{ ...td, textAlign:"right" }}>
-           <button style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}
-            onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>
-            Editar
-           </button>
-          </td>
+          <td style={td}><span style={{ display:"inline-flex", alignItems:"center", gap:10, fontWeight:600, color:T.color.tinta }}>{avatar(c.nombre)}{c.nombre}</span></td>
+          <td style={td}><span style={chipMono}>{c.placa || "—"}</span></td>
+          <td style={td}>{c.cedula || "—"}</td>
+          <td style={td}>{c.celular || "—"}</td>
+          <td style={td}>{chipCond(c, true)}</td>
+          <td style={{ ...td, textAlign:"right" }}>{accionesCond(c)}</td>
          </tr>
         ))}
        </tbody>
@@ -2651,60 +2922,31 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
     </section>
 
     <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
       <div>
        <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Pedidos de mis conductores</div>
-       <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>
-        Puedes reemplazar el soporte de entrega si hubo un error de carga.
-       </div>
+       <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>Puedes cargar o reemplazar el soporte de un pedido entregado si hubo un error de carga</div>
+      </div>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+       <Buscador valor={busqT} onChange={setBusqT} placeholder="Buscar pedido, cliente o conductor" ancho={240}/>
+       {selectorConductor}
       </div>
      </div>
-     {pedidosMisConductores.length === 0 ? (
-      <div style={{ padding:36, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
-       Aun no hay pedidos asociados a tus conductores.
-      </div>
-     ) : (
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
-        <thead>
-         <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-          <th style={th}>Pedido</th>
-          <th style={th}>Cliente</th>
-          <th style={th}>Destino</th>
-          <th style={th}>Conductor</th>
-          <th style={th}>Estado</th>
-          <th style={{ ...th, textAlign:"right" }}>Soportes</th>
-         </tr>
-        </thead>
-        <tbody>
-         {pedidosMisConductores.map(p => {
-          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-          return (
-           <tr key={p.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-            <td style={{ ...td, fontWeight:700, color:T.color.tinta }}>{p.guia_interna || p.id}</td>
-            <td style={td}>{p.cliente}</td>
-            <td style={td}>{p.ciudad_nombre || "-"}</td>
-            <td style={td}>{cond?.nombre || "-"}</td>
-            <td style={td}>
-             <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5 }}>
-              <span style={{ width:7, height:7, borderRadius:4, background:T.estado[p.estado] || T.color.tinta3 }} />
-              {ESTADOS_PEDIDO[p.estado]?.label || p.estado}
-             </span>
-            </td>
-            <td style={{ ...td, textAlign:"right" }}>
-             <button style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }} onClick={() => setModSoportes(p)}>
-              Reemplazar
-             </button>
-            </td>
-           </tr>
-          );
-         })}
-        </tbody>
-       </table>
-      </div>
-     )}
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <thead><tr>
+        <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={th}>Conductor</th>
+        <th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
+       </tr></thead>
+       <tbody>
+        {filtradosT.length === 0 && vacioPedidos(7)}
+        {itemsT.map(p => filaPedido(p, false))}
+       </tbody>
+      </table>
+     </div>
+     {pie}
     </section>
-
+    {detalle}
     {modales}
    </Pagina>
   );
@@ -5042,11 +5284,15 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = f
         </td></tr>
        )}
        {pageItems.map(x=>{
+        // Cada estado con su nombre. Antes todo lo que no era abierta o en
+        // gestion se pintaba como "Cerrada", incluida la rechazada.
         const estilo = x.estado==="abierta"
          ? { fondo:T.color.malSuave, texto:T.color.mal, punto:T.color.malPunto, label:"Abierta" }
          : x.estado==="en_gestion"
          ? { fondo:T.color.ojoSuave, texto:T.color.ojo, punto:T.color.ojoPunto, label:"En gestion" }
-         : { fondo:T.color.bienSuave, texto:T.color.bien, punto:T.color.bienPunto, label:"Cerrada" };
+         : x.estado==="cerrada"
+         ? { fondo:T.color.bienSuave, texto:T.color.bien, punto:T.color.bienPunto, label:"Cerrada" }
+         : { fondo:T.color.superficie3, texto:T.color.tinta2, punto:T.color.neutroPunto, label:ESTADOS_PQRS[x.estado]?.label || x.estado || "Sin estado" };
         return (
          <tr key={x.id}>
           <td style={td}><span style={chipMono}>{x.id}</span></td>
@@ -5079,7 +5325,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = f
             {(x.soporte_nombre || x.soporte_data) && (
              <button style={botonFila} onClick={()=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}>Soporte</button>
             )}
-            {puedeGestionar && x.estado!=="cerrada" && (
+            {puedeGestionar && ["abierta","en_gestion"].includes(x.estado) && (
              <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
               onClick={()=>{ setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}>
               Gestionar
@@ -5611,6 +5857,8 @@ export default function SomosProTracking() {
  const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
  // "Nueva PQRS" desde Estado de pedidos: se va a PQRS con el formulario abierto.
  const [pqrsNueva, setPqrsNueva] = useState(false);
+ // "Ver" en un conductor del transportista abre Pedidos filtrado por el.
+ const [conductorTransp, setConductorTransp] = useState("");
 
  // El QR de la guia apunta a ?pedido=<id>. Al entrar con esa direccion se abre
  // ese pedido y se limpia el parametro, para que recargar despues no lo repita.
@@ -5903,7 +6151,13 @@ export default function SomosProTracking() {
    case "ciudades":    return <Ciudades ciudades={ciudades} pedidos={pedidos} showToast={showToast} recargar={recargarCiudades}/>;
    case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} recargar={recargarPaqueterias}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
-   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}/>;
+   case "mi_empresa":
+   case "mis_conductores_transp":
+   case "mis_pedidos_transp":
+    return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}
+     vista={tab === "mis_conductores_transp" ? "conductores" : tab === "mis_pedidos_transp" ? "pedidos" : "empresa"}
+     conductorInicial={tab === "mis_pedidos_transp" ? conductorTransp : ""}
+     onIr={(destino, condId) => { setConductorTransp(condId || ""); navegar(destino); }}/>;
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} promesas={promesas} showToast={showToast} recargar={recargarPedidos}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
