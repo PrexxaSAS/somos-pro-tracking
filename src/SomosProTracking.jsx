@@ -30,7 +30,9 @@ import {
 import {
  CabeceraConductor, ProgresoRuta, BuscadorConductor, Pestanas, LineaResumen, ListaVacia,
  TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, fechaLarga, iniciales, abrirEnMapa,
+ ReordenarRuta,
 } from './modules/conductor/PantallasConductor';
+import { ordenarRuta, useRutaConductor } from './modules/conductor/ruta';
 import { DetallePedidoConductor } from './modules/conductor/DetallePedidoConductor';
 import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
@@ -3214,9 +3216,14 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
  const [detCond,  setDetCond]  = useState(null);
  const [guiaCond, setGuiaCond] = useState(null);
  const [entregaInicial, setEntregaInicial] = useState(null);
+ const [reordenando, setReordenando] = useState(false);
  const condId = user.conductor_db_id || user.id;
+ const rutaCond = useRutaConductor(condId);
  const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
- const activos = misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado));
+ // Por urgencia de la promesa, salvo lo que el conductor ordeno a mano.
+ const activos = ordenarRuta(
+  misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado)),
+  rutaCond.ruta, promesas || []);
  const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
@@ -3366,9 +3373,31 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
 
    <LineaResumen
     izquierda={`${lista.length} ${pestana === "pendientes" ? "pendientes" : pestana === "entregadas" ? "entregadas" : "con novedad"} · ${cajasDe(lista)} cajas`}
-    derecha={pestana === "pendientes" ? "Orden de ruta" : "Mas reciente"} />
+    derecha={pestana !== "pendientes" ? "Mas reciente"
+     : rutaCond.disponible && !busqCond && activos.length > 1 && !reordenando ? (
+      <button onClick={() => setReordenando(true)} style={{
+       border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit",
+       fontSize: 12, fontWeight: 600, color: T.color.marca,
+      }}>{rutaCond.aMano ? "Tu orden · cambiar" : "Por promesa · reordenar"}</button>
+     ) : rutaCond.aMano ? "Tu orden" : "Por promesa"} />
 
-   {lista.length === 0 ? (
+   {pestana === "pendientes" && reordenando ? (
+    <ReordenarRuta
+     pedidos={activos}
+     aMano={rutaCond.aMano}
+     onCancelar={() => setReordenando(false)}
+     onGuardar={async orden => {
+      const e = await rutaCond.guardar(orden);
+      if (e) showToast("No se pudo guardar el orden: " + e.message, "error");
+      else { showToast("Orden de ruta guardado", "success"); setReordenando(false); }
+     }}
+     onRestablecer={async () => {
+      const e = await rutaCond.restablecer();
+      if (e) showToast("No se pudo restablecer: " + e.message, "error");
+      else { showToast("La ruta vuelve al orden por promesa", "info"); setReordenando(false); }
+     }}
+    />
+   ) : lista.length === 0 ? (
     <ListaVacia>
      {busqCond ? "Ningun pedido coincide con la busqueda."
       : pestana === "pendientes" ? "No tienes pedidos pendientes. Ruta terminada."
@@ -5112,8 +5141,9 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
 // (verde es estado, no accion). Activo, el punto verde, hace cuanto y con que
 // precision, y la parada que sigue. La distancia no se muestra: los destinos
 // no tienen coordenadas y no se inventa.
-function MiUbicacion({ user, pedidos = [] }) {
+function MiUbicacion({ user, pedidos = [], promesas = [] }) {
  const esMovil = useEsMovil();
+ const rutaGps = useRutaConductor(user?.conductor_db_id || user?.id);
  const [lat, setLat] = useState(window._gpsLat || null);
  const [lng, setLng] = useState(window._gpsLng || null);
  const [on, setOn] = useState(window._gpsOn || false);
@@ -5173,7 +5203,10 @@ function MiUbicacion({ user, pedidos = [] }) {
  };
 
  const condId = user?.conductor_db_id || user?.id;
- const siguiente = pedidos.find(p => String(p.conductor_id) === String(condId) && ["en_transito", "pendiente", "sin_asignar"].includes(p.estado)) || null;
+ // La misma ruta que Mis entregas: la parada 1 de alla es la siguiente aqui.
+ const siguiente = ordenarRuta(
+  pedidos.filter(p => String(p.conductor_id) === String(condId) && ["en_transito", "pendiente", "sin_asignar"].includes(p.estado)),
+  rutaGps.ruta, promesas)[0] || null;
 
  const segundos = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
  const haceTexto = segundos == null ? "" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
@@ -5731,7 +5764,7 @@ export default function SomosProTracking() {
    case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} promesas={promesas} showToast={showToast} recargar={recargarPedidos}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
-   case "mi_ubicacion":  return <MiUbicacion user={user} pedidos={pedidos}/>;
+   case "mi_ubicacion":  return <MiUbicacion user={user} pedidos={pedidos} promesas={promesas}/>;
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;

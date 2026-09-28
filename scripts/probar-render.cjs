@@ -24,7 +24,8 @@ import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/p
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
 import { GestionAsesores } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
-import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
+import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
+import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
 
 const pedidos = [
@@ -194,6 +195,8 @@ casos.push(["TarjetaEntregada/novedad", React.createElement(TarjetaEntregada, { 
 casos.push(["TarjetaDevolucion", React.createElement(TarjetaDevolucion, { d: devolucion, onSoporte(){} })]);
 casos.push(["TarjetaRecogida", React.createElement(TarjetaRecogida, { r: recogida, onDocumento(){} })]);
 casos.push(["ListaVacia", React.createElement(ListaVacia, null, "No tienes pedidos pendientes. Ruta terminada.")]);
+casos.push(["ReordenarRuta/por_promesa", React.createElement(ReordenarRuta, { pedidos: pedidos.slice(0, 3), aMano: false, onGuardar(){}, onCancelar(){}, onRestablecer(){} })]);
+casos.push(["ReordenarRuta/a_mano", React.createElement(ReordenarRuta, { pedidos: pedidos.slice(0, 3), aMano: true, onGuardar(){}, onCancelar(){}, onRestablecer(){} })]);
 casos.push(["DetallePedidoConductor/en_transito", React.createElement(DetallePedidoConductor, {
  pedido: pedidos[0], parada: 5, totalParadas: 9, promesa: promesas[0],
  onCerrar(){}, onGuia(){}, onEntregar(){}, onVerSoportes(){},
@@ -274,6 +277,28 @@ for (const [nombre, elemento] of casos) {
  exigir(cerrado.includes("Ver soporte"), "el pedido cerrado con soportes no deja verlos");
  const tarjeta = renderToString(React.createElement(TarjetaEntrega, { pedido: pedidos[0], parada: 5, onAbrir(){} }));
  exigir(tarjeta.includes(pedidos[0].cliente) && tarjeta.includes("Medellin"), "la tarjeta no muestra a quien y a donde");
+}
+
+// La ruta del conductor: por urgencia de la promesa, salvo lo que el conductor
+// ordeno a mano, que va primero; lo nuevo se agrega al final por urgencia.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  ruta: " + queja); fallos++; } };
+ const prom = [{ ciudad_codigo: "05001", dias_plazo: 2 }];
+ const A = { id: "A", fecha_creacion: "2026-09-20", ciudad_codigo: "05001" };                          // vence 22
+ const B = { id: "B", fecha_creacion: "2026-09-10", ciudad_codigo: "99999", fecha_estimada: "2026-09-25" }; // vence 25
+ const C = { id: "C", fecha_creacion: "2026-09-01", ciudad_codigo: "99999" };                          // sin promesa
+ const D = { id: "D", fecha_creacion: "2026-09-19", ciudad_codigo: "05001" };                          // vence 21
+ const E = { id: "E", fecha_creacion: "2026-09-18", ciudad_codigo: "05001", fecha_estimada: "2026-09-30" }; // vence 20
+ const ids = xs => xs.map(x => x.id).join("");
+ // Sin tabla de promesas manda la fecha estimada, y sin ninguna fecha, la antiguedad.
+ exigir(ids(ordenarRuta([A, B, C, D])) === "BCDA", "sin promesas no usa la fecha estimada ni la antiguedad: " + ids(ordenarRuta([A, B, C, D])));
+ exigir(ids(ordenarRuta([A, B, C, D], {}, prom)) === "DABC", "sin orden a mano no va por urgencia de la promesa: " + ids(ordenarRuta([A, B, C, D], {}, prom)));
+ exigir(ids(ordenarRuta([A, B, C, D], { B: 1, C: 2 }, prom)) === "BCDA", "lo ordenado a mano no va primero: " + ids(ordenarRuta([A, B, C, D], { B: 1, C: 2 }, prom)));
+ exigir(ids(ordenarRuta([A, B, C, D, E], { B: 1, C: 2 }, prom)) === "BCEDA", "lo asignado despues no se agrega por urgencia: " + ids(ordenarRuta([A, B, C, D, E], { B: 1, C: 2 }, prom)));
+ const reord = renderToString(React.createElement(ReordenarRuta, { pedidos: [A, B], aMano: false, onGuardar(){}, onCancelar(){}, onRestablecer(){} }));
+ exigir(!reord.includes("Volver al orden por promesa"), "ofrece volver a la promesa cuando ya esta por promesa");
+ const reord2 = renderToString(React.createElement(ReordenarRuta, { pedidos: [A, B], aMano: true, onGuardar(){}, onCancelar(){}, onRestablecer(){} }));
+ exigir(reord2.includes("Volver al orden por promesa"), "con orden a mano no deja volver a la promesa");
 }
 
 globalThis.__fallos = fallos;

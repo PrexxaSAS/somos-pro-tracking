@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
- AlertTriangle, Bell, Boxes, Check, ChevronRight, Clock, MessageSquare, Navigation,
- PackageCheck, Search, Undo2, UserCheck,
+ AlertTriangle, ArrowDown, ArrowUp, Bell, Boxes, Check, ChevronRight, Clock, MessageSquare, Navigation,
+ PackageCheck, RotateCcw, Search, Undo2, UserCheck,
 } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO } from '../../Constants';
@@ -395,5 +395,83 @@ export function TarjetaRecogida({ r, onDocumento }) {
     </span>
    </div>
   </article>
+ );
+}
+
+// ── Reordenar la ruta ───────────────────────────────────────────────────────
+// Subir y bajar con botones, no arrastrar: arrastrar con el pulgar en una
+// lista que tambien se desplaza es poco fiable, y el conductor lo hace en la
+// calle. Nada se guarda hasta "Guardar orden"; "Cancelar" deja todo como
+// estaba. "Por promesa" borra el orden a mano y vuelve a la urgencia.
+export function ReordenarRuta({ pedidos, aMano, onGuardar, onCancelar, onRestablecer }) {
+ const [orden, setOrden] = useState(pedidos);
+ const [guardando, setGuardando] = useState(false);
+ const mover = (i, d) => setOrden(prev => {
+  const j = i + d;
+  if (j < 0 || j >= prev.length) return prev;
+  const n = prev.slice();
+  [n[i], n[j]] = [n[j], n[i]];
+  return n;
+ });
+ const cambio = orden.some((p, i) => p.id !== pedidos[i]?.id);
+ const guardar = async () => { setGuardando(true); await onGuardar(orden); setGuardando(false); };
+
+ const flecha = (activa) => ({
+  width: 40, height: 40, display: "grid", placeItems: "center", borderRadius: 10, padding: 0,
+  border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
+  color: activa ? T.color.tinta2 : T.color.tenue, cursor: activa ? "pointer" : "default",
+ });
+
+ return (
+  <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+   <div style={{
+    padding: "10px 12px", borderRadius: 10, background: T.color.marcaSuave, color: T.color.marca,
+    fontSize: 12.5, lineHeight: 1.45,
+   }}>
+    Mueve los pedidos al orden en que vas a entregarlos. Los que te asignen despues se agregan al final, por promesa.
+   </div>
+
+   {orden.map((p, i) => (
+    <div key={p.id} style={{
+     display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+     background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: 12,
+    }}>
+     <span style={{
+      width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", flexShrink: 0,
+      fontSize: 12, fontWeight: 700, background: T.color.superficie3, color: T.color.tinta2,
+     }}>{i + 1}</span>
+     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+      <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+       {p.cliente || p.guia_interna || p.id}
+      </span>
+      <span style={{ fontSize: 12, color: T.color.tinta3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+       {[p.direccion, p.ciudad_nombre].filter(Boolean).join(" · ") || "Sin direccion"}
+      </span>
+     </div>
+     <button onClick={() => mover(i, -1)} disabled={i === 0} title="Subir" style={flecha(i > 0)}><ArrowUp size={17} /></button>
+     <button onClick={() => mover(i, 1)} disabled={i === orden.length - 1} title="Bajar" style={flecha(i < orden.length - 1)}><ArrowDown size={17} /></button>
+    </div>
+   ))}
+
+   <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+    <button onClick={onCancelar} style={{
+     flex: 1, height: 46, borderRadius: 12, border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
+     color: T.color.tinta2, fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
+    }}>Cancelar</button>
+    <button onClick={guardar} disabled={!cambio || guardando} style={{
+     flex: 2, height: 46, borderRadius: 12, border: "none", background: T.color.marca, color: "#fff",
+     fontFamily: "inherit", fontSize: 14, fontWeight: 600,
+     cursor: !cambio || guardando ? "not-allowed" : "pointer", opacity: !cambio || guardando ? 0.5 : 1,
+    }}>{guardando ? "Guardando..." : "Guardar orden"}</button>
+   </div>
+
+   {aMano && (
+    <button onClick={onRestablecer} style={{
+     display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 42,
+     border: "none", background: "transparent", color: T.color.tinta3, fontFamily: "inherit",
+     fontSize: 13, fontWeight: 600, cursor: "pointer",
+    }}><RotateCcw size={14} /> Volver al orden por promesa</button>
+   )}
+  </section>
  );
 }
