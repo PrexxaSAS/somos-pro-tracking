@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MoreHorizontal, Search, X } from 'lucide-react';
+import { MoreHorizontal, Search, Trash2, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
@@ -55,6 +55,19 @@ export const iconoAccion = {
  color: T.color.tinta3, padding: 7, borderRadius: T.radio.chico,
  display: "grid", placeItems: "center",
 };
+
+// Disenio 26: Eliminar es un icono gris que solo se pinta rojo al pasar el
+// cursor, para que la accion destructiva no sea lo primero que se ve.
+export function BotonEliminar({ onClick, title = "Eliminar", tam = 15 }) {
+ const [encima, setEncima] = React.useState(false);
+ return (
+  <button title={title} onClick={onClick}
+   onMouseEnter={() => setEncima(true)} onMouseLeave={() => setEncima(false)}
+   style={{ ...iconoAccion, color: encima ? T.color.mal : T.color.tinta3, background: encima ? T.color.malSuave : "transparent" }}>
+   <Trash2 size={tam} />
+  </button>
+ );
+}
 
 export function Pagina({ children }) {
  // Los margenes negativos anulan el relleno del contenedor para que el fondo

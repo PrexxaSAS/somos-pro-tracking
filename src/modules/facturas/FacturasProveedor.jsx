@@ -4,11 +4,13 @@ import { Btn, Card, Field, Modal } from '../../Subcomponentes';
 import {
  ModalForm, Fila, Texto, Selector, AreaTexto,
 } from '../../components/ui/formularios';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
+import { useEsMovil } from '../../design/responsive';
+import { FacturasMovil } from '../configuracion/ConfiguracionMovil';
 import { T, tarjeta } from '../../design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Paginador, PieTabla,
- th, td, tdCifra, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion,
+ th, td, tdCifra, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion, BotonEliminar,
 } from '../../components/ui/listas';
 
 const campoFecha = {
@@ -35,6 +37,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const [fechaHasta, setFechaHasta] = useState("");
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
+ const esMovil = useEsMovil();
 
  const vacio = { numero_factura:"", transportista_id:"", fecha_factura:"", valor_total:"", observaciones:"" };
  const [form, setForm] = useState(vacio);
@@ -111,9 +114,114 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  React.useEffect(() => { setPage(1); }, [busq, fechaDesde, fechaHasta, pageSize]);
 
+ // Informe consolidado de fletes: una linea por guia de todas las facturas filtradas.
+ const descargarInforme = () => {
+  const lineasTodias = [];
+  filtradas.forEach(fac=>{
+   const t = transportistas.find(tr=>tr.id===fac.transportista_id);
+   const guias = fac.factura_guias||[];
+   const totalCaj = guias.reduce((a,g)=>a+(g.pedidos?.cajas||0),0);
+   const vCaja = totalCaj>0?fac.valor_total/totalCaj:0;
+   guias.forEach(g=>{
+    lineasTodias.push({
+     fac, trans:t,
+     cajas:g.pedidos?.cajas||0,
+     valorGuia:totalCaj>0?Math.round(vCaja*(g.pedidos?.cajas||0)):0,
+     pedidos:g.pedidos,
+     id:g.id,
+    });
+   });
+  });
+  if(lineasTodias.length===0){showToast("Sin guias en el perodo seleccionado","error");return;}
+  const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho","Codigo DANE","Ciudad Destino","No. Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
+  const rows=lineasTodias.map(l=>[
+   l.fac.fecha_factura,
+   l.pedidos?.guia_interna||"",
+   l.trans?.nombre||"",
+   l.pedidos?.fecha_creacion||"",
+   l.pedidos?.fecha_despacho||"",
+   l.pedidos?.ciudad_codigo||"",
+   l.pedidos?.ciudad_nombre||"",
+   l.fac.numero_factura,
+   l.cajas,
+   l.valorGuia,
+   l.pedidos?.factura||"",
+   l.pedidos?.id||"",
+  ]);
+  const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  const rango=fechaDesde&&fechaHasta?`${fechaDesde}_${fechaHasta}`:fechaDesde||fechaHasta||"todos";
+  a.download=`Informe_Fletes_${rango}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(` CSV descargado ${lineasTodias.length} lneas ${filtradas.length} factura(s)`,"success");
+ };
+
+ // CSV de una sola factura, con el valor repartido por cajas como en Gestionar.
+ const descargarFactura = (fac) => {
+  const trans = transportistas.find(t => t.id === fac.transportista_id);
+  exportarCSVFacturaProveedor(fac, calcularLineas(fac), trans, formatCOP);
+ };
+
  const totalFiltrado = filtradas.reduce((a, f) => a + Number(f.valor_total || 0), 0);
  const guiasFiltradas = filtradas.reduce((a, f) => a + (f.factura_guias || []).length, 0);
  const fmtCOP = (n) => "$ " + Number(n || 0).toLocaleString("es-CO");
+
+ const modales = (<>
+   {/* Modal nueva factura */}
+   {modNueva&&(
+    <ModalForm
+     titulo="Nueva factura de proveedor"
+     descripcion="Registro para conciliacion con transportista"
+     onClose={()=>{setModNueva(false);setForm(vacio);}}
+     onPrimario={crear}
+     guardando={guard}
+     textoPrimario="Crear factura"
+    >
+     <Texto label="N factura del proveedor" obligatorio mono valor={form.numero_factura}
+      onChange={f("numero_factura")} placeholder="FAC-PRO-001" />
+     <Selector label="Transportista" obligatorio valor={form.transportista_id} onChange={f("transportista_id")}
+      placeholder="Seleccione transportista"
+      opciones={(transportistas||[]).map(x=>({ value:x.id, label:`${x.nombre} - NIT ${x.nit}` }))} />
+     <Fila>
+      <Texto label="Fecha de factura" obligatorio tipo="date" valor={form.fecha_factura} onChange={f("fecha_factura")} />
+      <Texto label="Valor total" obligatorio tipo="number" prefijo="COP" valor={form.valor_total}
+       onChange={f("valor_total")} placeholder="1500000" />
+     </Fila>
+     <AreaTexto label="Observaciones" opcional valor={form.observaciones} onChange={f("observaciones")}
+      placeholder="Notas adicionales..." />
+    </ModalForm>
+   )}
+
+   {/* Modal gestionar guias */}
+   {modDet&&(
+    <ModalFacturaGuias
+     factura={modDet}
+     pedidos={pedidos}
+     transportistas={transportistas}
+     showToast={showToast}
+     recargar={async()=>{ if(recargar) await recargar(); setModDet(null); }}
+     onClose={()=>setModDet(null)}
+     formatCOP={formatCOP}
+    />
+   )}
+ </>);
+
+ // Disenio 26a: tarjetas con valor, transportista, ciudades de sus guias y
+ // Gestionar. Todo llama a las mismas funciones del escritorio.
+ if (esMovil) return (
+  <Pagina>
+   <FacturasMovil facturas={facturas||[]} filtradas={filtradas} transportistas={transportistas||[]}
+    busq={busq} setBusq={setBusq} fechaDesde={fechaDesde} setFechaDesde={setFechaDesde}
+    fechaHasta={fechaHasta} setFechaHasta={setFechaHasta}
+    onInforme={descargarInforme} onGestionar={setModDet} onCSV={descargarFactura}
+    onEliminar={(fac)=>eliminar(fac.id, fac.numero_factura)} onNueva={()=>setModNueva(true)} />
+   {modales}
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -155,51 +263,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
       <span style={{ fontSize:13, color:T.color.tinta2 }}>
        Informe consolidado de fletes: una linea por guia, para conciliar con el transportista.
       </span>
-      <button style={{ ...botonBarra, marginLeft:"auto" }} onClick={()=>{
-       // Export all filtered facturas as one CSV
-       const lineasTodias = [];
-       filtradas.forEach(fac=>{
-        const t = transportistas.find(tr=>tr.id===fac.transportista_id);
-        const guias = fac.factura_guias||[];
-        const totalCaj = guias.reduce((a,g)=>a+(g.pedidos?.cajas||0),0);
-        const vCaja = totalCaj>0?fac.valor_total/totalCaj:0;
-        guias.forEach(g=>{
-         lineasTodias.push({
-          fac, trans:t,
-          cajas:g.pedidos?.cajas||0,
-          valorGuia:totalCaj>0?Math.round(vCaja*(g.pedidos?.cajas||0)):0,
-          pedidos:g.pedidos,
-          id:g.id,
-         });
-        });
-       });
-       if(lineasTodias.length===0){showToast("Sin guias en el perodo seleccionado","error");return;}
-       const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho","Codigo DANE","Ciudad Destino","No. Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
-       const rows=lineasTodias.map(l=>[
-        l.fac.fecha_factura,
-        l.pedidos?.guia_interna||"",
-        l.trans?.nombre||"",
-        l.pedidos?.fecha_creacion||"",
-        l.pedidos?.fecha_despacho||"",
-        l.pedidos?.ciudad_codigo||"",
-        l.pedidos?.ciudad_nombre||"",
-        l.fac.numero_factura,
-        l.cajas,
-        l.valorGuia,
-        l.pedidos?.factura||"",
-        l.pedidos?.id||"",
-       ]);
-       const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-       const url=URL.createObjectURL(blob);
-       const a=document.createElement("a");
-       a.href=url;
-       const rango=fechaDesde&&fechaHasta?`${fechaDesde}_${fechaHasta}`:fechaDesde||fechaHasta||"todos";
-       a.download=`Informe_Fletes_${rango}.csv`;
-       a.click();
-       URL.revokeObjectURL(url);
-       showToast(` CSV descargado ${lineasTodias.length} lneas ${filtradas.length} factura(s)`,"success");
-      }}>
+      <button style={{ ...botonBarra, marginLeft:"auto" }} onClick={descargarInforme}>
        <Download size={15}/> Descargar informe
       </button>
      </div>
@@ -247,9 +311,11 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
            <td style={tdCifra}>{totalCajas}</td>
            <td style={{ ...td, textAlign:"right" }}>
             <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
-             <button style={botonFila} onClick={()=>setModDet(fac)}>Guias</button>
-             <button title="Eliminar factura" onClick={()=>eliminar(fac.id, fac.numero_factura)}
-              style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
+             <button style={botonFila} onClick={()=>setModDet(fac)}>Gestionar</button>
+             {guias.length > 0 && (
+              <button title="Descargar CSV" onClick={()=>descargarFactura(fac)} style={iconoAccion}><Download size={15}/></button>
+             )}
+             <BotonEliminar title="Eliminar factura" onClick={()=>eliminar(fac.id, fac.numero_factura)} />
             </div>
            </td>
           </tr>
@@ -267,43 +333,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
    </section>
 
 
-   {/* Modal nueva factura */}
-   {modNueva&&(
-    <ModalForm
-     titulo="Nueva factura de proveedor"
-     descripcion="Registro para conciliacion con transportista"
-     onClose={()=>{setModNueva(false);setForm(vacio);}}
-     onPrimario={crear}
-     guardando={guard}
-     textoPrimario="Crear factura"
-    >
-     <Texto label="N factura del proveedor" obligatorio mono valor={form.numero_factura}
-      onChange={f("numero_factura")} placeholder="FAC-PRO-001" />
-     <Selector label="Transportista" obligatorio valor={form.transportista_id} onChange={f("transportista_id")}
-      placeholder="Seleccione transportista"
-      opciones={(transportistas||[]).map(x=>({ value:x.id, label:`${x.nombre} - NIT ${x.nit}` }))} />
-     <Fila>
-      <Texto label="Fecha de factura" obligatorio tipo="date" valor={form.fecha_factura} onChange={f("fecha_factura")} />
-      <Texto label="Valor total" obligatorio tipo="number" prefijo="COP" valor={form.valor_total}
-       onChange={f("valor_total")} placeholder="1500000" />
-     </Fila>
-     <AreaTexto label="Observaciones" opcional valor={form.observaciones} onChange={f("observaciones")}
-      placeholder="Notas adicionales..." />
-    </ModalForm>
-   )}
-
-   {/* Modal gestionar guias */}
-   {modDet&&(
-    <ModalFacturaGuias
-     factura={modDet}
-     pedidos={pedidos}
-     transportistas={transportistas}
-     showToast={showToast}
-     recargar={async()=>{ if(recargar) await recargar(); setModDet(null); }}
-     onClose={()=>setModDet(null)}
-     formatCOP={formatCOP}
-    />
-   )}
+   {modales}
   </Pagina>
  );
 }

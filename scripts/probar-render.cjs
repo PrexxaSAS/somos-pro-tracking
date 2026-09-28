@@ -18,7 +18,7 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
-import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
+import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS, ResumenTransportador, Ciudades, GestionPromesas } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
@@ -31,6 +31,8 @@ import { NuevoPedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedido
 import { GestionEnvioMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionEnvioMovil';
 import { GestionPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionPqrsMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/SolicitudesMovil';
+import { FacturasProveedor } from '${raiz.replace(/\\/g, '/')}/src/modules/facturas/FacturasProveedor';
+import { ResumenMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/configuracion/ConfiguracionMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -316,6 +318,31 @@ casos.push(["FormDevolucionMovil/central", solicitud(FormDevolucionMovil, { form
 casos.push(["FormRecogidaMovil/central", solicitud(FormRecogidaMovil, { form: formRec, conTransporte: true })]);
 casos.push(["FormPqrsMovil/cliente", solicitud(FormPqrsMovil, { form: formPqrs })]);
 
+// Disenio 26: Facturas proveedor, Promesas, Ciudades y Resumen transportador.
+const transpFact = [{ id:"t1", nombre:"RUTTEK S.A.S", nit:"900" }];
+const facturasPrueba = [
+ { id:"f1", numero_factura:"FEV-7409", transportista_id:"t1", fecha_factura:"2026-09-03", valor_total:1300000,
+   factura_guias:[{ id:"g1", pedido_id:"PX1", pedidos:{ id:"PX1", cajas:100, ciudad_nombre:"Bogota" } }, { id:"g2", pedido_id:"PX2", pedidos:{ id:"PX2", cajas:77, ciudad_nombre:"Funza" } }] },
+ { id:"f2", numero_factura:"FEV-7468", transportista_id:"t1", fecha_factura:"2026-09-11", valor_total:1850000, factura_guias:[] },
+];
+const ciudades26 = [{ code:"05001", name:"Medellin" }, { code:"11001", name:"Bogota" }, { code:"76001", name:"Cali" }];
+const promesas26 = [{ ciudad_codigo:"05001", dias_plazo:2 }, { ciudad_codigo:"11001", dias_plazo:5 }];
+const facturas26 = () => React.createElement(FacturasProveedor, { facturas: facturasPrueba, transportistas: transpFact, pedidos, showToast(){} });
+const promesasM = () => React.createElement(GestionPromesas, { promesas: promesas26, ciudades: ciudades26, showToast(){} });
+const ciudadesM = () => React.createElement(Ciudades, { ciudades: ciudades26, pedidos, showToast(){} });
+const condResumen = { id:7, nombre:"Cristian Esneyder Velandia", placa:"JSL211", empresa:"RUTTEK SAS" };
+const resumenM = () => React.createElement(ResumenMovil, {
+ condOpts:[condResumen], selCond:"7", setSelCond(){}, cond: condResumen, gpsFresco:false, onImprimir(){},
+ misPeds:[{ id:"PX000119893", guia_interna:"SPT-2026-2370", cliente:"ARCHIE'S COMPANY", factura:"PX193104", ciudad_nombre:"Bogota", cajas:6, fecha_estimada:"2026-09-26" },
+          { id:"PX000119887", guia_interna:"SPT-2026-2364", cliente:"FARMATODO", factura:"PX193098", ciudad_nombre:"Bogota", cajas:100 }],
+ misDV:[], misRC:[], totalCajas:106,
+});
+casos.push(["Facturas/26", facturas26()]);
+casos.push(["Promesas/26", promesasM()]);
+casos.push(["Ciudades/26", ciudadesM()]);
+casos.push(["Resumen/26", React.createElement(ResumenTransportador, { pedidos, conductores: conductoresPrueba })]);
+casos.push(["ResumenMovil/26", resumenM()]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -508,6 +535,30 @@ if (window.matchMedia("").matches) {
  exigir(fRec.includes("Medellin · DANE 05001") && fRec.includes("remision.pdf") && fRec.includes("No. guia de paqueteria"), "25b sin ciudad, adjunto o paqueteria");
  const fPq = renderToString(solicitud(FormPqrsMovil, { form: formPqrs }));
  exigir(fPq.includes("PX000119704") && fPq.includes("22 caracteres") && fPq.includes("Enviar PQRS"), "25c sin pedido, contador o envio");
+}
+
+// Disenio 26. Facturas: Gestionar en cada fila, CSV solo con guias y
+// Eliminar gris (rojo solo con el cursor), en las dos vistas. En el celular:
+// ciudades de las guias, departamento por DANE, pastilla del plazo y total de
+// cajas del resumen.
+{
+ const movil = window.matchMedia("").matches;
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  26: " + queja); fallos++; } };
+ const fac = renderToString(facturas26());
+ exigir((fac.match(/>Gestionar</g) || []).length === 2, "facturas sin Gestionar en cada fila");
+ exigir((fac.match(/title="Descargar CSV"/g) || []).length === 1, "CSV donde no hay guias o falta donde si");
+ exigir(!fac.includes("color:#c33a31") || movil, "Eliminar sale rojo sin pasar el cursor");
+ if (movil) {
+  exigir(fac.includes("Valor total") && fac.includes("$ 3.150.000") && fac.includes("Bogota / Funza") && fac.includes("Sin guias"), "26a sin total, ruta o aviso sin guias");
+  const pr = renderToString(promesasM());
+  exigir(pr.includes("2 de 3 configuradas") && pr.includes("Antioquia") && pr.includes("2 dias") && pr.includes("5 dias") && pr.includes("Sin promesa"), "26b sin conteo, departamento o pastillas");
+  exigir(pr.includes('title="Agregar promesa"'), "26b sin +");
+  const ci = renderToString(ciudadesM());
+  exigir(ci.includes("3 ciudades") && ci.includes("Valle del Cauca") && ci.includes("pedidos") && ci.includes('title="Nueva ciudad"'), "26c sin departamento, usos o +");
+  const re = renderToString(resumenM());
+  exigir(re.includes("Total 106 cajas") && re.includes("2 pedidos") && re.includes("JSL211") && re.includes("RUTTEK SAS") && re.includes("Cambiar"), "26d sin total, conductor o cambiar");
+  exigir(renderToString(React.createElement(ResumenTransportador, { pedidos, conductores: conductoresPrueba })).includes("Elegir conductor"), "26d sin elegir conductor");
+ }
 }
 
 globalThis.__fallos = fallos;

@@ -53,6 +53,8 @@ import { hoyLocal, hoyMas } from './utils/fechas';
 import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
 import { EstadoPedidosMovil } from './modules/cliente/EstadoPedidosMovil';
+import { PromesasMovil, CiudadesMovil, ResumenMovil } from './modules/configuracion/ConfiguracionMovil';
+import { BotonEliminar } from './components/ui/listas';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -3231,7 +3233,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  );
 }
 
-function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
+export function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
+ const esMovil = useEsMovil();
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
  const [selCond, setSelCond] = useState("");
@@ -3256,6 +3259,14 @@ function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogid
 
  const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
  const gpsFresco = gpsCond && (Date.now() - gpsCond.ts) < 300000;
+
+ // Disenio 26d: mismo calculo, en tarjetas numeradas; imprime con la misma funcion.
+ if (esMovil) return (
+  <Pagina>
+   <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond}
+    misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} onImprimir={imprimir} />
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -3374,7 +3385,8 @@ function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogid
   </Pagina>
  );
 }
-function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
+export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
+ const esMovil = useEsMovil();
  const [modNueva,setModNueva]=useState(false);
  const [modCSV,setModCSV]=useState(false);
  const [busq,setBusq]=useState("");
@@ -3395,6 +3407,43 @@ function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
  const usosCiudad = (code) => (pedidos || []).filter(p => p.ciudad_codigo === code).length;
+
+ // Los formularios de crear e importar son los mismos en las dos vistas.
+ const modales = (<>
+  {modNueva&&(
+   <ModalForm
+    titulo="Nueva ciudad / municipio"
+    descripcion="Se agrega al catalogo DANE del sistema"
+    onClose={()=>setModNueva(false)}
+    onPrimario={guardar}
+    textoPrimario="Guardar ciudad"
+   >
+    <Texto label="Codigo DANE" obligatorio mono valor={form.code}
+     onChange={v=>setForm(p=>({...p,code:v}))} placeholder="05045" />
+    <Texto label="Nombre del municipio" obligatorio valor={form.name}
+     onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Apartado" />
+   </ModalForm>
+  )}
+  {modCSV&&(
+   <ModalCSVCiudades onClose={()=>setModCSV(false)} onImportar={async (nuevas)=>{
+    for(const c of nuevas){
+     await supabase.from('ciudades').upsert({code:c.code,name:c.name},{onConflict:'code'});
+    }
+    setModCSV(false);
+    showToast(` ${nuevas.length} ciudad(es) importada(s)`,"success");
+    if(recargar) await recargar();
+   }} />
+  )}
+ </>);
+
+ // Disenio 26c.
+ if (esMovil) return (
+  <Pagina>
+   <CiudadesMovil ciudades={ciudades||[]} usos={usosCiudad}
+    onNueva={()=>{setForm({code:"",name:""});setModNueva(true);}} onImportar={()=>setModCSV(true)} />
+   {modales}
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -3448,31 +3497,7 @@ function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
     )}
    </section>
 
-
-   {modNueva&&(
-    <ModalForm
-     titulo="Nueva ciudad / municipio"
-     descripcion="Se agrega al catalogo DANE del sistema"
-     onClose={()=>setModNueva(false)}
-     onPrimario={guardar}
-     textoPrimario="Guardar ciudad"
-    >
-     <Texto label="Codigo DANE" obligatorio mono valor={form.code}
-      onChange={v=>setForm(p=>({...p,code:v}))} placeholder="05045" />
-     <Texto label="Nombre del municipio" obligatorio valor={form.name}
-      onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Apartado" />
-    </ModalForm>
-   )}
-   {modCSV&&(
-    <ModalCSVCiudades onClose={()=>setModCSV(false)} onImportar={async (nuevas)=>{
-     for(const c of nuevas){
-      await supabase.from('ciudades').upsert({code:c.code,name:c.name},{onConflict:'code'});
-     }
-     setModCSV(false);
-     showToast(` ${nuevas.length} ciudad(es) importada(s)`,"success");
-     if(recargar) await recargar();
-    }} />
-   )}
+   {modales}
   </Pagina>
  );
 }
@@ -4013,7 +4038,8 @@ function MisRecogidasConductor({ recogidas = [], user }) {
  );
 }
 
-function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
+export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
+ const esMovil = useEsMovil();
  const [editando, setEditando] = useState(null); // ciudad_codigo being edited
  const [diasEdit, setDiasEdit] = useState("");
  const [nueva,  setNueva]  = useState({ ciudad_codigo: "", dias_plazo: "" });
@@ -4040,40 +4066,52 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const pageItems = conPromesa.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
- const guardarNueva = async () => {
-  if (!nueva.ciudad_codigo || !nueva.dias_plazo) {
-   showToast("Selecciona ciudad y escribe los dias", "error"); return;
+ const guardarNueva = async (datos = nueva) => {
+  if (!datos.ciudad_codigo || !datos.dias_plazo) {
+   showToast("Selecciona ciudad y escribe los dias", "error"); return false;
   }
-  const dias = parseInt(nueva.dias_plazo);
-  if (isNaN(dias) || dias < 1) { showToast("Los dias deben ser un numero mayor a 0", "error"); return; }
+  const dias = parseInt(datos.dias_plazo);
+  if (isNaN(dias) || dias < 1) { showToast("Los dias deben ser un numero mayor a 0", "error"); return false; }
   setGuard(true);
   const { error } = await supabase.from('promesas_servicio')
-   .upsert({ ciudad_codigo: nueva.ciudad_codigo, dias_plazo: dias }, { onConflict: 'ciudad_codigo' });
-  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); setGuard(false); return; }
+   .upsert({ ciudad_codigo: datos.ciudad_codigo, dias_plazo: dias }, { onConflict: 'ciudad_codigo' });
+  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); setGuard(false); return false; }
   setNueva({ ciudad_codigo: "", dias_plazo: "" });
   showToast(" Promesa registrada", "success");
   if (recargar) await recargar();
   setGuard(false);
+  return true;
  };
 
- const guardarEdit = async (codigo) => {
-  const dias = parseInt(diasEdit);
-  if (isNaN(dias) || dias < 1) { showToast("Dias invlidos", "error"); return; }
+ const guardarEdit = async (codigo, valor = diasEdit) => {
+  const dias = parseInt(valor);
+  if (isNaN(dias) || dias < 1) { showToast("Dias invlidos", "error"); return false; }
   const { error } = await supabase.from('promesas_servicio')
    .update({ dias_plazo: dias }).eq('ciudad_codigo', codigo);
-  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return; }
+  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return false; }
   setEditando(null);
   showToast(" Promesa actualizada", "success");
   if (recargar) await recargar();
+  return true;
  };
 
  const eliminar = async (codigo, nombre) => {
-  if (!window.confirm(`Eliminar promesa de servicio para ${nombre}?`)) return;
+  if (!window.confirm(`Eliminar promesa de servicio para ${nombre}?`)) return false;
   const { error } = await supabase.from('promesas_servicio').delete().eq('ciudad_codigo', codigo);
-  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return; }
+  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return false; }
   showToast("Promesa eliminada", "info");
   if (recargar) await recargar();
+  return true;
  };
+
+ // Disenio 26b: la ciudad es una fila con el plazo como pastilla; agregar y
+ // editar abren una hoja.
+ if (esMovil) return (
+  <Pagina>
+   <PromesasMovil ciudades={ciudades||[]} promMap={promMap}
+    onAgregar={guardarNueva} onEditar={guardarEdit} onEliminar={eliminar} />
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -4103,7 +4141,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
       <Texto label="Dias de plazo" tipo="number" valor={nueva.dias_plazo}
        onChange={v=>setNueva(p=>({...p, dias_plazo:v}))} placeholder="2"/>
      </div>
-     <button onClick={guardarNueva} disabled={guard} style={{ ...botonPrincipal, marginBottom:0 }}>
+     <button onClick={()=>guardarNueva()} disabled={guard} style={{ ...botonPrincipal, marginBottom:0 }}>
       <Plus size={16}/> {guard ? "Guardando..." : "Agregar"}
      </button>
     </div>
@@ -4158,8 +4196,7 @@ function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
              <>
               <button style={botonFila}
                onClick={()=>{ setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}>Editar</button>
-              <button title="Quitar promesa" onClick={()=>eliminar(c.code, c.name)}
-               style={{ ...iconoAccion, color:T.color.mal }}><Trash2 size={15}/></button>
+              <BotonEliminar title="Quitar promesa" onClick={()=>eliminar(c.code, c.name)} />
              </>
             )}
            </div>
