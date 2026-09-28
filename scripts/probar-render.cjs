@@ -23,7 +23,7 @@ import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
-import { razonCorteNoCabe, razonSedeNoCabe, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
+import { razonCorteNoCabe, razonSedeNoCabe, ResultadoCargue, ArchivoFila, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
 import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
@@ -648,6 +648,20 @@ if (window.matchMedia("").matches) {
  exigir(/no puede ser menor/.test(razonSedeNoCabe({ num_cortes: 2, capacidad_dia: 50, hora_ultimo_corte: "16:00" }, tres) || ""), "deja bajar cortes por dia");
  exigir(/no puede ser menor/.test(razonSedeNoCabe({ num_cortes: 3, capacidad_dia: 40, hora_ultimo_corte: "16:00" }, tres) || ""), "deja bajar la capacidad");
  exigir(/más temprano/.test(razonSedeNoCabe({ num_cortes: 3, capacidad_dia: 50, hora_ultimo_corte: "12:00" }, tres) || ""), "deja adelantar el ultimo corte");
+}
+
+// Cargar pedidos: el resultado queda en pantalla con sus cifras y el paso a
+// Gestion es un boton; el archivo que falla se dice como error.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  cargue: " + queja); fallos++; } };
+ const r = (x) => renderToString(React.createElement(ResultadoCargue, { resultado: x, onOtro(){}, onIrGestion(){} }));
+ const bien = r({ ok:3, total:3, errores:0, duplicados:[], aprobados:2, pendientes:1, sinCorte:0 });
+ exigir(bien.includes("3 de 3 pedidos cargados") && bien.includes("2 aprobados con corte asignado · 1 pendiente de revisión"), "resultado sin cifras del diseno");
+ exigir(bien.includes("Ir a Gestión de pedidos") && bien.includes("Cargar otro archivo"), "resultado sin sus dos salidas");
+ const sinSede = r({ ok:2, total:3, errores:0, duplicados:["4582913"], aprobados:2, pendientes:0, sinCorte:1 });
+ exigir(sinSede.includes("2 aprobados, 1 con corte asignado") && sinSede.includes("DANE origen"), "no avisa los aprobados sin sede");
+ const fila = renderToString(React.createElement(ArchivoFila, { nombre:"plano_2026-09-28.csv", detalle:"No se pudo leer", error:true, accion:"Elegir otro archivo", onAccion(){} }));
+ exigir(fila.includes("plano_2026-09-28.csv") && fila.includes("lucide-file-x"), "el archivo con error no se marca en rojo");
 }
 
 globalThis.__fallos = fallos;

@@ -3,7 +3,7 @@ import { supabase } from '../../supabase';
 import { leerTextoCsv, filasCsv } from '../../utils/files';
 import { P } from '../../Constants';
 import { T, tarjeta } from '../../design/tokens';
-import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen } from 'lucide-react';
+import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
  Segmentado, Paginador,
@@ -703,7 +703,9 @@ export function CargarPedidos({user,showToast,onCargado}) {
   const [archivo,   setArchivo]  = useState('');
   const [filasLeidas, setFilasLeidas] = useState(0);
   const [pedidos,   setPedidos]  = useState([]);
-  const [errMsg,    setErrMsg]   = useState('');
+  // El error va en dos partes: que paso (titulo) y que hacer (detalle).
+  const [errMsg,    setErrMsg]   = useState(null);
+  const fallo = (titulo, detalle) => setErrMsg({ titulo, detalle });
   const [carg,      setCarg]     = useState(false);
   const [resultado, setResultado]= useState(null);
   const fileRef = useRef(null);
@@ -716,15 +718,14 @@ export function CargarPedidos({user,showToast,onCargado}) {
   // filasCsv respeta las comillas, asi que un campo con comas o saltos de linea
   // adentro ya no corre las columnas.
   const leerArchivo = async (file) => {
-    setArchivo(file.name); setPedidos([]); setFilasLeidas(0); setErrMsg(''); setResultado(null);
+    setArchivo(file.name); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null);
     if(!/\.(csv|txt)$/i.test(file.name)) {
-      setErrMsg("Solo se aceptan archivos .CSV. Si tienes un Excel, guardalo como CSV y vuelve a subirlo.");
-      setArchivo('');
+      fallo("Solo se aceptan archivos .csv.", "Si tienes un Excel, guárdalo como CSV y vuelve a subirlo.");
       return;
     }
       try {
         const rows = filasCsv(await leerTextoCsv(file));
-        if(rows.length<2){setErrMsg("El archivo está vacío o solo tiene encabezado");return;}
+        if(rows.length<2){fallo("El archivo está vacío.", "Solo tiene el encabezado o no trae filas.");return;}
         setFilasLeidas(rows.length - 1);
 
         // Sin tildes: el plano escribe "Direccion" o "Condicion de pago" con o
@@ -759,7 +760,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
         const iLios  = col('lios','líos');
         const iVTotal= col('valor_total');
 
-        if(iPed===-1) {setErrMsg("No se encontró la columna 'Pedido'");return;}
+        if(iPed===-1) {fallo("Falta la columna Pedido.", 'Revisa que el encabezado del plano tenga la columna "Pedido" escrita igual.');return;}
         // La fecha y la condicion de pago van siempre en el plano. Si faltan se
         // para aqui: sin condicion de pago todo entraria como pendiente, y
         // serian cientos de pedidos sin aprobar sin que nada lo dijera.
@@ -768,7 +769,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
           iPlazo===-1 && "Condición de pago (plazo)",
         ].filter(Boolean);
         if(faltan.length) {
-          setErrMsg(`Al archivo le falta: ${faltan.join(" y ")}. Esas columnas siempre vienen en el plano.`);
+          fallo(`Falta ${faltan.length === 1 ? "la columna" : "las columnas"} ${faltan.join(" y ")}.`, "Esas columnas siempre vienen en el plano; revisa el encabezado.");
           return;
         }
 
@@ -817,9 +818,9 @@ export function CargarPedidos({user,showToast,onCargado}) {
           estado_cartera: clasificar(p.plazo),
         }));
 
-        if(lista.length===0){setErrMsg("No se encontraron pedidos en el archivo");return;}
+        if(lista.length===0){fallo("No se encontraron pedidos.", "Ninguna fila trae número de pedido.");return;}
         setPedidos(lista);
-      } catch(ex){setErrMsg("Error leyendo el archivo: "+ex.message);}
+      } catch(ex){fallo("No se pudo leer el archivo.", ex.message);}
   };
 
   const isFecha = (val) => {
@@ -842,7 +843,7 @@ export function CargarPedidos({user,showToast,onCargado}) {
     const {data:existentes} = await supabase.from('pedidos_cartera').select('numero_pedido').in('numero_pedido',numeros);
     const yaExisten = new Set((existentes||[]).map(e=>e.numero_pedido));
 
-    let ok=0, errores=0, sinCorte=0;
+    let ok=0, errores=0, sinCorte=0, aprobados=0, pendientes=0;
     const duplicados=[];
     for(const p of pedidos) {
       if(yaExisten.has(p.numero_pedido)){ duplicados.push(p.numero_pedido); continue; }
@@ -871,15 +872,15 @@ export function CargarPedidos({user,showToast,onCargado}) {
         });
       }
       ok++;
+      if(pedData.estado_cartera==='aprobado') aprobados++; else pendientes++;
     }
     setCarg(false);
-    setResultado({ok,errores,total:pedidos.length,duplicados});
-    let msg=`✓ ${ok} pedido(s) cargados`;
-    if(duplicados.length>0) msg+=` · ${duplicados.length} ya existían (omitidos)`;
-    if(sinCorte>0) msg+=` · ${sinCorte} aprobado(s) sin sede configurada (verificar DANE Origen)`;
-    showToast(msg,"success");
-    if(ok>0 && onCargado) onCargado();
+    // El resultado se queda en pantalla con sus numeros; antes la pantalla
+    // saltaba sola a Gestion y el aviso duraba lo que dura un toast.
+    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte});
   };
+
+  const empezarDeNuevo = () => { setArchivo(''); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null); };
 
   const resumen = {
     total:pedidos.length,
@@ -891,118 +892,211 @@ export function CargarPedidos({user,showToast,onCargado}) {
     archivo={archivo} pedidos={pedidos} filasLeidas={filasLeidas} errMsg={errMsg}
     resultado={resultado} resumen={resumen} carg={carg} fileRef={fileRef}
     leerArchivo={leerArchivo} confirmar={confirmar}
-    cancelar={()=>{setArchivo('');setPedidos([]);setFilasLeidas(0);setErrMsg('');setResultado(null);}}
+    cancelar={empezarDeNuevo} onIrGestion={onCargado}
   />;
+
+  // Clasificacion con su razon, para que se lea por que entro asi.
+  const etiquetaClase = (x) => x.estado_cartera === 'aprobado'
+    ? { texto: 'Aprobado · con plazo', bg: T.color.infoSuave, color: T.color.info }
+    : { texto: 'Pendiente · contado', bg: T.color.ojoSuave, color: T.color.ojo };
 
   return (
    <Pagina anchoCompleto>
     <Encabezado
      titulo="Cargar pedidos"
-     descripcion="Pedidos del dia para revisar contra el estado de cartera"
+     descripcion="Sube el plano CSV del día. Los pedidos con plazo entran aprobados y los de contado quedan pendientes de revisión."
     />
+    <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}}
+     onChange={e=>{ if(e.target.files[0]) leerArchivo(e.target.files[0]); e.target.value=''; }}/>
 
-    <section style={{ ...tarjeta, width:"100%", boxSizing:"border-box", padding:20, display:"flex", flexDirection:"column", gap:16 }}>
-     <button onClick={()=>fileRef.current?.click()}
-      onDragOver={e=>e.preventDefault()}
-      onDrop={e=>{e.preventDefault(); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);}}
-      style={{
-       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
-       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
-       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
-      }}>
-      <span style={{
-       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
-       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
-      }}><Upload size={20}/></span>
-      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
-       {archivo || "Arrastra el archivo CSV o haz clic para seleccionarlo"}
-      </span>
-      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
-       Solo archivos .csv · una linea por referencia del pedido
-      </span>
-     </button>
-     <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
-      onChange={e=>{ if(e.target.files[0]) leerArchivo(e.target.files[0]); }}/>
-
-     {errMsg && (
-      <div style={{
-       background:T.color.malSuave, border:`1px solid ${T.color.malBorde}`,
-       color:T.color.mal, borderRadius:T.radio.control, padding:"10px 12px", fontSize:13,
-      }}>{errMsg}</div>
-     )}
-
-     {pedidos.length > 0 && (
-      <>
-       <Indicadores items={[
-        { label:"Pedidos leidos", valor:resumen.total, color:T.color.marca, destacado:true },
-        { label:"Aprobados", valor:resumen.aprobado, color:T.color.bienPunto },
-        { label:"Pendientes", valor:resumen.pendiente, color:T.color.ojoPunto },
-       ]}/>
-
-       <div style={{ border:`1px solid ${T.color.borde}`, borderRadius:T.radio.tarjeta, overflow:"hidden" }}>
-        <div style={{ maxHeight:280, overflowY:"auto" }}>
-         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead>
-           <tr>
-            <th style={th}>Pedido</th>
-            <th style={th}>Cliente</th>
-            <th style={{...th, textAlign:"right"}}>Valor</th>
-            <th style={th}>Clasificacion</th>
-           </tr>
-          </thead>
-          <tbody>
-           {pedidos.slice(0, 100).map((x,i) => {
-            const est = ESTADOS_CARTERA[x.estado_cartera] || ESTADOS_CARTERA.pendiente;
-            return (
-             <tr key={i}>
-              <td style={td}><span style={chipMono}>{x.numero_pedido}</span></td>
-              <td style={{ ...td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-               <div style={{ fontWeight:600, color:T.color.tinta }}>{x.cliente}</div>
-               <div style={mono}>{x.nit}</div>
-              </td>
-              <td style={tdCifra}>{fCOP(x.valor_total)}</td>
-              <td style={td}>
-               <span style={{
-                display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-                borderRadius:T.radio.pastilla, background:est.bg, color:est.color,
-                fontSize:12, fontWeight:600, whiteSpace:"nowrap",
-               }}>
-                <span style={{ width:6, height:6, borderRadius:3, background:est.color }}/>
-                {est.label}
-               </span>
-              </td>
-             </tr>
-            );
-           })}
-          </tbody>
-         </table>
+    <section style={{ ...tarjeta, width:"100%", maxWidth:980, boxSizing:"border-box", overflow:"hidden" }}>
+     {resultado ? (
+      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} />
+     ) : errMsg ? (
+      // 1. Error: el archivo que se eligio y por que no se pudo leer.
+      <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14 }}>
+       <ArchivoFila nombre={archivo} detalle="No se pudo leer" error accion="Elegir otro archivo" onAccion={()=>fileRef.current?.click()} />
+       <div role="alert" style={{
+        display:"flex", gap:10, alignItems:"flex-start", padding:"14px 16px",
+        background:T.color.malSuave, border:`1px solid ${T.color.malBorde}`, borderRadius:T.radio.control,
+       }}>
+        <AlertCircle size={16} color={T.color.mal} style={{ flexShrink:0, marginTop:1 }}/>
+        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+         <strong style={{ fontSize:13.5, color:T.color.mal }}>{errMsg.titulo}</strong>
+         <span style={{ fontSize:13, color:T.color.tinta2 }}>{errMsg.detalle}</span>
         </div>
-        {pedidos.length > 100 && (
-         <div style={{ padding:"9px 14px", borderTop:`1px solid ${T.color.divisor}`, fontSize:12.5, color:T.color.tinta3 }}>
-          Mostrando 100 de {pedidos.length}; se cargan todos.
-         </div>
-        )}
        </div>
-
-       <button onClick={confirmar} disabled={carg} style={{ ...botonPrincipal, alignSelf:"flex-start" }}>
-        {carg ? "Cargando..." : `Cargar ${pedidos.length} pedido(s)`}
-       </button>
+      </div>
+     ) : pedidos.length > 0 ? (
+      // 2. Vista previa: conteos, lista y confirmacion.
+      <>
+       <div style={{ padding:"16px 20px" }}>
+        <ArchivoFila nombre={archivo} detalle={`${filasLeidas} ${filasLeidas === 1 ? "fila" : "filas"} · ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+         accion="Cambiar archivo" onAccion={()=>fileRef.current?.click()} />
+       </div>
+       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
+        {[["Pedidos leídos", resumen.total, T.color.tinta], ["Aprobados", resumen.aprobado, T.color.infoPunto || T.color.info], ["Pendientes", resumen.pendiente, T.color.ojoPunto]].map(([label, valor, color], i) => (
+         <div key={label} style={{ padding:"14px 20px", borderLeft: i ? `1px solid ${T.color.borde}` : "none" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta2 }}>
+           <span style={{ width:6, height:6, borderRadius:3, background:color }}/>{label}
+          </div>
+          <div style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.02em", color:T.color.tinta, marginTop:2 }}>{valor}</div>
+         </div>
+        ))}
+       </div>
+       <div style={{ maxHeight:420, overflowY:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+         <thead>
+          <tr>
+           <th style={{ ...th, paddingLeft:20 }}>Pedido</th>
+           <th style={th}>Cliente</th>
+           <th style={{ ...th, textAlign:"right" }}>Valor total</th>
+           <th style={{ ...th, paddingRight:20 }}>Clasificación</th>
+          </tr>
+         </thead>
+         <tbody>
+          {pedidos.slice(0, 100).map((x, i) => {
+           const c = etiquetaClase(x);
+           return (
+            <tr key={i} style={{ borderTop:`1px solid ${T.color.divisor}` }}>
+             <td style={{ ...td, paddingLeft:20, fontWeight:700, color:T.color.tinta, fontVariantNumeric:"tabular-nums" }}>{x.numero_pedido}</td>
+             <td style={{ ...td, maxWidth:360 }}>
+              <div style={{ color:T.color.tinta, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{x.cliente || "Sin nombre"}</div>
+              <div style={{ ...mono, color:T.color.tinta3 }}>{x.nit ? `NIT ${x.nit}` : "Sin NIT"}</div>
+             </td>
+             <td style={{ ...tdCifra, fontWeight:700, color:T.color.tinta }}>{fCOP(x.valor_total)}</td>
+             <td style={{ ...td, paddingRight:20 }}>
+              <span style={{
+               display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", borderRadius:T.radio.pastilla,
+               background:c.bg, color:c.color, fontSize:12, fontWeight:600, lineHeight:1.25,
+              }}>
+               <span style={{ width:5, height:5, borderRadius:3, background:c.color, flexShrink:0 }}/>{c.texto}
+              </span>
+             </td>
+            </tr>
+           );
+          })}
+         </tbody>
+        </table>
+       </div>
+       {pedidos.length > 100 && (
+        <div style={{ padding:"9px 20px", borderTop:`1px solid ${T.color.divisor}`, fontSize:12.5, color:T.color.tinta3 }}>
+         {`Mostrando 100 de ${pedidos.length}; se cargan todos.`}
+        </div>
+       )}
+       <div style={{
+        display:"flex", alignItems:"center", gap:10, padding:"14px 20px",
+        borderTop:`1px solid ${T.color.borde}`, background:T.color.superficie2,
+       }}>
+        <span style={{ fontSize:12.5, color:T.color.tinta3, flex:1 }}>Se carga tal como viene; la vista previa no se puede editar.</span>
+        <button onClick={empezarDeNuevo} disabled={carg} style={botonBarra}>Cancelar</button>
+        <button onClick={confirmar} disabled={carg} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: carg ? 0.6 : 1 }}>
+         <Upload size={16}/> {carg ? "Cargando..." : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+        </button>
+       </div>
       </>
-     )}
-
-     {resultado && (
-      <FranjaInfo>
-       {resultado.ok} de {resultado.total} pedido(s) cargados
-       {resultado.duplicados.length > 0 ? `, ${resultado.duplicados.length} ya existian y se omitieron` : ""}
-       {resultado.errores > 0 ? `, ${resultado.errores} con error` : ""}.
-      </FranjaInfo>
+     ) : (
+      // Sin archivo todavia.
+      <div style={{ padding:20 }}>
+       <button onClick={()=>fileRef.current?.click()}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={e=>{e.preventDefault(); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);}}
+        style={{
+         width:"100%", padding:"36px 20px", borderRadius:T.radio.tarjeta,
+         border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
+         cursor:"pointer", fontFamily:"inherit", textAlign:"center",
+        }}>
+        <span style={{
+         width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
+         background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
+        }}><Upload size={20}/></span>
+        <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>Arrastra el archivo CSV o haz clic para seleccionarlo</span>
+        <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
+         Solo archivos .csv · una línea por referencia · obligatorias: Pedido, Fecha pedido y Condición de pago
+        </span>
+       </button>
+      </div>
      )}
     </section>
    </Pagina>
   );
 }
 
-function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar }) {
+// El archivo elegido: icono verde si se leyo, rojo si no, y la accion para cambiarlo.
+export function ArchivoFila({ nombre, detalle, error = false, accion, onAccion }) {
+  const Icono = error ? FileX : FileCheck;
+  return (
+   <div style={{
+    display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
+    border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control, background:T.color.superficie,
+   }}>
+    <span style={{
+     width:36, height:36, borderRadius:9, flexShrink:0, display:"grid", placeItems:"center",
+     background: error ? T.color.malSuave : T.color.bienSuave, color: error ? T.color.mal : T.color.bien,
+    }}><Icono size={17}/></span>
+    <div style={{ display:"flex", flexDirection:"column", minWidth:0, flex:1 }}>
+     <span style={{ fontFamily:T.fuente.mono, fontSize:13.5, fontWeight:700, color:T.color.tinta, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nombre || "Archivo sin nombre"}</span>
+     <span style={{ fontSize:12, color:T.color.tinta3 }}>{detalle}</span>
+    </div>
+    <button onClick={onAccion} style={{
+     border:"none", background:"transparent", padding:0, cursor:"pointer", flexShrink:0,
+     fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca,
+    }}>{accion}</button>
+   </div>
+  );
+}
+
+// 3. Resultado del cargue. Queda en pantalla hasta que se elige que sigue.
+export function ResultadoCargue({ resultado, onOtro, onIrGestion, compacto = false }) {
+  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0 } = resultado;
+  const completo = ok === total && ok > 0;
+  const conCorte = Math.max(0, aprobados - sinCorte);
+  const partes = [
+   aprobados ? `${aprobados} ${aprobados === 1 ? "aprobado" : "aprobados"}${sinCorte ? (conCorte ? `, ${conCorte} con corte asignado` : " sin corte") : " con corte asignado"}` : null,
+   pendientes ? `${pendientes} ${pendientes === 1 ? "pendiente" : "pendientes"} de revisión` : null,
+  ].filter(Boolean);
+  const cifra = (label, valor, alerta) => (
+   <div style={{ padding:"10px 14px", minWidth:0 }}>
+    <div style={{ fontSize:12, color:T.color.tinta3 }}>{label}</div>
+    <div style={{ fontSize:20, fontWeight:800, color: valor ? alerta : T.color.tenue }}>{valor}</div>
+   </div>
+  );
+  return (
+   <div style={{ padding: compacto ? "20px 14px" : "28px 20px", display:"flex", flexDirection:"column", alignItems:"center", gap:12, textAlign:"center", ...(compacto ? { ...tarjeta } : {}) }}>
+    <span style={{
+     width:48, height:48, borderRadius:24, display:"grid", placeItems:"center",
+     background: completo ? T.color.bienSuave : T.color.ojoSuave, color: completo ? T.color.bien : T.color.ojo,
+    }}>{completo ? <Check size={22}/> : <AlertCircle size={22}/>}</span>
+    <div>
+     <div style={{ fontSize:18, fontWeight:800, color:T.color.tinta }}>{`${ok} de ${total} ${total === 1 ? "pedido cargado" : "pedidos cargados"}`}</div>
+     {partes.length > 0 && <div style={{ fontSize:13, color:T.color.tinta3, marginTop:3 }}>{partes.join(" · ")}</div>}
+    </div>
+    <div style={{
+     display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", width:"100%", maxWidth:520, textAlign:"left",
+     border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control,
+    }}>
+     {cifra("Ya existían (omitidos)", duplicados.length, T.color.ojo)}
+     <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Fallaron", errores, T.color.mal)}</div>
+     <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Aprobados sin sede", sinCorte, T.color.ojo)}</div>
+    </div>
+    {sinCorte > 0 && (
+     <div style={{ fontSize:12.5, color:T.color.ojo, maxWidth:520 }}>
+      Los aprobados sin sede no tienen corte: revisa que su DANE origen tenga una sede activa en Sedes y cortes.
+     </div>
+    )}
+    <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center", marginTop:4 }}>
+     <button onClick={onOtro} style={botonBarra}>Cargar otro archivo</button>
+     {onIrGestion && (
+      <button onClick={onIrGestion} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7 }}>
+       Ir a Gestión de pedidos <ArrowRight size={15}/>
+      </button>
+     )}
+    </div>
+   </div>
+  );
+}
+
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion }) {
   return (
    <Pagina anchoCompleto>
     <header>
@@ -1012,7 +1106,7 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
     <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:'none'}}
      onChange={e=>{if(e.target.files[0]) leerArchivo(e.target.files[0]);e.target.value='';}}/>
 
-    {!pedidos.length ? <>
+    {resultado ? null : !pedidos.length ? <>
      <section style={{ ...tarjeta, padding:20 }}>
       <button onClick={()=>fileRef.current?.click()} style={{
        width:'100%', minHeight:225, padding:'24px 20px', background:T.color.superficie,
@@ -1063,10 +1157,10 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
      </section>
      <p style={{textAlign:'center',fontSize:12,color:T.color.tinta3,margin:0}}>Se carga tal como viene; no se puede editar aquí.</p>
     </>}
-    {errMsg && <div role="alert" style={{background:T.color.malSuave,color:T.color.mal,padding:12,borderRadius:10,fontSize:13}}>{errMsg}</div>}
-    {resultado && <FranjaInfo>{resultado.ok} de {resultado.total} pedidos cargados.</FranjaInfo>}
-    {pedidos.length>0 && <div style={{height:65}}/>}
-    {pedidos.length>0 && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
+    {errMsg && <div role="alert" style={{background:T.color.malSuave,color:T.color.mal,padding:12,borderRadius:10,fontSize:13}}><strong>{errMsg.titulo}</strong> {errMsg.detalle}</div>}
+    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} compacto />}
+    {pedidos.length>0 && !resultado && <div style={{height:65}}/>}
+    {pedidos.length>0 && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
      <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
      <button onClick={confirmar} disabled={carg} style={{...botonPrincipal,justifyContent:'center'}}><Upload size={16}/> {carg?'Cargando...':`Cargar ${pedidos.length} pedidos`}</button>
     </div>}
