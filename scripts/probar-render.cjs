@@ -23,7 +23,7 @@ import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
-import { GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
+import { razonCorteNoCabe, razonSedeNoCabe, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
 import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
@@ -628,6 +628,26 @@ if (window.matchMedia("").matches) {
   const us = renderToString(usuarios27());
   exigir(us.includes("@driver1") && (us.match(/ · Sin acceso/g) || []).length === 1 && us.includes("2 con acceso") && us.includes("Administrador"), "29 sin usuario, acceso o roles");
  }
+}
+
+// Limites de la sede: con 3 cortes, 50 pedidos y ultimo corte a las 16:00,
+// no entra un cuarto corte, ni uno despues de las 16:00, ni uno que pase de 50,
+// ni uno repetido; y al editar la sede no se baja un limite por debajo de lo que
+// ya tienen sus cortes. El caso es el que se reporto.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  sedes: " + queja); fallos++; } };
+ const sede = { num_cortes: 3, capacidad_dia: 50, hora_ultimo_corte: "16:00:00" };
+ const dos = [{ hora_corte: "08:00:00", capacidad_corte: 20 }, { hora_corte: "11:00:00", capacidad_corte: 20 }];
+ const tres = [...dos, { hora_corte: "14:00:00", capacidad_corte: 5 }];
+ exigir(razonCorteNoCabe(sede, dos, "14:00", 10) === null, "rechaza un corte que si cabe");
+ exigir(/admite 3 cortes/.test(razonCorteNoCabe(sede, tres, "15:00", 1) || ""), "deja crear un cuarto corte");
+ exigir(/16:00/.test(razonCorteNoCabe(sede, dos, "17:00", 5) || ""), "deja crear un corte despues del ultimo");
+ exigir(/caben máximo 10/.test(razonCorteNoCabe(sede, dos, "14:00", 11) || ""), "deja pasar de la capacidad por dia");
+ exigir(/Ya hay un corte a las 08:00/.test(razonCorteNoCabe(sede, dos, "08:00", 1) || ""), "deja repetir la hora");
+ exigir(razonSedeNoCabe({ num_cortes: 3, capacidad_dia: 50, hora_ultimo_corte: "16:00" }, tres) === null, "rechaza una edicion valida");
+ exigir(/no puede ser menor/.test(razonSedeNoCabe({ num_cortes: 2, capacidad_dia: 50, hora_ultimo_corte: "16:00" }, tres) || ""), "deja bajar cortes por dia");
+ exigir(/no puede ser menor/.test(razonSedeNoCabe({ num_cortes: 3, capacidad_dia: 40, hora_ultimo_corte: "16:00" }, tres) || ""), "deja bajar la capacidad");
+ exigir(/más temprano/.test(razonSedeNoCabe({ num_cortes: 3, capacidad_dia: 50, hora_ultimo_corte: "12:00" }, tres) || ""), "deja adelantar el ultimo corte");
 }
 
 globalThis.__fallos = fallos;

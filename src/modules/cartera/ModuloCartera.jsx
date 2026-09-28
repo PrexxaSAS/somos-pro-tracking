@@ -164,6 +164,60 @@ function BadgeEstado({estado}) {
 
 // ── Sidebar ────────────────────────────────────────────────────────────────────
 // ── LOGIN ──────────────────────────────────────────────────────────────────────
+// ── Límites de una sede ────────────────────────────────────────────────────────
+// Cortes por dia, capacidad por dia y ultimo corte son el techo de los cortes de
+// la sede: cuantos puede tener, cuantos pedidos pueden sumar entre todos y hasta
+// que hora. Antes solo se guardaban y nadie los miraba, asi que una sede de 3
+// cortes y 50 pedidos admitia 5 cortes de 40 despues de las 4 p.m.
+const hhmm = (h) => String(h || '').slice(0, 5);
+
+const limitesSede = (sede) => ({
+  cortes: parseInt(sede?.num_cortes) || 0,
+  capacidad: parseInt(sede?.capacidad_dia) || 0,
+  ultimo: hhmm(sede?.hora_ultimo_corte),
+});
+
+// Por que no cabe un corte nuevo en la sede, o null si cabe.
+export const razonCorteNoCabe = (sede, cortes, hora, capacidad) => {
+  const lim = limitesSede(sede);
+  const suma = cortes.reduce((a, c) => a + (parseInt(c.capacidad_corte) || 0), 0);
+  if (lim.cortes && cortes.length >= lim.cortes)
+    return `La sede admite ${lim.cortes} ${lim.cortes === 1 ? 'corte' : 'cortes'} por día y ya los tiene. Elimina uno o sube "Cortes por día" en la sede.`;
+  if (cortes.some(c => hhmm(c.hora_corte) === hhmm(hora)))
+    return `Ya hay un corte a las ${hhmm(hora)}.`;
+  if (lim.ultimo && hhmm(hora) > lim.ultimo)
+    return `El último corte de la sede es a las ${lim.ultimo}; este no puede ser más tarde.`;
+  if (lim.capacidad && suma + capacidad > lim.capacidad)
+    return `La capacidad por día es ${lim.capacidad} y los cortes ya suman ${suma}: a este le caben máximo ${Math.max(0, lim.capacidad - suma)}.`;
+  return null;
+};
+
+// Por que la sede no puede quedar con esos limites, dados los cortes que ya tiene.
+export const razonSedeNoCabe = (datos, cortes) => {
+  if (!cortes.length) return null;
+  const suma = cortes.reduce((a, c) => a + (parseInt(c.capacidad_corte) || 0), 0);
+  const tarde = cortes.map(c => hhmm(c.hora_corte)).sort().pop();
+  if (cortes.length > datos.num_cortes)
+    return `La sede ya tiene ${cortes.length} cortes; "Cortes por día" no puede ser menor. Elimina cortes primero.`;
+  if (suma > datos.capacidad_dia)
+    return `Los cortes ya suman ${suma} pedidos; "Capacidad por día" no puede ser menor.`;
+  if (datos.hora_ultimo_corte && tarde > hhmm(datos.hora_ultimo_corte))
+    return `Ya hay un corte a las ${tarde}; "Último corte" no puede ser más temprano.`;
+  return null;
+};
+
+// Una linea con lo usado frente al limite: "2 de 3 cortes · 40 de 50 pedidos · hasta las 16:00".
+function UsoSede({ sede, cortes }) {
+  const lim = limitesSede(sede);
+  const suma = cortes.reduce((a, c) => a + (parseInt(c.capacidad_corte) || 0), 0);
+  const lleno = (lim.cortes && cortes.length >= lim.cortes) || (lim.capacidad && suma >= lim.capacidad);
+  return (
+    <div style={{ fontSize: 12.5, color: lleno ? T.color.ojo : T.color.tinta3, fontWeight: lleno ? 600 : 400 }}>
+      {`${cortes.length} de ${lim.cortes || '—'} cortes · ${suma} de ${lim.capacidad || '—'} pedidos por día · hasta las ${lim.ultimo || '—'}`}
+    </div>
+  );
+}
+
 // ── GESTIÓN SEDES ──────────────────────────────────────────────────────────────
 export function GestionSedes({showToast}) {
   const esMovil = useEsMovil();
@@ -188,6 +242,12 @@ export function GestionSedes({showToast}) {
     const datos = {nombre:form.nombre.trim(),municipio:form.municipio.trim(),dane_code:form.dane_code.trim(),
       capacidad_dia:parseInt(form.capacidad_dia)||50,hora_ultimo_corte:form.hora_ultimo_corte,
       num_cortes:parseInt(form.num_cortes)||3,activa:form.activa};
+    // Al editar, los limites no pueden quedar por debajo de los cortes que ya hay.
+    if(form.id){
+      const {data:actuales} = await supabase.from('cortes_sede').select('hora_corte,capacidad_corte').eq('sede_id',form.id);
+      const razon = razonSedeNoCabe(datos, actuales||[]);
+      if(razon){showToast(razon,"error");setCarg(false);return;}
+    }
     const {error} = form.id
       ? await supabase.from('sedes').update(datos).eq('id',form.id)
       : await supabase.from('sedes').insert(datos);
@@ -355,15 +415,27 @@ export function ModalCortes({sede,onClose,showToast,onCambiar}) {
 
   const agregar = async () => {
     if(!form.hora_corte||!form.capacidad_corte){showToast("Completa todos los campos","error");return;}
+    const capacidad = parseInt(form.capacidad_corte)||0;
+    if(capacidad<1){showToast("El máximo de pedidos del corte debe ser mayor que 0","error");return;}
+    // Se revisa contra los cortes de la base, no contra la lista en pantalla,
+    // por si otra persona agrego uno mientras tanto.
     setCarg(true);
+    const {data:actuales} = await supabase.from('cortes_sede').select('hora_corte,capacidad_corte').eq('sede_id',sede.id);
+    const razon = razonCorteNoCabe(sede, actuales||[], form.hora_corte, capacidad);
+    if(razon){showToast(razon,"error");setCarg(false);return;}
     const {error} = await supabase.from('cortes_sede').insert({
       sede_id:sede.id,hora_corte:form.hora_corte,
-      capacidad_corte:parseInt(form.capacidad_corte)||20
+      capacidad_corte:capacidad
     });
     if(error)showToast("Error: "+error.message,"error");
     else{showToast("✓ Corte agregado","success");setForm({hora_corte:'09:00',capacidad_corte:'20'});cargar();onCambiar?.();}
     setCarg(false);
   };
+
+  // Sin cupo para otro corte: el boton se apaga y la linea de uso dice por que.
+  const lim = limitesSede(sede);
+  const sumaCortes = cortes.reduce((a,c)=>a+(parseInt(c.capacidad_corte)||0),0);
+  const sinCupo = (lim.cortes && cortes.length>=lim.cortes) || (lim.capacidad && sumaCortes>=lim.capacidad);
 
   const eliminar = async (id) => {
     await supabase.from('cortes_sede').delete().eq('id',id);
@@ -376,13 +448,14 @@ export function ModalCortes({sede,onClose,showToast,onCambiar}) {
    <div onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Cortes de ${sede.nombre}`} style={{width:'100%',boxSizing:'border-box',maxHeight:'85vh',overflowY:'auto',background:T.color.superficie,borderRadius:'20px 20px 0 0',padding:'9px 16px calc(16px + env(safe-area-inset-bottom, 0px))'}}>
     <div style={{width:36,height:4,background:T.color.tenue,borderRadius:4,margin:'0 auto 14px'}}/>
     <h2 style={{fontSize:17,margin:'0 0 2px'}}>Cortes · {sede.nombre}</h2>
-    <p style={{fontSize:12,color:T.color.tinta3,margin:'0 0 12px'}}>Ordenados por hora. Se agregan y eliminan; no se editan.</p>
+    <p style={{fontSize:12,color:T.color.tinta3,margin:'0 0 6px'}}>Ordenados por hora. Se agregan y eliminan; no se editan.</p>
+    <div style={{margin:'0 0 10px'}}><UsoSede sede={sede} cortes={cortes}/></div>
     {cortes.map(c=><div key={c.id} style={{display:'flex',alignItems:'center',gap:9,padding:'12px 0',borderBottom:`1px solid ${T.color.divisor}`,fontSize:13}}><Clock size={15} color={T.color.tinta3}/><strong style={{minWidth:54}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{flex:1,color:T.color.tinta3}}>{c.capacidad_corte} pedidos máximo</span><button aria-label={`Eliminar corte ${c.hora_corte}`} onClick={()=>eliminar(c.id)} style={{border:'none',background:'transparent',color:T.color.tinta3}}><Trash2 size={16}/></button></div>)}
     {cortes.length===0&&<p style={{fontSize:13,color:T.color.tinta3}}>Esta sede aún no tiene cortes.</p>}
     <div style={{background:T.color.superficie2,borderRadius:10,padding:10,marginTop:12}}><div style={{fontSize:12,fontWeight:600,marginBottom:8}}>Agregar corte</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:6}}>
      <input aria-label="Hora del corte" type="time" value={form.hora_corte} onChange={e=>f('hora_corte')(e.target.value)} style={{minWidth:0,width:'100%',boxSizing:'border-box',padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:8}}/>
      <input aria-label="Máximo de pedidos" type="number" min="1" value={form.capacidad_corte} onChange={e=>f('capacidad_corte')(e.target.value)} placeholder="Máx. pedidos" style={{minWidth:0,width:'100%',boxSizing:'border-box',padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:8}}/>
-     <button onClick={agregar} disabled={carg} aria-label="Agregar corte" style={{...botonPrincipal,padding:'0 11px'}}><Plus size={18}/></button>
+     <button onClick={agregar} disabled={carg||sinCupo} aria-label="Agregar corte" style={{...botonPrincipal,padding:'0 11px',opacity:sinCupo?0.5:1,cursor:sinCupo?'not-allowed':'pointer'}}><Plus size={18}/></button>
     </div></div>
     <button onClick={onClose} style={{...botonBarra,width:'100%',justifyContent:'center',marginTop:12}}>Cerrar</button>
    </div>
@@ -396,6 +469,7 @@ export function ModalCortes({sede,onClose,showToast,onCambiar}) {
     ancho="M"
     textoCancelar="Cerrar"
    >
+    <UsoSede sede={sede} cortes={cortes}/>
     <Seccion titulo="Agregar corte"/>
     <div style={{
      display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:10, alignItems:"end",
@@ -404,7 +478,7 @@ export function ModalCortes({sede,onClose,showToast,onCambiar}) {
     }}>
      <Texto label="Hora" tipo="time" valor={form.hora_corte} onChange={f("hora_corte")}/>
      <Texto label="Pedidos max." tipo="number" valor={form.capacidad_corte} onChange={f("capacidad_corte")} placeholder="20"/>
-     <button onClick={agregar} disabled={carg} style={{ ...botonPrincipal, height:40 }}>
+     <button onClick={agregar} disabled={carg||sinCupo} style={{ ...botonPrincipal, height:40, opacity:sinCupo?0.5:1, cursor:sinCupo?"not-allowed":"pointer" }}>
       <Plus size={15}/> Agregar
      </button>
     </div>
