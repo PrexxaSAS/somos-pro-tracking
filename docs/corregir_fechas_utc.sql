@@ -28,6 +28,22 @@
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
+-- PASO 0. El respaldo.
+--
+-- No hace falta respaldar la base entera: este script solo toca una columna de
+-- una tabla. Se guarda el estado previo de fecha_real en una tabla aparte, que
+-- es instantaneo y da una reversa exacta. Deja esa tabla ahi unos dias y
+-- borrala cuando estes tranquilo.
+-- ---------------------------------------------------------------------------
+drop table if exists public.respaldo_fecha_real;
+create table public.respaldo_fecha_real as
+select id, fecha_real, estado, now() as respaldado_en
+from public.pedidos;
+
+-- Debe dar el mismo numero de pedidos que tiene la tabla.
+select count(*) as filas_respaldadas from public.respaldo_fecha_real;
+
+-- ---------------------------------------------------------------------------
 -- PASO 1. Ver que se va a cambiar, sin cambiar nada.
 --         Revisa esta lista antes de seguir.
 -- ---------------------------------------------------------------------------
@@ -127,3 +143,20 @@ select tgname, tgenabled
 from pg_trigger
 where tgrelid = 'public.pedidos'::regclass
   and tgname = 'trg_prevent_closed_pedido_changes';
+
+-- ---------------------------------------------------------------------------
+-- LA REVERSA, por si algo salio mal. Devuelve fecha_real a como estaba.
+-- Solo mientras exista la tabla del paso 0.
+-- ---------------------------------------------------------------------------
+-- begin;
+-- alter table public.pedidos disable trigger trg_prevent_closed_pedido_changes;
+-- update public.pedidos p
+-- set fecha_real = r.fecha_real
+-- from public.respaldo_fecha_real r
+-- where p.id = r.id
+--   and p.fecha_real is distinct from r.fecha_real;
+-- alter table public.pedidos enable trigger trg_prevent_closed_pedido_changes;
+-- commit;
+
+-- Cuando ya no la necesites:
+-- drop table public.respaldo_fecha_real;
