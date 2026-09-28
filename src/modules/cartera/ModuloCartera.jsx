@@ -1030,7 +1030,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}}
      onChange={e=>{ if(e.target.files[0]) leerArchivo(e.target.files[0]); e.target.value=''; }}/>
 
-    <section style={{ ...tarjeta, width:"100%", maxWidth:980, boxSizing:"border-box", overflow:"hidden" }}>
+    <section style={{ ...tarjeta, width:"100%", boxSizing:"border-box", overflow:"hidden" }}>
      {resultado ? (
       <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} />
      ) : errMsg ? (
