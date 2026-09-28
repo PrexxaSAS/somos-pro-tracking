@@ -1924,6 +1924,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
          <th style={th2}>Cliente</th>
          <th style={th2}>Ciudad / DANE</th>
          <th style={th2}>Fecha pedido</th>
+         <th style={th2}>Hora pedido</th>
          <th style={{ ...th2, textAlign:"right" }}>Cajas</th>
          <th style={th2}>Estado</th>
          <th style={th2}>Conductor</th>
@@ -1932,7 +1933,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        </thead>
        <tbody>
         {filtrados.length === 0 && (
-         <tr><td colSpan={10} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
+         <tr><td colSpan={11} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
           Ningun pedido coincide con los filtros.
          </td></tr>
         )}
@@ -1964,14 +1965,10 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
              : <span style={{ color:T.color.tinta3 }}>-</span>}
            </td>
            <td style={td2}>
-            {p.fecha_pedido
-             ? <><div>{p.fecha_pedido}</div>
-                {p.hora_pedido && (
-                 <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>
-                  {String(p.hora_pedido).slice(0, 5)}
-                 </div>
-                )}</>
-             : <span style={{ color:T.color.tinta3 }}>-</span>}
+            {p.fecha_pedido || <span style={{ color:T.color.tinta3 }}>-</span>}
+           </td>
+           <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>
+            {p.hora_pedido ? String(p.hora_pedido).slice(0, 5) : <span style={{ color:T.color.tinta3 }}>-</span>}
            </td>
            <td style={{ ...td2, textAlign:"right", fontWeight:700, color:T.color.tinta }}>{p.cajas || 0}</td>
            <td style={td2}>
@@ -6421,4 +6418,3 @@ export default function SomosProTracking() {
   </div>
  );
 }
-

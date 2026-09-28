@@ -468,7 +468,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
   };
 
   return (
-   <Pagina>
+   <Pagina anchoCompleto>
     <Encabezado
      titulo="Asesores comerciales"
      descripcion="Destinatarios del correo cuando se rechaza un pedido"
@@ -744,13 +744,13 @@ export function CargarPedidos({user,showToast,onCargado}) {
   };
 
   return (
-   <Pagina>
+   <Pagina anchoCompleto>
     <Encabezado
      titulo="Cargar pedidos"
      descripcion="Pedidos del dia para revisar contra el estado de cartera"
     />
 
-    <section style={{ ...tarjeta, padding:20, display:"flex", flexDirection:"column", gap:16 }}>
+    <section style={{ ...tarjeta, width:"100%", boxSizing:"border-box", padding:20, display:"flex", flexDirection:"column", gap:16 }}>
      <button onClick={()=>fileRef.current?.click()}
       onDragOver={e=>e.preventDefault()}
       onDrop={e=>{e.preventDefault(); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]);}}
@@ -1048,7 +1048,7 @@ export function GestionPedidos({user, showToast}) {
             </td>
             <td style={td}>
              <span style={chipMono}>{x.numero_pedido}</span>
-             {x.fecha_pedido && <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:3 }}>{x.fecha_pedido}</div>}
+             {x.fecha_pedido && <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:3 }}>Fecha del plano: {x.fecha_pedido}</div>}
             </td>
             <td style={{ ...td, maxWidth:220 }}>
              <div style={{ fontWeight:600, color:T.color.tinta, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -1307,7 +1307,7 @@ export function ModuloLogistica({showToast}) {
   const porImprimir = pedidos.filter(x => x.estado_impresion !== "impreso");
 
   return (
-   <Pagina>
+   <Pagina anchoCompleto>
     <Encabezado
      titulo="Logistica de cartera"
      descripcion="Pedidos aprobados listos para imprimir y transmitir al TMS"
@@ -1494,7 +1494,7 @@ export function ModuloConsultas({showToast}) {
   };
 
   return (
-   <Pagina>
+   <Pagina anchoCompleto>
     <Encabezado
      titulo="Consultas de cartera"
      descripcion="Estado de aprobacion de los pedidos, solo lectura"

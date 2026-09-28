@@ -17,6 +17,7 @@
 --
 -- QUE DATOS TRAE Y CUALES NO:
 --   fecha_pedido / hora_pedido  <- la fecha y hora del corte asignado
+--   pedidos_cartera.fecha_pedido conserva la fecha del plano solo como trazabilidad
 --   ciudad_codigo               <- sector_dane (destino), a 5 digitos
 --   ciudad_origen_codigo        <- dane_origen
 --   los nombres de ciudad se resuelven contra public.ciudades

@@ -69,7 +69,7 @@ export function BotonEliminar({ onClick, title = "Eliminar", tam = 15 }) {
  );
 }
 
-export function Pagina({ children }) {
+export function Pagina({ children, anchoCompleto = false }) {
  // Los margenes negativos anulan el relleno del contenedor para que el fondo
  // llegue a los bordes; en el celular ese relleno es otro, y abajo hay que
  // devolver el espacio que reserva la barra de navegacion.
@@ -81,7 +81,7 @@ export function Pagina({ children }) {
    margin: esMovil ? `-16px -16px -${pie}px` : "-28px -24px",
    padding: esMovil ? `16px 16px ${pie + 12}px` : "28px 36px 36px",
   }}>
-   <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: esMovil ? 14 : 20 }}>
+   <div style={{ width: anchoCompleto ? "100%" : undefined, maxWidth: anchoCompleto ? "none" : 1320, margin: "0 auto", display: "flex", flexDirection: "column", gap: esMovil ? 14 : 20 }}>
     {children}
    </div>
   </div>
