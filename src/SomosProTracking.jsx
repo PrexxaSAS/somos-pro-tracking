@@ -4457,7 +4457,10 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  };
 
  const crear = async () => {
-  const req = ["factura","pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
+  // La factura ya no se pide: sale del pedido elegido. Puede quedar vacia si
+  // el pedido aun no tiene factura (los de cartera entran sin ella) o si el
+  // pedido se escribio a mano.
+  const req = ["pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
   for (const k of req) {
    if (!form[k].toString().trim()) { showToast("Todos los campos son obligatorios","error"); return; }
   }
@@ -4674,14 +4677,15 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
       <FranjaInfo>Se generara automaticamente la guia DV-{new Date().getFullYear()}-XXXX</FranjaInfo>
      )}
 
-     {/* Como en el celular: el pedido se elige de la lista (o se escribe) y al
-         elegirlo se llenan la factura, la direccion y la ciudad de recogida con
-         las suyas; todo se puede corregir despues. */}
-     <Fila>
-      <SelectorPedido label="N pedido de referencia" obligatorio valor={form.pedido_ref} onChange={f("pedido_ref")} pedidos={pedidos}
-       onElegirPedido={p=>setForm(x=>({ ...x, factura: p.factura || x.factura, dir_recogida: p.direccion || x.dir_recogida, ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo }))} />
-      <Texto label="N factura" obligatorio mono valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" />
-     </Fila>
+     {/* Un solo campo: el pedido se elige de la lista (o se escribe). Su
+         factura se toma del pedido, no se pide aparte; y al elegirlo tambien
+         se llenan la direccion y la ciudad de recogida, que se pueden corregir. */}
+     <SelectorPedido label="Pedido" obligatorio valor={form.pedido_ref} pedidos={pedidos}
+      onChange={v=>setForm(x=>({ ...x, pedido_ref:v, factura: (pedidos.find(p=>String(p.id)===String(v))||{}).factura || "" }))}
+      onElegirPedido={p=>setForm(x=>({ ...x, factura: p.factura || "", dir_recogida: p.direccion || x.dir_recogida, ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo }))}
+      ayuda={form.factura ? `Factura ${form.factura} · se toma del pedido`
+       : form.pedido_ref ? "Sin factura: el pedido todavia no la tiene."
+       : "Al elegir el pedido se completan su factura, la direccion y la ciudad de recogida."} />
 
      <Seccion titulo="Carga" />
      <Fila columnas={3}>

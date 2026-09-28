@@ -310,11 +310,11 @@ export function FormDevolucionMovil({
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const [otro, setOtro] = useState(Boolean(form.motivo) && !MOTIVOS_DEVOLUCION.includes(form.motivo));
 
- // Al elegir el pedido se llenan factura, direccion y ciudad; el cliente
- // puede corregirlas despues.
+ // Un solo campo: al elegir el pedido su factura se toma de el (no se pide
+ // aparte) y se llenan la direccion y la ciudad, que se pueden corregir.
  const elegirPedido = (p) => setForm(x => ({
   ...x, pedido_ref: String(p.id),
-  factura: p.factura || x.factura,
+  factura: p.factura || "",
   dir_recogida: p.direccion || x.dir_recogida,
   ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo,
  }));
@@ -325,11 +325,10 @@ export function FormDevolucionMovil({
    onClose={onClose} onEnviar={onEnviar} cta={editando ? "Guardar cambios" : (conTransporte ? "Crear devolucion" : "Solicitar devolucion")}
    pie={conTransporte ? null : "La central asigna el transporte"}>
    <Seccion>Pedido</Seccion>
-   <Campo etiqueta="Pedido" obligatorio ayuda="Al elegirlo se completan factura y direccion">
+   <Campo etiqueta="Pedido" obligatorio ayuda={form.factura ? `Factura ${form.factura} · se toma del pedido`
+    : form.pedido_ref ? "Sin factura: el pedido todavia no la tiene."
+    : "Al elegirlo se completan su factura y la direccion"}>
     <BotonPedido valor={form.pedido_ref} pedidos={pedidos} onClick={() => setHoja("pedido")} />
-   </Campo>
-   <Campo etiqueta="N° factura" obligatorio>
-    <Texto valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" mono />
    </Campo>
    <Campo etiqueta="Motivo" obligatorio>
     <Opciones valor={otro ? OTRO : form.motivo} placeholder="Seleccione el motivo"
@@ -365,7 +364,7 @@ export function FormDevolucionMovil({
 
    {hoja === "pedido" && (
     <HojaPedidos pedidos={pedidos} seleccionado={form.pedido_ref} onElegir={elegirPedido}
-     onEscrito={v => f("pedido_ref")(v)} onClose={() => setHoja(null)} />
+     onEscrito={v => setForm(x => ({ ...x, pedido_ref: v, factura: "" }))} onClose={() => setHoja(null)} />
    )}
    {hoja === "ciudad" && (
     <HojaCiudades ciudades={ciudades} titulo="Ciudad de recogida" seleccionada={form.ciudad_codigo}

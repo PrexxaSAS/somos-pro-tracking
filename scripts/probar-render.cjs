@@ -698,7 +698,9 @@ if (window.matchMedia("").matches) {
  const campo = renderToString(React.createElement(SelectorPedido, { label:"N pedido de referencia", valor:"", onChange(){}, pedidos, obligatorio:true }));
  exigir(campo.includes("N pedido de referencia") && campo.includes("Elige o escribe el pedido"), "el selector de escritorio no se dibuja");
  const fDev = renderToString(solicitud(FormDevolucionMovil, { form: formDev }));
- exigir(fDev.includes("N° factura") && fDev.includes("Elegir pedido"), "el celular perdio el pedido o la factura");
+ exigir(!fDev.includes("N° factura") && fDev.includes("Elegir pedido"), "el celular sigue pidiendo la factura aparte");
+ const conPedido = renderToString(solicitud(FormDevolucionMovil, { form: { ...formDev, pedido_ref:"PX1", factura:"FAC-300" } }));
+ exigir(conPedido.includes("Factura FAC-300 · se toma del pedido"), "no dice de donde sale la factura");
 }
 
 globalThis.__fallos = fallos;
