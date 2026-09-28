@@ -5122,7 +5122,19 @@ function MiUbicacion({ user, pedidos = [] }) {
  const [tick, setTick] = useState(0);
  const [err, setErr] = useState("");
  const [claveMapa, setClaveMapa] = useState(0);
+ // Donde esta centrado el mapa, aparte de donde esta el conductor. Si el src
+ // del iframe siguiera a cada lectura del GPS, el mapa se recargaria entero
+ // cada segundo y parpadearia. El centro se mueve solo al primer fix, al
+ // pulsar Centrar, o cuando el conductor se alejo mas de ~80 m de el.
+ const [centro, setCentro] = useState(window._gpsLat && window._gpsLng ? { lat: window._gpsLat, lng: window._gpsLng } : null);
  const watchRef = useRef(window._gpsWatch || null);
+
+ const metrosEntre = (a, b) => {
+  const r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.asin(Math.sqrt(h));
+ };
 
  // "hace 8 s" se recalcula solo mientras el GPS esta activo.
  useEffect(() => {
@@ -5139,6 +5151,7 @@ function MiUbicacion({ user, pedidos = [] }) {
   const condId = user?.conductor_db_id || user?.id;
   if (condId) window._gpsData[String(condId)] = { lat, lng, ts: Date.now() };
   setLat(lat); setLng(lng); setPrecision(acc); setUltima(Date.now());
+  setCentro(c => (!c || metrosEntre(c, { lat, lng }) > 80) ? { lat, lng } : c);
  };
 
  const iniciar = () => {
@@ -5166,7 +5179,12 @@ function MiUbicacion({ user, pedidos = [] }) {
  const haceTexto = segundos == null ? "" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
  const precisionTexto = precision ? ` · ±${Math.round(precision)} m` : "";
 
- const mapUrl = lat&&lng ? `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16` : `https://maps.google.com/maps?q=4.711,-74.072&output=embed&z=11`;
+ // Cuatro decimales (~11 m): asi una lectura que apenas tiembla no cambia la
+ // URL y no recarga el mapa.
+ const mapUrl = centro
+  ? `https://maps.google.com/maps?q=${centro.lat.toFixed(4)},${centro.lng.toFixed(4)}&output=embed&z=16`
+  : `https://maps.google.com/maps?q=4.711,-74.072&output=embed&z=11`;
+ const centrar = () => { if (lat && lng) { setCentro({ lat, lng }); setClaveMapa(k => k + 1); } };
 
  const tarjetaFlotante = (
   <section style={{
@@ -5249,7 +5267,7 @@ function MiUbicacion({ user, pedidos = [] }) {
     </span>
    </header>
    {lat && lng && (
-    <button onClick={() => setClaveMapa(k => k + 1)} title="Centrar en mi posicion" style={{
+    <button onClick={centrar} title="Centrar en mi posicion" style={{
      position: "absolute", right: 16, bottom: on ? 226 : 176, width: 44, height: 44, display: "grid", placeItems: "center",
      background: T.color.superficie, border: `1px solid ${T.color.borde2}`, borderRadius: 12, color: T.color.tinta2,
      boxShadow: "0 4px 12px -4px rgba(23,20,31,.2)", cursor: "pointer",
