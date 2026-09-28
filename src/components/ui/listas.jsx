@@ -264,28 +264,53 @@ export function Casilla({ marcada, onChange, titulo }) {
  );
 }
 
+// El menu se dibuja con position fixed, medido desde el boton: las tablas
+// viven en contenedores con overflow (para el desplazamiento horizontal) y un
+// menu absoluto quedaba recortado en las ultimas filas. Si abajo no cabe, se
+// abre hacia arriba. Al desplazar o cambiar el tamanio de la ventana se cierra,
+// porque ya no estaria junto a su boton.
 export function MenuFila({ opciones }) {
- const [abierto, setAbierto] = useState(false);
+ const [pos, setPos] = useState(null); // null = cerrado
  const ref = useRef(null);
+ const boton = useRef(null);
+ const abierto = pos !== null;
  useEffect(() => {
   if (!abierto) return;
-  const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+  const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setPos(null); };
+  const cerrar = () => setPos(null);
   document.addEventListener("mousedown", fuera);
-  return () => document.removeEventListener("mousedown", fuera);
+  window.addEventListener("scroll", cerrar, true);
+  window.addEventListener("resize", cerrar);
+  return () => {
+   document.removeEventListener("mousedown", fuera);
+   window.removeEventListener("scroll", cerrar, true);
+   window.removeEventListener("resize", cerrar);
+  };
  }, [abierto]);
+
+ const alternar = () => {
+  if (abierto) { setPos(null); return; }
+  const r = boton.current.getBoundingClientRect();
+  const alto = opciones.length * 36 + 14;
+  const cabeAbajo = r.bottom + 4 + alto <= window.innerHeight;
+  setPos({
+   right: Math.max(8, window.innerWidth - r.right),
+   ...(cabeAbajo ? { top: r.bottom + 4 } : { bottom: Math.max(8, window.innerHeight - r.top + 4) }),
+  });
+ };
 
  return (
   <div ref={ref} style={{ position: "relative", display: "flex", justifyContent: "flex-end" }}>
-   <button onClick={() => setAbierto(!abierto)} title="Acciones" style={iconoAccion}>
+   <button ref={boton} onClick={alternar} title="Acciones" style={iconoAccion}>
     <MoreHorizontal size={17} />
    </button>
    {abierto && (
     <div style={{
-     position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 30, minWidth: 190,
+     position: "fixed", ...pos, zIndex: 60, minWidth: 190,
      ...tarjeta, boxShadow: T.sombra.flotante, padding: 6,
     }}>
      {opciones.map(o => (
-      <button key={o.texto} onClick={() => { setAbierto(false); o.accion(); }} disabled={o.inactivo} style={{
+      <button key={o.texto} onClick={() => { setPos(null); o.accion(); }} disabled={o.inactivo} style={{
        width: "100%", textAlign: "left", border: "none", background: "transparent",
        cursor: o.inactivo ? "not-allowed" : "pointer", fontFamily: "inherit",
        padding: "8px 10px", borderRadius: T.radio.chico, fontSize: 13,
