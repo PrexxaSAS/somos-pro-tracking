@@ -5,6 +5,7 @@ import {
 import { T } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
 import { hoyLocal } from '../../utils/fechas';
+import { docReferencia } from '../../utils/solicitudes';
 import { fechaCorta } from '../pedidos/DetallePedidoMovil';
 import { BuscadorConductor, Pestanas, LineaResumen, ListaVacia } from '../conductor/PantallasConductor';
 
@@ -158,16 +159,13 @@ export function TarjetaEnvio({ tipo, item, conductor, vistaCliente, onAbrir, onE
   <div role="button" tabIndex={0} onClick={() => onAbrir(item)} style={tarjeta}>
    <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
     <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: "tabular-nums" }}>{item.guia}</span>
-    {esDev && !vistaCliente && item.factura && <span style={monoChico}>{item.factura}</span>}
+    {!vistaCliente && docReferencia(item) && <span style={monoChico}>{docReferencia(item)}</span>}
     {!esDev && vistaCliente && item.fecha_creacion && <span style={{ fontSize: 12, color: T.color.tinta3 }}>{fechaCorta(item.fecha_creacion)}</span>}
     <Chip {...chip} />
    </span>
 
-   {esDev && vistaCliente && (
-    <span style={{ fontSize: 12, color: T.color.tinta3, display: "flex", gap: 12, flexWrap: "wrap" }}>
-     <span>Factura <span style={monoChico}>{item.factura || "—"}</span></span>
-     <span>Pedido <span style={monoChico}>{item.pedido_ref || "—"}</span></span>
-    </span>
+   {vistaCliente && docReferencia(item) && (
+    <span style={{ fontSize: 12, color: T.color.tinta3 }}>Doc. referencia <span style={monoChico}>{docReferencia(item)}</span></span>
    )}
 
    {!vistaCliente && (
@@ -238,8 +236,8 @@ export function EnviosMovil({
 
  const q = busq.trim().toLowerCase();
  const buscados = items.filter(x => !q || (esDev
-  ? [x.guia, x.factura, x.pedido_ref, x.dir_recogida, x.ciudad_nombre, x.solicitado_por]
-  : [x.guia, x.dir_recogida, x.ciudad_recogida_nombre, x.dir_entrega, x.ciudad_entrega_nombre, x.solicitado_por]
+  ? [x.guia, docReferencia(x), x.dir_recogida, x.ciudad_nombre, x.solicitado_por]
+  : [x.guia, docReferencia(x), x.dir_recogida, x.ciudad_recogida_nombre, x.dir_entrega, x.ciudad_entrega_nombre, x.solicitado_por]
  ).some(v => String(v || "").toLowerCase().includes(q)));
  const abiertas = buscados.filter(x => !esCerrado(x));
  const cerradas = buscados.filter(esCerrado);
@@ -257,7 +255,7 @@ export function EnviosMovil({
     titulo={vistaCliente ? (esDev ? "Mis devoluciones" : "Mis recogidas") : (esDev ? "Devoluciones" : "Recogidas")}
     accion={vistaCliente ? "Solicitar" : null} onAccion={onNuevo} />
    <BuscadorConductor valor={busq} onChange={setBusq}
-    placeholder={esDev ? "Buscar devolucion, factura o pedido" : (vistaCliente ? "Buscar recogida o direccion" : "Buscar recogida, cliente o ciudad")} />
+    placeholder={esDev ? "Buscar devolucion o doc. referencia" : (vistaCliente ? "Buscar recogida, documento o direccion" : "Buscar recogida, documento o ciudad")} />
    <Pestanas valor={pestana} onChange={setPestana} opciones={[
     { clave: "abiertas", label: "Abiertas", n: abiertas.length },
     { clave: "cerradas", label: "Cerradas", n: cerradas.length },

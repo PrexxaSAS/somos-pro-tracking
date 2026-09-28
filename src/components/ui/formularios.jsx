@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, Check, Eye, EyeOff, MessageSquare, X } from 'lucide-react';
+import { Camera, Check, ChevronDown, Eye, EyeOff, MessageSquare, X } from 'lucide-react';
 import { T } from '../../design/tokens';
 
 // Piezas de los modulos de creacion, segun docs/systemdesign.md seccion 3.
@@ -182,6 +182,60 @@ export function Texto({ label, valor, onChange, placeholder, obligatorio, opcion
       background: deshabilitado ? T.color.superficie2 : T.color.superficie,
       color: deshabilitado ? T.color.tinta4 : T.color.tinta,
      }}/>
+   </div>
+  </Campo>
+ );
+}
+
+// Doc. referencia: campo de texto con un desplegable de pedidos, como la hoja
+// del celular. Se elige un pedido de la lista (busca por pedido, guia, factura
+// o cliente) o se escribe cualquier numero: una factura o una orden de compra.
+// Al elegir un pedido, onElegirPedido recibe el pedido completo por si el
+// formulario quiere llenar otros campos con el.
+export function DocReferencia({ label = "Doc. referencia", valor, onChange, pedidos = [], onElegirPedido, obligatorio, opcional, ayuda, placeholder = "Elige un pedido o escribe el numero" }) {
+ const [abierto, setAbierto] = useState(false);
+ const q = String(valor || "").trim().toLowerCase();
+ const elegido = pedidos.some(p => String(p.id) === String(valor));
+ const lista = elegido ? [] : pedidos
+  .filter(p => !q || [p.id, p.guia_interna, p.factura, p.cliente].some(v => String(v || "").toLowerCase().includes(q)))
+  .slice(0, 8);
+ const elegir = (p) => { onChange(String(p.id)); if (onElegirPedido) onElegirPedido(p); setAbierto(false); };
+ return (
+  <Campo label={label} obligatorio={obligatorio} opcional={opcional} ayuda={ayuda}>
+   <div style={{ position: "relative" }}>
+    <input
+     value={valor}
+     onChange={e => { onChange(e.target.value); setAbierto(true); }}
+     placeholder={placeholder}
+     onFocus={e => { setAbierto(true); e.target.style.borderColor = T.color.marca; e.target.style.boxShadow = `0 0 0 3px ${T.color.marcaSuave}`; }}
+     onBlur={e => { setTimeout(() => setAbierto(false), 150); e.target.style.borderColor = T.color.borde2; e.target.style.boxShadow = "none"; }}
+     style={{ ...baseEntrada, fontFamily: T.fuente.mono, paddingRight: 34 }}/>
+    <ChevronDown size={16} style={{ position: "absolute", right: 12, top: 12, color: T.color.tinta4, pointerEvents: "none" }} />
+    {abierto && lista.length > 0 && (
+     <div style={{
+      position: "absolute", top: 44, left: 0, right: 0, zIndex: 30, maxHeight: 280, overflowY: "auto",
+      background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: T.radio.control,
+      boxShadow: T.sombra.flotante, padding: 4,
+     }}>
+      {lista.map(p => (
+       <button key={p.id} type="button" onMouseDown={e => { e.preventDefault(); elegir(p); }} style={{
+        display: "flex", flexDirection: "column", gap: 2, width: "100%", padding: "8px 10px", border: "none",
+        borderRadius: T.radio.chico, background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+       }}
+        onMouseEnter={e => { e.currentTarget.style.background = T.color.superficie2; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+        <span style={{ display: "flex", gap: 8, alignItems: "baseline", width: "100%" }}>
+         <span style={{ fontSize: 13, fontWeight: 700, color: T.color.tinta, fontFamily: T.fuente.mono }}>{p.id}</span>
+         {p.guia_interna && p.guia_interna !== p.id && <span style={{ fontFamily: T.fuente.mono, fontSize: 11.5, color: T.color.tinta4 }}>{p.guia_interna}</span>}
+         {p.factura && <span style={{ marginLeft: "auto", fontFamily: T.fuente.mono, fontSize: 11.5, color: T.color.tinta3 }}>{p.factura}</span>}
+        </span>
+        <span style={{ fontSize: 12, color: T.color.tinta3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>
+         {[p.cliente, p.ciudad_nombre].filter(Boolean).join(" · ")}
+        </span>
+       </button>
+      ))}
+     </div>
+    )}
    </div>
   </Campo>
  );

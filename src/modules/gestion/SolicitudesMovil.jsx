@@ -203,13 +203,13 @@ export function HojaPedidos({ pedidos = [], seleccionado, onElegir, onEscrito, o
  );
 }
 
-function BotonPedido({ valor, pedidos, onClick }) {
+function BotonPedido({ valor, pedidos, onClick, vacio = "Elegir pedido" }) {
  const p = pedidos.find(x => String(x.id) === String(valor));
  return (
   <button type="button" onClick={onClick} style={{ ...entrada, cursor: "pointer", textAlign: "left", color: valor ? T.color.tinta : T.color.placeholder }}>
    <FileText size={16} style={{ color: T.color.tinta4, flexShrink: 0 }} />
    <span style={corta}>
-    {valor ? <><span style={{ fontFamily: T.fuente.mono, fontSize: 14 }}>{valor}</span>{p?.cliente ? ` · ${p.cliente}` : ""}</> : "Elegir pedido"}
+    {valor ? <><span style={{ fontFamily: T.fuente.mono, fontSize: 14 }}>{valor}</span>{p?.cliente ? ` · ${p.cliente}` : ""}</> : vacio}
    </span>
    <ChevronDown size={16} style={{ color: T.color.tinta4, flexShrink: 0 }} />
   </button>
@@ -310,11 +310,11 @@ export function FormDevolucionMovil({
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const [otro, setOtro] = useState(Boolean(form.motivo) && !MOTIVOS_DEVOLUCION.includes(form.motivo));
 
- // Al elegir el pedido se llenan factura, direccion y ciudad; el cliente
- // puede corregirlas despues.
+ // Doc. referencia: al elegir un pedido se llenan la direccion y la ciudad de
+ // recogida; el cliente puede corregirlas despues. Tambien se puede escribir
+ // el numero a mano (una factura).
  const elegirPedido = (p) => setForm(x => ({
-  ...x, pedido_ref: String(p.id),
-  factura: p.factura || x.factura,
+  ...x, doc_referencia: String(p.id),
   dir_recogida: p.direccion || x.dir_recogida,
   ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo,
  }));
@@ -325,11 +325,8 @@ export function FormDevolucionMovil({
    onClose={onClose} onEnviar={onEnviar} cta={editando ? "Guardar cambios" : (conTransporte ? "Crear devolucion" : "Solicitar devolucion")}
    pie={conTransporte ? null : "La central asigna el transporte"}>
    <Seccion>Pedido</Seccion>
-   <Campo etiqueta="Pedido" obligatorio ayuda="Al elegirlo se completan factura y direccion">
-    <BotonPedido valor={form.pedido_ref} pedidos={pedidos} onClick={() => setHoja("pedido")} />
-   </Campo>
-   <Campo etiqueta="N° factura" obligatorio>
-    <Texto valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" mono />
+   <Campo etiqueta="Doc. referencia" obligatorio ayuda="Pedido o factura. Al elegir un pedido se completan direccion y ciudad.">
+    <BotonPedido valor={form.doc_referencia} pedidos={pedidos} onClick={() => setHoja("pedido")} vacio="Elegir pedido o escribir factura" />
    </Campo>
    <Campo etiqueta="Motivo" obligatorio>
     <Opciones valor={otro ? OTRO : form.motivo} placeholder="Seleccione el motivo"
@@ -364,8 +361,8 @@ export function FormDevolucionMovil({
    <Adjunto etiqueta="Fotos o soporte" icono={Camera} cta="Adjuntar soporte" nombre={form.soporte_nombre} onArchivo={onArchivo} />
 
    {hoja === "pedido" && (
-    <HojaPedidos pedidos={pedidos} seleccionado={form.pedido_ref} onElegir={elegirPedido}
-     onEscrito={v => f("pedido_ref")(v)} onClose={() => setHoja(null)} />
+    <HojaPedidos pedidos={pedidos} seleccionado={form.doc_referencia} onElegir={elegirPedido}
+     onEscrito={v => f("doc_referencia")(v)} onClose={() => setHoja(null)} />
    )}
    {hoja === "ciudad" && (
     <HojaCiudades ciudades={ciudades} titulo="Ciudad de recogida" seleccionada={form.ciudad_codigo}
@@ -377,16 +374,21 @@ export function FormDevolucionMovil({
 
 // ── 25b: recogida ───────────────────────────────────────────────────────────
 export function FormRecogidaMovil({
- form, setForm, ciudades, editando = false,
+ form, setForm, ciudades, pedidos = [], editando = false,
  conTransporte = false, conductores = [], paqueterias = [], onArchivo, onEnviar, onClose,
 }) {
- const [hoja, setHoja] = useState(null); // "recogida" | "entrega"
+ const [hoja, setHoja] = useState(null); // "doc" | "recogida" | "entrega"
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  return (
   <Pantalla titulo={editando ? "Editar recogida" : "Solicitar recogida"}
    subtitulo={editando ? form.guia || null : "Programa una recogida y su entrega"}
    onClose={onClose} onEnviar={onEnviar} cta={editando ? "Guardar cambios" : (conTransporte ? "Registrar recogida" : "Solicitar recogida")}
    pie={conTransporte ? null : "La central asigna el transporte"}>
+   <Seccion>Documento</Seccion>
+   <Campo etiqueta="Doc. referencia" opcional ayuda="Orden de compra o pedido.">
+    <BotonPedido valor={form.doc_referencia} pedidos={pedidos} onClick={() => setHoja("doc")} vacio="Elegir pedido o escribir orden de compra" />
+   </Campo>
+
    <Seccion>Recogida</Seccion>
    <Campo etiqueta="Direccion de recogida" obligatorio>
     <Texto valor={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 70 #44-22, Local 2" />
@@ -415,6 +417,10 @@ export function FormRecogidaMovil({
 
    <Adjunto etiqueta="Documento de soporte" cta="Adjuntar documento" nombre={form.doc_nombre} onArchivo={onArchivo} />
 
+   {hoja === "doc" && (
+    <HojaPedidos pedidos={pedidos} seleccionado={form.doc_referencia} onElegir={p => f("doc_referencia")(String(p.id))}
+     onEscrito={v => f("doc_referencia")(v)} onClose={() => setHoja(null)} />
+   )}
    {hoja === "recogida" && (
     <HojaCiudades ciudades={ciudades} titulo="Ciudad de recogida" seleccionada={form.ciudad_recogida_cod}
      onElegir={c => f("ciudad_recogida_cod")(c.code)} onClose={() => setHoja(null)} />

@@ -18,6 +18,8 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { faltantesPedido } from '${raiz.replace(/\\/g, '/')}/src/utils/transporte';
+import { docReferencia } from '${raiz.replace(/\\/g, '/')}/src/utils/solicitudes';
+import { DocReferencia } from '${raiz.replace(/\\/g, '/')}/src/components/ui/formularios';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
 import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS, ResumenTransportador, Ciudades, GestionPromesas, GestionPaqueterias } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
@@ -688,6 +690,25 @@ if (window.matchMedia("").matches) {
   completarF:false, setCompletarF(){}, porCompletar:1, onLimpiar(){}, onClose(){},
  }));
  exigir(hoja.includes("Solo por completar"), "la hoja de filtros no ofrece el filtro");
+}
+
+// Doc. referencia: un solo campo en Devoluciones y Recogidas. Las devoluciones
+// viejas (factura y pedido por separado) se ven juntas; las nuevas, su numero.
+{
+ const movil = window.matchMedia("").matches;
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  doc referencia: " + queja); fallos++; } };
+ exigir(docReferencia({ factura:"FAC-001", pedido_ref:"PED-001" }) === "FAC-001 · PED-001", "no junta factura y pedido de las viejas");
+ exigir(docReferencia({ doc_referencia:"OC-77", factura:"FAC-001" }) === "OC-77", "no usa el doc. referencia de las nuevas");
+ exigir(docReferencia({}) === "", "inventa un documento");
+ const dev = renderToString(moduloDev(usuarioAdmin));
+ exigir(dev.includes("FAC-001 · PED-001"), "la lista de devoluciones no muestra el documento de las viejas");
+ if (!movil) exigir(dev.includes("Doc. referencia") && !dev.includes(">Factura<"), "la tabla sigue con columnas de factura y pedido");
+ const campo = renderToString(React.createElement(DocReferencia, { valor:"", onChange(){}, pedidos, obligatorio:true }));
+ exigir(campo.includes("Doc. referencia") && campo.includes("Elige un pedido o escribe el numero"), "el desplegable de escritorio no se dibuja");
+ const fDev = renderToString(solicitud(FormDevolucionMovil, { form: { ...formDev, doc_referencia:"PX000119704" } }));
+ exigir(fDev.includes("Doc. referencia") && fDev.includes("PX000119704") && !fDev.includes("N° factura"), "el formulario de devolucion sigue pidiendo factura aparte");
+ const fRec = renderToString(solicitud(FormRecogidaMovil, { form: { ...formRec, doc_referencia:"" } }));
+ exigir(fRec.includes("Doc. referencia") && fRec.includes("orden de compra"), "la recogida no pide el doc. referencia");
 }
 
 globalThis.__fallos = fallos;
