@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
-import { generarGuia } from './utils/guides';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv, filasCsv } from './utils/files';
 import { mensajeError, mensajeErrorFuncion } from './utils/errors';
 import { numTexto, cargarSoportesPedido } from './utils/pedidos';
@@ -1549,9 +1548,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const ciudadOrigen = (ciudades || []).find(c => c.code === form.ciudad_origen_codigo);
   const cond = conductoresActivos.find(c => String(c.id) === String(form.conductor_id));
   const esPaq = form.tipo === "paqueteria";
-  const guia_interna = !esPaq ? generarGuia(pedidos) : null;
+  // La guia la pone la base (trg_asignar_guia_interna). Calcularla aqui leia
+  // una lista en memoria que podia estar vieja, y dos pedidos creados al tiempo
+  // —o uno a mano mientras cartera aprobaba— salian con la misma guia.
   const nuevo = {
-   id: form.id.trim(), guia_interna,
+   id: form.id.trim(),
    cliente: form.cliente.trim(),
    ciudad_codigo: form.ciudad_codigo, ciudad_nombre: ciudad?.name || "",
    direccion: form.direccion.trim(), cajas: parseInt(form.cajas) || 0,
@@ -1573,16 +1574,19 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    fecha_creacion: new Date().toISOString().split("T")[0],
    fecha_real: null, soportes: [], soportes_data: [],
   };
+  let guiaAsignada = null;
   if (supabase) {
-   const { error } = await supabase.from("pedidos").insert(nuevo);
+   const { data, error } = await supabase.from("pedidos").insert(nuevo)
+    .select("guia_interna").single();
    if (error) { showToast(mensajeError(error, "el pedido"), "error"); return; }
+   guiaAsignada = data?.guia_interna || null;
    if (recargar) await recargar(); else if (window._recargar) await window._recargar();
   } else {
    setPedidos(prev => [nuevo, ...prev]);
   }
   setModNuevo(false);
   setForm(vacio);
-  showToast(`Pedido ${form.id} creado. Guia: ${guia_interna || "N/A"}`, "success");
+  showToast(`Pedido ${form.id} creado. Guia: ${guiaAsignada || "N/A"}`, "success");
  };
 
  const imprimirPlanilla = () => {

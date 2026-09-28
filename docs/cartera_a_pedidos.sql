@@ -20,7 +20,8 @@
 --   ciudad_codigo               <- sector_dane (destino), a 5 digitos
 --   ciudad_origen_codigo        <- dane_origen
 --   los nombres de ciudad se resuelven contra public.ciudades
---   guia_interna                <- SPT-<anio>-<consecutivo>, como la genera la app
+--   guia_interna                <- la pone trg_asignar_guia_interna, que es el
+--                                  unico generador (docs/pedidos_guia_interna.sql)
 --   fecha_estimada              <- la fecha del corte mas los dias de la promesa
 --                                  de servicio de la ciudad destino
 --   cajas    entra en 0
@@ -44,11 +45,6 @@ declare
   cuando          timestamptz;
   dia_pedido      date;
   dias_promesa    integer;
-  anio            text;
-  consecutivo     integer;
-  guia            text;
-  patron_entero   text;
-  patron_captura  text;
 begin
   -- Solo los aprobados, y solo la primera vez que lo son.
   if new.estado_cartera is distinct from 'aprobado' then
@@ -92,29 +88,17 @@ begin
   from public.promesas_servicio
   where ciudad_codigo = dane_destino;
 
-  -- La guia interna la venia generando la aplicacion al crear el pedido. Se
-  -- arma igual (SPT-<anio>-<consecutivo de 4 digitos>), pero con un candado por
-  -- transaccion: dos aprobaciones simultaneas se turnan en vez de sacar las dos
-  -- el mismo numero, que es lo que si podia pasar desde el navegador.
-  anio := to_char(now() at time zone 'America/Bogota', 'YYYY');
-  patron_entero  := '^SPT-' || anio || '-[0-9]+$';
-  patron_captura := '^SPT-' || anio || '-([0-9]+)$';
-  perform pg_advisory_xact_lock(hashtext('pedidos.guia_interna'));
-  select coalesce(max(substring(guia_interna from patron_captura)::integer), 0) + 1
-    into consecutivo
-  from public.pedidos
-  where guia_interna ~ patron_entero;
-  guia := 'SPT-' || anio || '-' || lpad(consecutivo::text, 4, '0');
+  -- La guia interna no se calcula aqui: la pone trg_asignar_guia_interna al
+  -- insertar, que es el unico sitio donde se genera.
 
   insert into public.pedidos (
-    id, guia_interna, cliente, direccion,
+    id, cliente, direccion,
     ciudad_codigo, ciudad_nombre,
     ciudad_origen_codigo, ciudad_origen_nombre,
     cajas, factura, tipo, estado,
     fecha_pedido, hora_pedido, fecha_estimada, notas
   ) values (
     numero,
-    guia,
     coalesce(
       nullif(btrim(coalesce(new.cliente, '')), ''),
       nullif(btrim(coalesce(new.nit, '')), ''),
