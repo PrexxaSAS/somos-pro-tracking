@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv, filasCsv } from './utils/files';
 import { mensajeError, mensajeErrorFuncion } from './utils/errors';
 import { numTexto, cargarSoportesPedido } from './utils/pedidos';
-import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
+import { esTextoSoloFacturar, transportePedido, faltantesPedido } from './utils/transporte';
 import { generarPDFSoportes } from './utils/pdf';
 import { Login } from './components/auth/Login';
 import { CargadorFotos } from './components/delivery/CargadorFotos';
@@ -1501,6 +1501,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  // Transporte propio o paqueteria. Es filtro propio y no una pestana mas:
  // se cruza con el estado en vez de reemplazarlo.
  const [tipoF, setTipoF] = useState("");
+ // Solo los pedidos por completar: les falta cajas, factura o tipo de envio.
+ // Es para no olvidar los que entraron de cartera sin esos datos.
+ const [completarF, setCompletarF] = useState(false);
  // En el celular el detalle es una pantalla completa, no el modal de escritorio.
  const [detMovil, setDetMovil] = useState(null);
  // La edicion en el celular es otra pantalla completa, no el modal de escritorio.
@@ -1533,7 +1536,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
   const okTipo = !tipoF
    || (tipoF === "paqueteria" ? p.tipo === "paqueteria" : p.tipo !== "paqueteria");
-  if (!okFecha || !okCiudad || !okCond || !okTipo) return false;
+  const okCompletar = !completarF || faltantesPedido(p).length > 0;
+  if (!okFecha || !okCiudad || !okCond || !okTipo || !okCompletar) return false;
   const q = busq.toLowerCase();
   const okB = !busq ||
    (p.id || "").toLowerCase().includes(q) ||
@@ -1549,7 +1553,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
  const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
  const pageEnd = Math.min(filtrados.length, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, filtro, pageSize]);
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF]);
+ const porCompletar = pedidos.filter(p => faltantesPedido(p).length > 0).length;
 
  const guardar = async () => {
   if (!form.id.trim() || !form.cliente.trim() || !form.ciudad_codigo || !form.factura.trim()) {
@@ -1816,6 +1821,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
      tipoF={tipoF} setTipoF={setTipoF}
+     completarF={completarF} setCompletarF={setCompletarF} porCompletar={porCompletar}
      onAbrir={setDetMovil}
      onNuevo={() => setModNuevo(true)}
      onPlanilla={imprimirPlanilla}
@@ -1906,6 +1912,23 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         .map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
       </select>
 
+      {/* Encendido deja solo los pedidos a los que les falta cajas, factura o
+          tipo de envio; el numero es el total, con o sin los demas filtros. */}
+      <button onClick={() => setCompletarF(v => !v)} title="Pedidos sin cajas, factura o tipo de envio" style={{
+       display:"inline-flex", alignItems:"center", gap:7, height:36, padding:"0 12px",
+       borderRadius:T.radio.control, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
+       background: completarF ? T.color.ojoSuave : T.color.superficie,
+       border:`1px solid ${completarF ? T.color.ojoPunto : T.color.borde2}`,
+       color: completarF ? T.color.ojo : T.color.tinta2, whiteSpace:"nowrap",
+      }}>
+       <AlertTriangle size={14}/> Por completar
+       <span style={{
+        fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
+        background: completarF ? "rgba(255,255,255,.6)" : T.color.superficie2,
+        color: porCompletar ? T.color.ojo : T.color.tinta3,
+       }}>{porCompletar}</span>
+      </button>
+
       <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
        {seleccion.size > 0 ? `${seleccion.size} seleccionados` : `${pageItems.length} en esta pagina`}
       </div>
@@ -1953,6 +1976,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
             }}>{p.guia_interna || p.id}</button>
             {p.guia_interna && p.guia_interna !== p.id && (
              <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</div>
+            )}
+            {faltantesPedido(p).length > 0 && (
+             <div style={{ color:T.color.ojo, fontSize:11.5, fontWeight:600, marginTop:2 }}>{`Falta: ${faltantesPedido(p).join(", ")}`}</div>
             )}
            </td>
            <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>

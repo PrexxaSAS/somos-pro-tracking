@@ -30,3 +30,18 @@ export function transportePedido(pedido, conductor) {
   }
   return { principal: null, detalle: "", noAplica: false };
 }
+
+// Lo que le falta a un pedido para quedar completo: los que llegan de cartera
+// entran con 0 cajas, sin factura y sin tipo de envio, y se completan a mano
+// desde la edicion. Los cerrados (entregado o novedad) no cuentan: ya no se
+// pueden editar desde la aplicacion. Los que no se despachan (solo facturar,
+// cliente recoge) no necesitan tipo de envio.
+export function faltantesPedido(pedido) {
+  const p = pedido || {};
+  if (["entregado", "novedad"].includes(p.estado)) return [];
+  const falta = [];
+  if (!(parseInt(p.cajas) > 0)) falta.push("cajas");
+  if (!String(p.factura || "").trim()) falta.push("factura");
+  if (!p.tipo && !ESTADOS_SIN_DESPACHO.includes(p.estado)) falta.push("tipo de envio");
+  return falta;
+}

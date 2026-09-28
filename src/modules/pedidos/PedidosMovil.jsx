@@ -6,7 +6,7 @@ import {
 import { T } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
-import { transportePedido } from '../../utils/transporte';
+import { transportePedido, faltantesPedido } from '../../utils/transporte';
 
 // La tabla de pedidos no cabe en un telefono. Cada fila pasa a ser una tarjeta
 // de tres lineas -- numero y estado arriba, cliente en medio, carga y conductor
@@ -70,6 +70,7 @@ function useCerrarAlTocarFuera(abierto, cerrar) {
 export function HojaFiltros({
  ciudades, pedidos, conductoresActivos, total,
  rango, setRango, ciudadF, setCiudadF, conductorF, setConductorF, tipoF, setTipoF,
+ completarF = false, setCompletarF, porCompletar = 0,
  onLimpiar, onClose,
 }) {
  const [dentro, setDentro] = useState(false);
@@ -189,6 +190,23 @@ export function HojaFiltros({
      </div>
     </div>
 
+    {setCompletarF && (
+     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: T.color.tinta2 }}>Datos</span>
+      <button onClick={() => setCompletarF(!completarF)} style={{
+       display: "flex", alignItems: "center", gap: 10, minHeight: 44, padding: "0 12px",
+       borderRadius: T.radio.control, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+       background: completarF ? T.color.ojoSuave : T.color.superficie,
+       border: `1px solid ${completarF ? T.color.ojoPunto : T.color.borde2}`,
+       color: completarF ? T.color.ojo : T.color.tinta2, fontSize: 13.5, fontWeight: 600,
+      }}>
+       <span style={{ flex: 1 }}>Solo por completar</span>
+       <span style={{ fontSize: 12, fontWeight: 700 }}>{porCompletar}</span>
+      </button>
+      <span style={{ fontSize: 12, color: T.color.tinta4 }}>Sin cajas, factura o tipo de envio.</span>
+     </div>
+    )}
+
     <button onClick={cerrar} style={{
      display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48,
      borderRadius: 12, border: "none", background: T.color.marca, color: "#fff",
@@ -247,6 +265,9 @@ function TarjetaPedido({ pedido, conductor, onAbrir }) {
     fontSize: 13, fontWeight: 500, color: T.color.tinta, width: "100%",
     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
    }}>{pedido.cliente}</span>
+   {faltantesPedido(pedido).length > 0 && (
+    <span style={{ fontSize: 11.5, fontWeight: 600, color: T.color.ojo }}>{`Falta: ${faltantesPedido(pedido).join(", ")}`}</span>
+   )}
 
    <div style={{
     display: "flex", alignItems: "center", gap: 14, width: "100%",
@@ -282,6 +303,7 @@ export function PedidosMovil({
  pedidos, filtrados, conductores, ciudades, conductoresActivos,
  busq, setBusq, filtro, setFiltro, conteoPorEstado, estadosOrden,
  rango, setRango, ciudadF, setCiudadF, conductorF, setConductorF, tipoF, setTipoF,
+ completarF = false, setCompletarF, porCompletar = 0,
  onAbrir, onNuevo, onPlanilla, onCSV, onCargarGuias, avisos = 0,
 }) {
  const [hoja, setHoja] = useState(false);
@@ -291,13 +313,13 @@ export function PedidosMovil({
 
  // Se muestra de a 40 y crece al llegar al final: en el celular un paginador
  // con numeros es mas trabajo que seguir bajando.
- useEffect(() => { setTope(40); }, [busq, filtro, rango, ciudadF, conductorF, tipoF]);
+ useEffect(() => { setTope(40); }, [busq, filtro, rango, ciudadF, conductorF, tipoF, completarF]);
 
- const activos = [rango !== "todo", !!ciudadF, !!conductorF, !!tipoF].filter(Boolean).length;
+ const activos = [rango !== "todo", !!ciudadF, !!conductorF, !!tipoF, completarF].filter(Boolean).length;
  const visibles = filtrados.slice(0, tope);
  const pie = ALTO_BARRA + 16;
 
- const limpiar = () => { setRango("todo"); setCiudadF(""); setConductorF(""); setTipoF(""); };
+ const limpiar = () => { setRango("todo"); setCiudadF(""); setConductorF(""); setTipoF(""); if (setCompletarF) setCompletarF(false); };
 
  const etiquetaFiltro = filtro === "todos"
   ? "pedidos"
@@ -466,6 +488,7 @@ export function PedidosMovil({
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
      tipoF={tipoF} setTipoF={setTipoF}
+     completarF={completarF} setCompletarF={setCompletarF} porCompletar={porCompletar}
      onLimpiar={limpiar}
      onClose={() => setHoja(false)}
     />

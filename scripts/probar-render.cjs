@@ -17,6 +17,7 @@ import { Dashboard } from '${raiz.replace(/\\/g, '/')}/src/modules/dashboard/Das
 import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/components/layout/NavegacionMovil';
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
+import { faltantesPedido } from '${raiz.replace(/\\/g, '/')}/src/utils/transporte';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
 import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS, ResumenTransportador, Ciudades, GestionPromesas, GestionPaqueterias } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
@@ -662,6 +663,31 @@ if (window.matchMedia("").matches) {
  exigir(sinSede.includes("2 aprobados, 1 con corte asignado") && sinSede.includes("DANE origen"), "no avisa los aprobados sin sede");
  const fila = renderToString(React.createElement(ArchivoFila, { nombre:"plano_2026-09-28.csv", detalle:"No se pudo leer", error:true, accion:"Elegir otro archivo", onAccion(){} }));
  exigir(fila.includes("plano_2026-09-28.csv") && fila.includes("lucide-file-x"), "el archivo con error no se marca en rojo");
+}
+
+// Pedidos por completar: los de cartera entran sin cajas, factura ni tipo de
+// envio. Los cerrados no cuentan y los que no se despachan no piden tipo.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  por completar: " + queja); fallos++; } };
+ const deCartera = { id:"4582913", estado:"sin_asignar", cajas:0, factura:"", tipo:null };
+ exigir(faltantesPedido(deCartera).join(",") === "cajas,factura,tipo de envio", "no dice todo lo que le falta al pedido de cartera");
+ exigir(faltantesPedido({ ...deCartera, estado:"entregado" }).length === 0, "cuenta un pedido cerrado");
+ exigir(faltantesPedido({ ...deCartera, estado:"solo_facturar", cajas:2, factura:"F1" }).length === 0, "pide tipo de envio a uno que no se despacha");
+ exigir(faltantesPedido({ ...deCartera, cajas:"3", factura:"F1", tipo:"propio" }).length === 0, "marca uno completo");
+ const lista = renderToString(React.createElement(PedidosMovil, {
+  pedidos:[deCartera], filtrados:[deCartera], conductores:[], ciudades:[], conductoresActivos:[],
+  busq:"", setBusq(){}, filtro:"todos", setFiltro(){}, conteoPorEstado:()=>1, estadosOrden:["sin_asignar"],
+  rango:"todo", setRango(){}, ciudadF:"", setCiudadF(){}, conductorF:"", setConductorF(){}, tipoF:"", setTipoF(){},
+  completarF:false, setCompletarF(){}, porCompletar:1,
+  onAbrir(){}, onNuevo(){}, onPlanilla(){}, onCSV(){}, onCargarGuias(){},
+ }));
+ exigir(lista.includes("Falta: cajas, factura, tipo de envio"), "la tarjeta no avisa lo que falta");
+ const hoja = renderToString(React.createElement(HojaFiltros, {
+  pedidos:[deCartera], ciudades:[], conductoresActivos:[], total:1,
+  rango:"todo", setRango(){}, ciudadF:"", setCiudadF(){}, conductorF:"", setConductorF(){}, tipoF:"", setTipoF(){},
+  completarF:false, setCompletarF(){}, porCompletar:1, onLimpiar(){}, onClose(){},
+ }));
+ exigir(hoja.includes("Solo por completar"), "la hoja de filtros no ofrece el filtro");
 }
 
 globalThis.__fallos = fallos;
