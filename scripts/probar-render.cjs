@@ -24,6 +24,7 @@ import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/p
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
 import { GestionAsesores } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
+import { TarjetaPedidoConductor, TarjetaEnvio, Bloque, ListaVacia } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -167,6 +168,38 @@ for (const rol of ROLES_PRUEBA) {
  })]);
 }
 
+const devolucion = {
+ id:"DV-1", guia:"DV-2026-0007", estado:"sin_asignar", factura:"F-991", pedido_ref:"PX000119704",
+ dir_recogida:"Cra 43A 1-50", ciudad_nombre:"Medellin", unidades:3, volumen_m3:0.4, peso_kg:12,
+ motivo:"Producto averiado", soporte_nombre:"soporte.pdf",
+};
+const recogida = {
+ id:"RC-1", guia:"RC-2026-0003", estado:"en_transito", novedad:true,
+ ciudad_recogida_nombre:"Bogota", ciudad_entrega_nombre:"Medellin",
+ dir_recogida:"Calle 100 15-20", dir_entrega:"Cra 43A 1-50",
+ unidades:8, volumen_m3:1.2, peso_kg:45, observaciones:"Llamar antes de llegar",
+};
+
+casos.push(["TarjetaPedidoConductor/activo", React.createElement(TarjetaPedidoConductor, {
+ pedido: pedidos[0], onVer(){}, onEntregar(){},
+})]);
+casos.push(["TarjetaPedidoConductor/cerrado", React.createElement(TarjetaPedidoConductor, {
+ pedido: { ...pedidos[1], soportes:["a.jpg","b.jpg"] }, cerrado: true, onVer(){}, onEntregar(){},
+})]);
+casos.push(["TarjetaEnvio/devolucion", React.createElement(TarjetaEnvio, {
+ guia: devolucion.guia, estado: devolucion.estado, acento: "#dc2626",
+ lineas: ["Factura F-991 · Pedido PX000119704", "Recoge en Cra 43A 1-50 · Medellin"],
+ medidas: "3 uds · 0.4 m3 · 12 kg", nota: "Motivo: Producto averiado",
+ adjunto: { texto: "Soporte", onClick(){} },
+})]);
+casos.push(["TarjetaEnvio/recogida", React.createElement(TarjetaEnvio, {
+ guia: recogida.guia, estado: recogida.estado, novedad: true, acento: "#0891b2",
+ lineas: ["Bogota → Medellin", "Recoge en Calle 100 15-20", "Entrega en Cra 43A 1-50"],
+ medidas: "8 uds · 1.2 m3 · 45 kg",
+})]);
+casos.push(["Bloque/vacio", React.createElement(Bloque, { titulo:"Por entregar", cuenta:"0 pedidos" },
+ React.createElement(ListaVacia, null, "No tienes pedidos activos por el momento."))]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -212,6 +245,21 @@ for (const [nombre, elemento] of casos) {
  exigir(conNovedad.includes("Con novedad"), "el resumen no muestra el estado con novedad");
  exigir(sinNovedad.includes("Entregado"), "sin novedad el resumen no dice Entregado");
  exigir(!sinNovedad.includes("Con novedad"), "sin marcarla el resumen ya dice con novedad");
+}
+
+// La tarjeta del conductor: el pedido abierto ofrece registrar la entrega y el
+// cerrado no, porque un pedido entregado ya no se toca. Si las acciones se
+// cuelan en el historial, el conductor puede reabrir algo que ya cerro.
+{
+ const dibujar = (props) => renderToString(React.createElement(TarjetaPedidoConductor, {
+  pedido: pedidos[0], onVer(){}, onEntregar(){}, ...props,
+ }));
+ const abierto = dibujar({});
+ const cerrado = dibujar({ pedido: pedidos[1], cerrado: true });
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  conductor: " + queja); fallos++; } };
+ exigir(abierto.includes("Registrar entrega"), "el pedido activo no ofrece registrar la entrega");
+ exigir(!cerrado.includes("Registrar entrega"), "el pedido cerrado deja registrar la entrega otra vez");
+ exigir(abierto.includes(pedidos[0].direccion || "Medellin"), "la tarjeta no muestra a donde ir");
 }
 
 globalThis.__fallos = fallos;

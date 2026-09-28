@@ -112,13 +112,23 @@ export function Indicadores({ items }) {
    </section>
   );
  }
+ // En el celular caben dos por fila: con cuatro en una sola, la cifra y su
+ // etiqueta se parten y no se leen. La linea divisoria pasa a ser tambien la de
+ // arriba, porque con dos filas la de la izquierda sola deja huecos.
+ const esMovil = useEsMovil();
+ const columnas = esMovil ? Math.min(items.length, 2) : items.length;
  return (
-  <section style={{ ...tarjeta, display: "grid", gridTemplateColumns: `repeat(${items.length},1fr)` }}>
+  <section style={{ ...tarjeta, display: "grid", gridTemplateColumns: `repeat(${columnas},minmax(0,1fr))` }}>
    {items.map((i, n) => (
-    <div key={i.label} style={{ padding: "18px 22px", borderLeft: n === 0 ? "none" : `1px solid ${T.color.borde}` }}>
+    <div key={i.label} style={{
+     padding: esMovil ? "14px 16px" : "18px 22px",
+     borderLeft: n % columnas === 0 ? "none" : `1px solid ${T.color.borde}`,
+     borderTop: n >= columnas ? `1px solid ${T.color.borde}` : "none",
+     minWidth: 0,
+    }}>
      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
       <span style={{ width: 7, height: 7, borderRadius: 4, background: i.color || T.color.tinta3, flexShrink: 0 }} />
-      <span style={{ fontSize: 12.5, color: T.color.tinta2, whiteSpace: "nowrap" }}>{i.label}</span>
+      <span style={{ fontSize: 12.5, color: T.color.tinta2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.label}</span>
      </div>
      <div style={{ ...T.texto.cifra, color: i.destacado ? T.color.marca : T.color.tinta }}>
       {Number(i.valor).toLocaleString("es-CO")}

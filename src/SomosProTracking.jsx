@@ -28,6 +28,9 @@ import {
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
+ TarjetaPedidoConductor, TarjetaEnvio, Bloque, ListaVacia,
+} from './modules/conductor/PantallasConductor';
+import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
@@ -3261,6 +3264,103 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
   if (recargar) await recargar();
  };
 
+ // Los modales son los mismos en las dos versiones: se arman una vez y se
+ // dibujan en la que toque.
+ const modales = (
+  <>
+    {/* Modal detalle (solo lectura) */}
+    {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
+     onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
+ 
+    {/* Modal cargar soportes de entrega */}
+    {modFotos && esMovil && (
+     <RegistrarEntregaMovil
+      pedido={modFotos}
+      promesa={(promesas || []).find(x => x.ciudad_codigo === modFotos.ciudad_codigo)}
+      onConfirmar={async ({ fotos, conNovedad, ...datos }) => {
+       await marcarEntregado(modFotos, fotos, conNovedad, datos);
+      }}
+      onClose={() => setModFotos(null)}
+     />
+    )}
+ 
+    {modFotos && !esMovil && (
+     <Modal title={`Registrar Entrega - ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+       {/* Info pedido */}
+       <div style={{background:P[50],borderRadius:10,padding:14}}>
+        <div style={{fontWeight:700,color:P[800],marginBottom:4}}>{modFotos.cliente}</div>
+        <div style={{fontSize:13,color:"#64748b"}}>Direccion: {modFotos.direccion} - {modFotos.ciudad_nombre}</div>
+        <div style={{fontSize:13,color:"#64748b"}}>Factura: {modFotos.factura} - {modFotos.cajas} cajas</div>
+       </div>
+ 
+       {/* Checkbox novedad */}
+       <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"12px 16px",cursor:"pointer",border:`2px solid ${novedad?"#dc2626":P[200]}`}}
+        onClick={()=>setNovedad(!novedad)}>
+        <div style={{width:22,height:22,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+         {novedad&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}></span>}
+        </div>
+        <div>
+         <div style={{fontWeight:700,color:novedad?"#dc2626":P[800],fontSize:14}}>Entrega con Novedad</div>
+         <div style={{fontSize:12,color:"#94a3b8"}}>Marca esto si hubo algun inconveniente en la entrega</div>
+        </div>
+       </div>
+ 
+       {/* Cargador de fotos */}
+       <CargadorFotos
+        pedido={modFotos}
+        onGuardar={(fotos)=>marcarEntregado(modFotos, fotos, novedad)}
+        onClose={()=>setModFotos(null)}
+        showToast={showToast}
+       />
+      </div>
+     </Modal>
+    )}
+  </>
+ );
+
+ // En el celular no hay tablas: el conductor lee la pantalla en la calle y con
+ // una mano, y una tabla ahi obliga a desplazarse de lado para una sola fila.
+ if (esMovil) return (
+  <Pagina>
+   <Encabezado titulo="Mis pedidos" descripcion={user.placa ? `Vehiculo ${user.placa}` : "Pedidos asignados para entrega"} />
+
+   <Indicadores items={[
+    { label: "Asignados", valor: misPeds.length },
+    { label: "Activos", valor: activos.length, destacado: true, color: T.color.marca },
+    { label: "Entregados", valor: completados.length, color: T.color.bienPunto },
+   ]}/>
+
+   <Bloque titulo="Por entregar" cuenta={`${activos.length} ${activos.length === 1 ? "pedido" : "pedidos"}`}>
+    {activos.length === 0 ? (
+     <ListaVacia>No tienes pedidos activos por el momento.</ListaVacia>
+    ) : (
+     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {activos.map(p => (
+       <TarjetaPedidoConductor key={p.id} pedido={p}
+        onVer={setModDet}
+        onEntregar={x => { setModFotos(x); setNovedad(false); }}/>
+      ))}
+     </div>
+    )}
+   </Bloque>
+
+   <Bloque titulo="Entregados" cuenta={`${completados.length} ${completados.length === 1 ? "pedido" : "pedidos"}`}>
+    {completados.length === 0 ? (
+     <ListaVacia>Aun no tienes pedidos entregados.</ListaVacia>
+    ) : (
+     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {completados.map(p => (
+       <TarjetaPedidoConductor key={p.id} pedido={p} cerrado onVer={setModDet} onEntregar={() => {}}/>
+      ))}
+     </div>
+    )}
+   </Bloque>
+
+   {modales}
+  </Pagina>
+ );
+
  return (
   <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
    <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
@@ -3396,54 +3496,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
     </section>
    </main>
 
-   {/* Modal detalle (solo lectura) */}
-   {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
-    onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
-
-   {/* Modal cargar soportes de entrega */}
-   {modFotos && esMovil && (
-    <RegistrarEntregaMovil
-     pedido={modFotos}
-     promesa={(promesas || []).find(x => x.ciudad_codigo === modFotos.ciudad_codigo)}
-     onConfirmar={async ({ fotos, conNovedad, ...datos }) => {
-      await marcarEntregado(modFotos, fotos, conNovedad, datos);
-     }}
-     onClose={() => setModFotos(null)}
-    />
-   )}
-
-   {modFotos && !esMovil && (
-    <Modal title={`Registrar Entrega - ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
-     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Info pedido */}
-      <div style={{background:P[50],borderRadius:10,padding:14}}>
-       <div style={{fontWeight:700,color:P[800],marginBottom:4}}>{modFotos.cliente}</div>
-       <div style={{fontSize:13,color:"#64748b"}}>Direccion: {modFotos.direccion} - {modFotos.ciudad_nombre}</div>
-       <div style={{fontSize:13,color:"#64748b"}}>Factura: {modFotos.factura} - {modFotos.cajas} cajas</div>
-      </div>
-
-      {/* Checkbox novedad */}
-      <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"12px 16px",cursor:"pointer",border:`2px solid ${novedad?"#dc2626":P[200]}`}}
-       onClick={()=>setNovedad(!novedad)}>
-       <div style={{width:22,height:22,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        {novedad&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}></span>}
-       </div>
-       <div>
-        <div style={{fontWeight:700,color:novedad?"#dc2626":P[800],fontSize:14}}>Entrega con Novedad</div>
-        <div style={{fontSize:12,color:"#94a3b8"}}>Marca esto si hubo algun inconveniente en la entrega</div>
-       </div>
-      </div>
-
-      {/* Cargador de fotos */}
-      <CargadorFotos
-       pedido={modFotos}
-       onGuardar={(fotos)=>marcarEntregado(modFotos, fotos, novedad)}
-       onClose={()=>setModFotos(null)}
-       showToast={showToast}
-      />
-     </div>
-    </Modal>
-   )}
+   {modales}
   </div>
  );
 }
@@ -3451,91 +3504,73 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
 function MisDevolucionesConductor({ devoluciones = [], user }) {
  const condId = user.conductor_db_id || user.id;
  const items = devoluciones.filter(d => String(d.conductor_id) === String(condId));
- const border = "#e5e7eb";
- const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
-    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Devoluciones</h1>
-    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Devoluciones asignadas a tu ruta</p>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:14 }}>
-    {items.length===0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes devoluciones asignadas.</section>}
-    {items.map(d=>(
-     <section key={d.id} style={{ ...cardStyle, padding:18, borderLeft:"4px solid #dc2626" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
-       <div>
-        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
-         <span style={{ fontFamily:"monospace", fontWeight:900, color:"#dc2626", fontSize:15 }}>{d.guia}</span>
-         <Badge estado={d.estado}/>
-         {d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}
-        </div>
-        <div style={{ color:"#4b5563", fontSize:13 }}>Factura: <strong>{d.factura}</strong> · Pedido: <strong>{d.pedido_ref}</strong></div>
-        <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>Recogida: {d.dir_recogida} · {d.ciudad_nombre}</div>
-        <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{d.unidades} uds · {d.volumen_m3} m3 · {d.peso_kg} kg</div>
-        {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>Motivo: {d.motivo}</div>}
-       </div>
-       {(d.soporte_nombre||d.soporte_data)&&(
-        <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
-         onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`)}>
-         Ver Soporte
-        </button>
-       )}
-      </div>
-     </section>
-    ))}
-   </main>
-  </div>
+  <Pagina>
+   <Encabezado titulo="Mis devoluciones" descripcion="Devoluciones asignadas a tu ruta" />
+   {items.length === 0 ? (
+    <ListaVacia>No tienes devoluciones asignadas.</ListaVacia>
+   ) : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+     {items.map(d => (
+      <TarjetaEnvio
+       key={d.id}
+       guia={d.guia}
+       estado={d.estado}
+       novedad={d.novedad}
+       acento={T.color.mal}
+       lineas={[
+        `Factura ${d.factura || "-"} · Pedido ${d.pedido_ref || "-"}`,
+        d.dir_recogida ? `Recoge en ${d.dir_recogida}${d.ciudad_nombre ? " · " + d.ciudad_nombre : ""}` : null,
+       ]}
+       medidas={`${d.unidades || 0} uds · ${d.volumen_m3 || 0} m3 · ${d.peso_kg || 0} kg`}
+       nota={d.motivo ? `Motivo: ${d.motivo}` : null}
+       adjunto={(d.soporte_nombre || d.soporte_data) ? {
+        texto: "Soporte",
+        onClick: () => abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`),
+       } : null}
+      />
+     ))}
+    </div>
+   )}
+  </Pagina>
  );
 }
 
 function MisRecogidasConductor({ recogidas = [], user }) {
  const condId = user.conductor_db_id || user.id;
  const items = recogidas.filter(r => String(r.conductor_id) === String(condId));
- const border = "#e5e7eb";
- const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
-    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Recogidas</h1>
-    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Recogidas asignadas a tu ruta</p>
-   </header>
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:14 }}>
-    {items.length===0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes recogidas asignadas.</section>}
-    {items.map(r=>(
-     <section key={r.id} style={{ ...cardStyle, padding:18, borderLeft:"4px solid #0891b2" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
-       <div>
-        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
-         <span style={{ fontFamily:"monospace", fontWeight:900, color:"#0891b2", fontSize:15 }}>{r.guia}</span>
-         <Badge estado={r.estado}/>
-         {r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}
-        </div>
-        <div style={{ color:"#4b5563", fontSize:13 }}>Recogida: <strong>{r.ciudad_recogida_nombre}</strong> · Entrega: <strong>{r.ciudad_entrega_nombre}</strong></div>
-        <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>{r.dir_recogida} → {r.dir_entrega}</div>
-        <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{r.unidades} uds · {r.volumen_m3} m3 · {r.peso_kg} kg</div>
-        {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>Obs: {r.observaciones}</div>}
-       </div>
-       {(r.doc_nombre||r.doc_data)&&(
-        <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
-         onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`)}>
-         Ver Documento
-        </button>
-       )}
-      </div>
-     </section>
-    ))}
-   </main>
-  </div>
+  <Pagina>
+   <Encabezado titulo="Mis recogidas" descripcion="Recogidas asignadas a tu ruta" />
+   {items.length === 0 ? (
+    <ListaVacia>No tienes recogidas asignadas.</ListaVacia>
+   ) : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+     {items.map(r => (
+      <TarjetaEnvio
+       key={r.id}
+       guia={r.guia}
+       estado={r.estado}
+       novedad={r.novedad}
+       acento={T.color.info}
+       lineas={[
+        `${r.ciudad_recogida_nombre || "-"} → ${r.ciudad_entrega_nombre || "-"}`,
+        r.dir_recogida ? `Recoge en ${r.dir_recogida}` : null,
+        r.dir_entrega ? `Entrega en ${r.dir_entrega}` : null,
+       ]}
+       medidas={`${r.unidades || 0} uds · ${r.volumen_m3 || 0} m3 · ${r.peso_kg || 0} kg`}
+       nota={r.observaciones ? `Obs: ${r.observaciones}` : null}
+       adjunto={(r.doc_nombre || r.doc_data) ? {
+        texto: "Documento",
+        onClick: () => abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`),
+       } : null}
+      />
+     ))}
+    </div>
+   )}
+  </Pagina>
  );
 }
-
-
-// GestionPaqueterias 
-
-// GestionPromesas 
-
-// FacturasProveedor 
 
 function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const [editando, setEditando] = useState(null); // ciudad_codigo being edited
@@ -5026,6 +5061,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
 // SidebarApp 
 
 function MiUbicacion({ user }) {
+ const esMovil = useEsMovil();
  const [lat, setLat] = useState(window._gpsLat || null);
  const [lng, setLng] = useState(window._gpsLng || null);
  const [on, setOn] = useState(window._gpsOn || false);
@@ -5062,22 +5098,56 @@ function MiUbicacion({ user }) {
 
  const mapUrl = lat&&lng ? `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16` : `https://maps.google.com/maps?q=4.711,-74.072&output=embed&z=11`;
  return (
-  <div>
-   <h2 style={{margin:"0 0 22px",color:P[800],fontWeight:900}}> Mi Ubicacion GPS</h2>
-   <Card style={{marginBottom:16}}>
-    <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-     <div style={{flex:1,fontSize:14}}>
-      {lat&&lng?<><strong>Lat:</strong> {lat.toFixed(6)} <strong>Lng:</strong> {lng.toFixed(6)}</>:<span style={{color:"#94a3b8"}}>Presiona el botn para activar tu GPS</span>}
-      {on&&<span style={{marginLeft:12,color:"#059669",fontWeight:700,fontSize:12}}> Compartiendo</span>}
-     </div>
-     <Btn variant={on?"danger":"success"} onClick={on?detener:iniciar}>{on?" Detener GPS":" Activar GPS"}</Btn>
+  <Pagina>
+   <Encabezado titulo="Mi ubicacion GPS"
+    descripcion={on ? "Compartiendo tu posicion con la central" : "Activa el GPS para que la central te ubique"} />
+
+   <section style={{
+    ...tarjeta, padding: 16, display: "flex", flexDirection: "column", gap: 12,
+   }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+     <span style={{
+      width: 10, height: 10, borderRadius: 5, flexShrink: 0,
+      background: on ? T.color.bienPunto : T.color.tenue,
+     }}/>
+     <span style={{ fontSize: 14, fontWeight: 600, color: on ? T.color.bien : T.color.tinta3 }}>
+      {on ? "GPS activo" : "GPS apagado"}
+     </span>
     </div>
-    {err&&<p style={{color:"#dc2626",fontSize:13,margin:"10px 0 0"}}> {err}</p>}
-   </Card>
-   <div style={{borderRadius:14,overflow:"hidden",border:`2px solid ${P[200]}`}}>
-    <iframe title="mi-ubicacion" src={mapUrl} width="100%" height="360" style={{border:"none",display:"block"}} allowFullScreen loading="lazy"/>
-   </div>
-  </div>
+
+    {lat && lng ? (
+     <div style={{ display: "flex", gap: 18, fontFamily: T.fuente.mono, fontSize: 13, color: T.color.tinta2 }}>
+      <span><span style={{ color: T.color.tinta3 }}>Lat </span>{lat.toFixed(6)}</span>
+      <span><span style={{ color: T.color.tinta3 }}>Lng </span>{lng.toFixed(6)}</span>
+     </div>
+    ) : (
+     <span style={{ fontSize: 13, color: T.color.tinta3 }}>
+      Todavia no hay posicion. Activa el GPS y dale permiso al navegador.
+     </span>
+    )}
+
+    {/* Alto 48 y ancho completo: se pulsa con el telefono en una mano. */}
+    <button onClick={on ? detener : iniciar} style={{
+     width: "100%", minHeight: 48, borderRadius: T.radio.control, border: "none",
+     cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 700, color: "#fff",
+     background: on ? T.color.mal : T.color.bienPunto,
+    }}>
+     {on ? "Detener GPS" : "Activar GPS"}
+    </button>
+
+    {err && (
+     <div style={{
+      background: T.color.malSuave, border: `1px solid ${T.color.malBorde}`,
+      color: T.color.mal, borderRadius: T.radio.control, padding: "10px 12px", fontSize: 13,
+     }}>{err}</div>
+    )}
+   </section>
+
+   <section style={{ ...tarjeta, padding: 0, overflow: "hidden" }}>
+    <iframe title="Mi ubicacion" src={mapUrl} loading="lazy" allowFullScreen
+     style={{ width: "100%", height: esMovil ? "48vh" : 380, border: "none", display: "block" }}/>
+   </section>
+  </Pagina>
  );
 }
 
