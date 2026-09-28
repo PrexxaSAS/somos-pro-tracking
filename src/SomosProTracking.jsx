@@ -20,6 +20,7 @@ import { RegistrarEntregaMovil } from './modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from './modules/pedidos/RegistrarEntregaOperador';
 import { NuevoPedidoMovil } from './modules/pedidos/NuevoPedidoMovil';
 import { GestionEnvioMovil } from './modules/gestion/GestionEnvioMovil';
+import { GestionPqrsMovil } from './modules/gestion/GestionPqrsMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
@@ -40,7 +41,7 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, MapPin, Plus, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, MapPin, Plus, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -4839,7 +4840,8 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
 
 // ModuloPQRS 
 
-function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
+function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva }) {
+ const esMovil = useEsMovil();
  const MOTIVOS = [
   "Entrega tarda fuera de tiempo estimado",
   "Mercancia averiada o daada en transito",
@@ -4871,6 +4873,10 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  const [modNueva,  setModNueva]  = useState(false);
  const [modEditar, setModEditar] = useState(null);
  const [modGestion, setModGestion] = useState(null);
+ // El aviso de "Nueva PQRS" se atiende aqui, ya con el estado declarado.
+ useEffect(() => {
+  if (nuevaInicial) { setModNueva(true); if (onConsumirNueva) onConsumirNueva(); }
+ }, [nuevaInicial]);
  const [busq,    setBusq]    = useState("");
  const [filtroEst, setFiltroEst] = useState("todos");
  const [gestion,  setGestion]  = useState("");
@@ -4933,16 +4939,19 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   if (recargar) await recargar();
  };
 
- const guardarGestion = async () => {
+ // El texto y el soporte llegan por parametro cuando la gestion se registra
+ // desde la pantalla del celular (disenio 20), que lleva su propio estado; el
+ // modal de escritorio sigue usando el estado del modulo.
+ const guardarGestion = async (texto = gestion, soporte = gestionSoporte) => {
   if ((modGestion.respuesta||"").trim() || modGestion.fecha_gestion || modGestion.gestionado_por) {
    showToast("La respuesta de esta PQRS ya fue registrada y no se puede editar","error");
    return;
   }
-  if (!gestion.trim()) { showToast("Escribe una respuesta de gestin","error"); return; }
-  const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
+  if (!String(texto || "").trim()) { showToast("Escribe una respuesta de gestion","error"); return; }
+  const cambios = { respuesta:texto, gestionado_por:user.nombre||user.user,
    fecha_gestion:hoyLocal(), estado:"en_gestion",
-   soporte_data: gestionSoporte.data || null,
-   soporte_nombre: gestionSoporte.nombre || "" };
+   soporte_data: soporte?.data || null,
+   soporte_nombre: soporte?.nombre || "" };
   const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
   if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return; }
   setModGestion(null); setGestion(""); setGestionSoporte({ data:null, nombre:"" });
@@ -5116,7 +5125,17 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
       placeholder="Describe la situacion, la fecha del evento y las personas involucradas..." />
     </ModalForm>
    )}
-   {modGestion&&(
+   {/* Disenio 20: en el celular la gestion va a pantalla completa. Llama a los
+       mismos guardarGestion y cerrar que el modal de escritorio. */}
+   {modGestion&&esMovil&&(
+    <GestionPqrsMovil item={modGestion} puedeGestionar={puedeGestionar}
+     onClose={()=>setModGestion(null)}
+     onRegistrar={(texto, soporte)=>guardarGestion(texto, soporte)}
+     onCerrar={async ()=>{ await cerrar(modGestion.id, "cerrada"); setModGestion(null); }}
+     onSoporte={(x)=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}
+     showToast={showToast}/>
+   )}
+   {modGestion&&!esMovil&&(
    <ModalGestion
     titulo="PQRS"
     id={modGestion.id}
@@ -5356,41 +5375,76 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
 
 // Consultas (cliente interno) 
 
-function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast }) {
+// "J. E. Castrillon": las iniciales de los nombres y el primer apellido.
+const nombreCorto = (nombre) => {
+ const partes = String(nombre || "").trim().split(/\s+/).filter(Boolean);
+ if (partes.length <= 2) return partes.join(" ");
+ const apellido = partes[partes.length - 2];
+ return partes.slice(0, partes.length - 2).map(x => x[0].toUpperCase() + ".").join(" ") + " " + apellido;
+};
+
+// Estado de pedidos para el rol cliente. Lo que ve el cliente es lo suyo: sus
+// pedidos, en que van y con quien. Los indicadores de arriba son tambien el
+// filtro por estado; el rastreo abre el mapa debajo de la fila, en vivo si el
+// conductor tiene el GPS encendido y sobre el destino si no.
+export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast, onNuevaPQRS }) {
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
  const [busq, setBusq] = useState("");
+ const [rango, setRango] = useState("30");
+ const [ciudadF, setCiudadF] = useState("");
+ const [filtro, setFiltro] = useState("todos");
  const [modMapa, setModMapa] = useState(null);
+ const [modGuia, setModGuia] = useState(null);
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const pageSize = 8;
 
- const filtP = pedidos.filter(p => {
-  const q = busq.toLowerCase();
-  return !busq ||
-   (p.id || "").toLowerCase().includes(q) ||
-   (p.cliente || "").toLowerCase().includes(q) ||
-   (p.factura || "").toLowerCase().includes(q) ||
-   (p.ciudad_nombre || "").toLowerCase().includes(q) ||
-   (p.guia_interna || "").toLowerCase().includes(q) ||
-   (p.guia_paqueteria || "").toLowerCase().includes(q);
+ const desde = (() => { const r = RANGOS_PEDIDOS.find(x => x.id === rango); return r && r.dias ? hoyMas(-r.dias) : null; })();
+ const enRango = pedidos.filter(p => !desde || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde);
+ const ciudadesDe = [...new Set(enRango.map(p => p.ciudad_nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+
+ const esActivo = (p) => ["sin_asignar", "pendiente", "en_transito", "paqueteria"].includes(p.estado);
+ const conteo = {
+  todos: enRango.length,
+  activos: enRango.filter(esActivo).length,
+  entregados: enRango.filter(p => p.estado === "entregado").length,
+  novedades: enRango.filter(p => p.estado === "novedad" || p.novedad).length,
+ };
+
+ const filtP = enRango.filter(p => {
+  if (ciudadF && p.ciudad_nombre !== ciudadF) return false;
+  if (filtro === "activos" && !esActivo(p)) return false;
+  if (filtro === "entregados" && p.estado !== "entregado") return false;
+  if (filtro === "novedades" && !(p.estado === "novedad" || p.novedad)) return false;
+  const q = busq.trim().toLowerCase();
+  return !q || [p.id, p.guia_interna, p.factura, p.cliente, p.ciudad_nombre, p.direccion, p.guia_paqueteria]
+   .some(v => String(v || "").toLowerCase().includes(q));
  });
  const pageItems = filtP.slice((page - 1) * pageSize, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, pageSize]);
+ const pageStart = filtP.length === 0 ? 0 : (page - 1) * pageSize + 1;
+ const pageEnd = Math.min(filtP.length, page * pageSize);
+ const totalCajas = filtP.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
+ useEffect(() => { setPage(1); }, [busq, rango, ciudadF, filtro]);
 
- const border = "#e5e7eb";
- const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
- const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"8px 12px", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" };
- const activos = filtP.filter(p => ["sin_asignar", "pendiente", "en_transito", "paqueteria"].includes(p.estado)).length;
- const entregados = filtP.filter(p => p.estado === "entregado").length;
- const novedades = filtP.filter(p => p.estado === "novedad" || p.novedad).length;
- const totalCajas = filtP.reduce((a,p)=>a+(parseInt(p.cajas)||0),0);
+ const exportar = () => {
+  const cab = "pedido,guia,factura,destinatario,direccion,ciudad,cajas,estado,transporte,fecha_creacion,fecha_estimada,fecha_real";
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const filas = filtP.map(p => {
+   const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+   const tr = transportePedido(p, cond);
+   return [p.id, p.guia_interna, p.factura, p.cliente, p.direccion, p.ciudad_nombre, p.cajas || 0,
+    ESTADOS_PEDIDO[p.estado]?.label || p.estado, tr.noAplica ? "No aplica" : (tr.principal || "Sin asignar"),
+    p.fecha_creacion, p.fecha_estimada, p.fecha_real].map(esc).join(",");
+  });
+  descargarCSV(`estado_pedidos_${hoyLocal()}.csv`, cab, filas.join("\n"));
+ };
 
  const renderMapa = (p, cond, ciudad) => {
   const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
   const gpsReciente = gps && (Date.now()-gps.ts) < 300000;
   const entregado = ["entregado","novedad"].includes(p.estado);
   if (entregado) return (
-   <div style={{ background:"#ecfdf5", border:`1px solid #a7f3d0`, borderRadius:12, padding:"12px 16px", color:"#059669", fontWeight:750, fontSize:13 }}>
+   <div style={{ background:T.color.bienSuave, border:`1px solid ${T.color.bienSuave}`, borderRadius:12, padding:"12px 16px", color:T.color.bien, fontWeight:600, fontSize:13 }}>
     Pedido entregado. Rastreo GPS no disponible.
    </div>
   );
@@ -5398,77 +5452,133 @@ function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=
    ? `https://maps.google.com/maps?q=${gps.lat},${gps.lng}&output=embed&z=15`
    : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"") + ", " + (ciudad?.name||p.ciudad_nombre||"") + ", Colombia")}&output=embed&z=15`;
   return (
-   <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? "#6d42d8" : border}`, background:"#fff" }}>
-    {gpsReciente && <div style={{ background:"#6d42d8", color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:800 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
+   <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? T.color.marca : T.color.borde}`, background:T.color.superficie }}>
+    {gpsReciente && <div style={{ background:T.color.marca, color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:700 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
     <iframe title={"mapa-"+p.id} width="100%" height="280" style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
-    <div style={{ background:"#f8fafc", padding:"9px 14px", fontSize:12, color:"#4b5563" }}>
+    <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2 }}>
      {gpsReciente ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : `${p.direccion || ""}, ${ciudad?.name || p.ciudad_nombre || ""}`}
      {cond && <span style={{ marginLeft:12 }}>{cond.nombre} · {p.placa}</span>}
-     {!gpsReciente && <span style={{ marginLeft:8, color:"#9ca3af" }}>(GPS no activo, mostrando destino)</span>}
+     {!gpsReciente && <span style={{ marginLeft:8, color:T.color.tinta4 }}>(GPS no activo, mostrando destino)</span>}
     </div>
    </div>
   );
  };
 
+ const kpi = (clave, label, color, destacado) => ({
+  label, valor: conteo[clave], color, activo: filtro === clave,
+  onClick: () => setFiltro(filtro === clave && clave !== "todos" ? "todos" : clave),
+ });
+
  return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
-    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Estado de Pedidos</h1>
-    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Consulta y seguimiento de pedidos registrados</p>
-   </header>
+  <Pagina>
+   <Encabezado
+    titulo="Estado de pedidos"
+    descripcion="Consulta y seguimiento de tus pedidos registrados"
+    acciones={<>
+     <button onClick={exportar} style={botonBarra} disabled={filtP.length === 0}><Download size={15}/> Exportar</button>
+     {onNuevaPQRS && <button onClick={onNuevaPQRS} style={botonPrincipal}><HelpCircle size={16}/> Nueva PQRS</button>}
+    </>}
+   />
 
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Total pedidos</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtP.length}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Activos</div><div style={{ fontSize:28, fontWeight:900, color:"#6d42d8", marginTop:8 }}>{activos}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Entregados</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{entregados}</div></div>
-     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Novedades</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{novedades}</div></div>
-    </section>
+   <Indicadores items={[
+    kpi("todos", "Total pedidos", T.color.tinta),
+    kpi("activos", "Activos", T.color.marca),
+    kpi("entregados", "Entregados", T.color.bienPunto),
+    kpi("novedades", "Novedades", T.color.malPunto),
+   ]}/>
 
-    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por pedido, guia, factura, cliente o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
-      <span style={{ color:"#6b7280", fontSize:13, whiteSpace:"nowrap" }}>{filtP.length} pedidos · {totalCajas} cajas</span>
-     </div>
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${pageItems.length} en esta pagina`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar por N° pedido, guia, factura o destino" ancho={420} />
+     <SelectFiltro valor={rango} onChange={setRango} ancho={170}>
+      {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+     </SelectFiltro>
+     <SelectFiltro valor={ciudadF} onChange={setCiudadF} ancho={170}>
+      <option value="">Ciudad</option>
+      {ciudadesDe.map(c => <option key={c} value={c}>{c}</option>)}
+     </SelectFiltro>
+    </BarraFiltros>
 
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-       <thead>
-        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-         {["Pedido", "Factura", "Cliente", "Destino", "Cajas", "Estado", "Transporte", "Acciones"].map(h => (
-          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap", width:h==="Acciones" ? 220 : undefined, minWidth:h==="Acciones" ? 220 : undefined }}>{h}</th>
-         ))}
-        </tr>
-       </thead>
-       <tbody>
-        {filtP.length===0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin resultados.</td></tr>}
-        {pageItems.map(p=>{
-         const cond = conductores.find(c=>String(c.id)===String(p.conductor_id));
-         const ciudad = (ciudades||[]).find(c=>c.code===p.ciudad_codigo);
-         const soportes = p.soportes || p.soportes_data || [];
-         return (
-          <React.Fragment key={p.id}>
-           <tr style={{ borderBottom:`1px solid ${border}` }}>
-            <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
-            <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
-            <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
-            <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
-            <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
-            <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
-            <td style={{ padding:"16px" }}>{(() => { const tr = transportePedido(p, cond); if (tr.noAplica) return <span style={{ color:"#9ca3af" }}>No aplica</span>; if (!tr.principal) return <span style={{ color:"#9ca3af" }}>Sin conductor</span>; return <><div>{tr.principal}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{tr.detalle}</div></>; })()}</td>
-            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
-           </tr>
-           {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
-          </React.Fragment>
-         );
-        })}
-       </tbody>
-      </table>
-     </div>
-     <PaginationControls total={filtP.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
-    </section>
-   </main>
-  </div>
+    <div style={{ overflowX:"auto" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <thead>
+       <tr>
+        <th style={th}>N° pedido</th>
+        <th style={th}>Factura</th>
+        <th style={th}>Destinatario</th>
+        <th style={th}>Destino</th>
+        <th style={{ ...th, textAlign:"right" }}>Cajas</th>
+        <th style={th}>Estado</th>
+        <th style={th}>Transporte</th>
+        <th style={{ ...th, textAlign:"right" }}>Acciones</th>
+       </tr>
+      </thead>
+      <tbody>
+       {filtP.length === 0 && (
+        <tr><td colSpan={8} style={{ ...td, padding:42, textAlign:"center", color:T.color.tinta3 }}>
+         {enRango.length === 0 ? "No hay pedidos en este periodo." : "Ningun pedido coincide con los filtros."}
+        </td></tr>
+       )}
+       {pageItems.map(p => {
+        const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+        const ciudad = (ciudades||[]).find(c => c.code === p.ciudad_codigo);
+        const tr = transportePedido(p, cond);
+        const rastreable = ["en_transito", "paqueteria"].includes(p.estado);
+        const soportes = p.soportes || p.soportes_data || [];
+        const abierto = modMapa?.id === p.id;
+        return (
+         <React.Fragment key={p.id}>
+          <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
+           <td style={td}>
+            <div style={{ color:T.color.marca, fontWeight:700, fontSize:13.5 }}>{p.guia_interna || p.id}</div>
+            {p.guia_interna && p.guia_interna !== p.id && <div style={{ ...mono, color:T.color.tinta3, fontSize:12 }}>{p.id}</div>}
+           </td>
+           <td style={td}>{p.factura ? <span style={mono}>{p.factura}</span> : <span style={{ color:T.color.tinta3 }}>—</span>}</td>
+           <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
+           <td style={{ ...td, maxWidth:240 }}>
+            <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.direccion || "—"}</div>
+            <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{p.ciudad_nombre || ciudad?.name || ""}</div>
+           </td>
+           <td style={{ ...td, textAlign:"right", fontWeight:700, color: p.cajas ? T.color.tinta : T.color.tinta4 }}>{p.cajas || 0}</td>
+           <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
+           <td style={td}>
+            {tr.noAplica ? <span style={{ color:T.color.tinta3 }}>No aplica</span>
+             : !tr.principal ? <span style={{ color:T.color.tinta3 }}>Sin asignar</span>
+             : <><div style={{ color:T.color.tinta }}>{cond ? nombreCorto(tr.principal) : tr.principal}</div>
+                {tr.detalle && <div style={{ ...mono, color:T.color.tinta3, fontSize:12 }}>{tr.detalle}</div>}</>}
+           </td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:6, whiteSpace:"nowrap" }}>
+             {soportes.length > 0 && (
+              <button style={botonFila} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>
+             )}
+             <button onClick={()=>setModMapa(abierto ? null : p)} disabled={!rastreable && !abierto} title={rastreable ? "Ver en el mapa" : "Solo los pedidos en transito se rastrean"} style={{
+              ...botonFila, display:"inline-flex", alignItems:"center", gap:5,
+              color: rastreable ? T.color.marca : T.color.tinta4,
+              borderColor: rastreable ? T.color.marcaBorde : T.color.borde2,
+              background: abierto ? T.color.marcaSuave : T.color.superficie,
+              cursor: rastreable ? "pointer" : "not-allowed",
+             }}><MapPin size={13}/> {abierto ? "Ocultar" : "Rastrear"}</button>
+             <button onClick={()=>setModGuia(p)} style={{ ...botonFila, display:"inline-flex", alignItems:"center", gap:5 }}><FileText size={13}/> Guia</button>
+            </div>
+           </td>
+          </tr>
+          {abierto && <tr><td colSpan={8} style={{ padding:16, background:T.color.superficie2, borderBottom:`1px solid ${T.color.borde}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
+         </React.Fragment>
+        );
+       })}
+      </tbody>
+     </table>
+    </div>
+
+    <PieTabla
+     izquierda={`Mostrando ${pageStart}–${pageEnd} de ${filtP.length} pedidos · ${totalCajas} cajas`}
+     derecha={<Paginador total={filtP.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+    />
+   </section>
+
+   {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
+  </Pagina>
  );
 }
 
@@ -5499,6 +5609,8 @@ export default function SomosProTracking() {
  // enlace terminaba mostrando siempre el mismo pedido.
  const [estadoPedidos, setEstadoPedidos] = useState("");
  const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
+ // "Nueva PQRS" desde Estado de pedidos: se va a PQRS con el formulario abierto.
+ const [pqrsNueva, setPqrsNueva] = useState(false);
 
  // El QR de la guia apunta a ?pedido=<id>. Al entrar con esa direccion se abre
  // ese pedido y se limpia el parametro, para que recargar despues no lo repita.
@@ -5796,8 +5908,10 @@ export default function SomosProTracking() {
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
    case "mi_ubicacion":  return <MiUbicacion user={user} pedidos={pedidos} promesas={promesas}/>;
-   case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
-   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}/>;
+   case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}
+    onNuevaPQRS={() => { navegar("pqrs"); setPqrsNueva(true); }}/>;
+   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
+    nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
    case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.

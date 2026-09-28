@@ -18,7 +18,7 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
-import { ModalDetalle } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
+import { ModalDetalle, Consultas } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
@@ -29,6 +29,7 @@ import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/r
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
 import { NuevoPedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/NuevoPedidoMovil';
 import { GestionEnvioMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionEnvioMovil';
+import { GestionPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionPqrsMovil';
 
 const pedidos = [
  { id:"PX000119704", estado:"en_transito", fecha_creacion:"2026-09-01", ciudad_codigo:"05001", ciudad_nombre:"Medellin", cliente:"ACME", cajas:4, conductor_id:7, guia_interna:"SPT-2026-0138" },
@@ -240,6 +241,23 @@ casos.push(["GestionEnvioMovil/devolucion_sin_asignar", gestion({ tipo:"devoluci
 casos.push(["GestionEnvioMovil/recogida_en_transito", gestion({ tipo:"recogida", item: recEnTransito })]);
 casos.push(["GestionEnvioMovil/solo_lectura", gestion({ tipo:"devolucion", item: devSinAsignar, canEdit: false })]);
 
+// Disenio 20: gestionar PQRS.
+const pqrsAbierta = { id:"PQRS-2026-0002", estado:"abierta", factura:"FAC-02", pedido_ref:"PED-02", motivo:"Incidente",
+ descripcion:"Sin comunicacion del conductor durante el transito", solicitado_por:"Cliente Interno Prueba", fecha_creacion:"2026-06-09" };
+const pqrsGestionada = { ...pqrsAbierta, estado:"en_gestion", respuesta:"Se contacto al conductor y se confirmo la entrega.",
+ gestionado_por:"Operador", fecha_gestion:"2026-06-11", soporte_nombre:"confirmacion-cliente.pdf" };
+const gestionPqrs = (props) => React.createElement(GestionPqrsMovil, {
+ onClose(){}, onRegistrar(){}, onCerrar(){}, onSoporte(){}, showToast(){}, ...props,
+});
+casos.push(["GestionPqrsMovil/abierta", gestionPqrs({ item: pqrsAbierta })]);
+casos.push(["GestionPqrsMovil/en_gestion", gestionPqrs({ item: pqrsGestionada })]);
+casos.push(["GestionPqrsMovil/cerrada", gestionPqrs({ item: { ...pqrsGestionada, estado:"cerrada" } })]);
+
+// Estado de pedidos del cliente (escritorio).
+casos.push(["Consultas/cliente", React.createElement(Consultas, {
+ pedidos, conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){},
+})]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -348,6 +366,26 @@ for (const [nombre, elemento] of casos) {
  const paso2 = renderToString(React.createElement(NuevoPedidoMovil, { form: formNuevo, setForm(){}, ciudades: ciudadesPrueba, conductores: conductoresPrueba, onCrear(){}, onClose(){}, pasoInicial: 1 }));
  exigir(paso1.includes("Continuar") && !paso1.includes("Saltar"), "el paso 1 no continua o deja saltar");
  exigir(paso2.includes("Saltar") && paso2.includes("Crear pedido"), "el paso 2 no deja saltar ni crear");
+}
+
+// Disenio 20: la abierta pide la respuesta y deja registrar; la gestionada
+// muestra la gestion como historial y ya no deja escribir otra (la base guarda
+// una sola); la cerrada no ofrece acciones. Estado de pedidos: cabecera,
+// indicadores como filtro, y Rastrear/Guia por fila.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  pqrs: " + queja); fallos++; } };
+ const abierta = renderToString(gestionPqrs({ item: pqrsAbierta }));
+ const gestionada = renderToString(gestionPqrs({ item: pqrsGestionada }));
+ const cerrada = renderToString(gestionPqrs({ item: { ...pqrsGestionada, estado:"cerrada" } }));
+ exigir(abierta.includes("Registrar gestion") && abierta.includes("Que se hizo y que se le respondio"), "la abierta no pide la respuesta");
+ exigir(abierta.includes("Abierta hace"), "la abierta no dice cuanto lleva abierta");
+ exigir(gestionada.includes("Gestiones") && gestionada.includes("Operador") && gestionada.includes("confirmacion-cliente.pdf"), "la gestionada no muestra el historial");
+ exigir(!gestionada.includes("Que se hizo y que se le respondio") && gestionada.includes("ya fue registrada"), "la gestionada deja escribir otra respuesta");
+ exigir(!cerrada.includes("Registrar gestion") && !cerrada.includes("Cerrar PQRS"), "la cerrada ofrece acciones");
+ const consultas = renderToString(React.createElement(Consultas, { pedidos, conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){} }));
+ exigir(consultas.includes("Estado de pedidos") && consultas.includes("Nueva PQRS") && consultas.includes("Exportar"), "estado de pedidos sin cabecera");
+ exigir(consultas.includes("Total pedidos") && consultas.includes("Novedades"), "estado de pedidos sin indicadores");
+ exigir(consultas.includes("Rastrear") && consultas.includes("Guia"), "estado de pedidos sin acciones por fila");
 }
 
 globalThis.__fallos = fallos;
