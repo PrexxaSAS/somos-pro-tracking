@@ -12,6 +12,8 @@ import {
  Segmentado, Casilla, Paginador, PieTabla, useSeleccion,
  th, td, mono, botonBarra, botonPrincipal, iconoAccion,
 } from '../../components/ui/listas';
+import { useEsMovil } from '../../design/responsive';
+import { UsuariosMovil } from '../red/RedMovil';
 
 const POR_PAGINA = 50;
 
@@ -30,6 +32,7 @@ const inicialesUsuario = (nombre) => (nombre || "?")
 
 export function Usuarios({ usuarios, transportistas = [], showToast, recargar }) {
  const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
+ const esMovil = useEsMovil();
  const [modal,   setModal]   = useState(false);
  const [modEditar, setModEditar] = useState(null);
  const [form,   setForm]   = useState(vacio);
@@ -149,9 +152,10 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   if (recargar) await recargar();
  };
 
+ // Devuelve si elimino, para que la hoja del celular sepa si cerrarse.
  const eliminar = async (uid, uname) => {
-  if (uname==="admin") { showToast("No se puede eliminar el admin principal","error"); return; }
-  if (!window.confirm("Eliminar este usuario?")) return;
+  if (uname==="admin") { showToast("No se puede eliminar el admin principal","error"); return false; }
+  if (!window.confirm("Eliminar este usuario?")) return false;
   setEliminando(uid);
   const { data, error } = await supabase.functions.invoke('create-system-user', {
    body: {
@@ -159,13 +163,14 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
     user_id: uid,
    },
   });
-  if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); setEliminando(null); return; }
-  if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); setEliminando(null); return; }
+  if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); setEliminando(null); return false; }
+  if (data?.error) { showToast("Error eliminando usuario: "+data.error,"error"); setEliminando(null); return false; }
   // La tarjeta desaparece de inmediato; el refresco ocurre despues sin hacer esperar.
   setOcultos(prev=>[...prev, uid]);
   setEliminando(null);
   showToast("Usuario eliminado","info");
   if (recargar) await recargar();
+  return true;
  };
 
  // Campos que solo aplican a ciertos roles.
@@ -240,6 +245,59 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  useEffect(() => { setPagina(1); }, [busq, rolFiltro, acceso]);
  const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
  const sel = useSeleccion(visibles.map(u => u.id));
+
+ const modales = (<>
+   {modal&&(
+    <ModalForm
+     titulo="Nuevo usuario"
+     descripcion="Acceso al sistema con rol asignado"
+     onClose={()=>setModal(false)}
+     onPrimario={crearUsuario}
+     guardando={guardando}
+     textoPrimario="Crear usuario"
+    >
+     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
+     <Selector label="Rol" obligatorio valor={form.rol} onChange={f("rol")}
+      opciones={Object.entries(ROLES).map(([k,v])=>({ value:k, label:v }))} />
+     {camposRol()}
+     <Seccion titulo="Acceso al sistema" />
+     <Fila>
+      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} placeholder="juan.perez" />
+      <Clave label="Contrasena" obligatorio valor={form.pass} onChange={f("pass")} ayuda="Minimo 8 caracteres" />
+     </Fila>
+    </ModalForm>
+   )}
+
+   {modEditar&&(
+    <ModalForm
+     titulo={`Editar ${modEditar.nombre}`}
+     descripcion="Cambia sus datos, su rol o su contrasena"
+     onClose={()=>setModEditar(null)}
+     onPrimario={guardarEdicion}
+     guardando={guardando}
+     textoPrimario="Guardar cambios"
+    >
+     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} />
+     <Selector label="Rol" obligatorio valor={form.rol} onChange={f("rol")}
+      opciones={Object.entries(ROLES).map(([k,v])=>({ value:k, label:v }))} />
+     {camposRol()}
+     <Seccion titulo="Acceso al sistema" />
+     <Fila>
+      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} />
+      <Clave label="Nueva contrasena" valor={form.pass} onChange={f("pass")} ayuda="Dejala vacia para no cambiarla" />
+     </Fila>
+    </ModalForm>
+   )}
+ </>);
+
+ // Disenio 29: roles en pastillas, fila compacta y acciones en una hoja.
+ if (esMovil) return (
+  <Pagina>
+   <UsuariosMovil usuarios={listaBase} colorRol={COLOR_ROL} acceso={acceso} setAcceso={setAcceso}
+    onNuevo={abrirNuevo} onEditar={abrirEditar} onEliminar={(u) => eliminar(u.id, u.user)} />
+   {modales}
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -388,47 +446,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
     />
    </section>
 
-   {modal&&(
-    <ModalForm
-     titulo="Nuevo usuario"
-     descripcion="Acceso al sistema con rol asignado"
-     onClose={()=>setModal(false)}
-     onPrimario={crearUsuario}
-     guardando={guardando}
-     textoPrimario="Crear usuario"
-    >
-     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
-     <Selector label="Rol" obligatorio valor={form.rol} onChange={f("rol")}
-      opciones={Object.entries(ROLES).map(([k,v])=>({ value:k, label:v }))} />
-     {camposRol()}
-     <Seccion titulo="Acceso al sistema" />
-     <Fila>
-      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} placeholder="juan.perez" />
-      <Clave label="Contrasena" obligatorio valor={form.pass} onChange={f("pass")} ayuda="Minimo 8 caracteres" />
-     </Fila>
-    </ModalForm>
-   )}
-
-   {modEditar&&(
-    <ModalForm
-     titulo={`Editar ${modEditar.nombre}`}
-     descripcion="Cambia sus datos, su rol o su contrasena"
-     onClose={()=>setModEditar(null)}
-     onPrimario={guardarEdicion}
-     guardando={guardando}
-     textoPrimario="Guardar cambios"
-    >
-     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} />
-     <Selector label="Rol" obligatorio valor={form.rol} onChange={f("rol")}
-      opciones={Object.entries(ROLES).map(([k,v])=>({ value:k, label:v }))} />
-     {camposRol()}
-     <Seccion titulo="Acceso al sistema" />
-     <Fila>
-      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} />
-      <Clave label="Nueva contrasena" valor={form.pass} onChange={f("pass")} ayuda="Dejala vacia para no cambiarla" />
-     </Fila>
-    </ModalForm>
-   )}
+   {modales}
   </Pagina>
  );
 }

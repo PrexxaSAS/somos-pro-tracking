@@ -13,6 +13,8 @@ import {
  th, td, mono, botonBarra, botonPrincipal,
 } from '../../components/ui/listas';
 import { hoyLocal } from '../../utils/fechas';
+import { useEsMovil } from '../../design/responsive';
+import { ConductoresMovil } from '../red/RedMovil';
 
 const POR_PAGINA = 50;
 
@@ -29,8 +31,12 @@ const escaparCsv = (v) => {
  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 };
 
-export function Conductores({ conductores, pedidos, showToast, transportistas = [], recargar, onVerPedidos }) {
+export function Conductores({ conductores, pedidos, showToast, transportistas = [], recargar, onVerPedidos, puedeEditar = false }) {
+ const esMovil = useEsMovil();
  const [modal, setModal] = useState(false);
+ // Editar un conductor: solo admin (el operador ve la lista sin editar).
+ const [modEdit, setModEdit] = useState(null);
+ const [formEdit, setFormEdit] = useState({ nombre: "", cedula: "", placa: "", celular: "", nit_proveedor: "", empresa: "" });
  const [guardando, setGuardando] = useState(false);
  const [busq, setBusq] = useState("");
  const [empresa, setEmpresa] = useState("");
@@ -118,6 +124,30 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
   copiar(nums.join(", "), `${nums.length} celular(es)`);
  };
 
+ const abrirEditar = (c) => {
+  setFormEdit({ nombre: c.nombre || "", cedula: c.cedula || "", placa: c.placa || "", celular: c.celular || "", nit_proveedor: c.nit_proveedor || "", empresa: c.empresa || "" });
+  setModEdit(c);
+ };
+
+ // La misma actualizacion que hace el admin desde Transportistas: el conductor
+ // y, si tiene usuario, su nombre, placa y celular en usuarios.
+ const guardarEdicion = async () => {
+  if (!formEdit.nombre.trim() || !formEdit.placa.trim()) { showToast("Nombre y placa son obligatorios", "error"); return; }
+  setGuardando(true);
+  const { error: cErr } = await supabase.from('conductores').update({
+   nombre: formEdit.nombre.trim(), cedula: formEdit.cedula.trim(), placa: formEdit.placa.trim(), celular: formEdit.celular.trim(),
+   nit_proveedor: formEdit.nit_proveedor.trim(), empresa: formEdit.empresa.trim(),
+  }).eq('id', modEdit.id);
+  if (cErr) { showToast("Error actualizando conductor: " + cErr.message, "error"); setGuardando(false); return; }
+  if (modEdit.usuario_id) {
+   const { error: uErr } = await supabase.from('usuarios').update({ nombre: formEdit.nombre.trim(), placa: formEdit.placa.trim(), celular: formEdit.celular.trim() }).eq('id', modEdit.usuario_id);
+   if (uErr) { showToast("Conductor actualizado, pero fallo usuario: " + uErr.message, "warning"); setGuardando(false); return; }
+  }
+  setModEdit(null); showToast("Conductor actualizado", "success");
+  if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  setGuardando(false);
+ };
+
  const guardar = async () => {
   if (!form.nombre.trim() || !form.cedula.trim() || !form.placa.trim()) {
    showToast("Nombre, cedula y placa son obligatorios", "error"); return;
@@ -154,6 +184,79 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
   }
   setGuardando(false);
  };
+
+ const opcionesEmpresa = (transportistas || []).filter(x => x?.nit).map(x => ({ value: x.nit, label: x.nombre || x.empresa || x.nit }));
+ const modales = (<>
+  {modal && (
+   <ModalForm
+    titulo="Registrar conductor"
+    descripcion="Crea el conductor y su usuario de acceso"
+    ancho="M"
+    onClose={() => setModal(false)}
+    onPrimario={guardar}
+    guardando={guardando}
+    textoPrimario="Crear conductor"
+   >
+    <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
+    <Fila>
+     <Texto label="Cedula" obligatorio mono valor={form.cedula} onChange={f("cedula")} placeholder="1012345678" />
+     <Texto label="Celular" valor={form.celular} onChange={f("celular")} placeholder="300 123 4567" />
+    </Fila>
+    <Fila>
+     <Texto label="Placa" obligatorio mono valor={form.placa} onChange={f("placa")} placeholder="ABC-123" />
+     {/* Un solo campo de empresa: al elegir la transportista se llenan su NIT y su
+         nombre, que antes se pedian por separado y podian quedar contradiciendose. */}
+     <Selector label="Empresa transportista" valor={form.nit_proveedor}
+      onChange={nit => {
+       const emp = (transportistas || []).find(x => x.nit === nit);
+       setForm(pp => ({ ...pp, nit_proveedor:nit, empresa:emp?.nombre || emp?.empresa || "" }));
+      }}
+      placeholder="Sin asignar"
+      opciones={opcionesEmpresa} />
+    </Fila>
+    <Seccion titulo="Acceso al sistema" />
+    <Fila>
+     <Texto label="Usuario" obligatorio mono valor={form.user_login} onChange={f("user_login")} placeholder="juan.perez" />
+     <Clave label="Contrasena" obligatorio valor={form.pass_login} onChange={f("pass_login")} />
+    </Fila>
+   </ModalForm>
+  )}
+  {modEdit && (
+   <ModalForm
+    titulo={`Editar ${modEdit.nombre}`}
+    descripcion="Datos del conductor"
+    ancho="M"
+    onClose={() => setModEdit(null)}
+    onPrimario={guardarEdicion}
+    guardando={guardando}
+    textoPrimario="Guardar cambios"
+   >
+    <Texto label="Nombre" obligatorio valor={formEdit.nombre} onChange={v => setFormEdit(pp => ({ ...pp, nombre: v }))} />
+    <Fila>
+     <Texto label="Cedula" mono valor={formEdit.cedula} onChange={v => setFormEdit(pp => ({ ...pp, cedula: v }))} />
+     <Texto label="Celular" valor={formEdit.celular} onChange={v => setFormEdit(pp => ({ ...pp, celular: v }))} />
+    </Fila>
+    <Fila>
+     <Texto label="Placa" obligatorio mono valor={formEdit.placa} onChange={v => setFormEdit(pp => ({ ...pp, placa: v }))} />
+     <Selector label="Empresa" valor={formEdit.nit_proveedor}
+      onChange={v => {
+       const emp = (transportistas || []).find(x => x.nit === v);
+       setFormEdit(pp => ({ ...pp, nit_proveedor: v, empresa: emp?.nombre || emp?.empresa || "" }));
+      }}
+      placeholder="Sin asignar" opciones={opcionesEmpresa} />
+    </Fila>
+   </ModalForm>
+  )}
+ </>);
+
+ // Disenio 27a: tarjetas con transportista, pedidos en transito y acciones.
+ if (esMovil) return (
+  <Pagina>
+   <ConductoresMovil filas={filas} transportistas={transportistas}
+    onNuevo={() => setModal(true)} onEditar={puedeEditar ? abrirEditar : null} onVerPedidos={onVerPedidos} />
+   {modales}
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -257,6 +360,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
             { texto: "Ver sus pedidos", accion: () => onVerPedidos && onVerPedidos(c), inactivo: !onVerPedidos || !c.placa },
             { texto: "Copiar celular", accion: () => copiar(c.celular, "Celular") },
             { texto: "Copiar placa", accion: () => copiar(c.placa, "Placa") },
+            ...(puedeEditar ? [{ texto: "Editar conductor", accion: () => abrirEditar(c) }] : []),
            ]}/>
           </td>
          </tr>
@@ -272,40 +376,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
     />
    </section>
 
-   {modal && (
-    <ModalForm
-     titulo="Registrar conductor"
-     descripcion="Crea el conductor y su usuario de acceso"
-     ancho="M"
-     onClose={() => setModal(false)}
-     onPrimario={guardar}
-     guardando={guardando}
-     textoPrimario="Crear conductor"
-    >
-     <Texto label="Nombre completo" obligatorio valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
-     <Fila>
-      <Texto label="Cedula" obligatorio mono valor={form.cedula} onChange={f("cedula")} placeholder="1012345678" />
-      <Texto label="Celular" valor={form.celular} onChange={f("celular")} placeholder="300 123 4567" />
-     </Fila>
-     <Fila>
-      <Texto label="Placa" obligatorio mono valor={form.placa} onChange={f("placa")} placeholder="ABC-123" />
-      {/* Un solo campo de empresa: al elegir la transportista se llenan su NIT y su
-          nombre, que antes se pedian por separado y podian quedar contradiciendose. */}
-      <Selector label="Empresa transportista" valor={form.nit_proveedor}
-       onChange={nit => {
-        const emp = (transportistas || []).find(x => x.nit === nit);
-        setForm(pp => ({ ...pp, nit_proveedor:nit, empresa:emp?.nombre || emp?.empresa || "" }));
-       }}
-       placeholder="Sin asignar"
-       opciones={(transportistas || []).filter(x => x?.nit).map(x => ({ value:x.nit, label:x.nombre || x.empresa || x.nit }))} />
-     </Fila>
-     <Seccion titulo="Acceso al sistema" />
-     <Fila>
-      <Texto label="Usuario" obligatorio mono valor={form.user_login} onChange={f("user_login")} placeholder="juan.perez" />
-      <Clave label="Contrasena" obligatorio valor={form.pass_login} onChange={f("pass_login")} />
-     </Fila>
-    </ModalForm>
-   )}
+   {modales}
   </Pagina>
  );
 }

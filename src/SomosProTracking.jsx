@@ -42,7 +42,7 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto,
 } from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
@@ -55,6 +55,7 @@ import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules
 import { EstadoPedidosMovil } from './modules/cliente/EstadoPedidosMovil';
 import { PromesasMovil, CiudadesMovil, ResumenMovil } from './modules/configuracion/ConfiguracionMovil';
 import { BotonEliminar } from './components/ui/listas';
+import { TransportistasMovil, PaqueteriasMovil } from './modules/red/RedMovil';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -3064,6 +3065,16 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  }
 
  // ── Vista de administracion ───────────────────────────────────────────────
+ // Disenio 27c: cada empresa en una tarjeta, con sus conductores desplegables.
+ if (esMovil) return (
+  <Pagina>
+   <TransportistasMovil empresas={empresas} pedidos={pedidos}
+    onNueva={() => setModEmpresa(true)} onEditarEmpresa={abrirEditarEmpresa} onInscribir={abrirInscribir}
+    onEditarConductor={(c) => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }} />
+   {modales}
+  </Pagina>
+ );
+
  return (
   <Pagina>
    <Encabezado
@@ -4242,34 +4253,47 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
 }
 
 
-function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) {
+export function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) {
+ const esMovil = useEsMovil();
  const [nueva, setNueva] = useState("");
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
- const agregar = async () => {
-  if (!nueva.trim()) { showToast("Escribe el nombre de la empresa","error"); return; }
-  if ((paqueterias||[]).includes(nueva.trim())) { showToast("Ya existe esa empresa","error"); return; }
-  const { error } = await supabase.from('paqueterias').insert({ nombre: nueva.trim() });
-  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"),"error"); return; }
+ // Reciben el nombre por parametro y devuelven si guardaron, para que la hoja
+ // del celular sepa si cerrarse. Validan y guardan lo mismo que antes.
+ const agregar = async (valor = nueva) => {
+  if (!valor.trim()) { showToast("Escribe el nombre de la empresa","error"); return false; }
+  if ((paqueterias||[]).includes(valor.trim())) { showToast("Ya existe esa empresa","error"); return false; }
+  const { error } = await supabase.from('paqueterias').insert({ nombre: valor.trim() });
+  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"),"error"); return false; }
   setNueva("");
   showToast(" Empresa de paqueteria agregada","success");
   if (recargar) await recargar();
+  return true;
  };
  // Solo se puede quitar una empresa que ningun pedido este usando: si no, el
  // pedido quedaria apuntando a una paqueteria que ya no existe en el catalogo.
  const eliminar = async (nombre) => {
-  if (!window.confirm(`Quitar "${nombre}" del catalogo de paqueterias?`)) return;
+  if (!window.confirm(`Quitar "${nombre}" del catalogo de paqueterias?`)) return false;
   const { error } = await supabase.from('paqueterias').delete().eq('nombre', nombre);
-  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"), "error"); return; }
+  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"), "error"); return false; }
   showToast("Empresa quitada del catalogo", "info");
   if (recargar) await recargar();
+  return true;
  };
 
  const lista = (paqueterias || []).slice()
   .sort((a,b)=>String(a).localeCompare(String(b), "es", { sensitivity:"base" }));
  const usos = (nombre) => (pedidos || []).filter(p => p.paqueteria === nombre).length;
+ // Disenio 28: el nombre repetido se avisa mientras se escribe y bloquea el alta.
+ const repetida = Boolean(nueva.trim()) && (paqueterias||[]).includes(nueva.trim());
+
+ if (esMovil) return (
+  <Pagina>
+   <PaqueteriasMovil lista={lista} usos={usos} onAgregar={agregar} onEliminar={eliminar} />
+  </Pagina>
+ );
 
  return (
   <Pagina>
@@ -4281,7 +4305,7 @@ function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) 
    <section style={{ ...tarjeta, padding:14, display:"flex", gap:10, flexWrap:"wrap" }}>
     <div style={{ flex:"1 1 280px", minWidth:220 }}>
      <input value={nueva} onChange={e=>setNueva(e.target.value)}
-      onKeyDown={e=>e.key==="Enter"&&agregar()}
+      onKeyDown={e=>e.key==="Enter"&&!repetida&&agregar()}
       placeholder="Nombre de la empresa (Servientrega, TCC, Coordinadora...)"
       style={{
        width:"100%", boxSizing:"border-box", height:38, padding:"0 12px",
@@ -4290,7 +4314,10 @@ function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) 
        background:T.color.superficie2,
       }}/>
     </div>
-    <button onClick={agregar} style={botonPrincipal}><Plus size={16}/> Agregar</button>
+    <button onClick={()=>agregar()} disabled={repetida} style={{ ...botonPrincipal, opacity: repetida ? 0.5 : 1, cursor: repetida ? "not-allowed" : "pointer" }}><Plus size={16}/> Agregar</button>
+    {repetida && (
+     <div style={{ flexBasis:"100%", fontSize:12.5, color:T.color.mal }}>Esa paqueteria ya existe.</div>
+    )}
    </section>
 
    <section style={{ ...tarjeta, overflow:"hidden" }}>
@@ -4331,14 +4358,14 @@ function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) 
            </td>
            <td style={tdCifra}>{enUso}</td>
            <td style={{ ...td, textAlign:"right" }}>
-            <button title={enUso ? `No se puede quitar: ${enUso} pedido(s) la usan` : "Quitar"}
-             onClick={()=>enUso === 0 && eliminar(nombre)}
-             disabled={enUso > 0}
-             style={{
-              ...iconoAccion,
-              color: enUso > 0 ? T.color.tenue : T.color.mal,
-              cursor: enUso > 0 ? "not-allowed" : "pointer",
-             }}><Trash2 size={15}/></button>
+            {/* Con pedidos no se puede quitar: un candado con la razon, en vez
+                de una papelera gris que parece un boton roto. */}
+            {enUso > 0 ? (
+             <span title={`No se puede quitar: ${enUso} pedido(s) la usan`}
+              style={{ ...iconoAccion, cursor:"help", color:T.color.tinta4 }}><Lock size={15}/></span>
+            ) : (
+             <BotonEliminar title="Quitar" onClick={()=>eliminar(nombre)} />
+            )}
            </td>
           </tr>
          );
@@ -6335,7 +6362,7 @@ export default function SomosProTracking() {
     onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
-   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}
+   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores} puedeEditar={user.rol==="admin"}
     onVerPedidos={(c)=>{ setEstadoPedidos(""); setBusquedaPedidos(c.placa || c.nombre || ""); setTab("pedidos"); }}/>;
    case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;

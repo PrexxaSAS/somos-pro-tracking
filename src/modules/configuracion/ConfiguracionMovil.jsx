@@ -58,7 +58,7 @@ const botonGrande = (primario) => ({
 });
 
 // ── Hoja inferior ───────────────────────────────────────────────────────────
-function Hoja({ titulo, onClose, children }) {
+export function Hoja({ titulo, onClose, children }) {
  const [dentro, setDentro] = useState(false);
  useEffect(() => { const id = requestAnimationFrame(() => setDentro(true)); return () => cancelAnimationFrame(id); }, []);
  useEffect(() => {
@@ -86,12 +86,12 @@ function Hoja({ titulo, onClose, children }) {
  );
 }
 
-function Etiqueta({ children }) {
+export function Etiqueta({ children }) {
  return <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>{children}</span>;
 }
 
 // Menu "···" de la cabecera.
-function MenuMas({ opciones }) {
+export function MenuMas({ opciones }) {
  const [abierto, setAbierto] = useState(false);
  const ref = useRef(null);
  useEffect(() => {
@@ -121,7 +121,7 @@ function MenuMas({ opciones }) {
  );
 }
 
-function Cabecera({ sobre, titulo, derecha }) {
+export function Cabecera({ sobre, titulo, derecha }) {
  return (
   <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
    <div style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -133,7 +133,7 @@ function Cabecera({ sobre, titulo, derecha }) {
  );
 }
 
-function VerMas({ onClick }) {
+export function VerMas({ onClick }) {
  return (
   <button onClick={onClick} style={{
    minHeight: 46, borderRadius: T.radio.control, border: `1px solid ${T.color.borde2}`, background: T.color.superficie,

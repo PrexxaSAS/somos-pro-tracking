@@ -18,7 +18,7 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
-import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS, ResumenTransportador, Ciudades, GestionPromesas } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
+import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS, ResumenTransportador, Ciudades, GestionPromesas, GestionPaqueterias } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
 import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/EditarPedidoMovil';
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
@@ -32,6 +32,8 @@ import { GestionEnvioMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gesti
 import { GestionPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/GestionPqrsMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/gestion/SolicitudesMovil';
 import { FacturasProveedor } from '${raiz.replace(/\\/g, '/')}/src/modules/facturas/FacturasProveedor';
+import { Conductores } from '${raiz.replace(/\\/g, '/')}/src/modules/conductores/Conductores';
+import { Usuarios } from '${raiz.replace(/\\/g, '/')}/src/modules/usuarios/Usuarios';
 import { ResumenMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/configuracion/ConfiguracionMovil';
 
 const pedidos = [
@@ -343,6 +345,25 @@ casos.push(["Ciudades/26", ciudadesM()]);
 casos.push(["Resumen/26", React.createElement(ResumenTransportador, { pedidos, conductores: conductoresPrueba })]);
 casos.push(["ResumenMovil/26", resumenM()]);
 
+// Disenios 27 a 29: Conductores, Transportistas, Paqueterias y Usuarios.
+const transp27 = [{ id:"t1", nombre:"Transportes Prueba S.A.S", nit:"900111222-1", contacto:"Contacto Prueba", tel:"3007654321" },
+                  { id:"t2", nombre:"Transportadora Nacional", nit:"900123456-1", contacto:"Pepito Perez", tel:"" }];
+const cond27 = [{ id:7, nombre:"Juan Esteban Castrillon", placa:"NLX290", cedula:"1010", celular:"3001234567", nit_proveedor:"900111222-1", activo:true },
+                { id:8, nombre:"Conductor Libre", placa:"ABC123", cedula:"2020", nit_proveedor:"900111222-1", activo:true }];
+const conductores27 = (puedeEditar) => React.createElement(Conductores, { conductores: cond27, pedidos, transportistas: transp27, showToast(){}, onVerPedidos(){}, puedeEditar });
+const transpAdmin27 = () => React.createElement(Transportistas, { transportistas: transp27, conductores: cond27, pedidos, showToast(){}, user:{ rol:"admin", nombre:"Admin" } });
+const paq27 = () => React.createElement(GestionPaqueterias, { paqueterias:["Servientrega","Deprisa"], pedidos, showToast(){} });
+const usuarios27 = () => React.createElement(Usuarios, { usuarios:[
+ { id:"u1", nombre:"Admin", user:"admin", rol:"admin", auth_user_id:"a1" },
+ { id:"u2", nombre:"Conductor Prueba", user:"driver1", rol:"conductor", cedula:"1010101010", placa:"ABC123", empresa:"Transportes Prueba S.A.S", auth_user_id:"a2" },
+ { id:"u3", nombre:"consultor", user:"consultor", rol:"cliente" },
+], transportistas: transp27, showToast(){} });
+casos.push(["Conductores/admin", conductores27(true)]);
+casos.push(["Conductores/operador", conductores27(false)]);
+casos.push(["Transportistas/admin", transpAdmin27()]);
+casos.push(["Paqueterias", paq27()]);
+casos.push(["Usuarios", usuarios27()]);
+
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 
@@ -558,6 +579,28 @@ if (window.matchMedia("").matches) {
   const re = renderToString(resumenM());
   exigir(re.includes("Total 106 cajas") && re.includes("2 pedidos") && re.includes("JSL211") && re.includes("RUTTEK SAS") && re.includes("Cambiar"), "26d sin total, conductor o cambiar");
   exigir(renderToString(React.createElement(ResumenTransportador, { pedidos, conductores: conductoresPrueba })).includes("Elegir conductor"), "26d sin elegir conductor");
+ }
+}
+
+// Disenios 27 a 29. Editar conductores solo admin; en Paqueterias la que
+// tiene pedidos lleva candado y no papelera, en las dos vistas.
+{
+ const movil = window.matchMedia("").matches;
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  27-29: " + queja); fallos++; } };
+ const paq = renderToString(paq27());
+ exigir(paq.includes("lucide-lock"), "la paqueteria con pedidos no lleva candado");
+ exigir((paq.match(/lucide-trash/g) || []).length === (movil ? 0 : 1), "papelera donde no se puede eliminar");
+ if (movil) {
+  exigir(paq.includes("no se puede eliminar") && paq.includes("Sin pedidos"), "28 sin razon de bloqueo");
+  const ca = renderToString(conductores27(true));
+  const co = renderToString(conductores27(false));
+  exigir((ca.match(/title="Editar"/g) || []).length === 2, "27a: admin sin editar en cada conductor");
+  exigir(!co.includes('title="Editar"'), "27a: el operador puede editar");
+  exigir(ca.includes("En ruta") && ca.includes("Disponible") && ca.includes("Transportes Prueba S.A.S") && ca.includes('href="tel:3001234567"'), "27a sin estado, transportista o llamar");
+  const tr = renderToString(transpAdmin27());
+  exigir(tr.includes("NIT 900111222-1") && tr.includes("Sin conductores · inscribir") && tr.includes("2 conductores") && tr.includes('title="Nueva empresa"'), "27c sin NIT, conductores o nueva");
+  const us = renderToString(usuarios27());
+  exigir(us.includes("@driver1") && (us.match(/ · Sin acceso/g) || []).length === 1 && us.includes("2 con acceso") && us.includes("Administrador"), "29 sin usuario, acceso o roles");
  }
 }
 
