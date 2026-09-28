@@ -6,6 +6,7 @@ import {
 import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO } from '../../Constants';
 import { transportePedido } from '../../utils/transporte';
+import { hoyLocal } from '../../utils/fechas';
 
 // El detalle de escritorio es un formulario de veinte campos. En el celular se
 // lee antes de editarse: esta vista muestra el pedido por bloques y deja una
@@ -34,7 +35,7 @@ const fechaCorta = (iso) => {
  return `${Number(d)} ${MESES[Number(m) - 1] || m}`;
 };
 
-const hoyISO = () => new Date().toISOString().split("T")[0];
+const hoyISO = hoyLocal;
 
 const sumarDias = (iso, dias) => {
  if (!iso) return null;

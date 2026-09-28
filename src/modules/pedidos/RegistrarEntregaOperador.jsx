@@ -4,6 +4,7 @@ import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO } from '../../Constants';
 import { usePedidoEditable } from './usePedidoEditable';
 import { leerFotos } from '../../utils/images';
+import { hoyLocal } from '../../utils/fechas';
 
 // La entrega que registra el operador, no el conductor: los pedidos de Solo
 // facturar y Cliente recoge nunca salen con nadie, asi que el soporte lo sube
@@ -21,7 +22,7 @@ const entrada = {
  outline: "none",
 };
 
-const hoyISO = () => new Date().toISOString().split("T")[0];
+const hoyISO = hoyLocal;
 
 export function RegistrarEntregaOperador({
  pedido, conductores, ciudades, promesas = [], setPedidos, showToast, onClose,

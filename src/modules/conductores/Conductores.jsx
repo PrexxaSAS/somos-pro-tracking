@@ -12,6 +12,7 @@ import {
  Segmentado, Casilla, MenuFila, Paginador, PieTabla, useSeleccion,
  th, td, mono, botonBarra, botonPrincipal,
 } from '../../components/ui/listas';
+import { hoyLocal } from '../../utils/fechas';
 
 const POR_PAGINA = 50;
 
@@ -96,7 +97,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
    c.nombre, c.cedula, c.placa, c.transportista, c.celular, c.asignados, c.transito,
   ].map(escaparCsv).join(","));
   descargarCSV(
-   `conductores_${new Date().toISOString().slice(0, 10)}.csv`,
+   `conductores_${hoyLocal()}.csv`,
    "nombre,cedula,placa,transportista,celular,asignados,en_transito",
    filasCsv.join("\n"),
   );

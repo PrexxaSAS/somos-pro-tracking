@@ -14,6 +14,7 @@ import {
  CasillaNovedad,
 } from '../../components/ui/formularios';
 import emailjs from '@emailjs/browser';
+import { hoyLocal, hoyMas } from '../../utils/fechas';
 
 // ── Configuración ──────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ const dane5 = (v) => {
 // ── Asignar corte ──────────────────────────────────────────────────────────────
 const asignarCorte = async (daneOrigen) => {
   if (!daneOrigen) return null;
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyLocal();
   const ahora = new Date();
 
   const {data:sedesAll} = await supabase
@@ -116,8 +117,7 @@ const asignarCorte = async (daneOrigen) => {
   }
 
   // Si todos los cortes de hoy están llenos → mañana primer corte
-  const man = new Date(); man.setDate(man.getDate()+1);
-  const manStr = man.toISOString().split('T')[0];
+  const manStr = hoyMas(1);
   const primerCorte = cortesOrdenados[0];
 
   let {data:cp} = await supabase.from('cortes_programados')
@@ -1166,7 +1166,7 @@ export function ModuloLogistica({showToast}) {
   const [sedes,   setSedes]   = useState([]);
   const [cortes,  setCortes]  = useState([]);
   const [filtroSede, setFiltroSede] = useState('');
-  const [filtroFecha,setFiltroFecha]= useState(new Date().toISOString().split('T')[0]);
+  const [filtroFecha,setFiltroFecha]= useState(hoyLocal());
   // La pantalla arranca en "pendientes" y no en el dia de hoy porque su trabajo
   // es imprimir lo que falte, no mirar una fecha. Cuando los cortes de hoy se
   // llenan o ya pasaron, el pedido cae en el primer corte de manana: mirando un

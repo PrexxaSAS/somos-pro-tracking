@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { leerFotos } from '../../utils/images';
+import { hoyLocal } from '../../utils/fechas';
 
 // La entrega se registra en el punto de entrega, de pie y con una mano: tres
 // pasos cortos en vez de un formulario. Cada paso pide una sola cosa, el boton
@@ -21,7 +22,7 @@ const entrada = {
  padding: "0 14px", fontSize: 15, fontFamily: "inherit", color: T.color.tinta, outline: "none",
 };
 
-const hoyISO = () => new Date().toISOString().split("T")[0];
+const hoyISO = hoyLocal;
 
 const horaCorta = () => {
  const d = new Date();

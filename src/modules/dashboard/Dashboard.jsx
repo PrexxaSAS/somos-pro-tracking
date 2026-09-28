@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, CalendarDays, ChevronDown, ChevronRight, Search, X
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
+import { hoyLocal, hoyMas } from '../../utils/fechas';
 
 // Rangos del filtro de fecha. Se compara contra fecha_creacion del pedido.
 const RANGOS = [
@@ -60,12 +61,8 @@ const porFoco = (lista, foco, cual) => {
  return lista.filter(x => prueba(x, foco));
 };
 
-const hoyISO = () => new Date().toISOString().split("T")[0];
-const restarDias = (n) => {
- const d = new Date();
- d.setDate(d.getDate() - n);
- return d.toISOString().split("T")[0];
-};
+const hoyISO = hoyLocal;
+const restarDias = (n) => hoyMas(-n);
 const diasEntre = (desde, hasta) =>
  Math.round((new Date(hasta) - new Date(desde)) / 86400000);
 

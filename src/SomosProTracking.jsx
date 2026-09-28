@@ -38,6 +38,7 @@ import { Conductores } from './modules/conductores/Conductores';
 import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
+import { hoyLocal, hoyMas } from './utils/fechas';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -573,7 +574,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
 
  // Procesar filas
  const procesar = (rows, pedidosPorId) => {
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = hoyLocal();
 
   // Duplicados dentro del CSV (mismo Pedido_Pro en varias filas):
   // - Si las filas repiten la MISMA guia es un error del archivo: se bloquea.
@@ -693,9 +694,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
   let ok = 0; const fallosDetalle = [];
 
   // Fecha estimada = hoy + 2 dias
-  const fechaEst = new Date();
-  fechaEst.setDate(fechaEst.getDate() + 2);
-  const fechaEstStr = fechaEst.toISOString().split("T")[0];
+  const fechaEstStr = hoyMas(2);
 
   for (const m of paraActualizar) {
    const actual = m.pedido || {};
@@ -1153,7 +1152,7 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
     conductor_id: null, placa: null, nit_proveedor: null,
    estado:    esPaq ? "paqueteria" : "sin_asignar",
    estado_despacho: "despachado", novedad: false,
-   fecha_creacion: new Date().toISOString().split("T")[0],
+   fecha_creacion: hoyLocal(),
    fecha_real: null, soportes: [], soportes_data: [],
    _csvOriginal: original,
    _csvHeaders: hdrs,
@@ -1506,9 +1505,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const desdeRango = (() => {
   const r = RANGOS_PEDIDOS.find(x => x.id === rango);
   if (!r || !r.dias) return null;
-  const d = new Date();
-  d.setDate(d.getDate() - r.dias);
-  return d.toISOString().split("T")[0];
+  return hoyMas(-r.dias);
  })();
 
  const filtrados = pedidos.filter(p => {
@@ -1565,13 +1562,13 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    placa: cond ? cond.placa : null,
    nit_proveedor: cond ? cond.nit_proveedor : null,
    estado: esPaq ? "paqueteria" : (cond ? "en_transito" : "sin_asignar"),
-   fecha_despacho: cond ? new Date().toISOString().split("T")[0] : null,
+   fecha_despacho: cond ? hoyLocal() : null,
    estado_despacho: form.estado_despacho || "despachado",
    ciudad_origen_codigo: form.ciudad_origen_codigo || null,
    ciudad_origen_nombre: ciudadOrigen?.name || null,
    direccion_origen: form.direccion_origen || null,
    novedad: false,
-   fecha_creacion: new Date().toISOString().split("T")[0],
+   fecha_creacion: hoyLocal(),
    fecha_real: null, soportes: [], soportes_data: [],
   };
   let guiaAsignada = null;
@@ -1636,7 +1633,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `errores_importacion_pedidos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `errores_importacion_pedidos_${hoyLocal()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
  };
@@ -2437,7 +2434,7 @@ function Transportistas({ transportistas, conductores, pedidos = [], showToast, 
    ? [[e.nombre, e.nit, e.contacto, e.tel, "", "", ""].map(esc).join(",")]
    : e.conductores.map(c => [e.nombre, e.nit, e.contacto, e.tel, c.nombre, c.cedula, c.placa].map(esc).join(",")));
   descargarCSV(
-   `transportistas_${new Date().toISOString().slice(0, 10)}.csv`,
+   `transportistas_${hoyLocal()}.csv`,
    "empresa,nit,contacto,telefono,conductor,cedula,placa",
    filas.join("\n"),
   );
@@ -3219,7 +3216,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
    setModFotos(null);
    return;
   }
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = hoyLocal();
   const nombres = fotos.map((_,i)=>`soporte_${pedido.id}_${i+1}.jpg`);
   const estadoFinal = conNovedad ? "novedad" : "entregado";
   let soportesPrevios = Array.isArray(pedido.soportes_data) ? pedido.soportes_data : [];
@@ -3943,7 +3940,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
    guia_paqueteria: form.tipo_envio==="paqueteria" ? form.guia_paqueteria : null,
    soporte_data: form.soporte_data,
    soporte_nombre: form.soporte_nombre,
-   fecha_creacion: new Date().toISOString().split("T")[0],
+   fecha_creacion: hoyLocal(),
    fecha_real: null, novedad: false,
    solicitado_por: user.nombre||user.user,
   };
@@ -3976,7 +3973,7 @@ function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportista
  };
 
  const marcarEntregado = async (id, novedad, condId) => {
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = hoyLocal();
   const cond = conductores.find(c=>String(c.id)===String(condId));
   const cambios = {
    estado:novedad?"novedad":"entregado",
@@ -4373,7 +4370,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
    guia_paqueteria: form.tipo_envio==="paqueteria"?form.guia_paqueteria:null,
    doc_data: form.doc_data,
    doc_nombre: form.doc_nombre,
-   fecha_creacion: new Date().toISOString().split("T")[0],
+   fecha_creacion: hoyLocal(),
    fecha_real: null, novedad: false,
    solicitado_por: user.nombre||user.user,
   };
@@ -4406,7 +4403,7 @@ function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paq
  };
 
  const marcarEntregado = async (id, novedad, condId) => {
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = hoyLocal();
   const cond = conductores.find(c=>String(c.id)===String(condId));
   const cambios = {
    estado:novedad?"novedad":"entregado",
@@ -4784,7 +4781,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
    factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
    motivo: form.motivo, descripcion: form.descripcion.trim(),
    estado: "abierta", solicitado_por: user.nombre||user.user,
-   fecha_creacion: new Date().toISOString().split("T")[0],
+   fecha_creacion: hoyLocal(),
    fecha_gestion: null, respuesta: "", gestionado_por: "",
   };
   const { error } = await supabase.from('pqrs').insert(nueva);
@@ -4801,7 +4798,7 @@ function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
   }
   if (!gestion.trim()) { showToast("Escribe una respuesta de gestin","error"); return; }
   const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
-   fecha_gestion:new Date().toISOString().split("T")[0], estado:"en_gestion",
+   fecha_gestion:hoyLocal(), estado:"en_gestion",
    soporte_data: gestionSoporte.data || null,
    soporte_nombre: gestionSoporte.nombre || "" };
   const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);

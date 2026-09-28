@@ -3,6 +3,7 @@ import { supabase } from '../../supabase';
 import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO } from '../../Constants';
 import { mensajeError } from '../../utils/errors';
 import { numTexto, cargarSoportesPedido } from '../../utils/pedidos';
+import { hoyLocal } from '../../utils/fechas';
 
 // Toda la edicion de un pedido -- el formulario, las reglas de estado y el
 // guardado -- vive aqui y no en la pantalla. El modal de escritorio y la
@@ -95,7 +96,7 @@ export function usePedidoEditable({
    const conTransporte = c || (tipoModal === "empresa_transporte" && empTrans.trim());
    nuevoEstado = tipoModal === "paqueteria" ? "paqueteria" : conTransporte ? "en_transito" : "sin_asignar";
   }
-  const fechaDespacho = new Date().toISOString().split("T")[0];
+  const fechaDespacho = hoyLocal();
   const debeMarcarDespacho = nuevoEstado === "en_transito" && pedido.estado !== "en_transito" && !pedido.fecha_despacho;
   const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
   const cambiosBase = {
@@ -114,7 +115,7 @@ export function usePedidoEditable({
   // Con fotos adjuntas, este guardado ES la entrega: escribe los soportes, cierra el
   // pedido y conserva la modalidad (Cliente Recoge / Solo Facturar) en estado_despacho,
   // porque la columna estado pasa a "entregado".
-  const hoyEntrega = new Date().toISOString().split("T")[0];
+  const hoyEntrega = hoyLocal();
   const conNovedadEntrega = Boolean(novedadEntrega);
   const modalidad = ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp
    : ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : null;
@@ -235,7 +236,7 @@ export function usePedidoEditable({
    ],
    soportes_data: [...previos, ...fotos],
    estado: conNovedad ? "novedad" : "entregado",
-   fecha_real: fechaReal || new Date().toISOString().split("T")[0],
+   fecha_real: fechaReal || hoyLocal(),
    novedad: conNovedad,
    ...(modalidad ? { estado_despacho: modalidad } : {}),
   };
