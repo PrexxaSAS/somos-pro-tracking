@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { transportePedido } from '../../utils/transporte';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '../../Subcomponentes';
+import { hoyLocal, hoyMas } from '../../utils/fechas';
 
 const card = {
  background: "#fff",
@@ -19,7 +20,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
   return () => clearInterval(t);
  }, []);
 
- const hoy = new Date().toISOString().split("T")[0];
+ const hoy = hoyLocal();
  const entregados = pedidos.filter(p => p.estado === "entregado" || p.estado === "novedad");
  const activos = pedidos.filter(p => ["en_transito", "pendiente", "sin_asignar"].includes(p.estado));
 
@@ -43,9 +44,7 @@ export function Dashboard({ pedidos, conductores, devoluciones = [], recogidas =
   return lim < hoy;
  });
 
- const manana = new Date();
- manana.setDate(manana.getDate() + 1);
- const mananaStr = manana.toISOString().split("T")[0];
+ const mananaStr = hoyMas(1);
  const enRiesgo = activos
   .filter(p => {
    const info = fechaRiesgoInfo(p);
