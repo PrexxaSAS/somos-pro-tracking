@@ -4151,7 +4151,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
   <Pagina>
    <Encabezado
     titulo="Promesas de servicio"
-    descripcion="Dias habiles de entrega prometidos por ciudad destino"
+    descripcion="Dias calendario de entrega prometidos por ciudad destino, contados desde la fecha del corte"
    />
 
    <Indicadores items={[

@@ -6,6 +6,7 @@ import {
 import { T } from '../../design/tokens';
 import { leerFotos } from '../../utils/images';
 import { hoyLocal } from '../../utils/fechas';
+import { limitePromesa } from '../../utils/promesa';
 
 // La entrega se registra en el punto de entrega, de pie y con una mano: tres
 // pasos cortos en vez de un formulario. Cada paso pide una sola cosa, el boton
@@ -98,13 +99,7 @@ export function RegistrarEntregaMovil({
  const puedeSeguir = paso === 0 ? fotos.length > 0 : true;
 
  // Comparacion con la promesa, para que el conductor vea si llego a tiempo.
- const limite = promesa && pedido.fecha_creacion
-  ? (() => {
-   const d = new Date(`${String(pedido.fecha_creacion).slice(0, 10)}T12:00:00`);
-   d.setDate(d.getDate() + Number(promesa.dias_plazo || 0));
-   return d.toISOString().split("T")[0];
-  })()
-  : pedido.fecha_estimada || null;
+ const limite = limitePromesa(pedido, promesa);
  const aTiempo = limite ? hoyISO() <= limite : null;
 
  return (

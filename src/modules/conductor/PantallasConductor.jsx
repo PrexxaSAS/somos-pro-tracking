@@ -6,6 +6,7 @@ import {
 import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO } from '../../Constants';
 import { fechaCorta, sumarDias } from '../pedidos/DetallePedidoMovil';
+import { limitePromesa } from '../../utils/promesa';
 
 // Las pantallas del conductor siguen los disenios 15 y 16: el conductor ve solo
 // lo suyo, en tarjetas orientadas a la ruta. Arriba lo que necesita para
@@ -213,9 +214,7 @@ function Destino({ cliente, direccion, ciudad }) {
 export function TarjetaEntrega({ pedido, parada, actual = false, promesa, onAbrir }) {
  // La fecha limite sale de la promesa de la ciudad; sin promesa, de la fecha
  // estimada que se digita pedido a pedido. Igual que en el detalle.
- const limite = promesa && pedido.fecha_creacion
-  ? sumarDias(pedido.fecha_creacion, promesa.dias_plazo)
-  : pedido.fecha_estimada || null;
+ const limite = limitePromesa(pedido, promesa);
  return (
   <button onClick={() => onAbrir(pedido)} style={tarjeta(actual ? T.estado.paqueteria : T.color.borde)}>
    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

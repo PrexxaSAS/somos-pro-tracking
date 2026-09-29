@@ -8,6 +8,7 @@ import { ESTADOS_PEDIDO } from '../../Constants';
 import { leerFotos } from '../../utils/images';
 import { Bloque, Fila, fechaCorta, sumarDias } from '../pedidos/DetallePedidoMovil';
 import { abrirEnMapa } from './PantallasConductor';
+import { limitePromesa } from '../../utils/promesa';
 
 // Disenio 18: el detalle del pedido para quien lo va a entregar. Pantalla
 // completa, no modal. Cabecera fija con volver y el numero de parada, pie fijo
@@ -66,9 +67,7 @@ export function DetallePedidoConductor({
   : cerrado ? { bg: T.color.bienSuave, color: T.color.bien }
   : { bg: T.color.marcaSuave, color: T.color.marca };
 
- const limite = promesa && pedido.fecha_creacion
-  ? sumarDias(pedido.fecha_creacion, promesa.dias_plazo)
-  : pedido.fecha_estimada || null;
+ const limite = limitePromesa(pedido, promesa);
 
  const agregar = async (files) => {
   const nuevas = await leerFotos(files, MAX_FOTOS - fotos.length);

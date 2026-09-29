@@ -4,6 +4,7 @@ import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO } from '../../Constants';
 import { mensajeError } from '../../utils/errors';
 import { numTexto, cargarSoportesPedido } from '../../utils/pedidos';
 import { hoyLocal } from '../../utils/fechas';
+import { limiteDePromesa } from '../../utils/promesa';
 
 // Toda la edicion de un pedido -- el formulario, las reglas de estado y el
 // guardado -- vive aqui y no en la pantalla. El modal de escritorio y la
@@ -48,11 +49,7 @@ export function usePedidoEditable({
  const cond  = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
  const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
  const promesa = (promesas||[]).find(p=>p.ciudad_codigo===pedido.ciudad_codigo);
- const fechaLimitePromesa = promesa && pedido.fecha_creacion ? (() => {
-  const d = new Date(pedido.fecha_creacion);
-  d.setDate(d.getDate() + Number(promesa.dias_plazo || 0));
-  return d.toISOString().split("T")[0];
- })() : null;
+ const fechaLimitePromesa = limiteDePromesa(pedido, promesa);
  const fuenteRiesgo = fechaLimitePromesa ? "Promesa de servicio" : "Fecha estimada";
  const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0) || (fotosPendientes.length > 0);
  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);

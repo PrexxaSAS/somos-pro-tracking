@@ -18,6 +18,7 @@ import { NavegacionMovil, HojaMas } from '${raiz.replace(/\\/g, '/')}/src/compon
 import { SidebarApp, MENUS } from '${raiz.replace(/\\/g, '/')}/src/components/layout/SidebarApp';
 import { PedidosMovil, HojaFiltros } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/PedidosMovil';
 import { faltantesPedido } from '${raiz.replace(/\\/g, '/')}/src/utils/transporte';
+import { limitePromesa, limiteDePromesa } from '${raiz.replace(/\\/g, '/')}/src/utils/promesa';
 import { SelectorPedido } from '${raiz.replace(/\\/g, '/')}/src/components/ui/formularios';
 import { DetallePedidoMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/DetallePedidoMovil';
 import { ModalDetalle, Consultas, Transportistas, ModuloDevoluciones, ModuloRecogidas, ModuloPQRS, ResumenTransportador, Ciudades, GestionPromesas, GestionPaqueterias } from '${raiz.replace(/\\/g, '/')}/src/SomosProTracking';
@@ -701,6 +702,19 @@ if (window.matchMedia("").matches) {
  exigir(!fDev.includes("N° factura") && fDev.includes("Elegir pedido"), "el celular sigue pidiendo la factura aparte");
  const conPedido = renderToString(solicitud(FormDevolucionMovil, { form: { ...formDev, pedido_ref:"PX1", factura:"FAC-300" } }));
  exigir(conPedido.includes("Factura FAC-300 · se toma del pedido"), "no dice de donde sale la factura");
+}
+
+// Promesa de servicio: se cuenta desde la fecha del CORTE (fecha_pedido), en
+// dias calendario. Sin fecha de corte, desde la creacion; sin promesa, la
+// fecha estimada digitada.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  promesa: " + queja); fallos++; } };
+ const prom = { dias_plazo: 2 };
+ exigir(limitePromesa({ fecha_pedido:"2026-09-29", fecha_creacion:"2026-09-28" }, prom) === "2026-10-01", "no cuenta desde la fecha del corte");
+ exigir(limitePromesa({ fecha_creacion:"2026-09-28" }, prom) === "2026-09-30", "sin corte no cuenta desde la creacion");
+ exigir(limitePromesa({ fecha_pedido:"2026-09-25" }, prom) === "2026-09-27", "salta el fin de semana: deben ser dias calendario");
+ exigir(limitePromesa({ fecha_pedido:"2026-09-29", fecha_estimada:"2026-10-09" }, null) === "2026-10-09", "sin promesa no usa la fecha estimada");
+ exigir(limiteDePromesa({ fecha_pedido:"2026-09-29" }, null) === null, "inventa un limite sin promesa");
 }
 
 globalThis.__fallos = fallos;

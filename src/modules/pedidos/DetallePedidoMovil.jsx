@@ -7,6 +7,7 @@ import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO } from '../../Constants';
 import { transportePedido } from '../../utils/transporte';
 import { hoyLocal } from '../../utils/fechas';
+import { limitePromesa } from '../../utils/promesa';
 
 // El detalle de escritorio es un formulario de veinte campos. En el celular se
 // lee antes de editarse: esta vista muestra el pedido por bloques y deja una
@@ -120,9 +121,7 @@ export function DetallePedidoMovil({
 
  // La fecha limite sale de la promesa de la ciudad; sin promesa, de la fecha
  // estimada que se digita pedido a pedido.
- const limite = promesa && pedido.fecha_creacion
-  ? sumarDias(pedido.fecha_creacion, promesa.dias_plazo)
-  : pedido.fecha_estimada || null;
+ const limite = limitePromesa(pedido, promesa);
 
  const hoy = hoyISO();
  const dias = limite ? diasEntre(hoy, limite) : null;

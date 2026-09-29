@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../supabase';
-import { sumarDias } from '../pedidos/DetallePedidoMovil';
+import { limitePromesa } from '../../utils/promesa';
 
 // El orden de la ruta del conductor. Lo usan Mis entregas (numero de parada)
 // y Mi ubicacion (siguiente parada), asi que vive en un solo sitio para que
@@ -13,14 +13,10 @@ import { sumarDias } from '../pedidos/DetallePedidoMovil';
 //   3. A igual promesa, el mas antiguo primero. Sin promesa, al final.
 // El orden a mano se guarda en ruta_conductor (docs/ruta_conductor.sql).
 
-// La fecha limite: la promesa de la ciudad sobre la fecha de creacion o, sin
-// promesa, la fecha estimada que se digita pedido a pedido.
-export const limitePedido = (p, promesas = []) => {
- const promesa = promesas.find(x => x.ciudad_codigo === p.ciudad_codigo);
- return promesa && p.fecha_creacion
-  ? sumarDias(p.fecha_creacion, promesa.dias_plazo)
-  : p.fecha_estimada || null;
-};
+// La fecha limite: la promesa de la ciudad contada desde la fecha del corte
+// o, sin promesa, la fecha estimada que se digita pedido a pedido.
+export const limitePedido = (p, promesas = []) =>
+ limitePromesa(p, promesas.find(x => x.ciudad_codigo === p.ciudad_codigo));
 
 const porUrgencia = (promesas) => (a, b) => {
  const la = limitePedido(a, promesas), lb = limitePedido(b, promesas);

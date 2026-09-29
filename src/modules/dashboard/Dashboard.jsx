@@ -4,6 +4,7 @@ import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
 import { hoyLocal, hoyMas } from '../../utils/fechas';
+import { limitePromesa } from '../../utils/promesa';
 
 // Rangos del filtro de fecha. Se compara contra fecha_creacion del pedido.
 const RANGOS = [
@@ -535,12 +536,8 @@ export function Dashboard({
   const hoy = hoyISO();
   const promMap = Object.fromEntries((promesas || []).map(p => [p.ciudad_codigo, Number(p.dias_plazo || 0)]));
   const tienePromesa = (p) => promMap[p.ciudad_codigo] !== undefined;
-  const fechaLimite = (p) => {
-   if (!tienePromesa(p) || !p.fecha_creacion) return p.fecha_estimada || null;
-   const d = new Date(p.fecha_creacion);
-   d.setDate(d.getDate() + promMap[p.ciudad_codigo]);
-   return d.toISOString().split("T")[0];
-  };
+  const fechaLimite = (p) =>
+   limitePromesa(p, tienePromesa(p) ? { dias_plazo: promMap[p.ciudad_codigo] } : null);
 
   const entregados = enRango.filter(p => p.estado === "entregado" || p.estado === "novedad");
   const activos = enRango.filter(p => ["en_transito", "pendiente", "sin_asignar"].includes(p.estado));
