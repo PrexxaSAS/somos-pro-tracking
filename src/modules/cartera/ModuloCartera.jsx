@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
-import { leerTextoCsv, filasCsv } from '../../utils/files';
+import { leerTextoCsv, filasCsv, descargarCSV } from '../../utils/files';
 import { P } from '../../Constants';
 import { T, tarjeta } from '../../design/tokens';
-import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight } from 'lucide-react';
+import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
  Segmentado, Paginador,
@@ -774,6 +774,11 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
   const esMovil = useEsMovil();
   const [archivo,   setArchivo]  = useState('');
   const [filasLeidas, setFilasLeidas] = useState(0);
+  // Pedidos que no se cargan porque les falta un dato obligatorio (hoy, el
+  // DANE origen: sin el no hay sede ni corte). Se guardan las filas tal como
+  // venian en el plano, con su encabezado, para descargarlas, corregirlas y
+  // volver a subirlas.
+  const [rechazados, setRechazados] = useState({ encabezado: [], pedidos: [] });
   const [pedidos,   setPedidos]  = useState([]);
   // El error va en dos partes: que paso (titulo) y que hacer (detalle).
   const [errMsg,    setErrMsg]   = useState(null);
@@ -790,7 +795,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
   // filasCsv respeta las comillas, asi que un campo con comas o saltos de linea
   // adentro ya no corre las columnas.
   const leerArchivo = async (file) => {
-    setArchivo(file.name); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null);
+    setArchivo(file.name); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null); setRechazados({ encabezado: [], pedidos: [] });
     if(!/\.(csv|txt)$/i.test(file.name)) {
       fallo("Solo se aceptan archivos .csv.", "Si tienes un Excel, guárdalo como CSV y vuelve a subirlo.");
       return;
@@ -847,9 +852,11 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
 
         // Group rows by pedido
         const grupos = {};
+        const crudas = {}; // numero -> filas del plano tal como venian
         for(const row of rows.slice(1)) {
           const numPed = String(row[iPed]||'').trim();
           if(!numPed) continue;
+          (crudas[numPed] = crudas[numPed] || []).push(row);
           if(!grupos[numPed]) {
             grupos[numPed]={
               numero_pedido:numPed,
@@ -891,7 +898,18 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         }));
 
         if(lista.length===0){fallo("No se encontraron pedidos.", "Ninguna fila trae número de pedido.");return;}
-        setPedidos(lista);
+        // Sin DANE origen el pedido no tiene sede ni corte: no se carga. Se
+        // muestra con su error y se puede descargar para corregirlo.
+        const conError = lista.filter(p => !p.dane_origen);
+        setPedidos(lista.filter(p => p.dane_origen));
+        setRechazados({
+          encabezado: rows[0],
+          pedidos: conError.map(p => ({
+            numero_pedido: p.numero_pedido, cliente: p.cliente, nit: p.nit,
+            error: 'Sin DANE origen', filas: crudas[p.numero_pedido] || [],
+          })),
+        });
+        if(conError.length) showToast(`${conError.length} ${conError.length === 1 ? 'pedido no tiene' : 'pedidos no tienen'} DANE origen y no se cargará${conError.length === 1 ? '' : 'n'}`, 'error');
       } catch(ex){fallo("No se pudo leer el archivo.", ex.message);}
   };
 
@@ -996,12 +1014,24 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     }
     // El resultado se queda en pantalla con sus numeros; antes la pantalla
     // saltaba sola a Gestion y el aviso duraba lo que dura un toast.
-    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte});
+    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte,conError:rechazados.pedidos.length});
     if(aprobados>0) onPedidosCambiaron?.();
   };
   const textoCargando = progreso ? `Cargando ${progreso.hechos} de ${progreso.total}...` : "Cargando...";
 
-  const empezarDeNuevo = () => { setArchivo(''); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null); };
+  const empezarDeNuevo = () => { setArchivo(''); setPedidos([]); setFilasLeidas(0); setErrMsg(null); setResultado(null); setRechazados({ encabezado: [], pedidos: [] }); };
+
+  // El CSV de los pedidos con error: las mismas columnas y filas del plano, para
+  // completar lo que falta y volver a cargarlo. Lleva BOM para que Excel lea
+  // bien las tildes.
+  const descargarRechazados = () => {
+    if(!rechazados.pedidos.length) return;
+    const esc = v => { const x = String(v ?? ''); return /[",\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+    const cabecera = '\uFEFF' + rechazados.encabezado.map(esc).join(',');
+    const cuerpo = rechazados.pedidos.flatMap(p => p.filas).map(f => f.map(esc).join(',')).join('\n');
+    const base = String(archivo || 'plano').replace(/\.(csv|txt)$/i, '');
+    descargarCSV(`${base}_con_error.csv`, cabecera, cuerpo);
+  };
 
   const resumen = {
     total:pedidos.length,
@@ -1014,6 +1044,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     resultado={resultado} resumen={resumen} carg={carg} fileRef={fileRef}
     leerArchivo={leerArchivo} confirmar={confirmar}
     cancelar={empezarDeNuevo} onIrGestion={onCargado} textoCargando={textoCargando}
+    rechazados={rechazados.pedidos} onDescargarRechazados={descargarRechazados}
   />;
 
   // Clasificacion con su razon, para que se lea por que entro asi.
@@ -1032,7 +1063,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
 
     <section style={{ ...tarjeta, width:"100%", boxSizing:"border-box", overflow:"hidden" }}>
      {resultado ? (
-      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} />
+      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} onDescargarErrores={rechazados.pedidos.length ? descargarRechazados : null} />
      ) : errMsg ? (
       // 1. Error: el archivo que se eligio y por que no se pudo leer.
       <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14 }}>
@@ -1048,15 +1079,16 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         </div>
        </div>
       </div>
-     ) : pedidos.length > 0 ? (
+     ) : pedidos.length > 0 || rechazados.pedidos.length > 0 ? (
       // 2. Vista previa: conteos, lista y confirmacion.
       <>
        <div style={{ padding:"16px 20px" }}>
-        <ArchivoFila nombre={archivo} detalle={`${filasLeidas} ${filasLeidas === 1 ? "fila" : "filas"} · ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+        <ArchivoFila nombre={archivo} detalle={`${filasLeidas} ${filasLeidas === 1 ? "fila" : "filas"} · ${pedidos.length + rechazados.pedidos.length} ${pedidos.length + rechazados.pedidos.length === 1 ? "pedido" : "pedidos"}`}
          accion="Cambiar archivo" onAccion={()=>fileRef.current?.click()} />
        </div>
-       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
-        {[["Pedidos leídos", resumen.total, T.color.tinta], ["Aprobados", resumen.aprobado, T.color.infoPunto || T.color.info], ["Pendientes", resumen.pendiente, T.color.ojoPunto]].map(([label, valor, color], i) => (
+       <div style={{ display:"grid", gridTemplateColumns:`repeat(${rechazados.pedidos.length ? 4 : 3},minmax(0,1fr))`, borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
+        {[["Pedidos leídos", resumen.total + rechazados.pedidos.length, T.color.tinta], ["Aprobados", resumen.aprobado, T.color.infoPunto || T.color.info], ["Pendientes", resumen.pendiente, T.color.ojoPunto],
+          ...(rechazados.pedidos.length ? [["Con error · no se cargan", rechazados.pedidos.length, T.color.malPunto]] : [])].map(([label, valor, color], i) => (
          <div key={label} style={{ padding:"14px 20px", borderLeft: i ? `1px solid ${T.color.borde}` : "none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta2 }}>
            <span style={{ width:6, height:6, borderRadius:3, background:color }}/>{label}
@@ -1065,7 +1097,12 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
          </div>
         ))}
        </div>
-       <div style={{ maxHeight:420, overflowY:"auto" }}>
+       {rechazados.pedidos.length > 0 && (
+        <div style={{ padding:"14px 20px", borderBottom:`1px solid ${T.color.borde}` }}>
+         <PedidosConError pedidos={rechazados.pedidos} onDescargar={descargarRechazados} />
+        </div>
+       )}
+       {pedidos.length > 0 && <div style={{ maxHeight:420, overflowY:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
          <thead>
           <tr>
@@ -1099,7 +1136,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
           })}
          </tbody>
         </table>
-       </div>
+       </div>}
        {pedidos.length > 100 && (
         <div style={{ padding:"9px 20px", borderTop:`1px solid ${T.color.divisor}`, fontSize:12.5, color:T.color.tinta3 }}>
          {`Mostrando 100 de ${pedidos.length}; se cargan todos.`}
@@ -1111,8 +1148,8 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
        }}>
         <span style={{ fontSize:12.5, color:T.color.tinta3, flex:1 }}>Se carga tal como viene; la vista previa no se puede editar.</span>
         <button onClick={empezarDeNuevo} disabled={carg} style={botonBarra}>Cancelar</button>
-        <button onClick={confirmar} disabled={carg} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: carg ? 0.6 : 1 }}>
-         <Upload size={16}/> {carg ? textoCargando : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+        <button onClick={confirmar} disabled={carg || pedidos.length === 0} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: (carg || pedidos.length === 0) ? 0.6 : 1, cursor: pedidos.length === 0 ? "not-allowed" : "pointer" }}>
+         <Upload size={16}/> {carg ? textoCargando : pedidos.length === 0 ? "No hay pedidos para cargar" : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
         </button>
        </div>
       </>
@@ -1143,6 +1180,35 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
   );
 }
 
+// Los pedidos que no se cargan, con su error, y la descarga del CSV para
+// corregirlos y volver a subirlos.
+export function PedidosConError({ pedidos, onDescargar }) {
+  const n = pedidos.length;
+  return (
+   <div role="alert" style={{ border:`1px solid ${T.color.malBorde}`, background:T.color.malSuave, borderRadius:T.radio.control, overflow:"hidden" }}>
+    <div style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 14px", flexWrap:"wrap" }}>
+     <AlertCircle size={16} color={T.color.mal} style={{ flexShrink:0, marginTop:2 }}/>
+     <div style={{ display:"flex", flexDirection:"column", gap:2, flex:"1 1 240px", minWidth:0 }}>
+      <strong style={{ fontSize:13.5, color:T.color.mal }}>{`${n} ${n === 1 ? "pedido con error no se cargará" : "pedidos con error no se cargarán"}`}</strong>
+      <span style={{ fontSize:12.5, color:T.color.tinta2 }}>Les falta el DANE origen: sin él no tienen sede ni corte. Descarga el archivo, completa la columna DANE_Origen y vuelve a cargarlo.</span>
+     </div>
+     <button onClick={onDescargar} style={{ ...botonBarra, background:T.color.superficie, display:"inline-flex", alignItems:"center", gap:6, flexShrink:0 }}>
+      <Download size={15}/> {`Descargar CSV (${n})`}
+     </button>
+    </div>
+    <div style={{ maxHeight:200, overflowY:"auto", background:T.color.superficie, borderTop:`1px solid ${T.color.malBorde}` }}>
+     {pedidos.map(p => (
+      <div key={p.numero_pedido} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 14px", borderBottom:`1px solid ${T.color.divisor}`, fontSize:13 }}>
+       <span style={{ fontWeight:700, color:T.color.tinta, fontVariantNumeric:"tabular-nums", flexShrink:0 }}>{p.numero_pedido}</span>
+       <span style={{ flex:1, minWidth:0, color:T.color.tinta2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente || "Sin nombre"}</span>
+       <span style={{ fontSize:12, fontWeight:600, color:T.color.mal, flexShrink:0 }}>{p.error}</span>
+      </div>
+     ))}
+    </div>
+   </div>
+  );
+}
+
 // El archivo elegido: icono verde si se leyo, rojo si no, y la accion para cambiarlo.
 export function ArchivoFila({ nombre, detalle, error = false, accion, onAccion }) {
   const Icono = error ? FileX : FileCheck;
@@ -1168,9 +1234,9 @@ export function ArchivoFila({ nombre, detalle, error = false, accion, onAccion }
 }
 
 // 3. Resultado del cargue. Queda en pantalla hasta que se elige que sigue.
-export function ResultadoCargue({ resultado, onOtro, onIrGestion, compacto = false }) {
-  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0 } = resultado;
-  const completo = ok === total && ok > 0;
+export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErrores, compacto = false }) {
+  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0, conError = 0 } = resultado;
+  const completo = ok === total && ok > 0 && !conError;
   const conCorte = Math.max(0, aprobados - sinCorte);
   const partes = [
    aprobados ? `${aprobados} ${aprobados === 1 ? "aprobado" : "aprobados"}${sinCorte ? (conCorte ? `, ${conCorte} con corte asignado` : " sin corte") : " con corte asignado"}` : null,
@@ -1193,12 +1259,13 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, compacto = fal
      {partes.length > 0 && <div style={{ fontSize:13, color:T.color.tinta3, marginTop:3 }}>{partes.join(" · ")}</div>}
     </div>
     <div style={{
-     display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", width:"100%", maxWidth:520, textAlign:"left",
+     display:"grid", gridTemplateColumns:`repeat(${conError ? 4 : 3},minmax(0,1fr))`, width:"100%", maxWidth: conError ? 680 : 520, textAlign:"left",
      border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control,
     }}>
      {cifra("Ya existían (omitidos)", duplicados.length, T.color.ojo)}
      <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Fallaron", errores, T.color.mal)}</div>
      <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Aprobados sin sede", sinCorte, T.color.ojo)}</div>
+     {conError > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Sin DANE origen (no se subieron)", conError, T.color.mal)}</div>}
     </div>
     {sinCorte > 0 && (
      <div style={{ fontSize:12.5, color:T.color.ojo, maxWidth:520 }}>
@@ -1207,6 +1274,11 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, compacto = fal
     )}
     <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center", marginTop:4 }}>
      <button onClick={onOtro} style={botonBarra}>Cargar otro archivo</button>
+     {conError > 0 && onDescargarErrores && (
+      <button onClick={onDescargarErrores} style={{ ...botonBarra, display:"inline-flex", alignItems:"center", gap:6, color:T.color.mal }}>
+       <Download size={15}/> {`Descargar los ${conError} con error`}
+      </button>
+     )}
      {onIrGestion && (
       <button onClick={onIrGestion} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7 }}>
        Ir a Gestión de pedidos <ArrowRight size={15}/>
@@ -1217,17 +1289,18 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, compacto = fal
   );
 }
 
-function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando..." }) {
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados }) {
+  const hayAlgo = pedidos.length > 0 || rechazados.length > 0;
   return (
    <Pagina anchoCompleto>
     <header>
-     <div style={{ fontSize:12, color:T.color.tinta3 }}>{pedidos.length ? 'Revisa antes de cargar' : 'Plano CSV del día'}</div>
+     <div style={{ fontSize:12, color:T.color.tinta3 }}>{hayAlgo ? 'Revisa antes de cargar' : 'Plano CSV del día'}</div>
      <h1 style={{ ...T.texto.titulo, fontSize:23, margin:0 }}>Cargar pedidos</h1>
     </header>
     <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:'none'}}
      onChange={e=>{if(e.target.files[0]) leerArchivo(e.target.files[0]);e.target.value='';}}/>
 
-    {resultado ? null : !pedidos.length ? <>
+    {resultado ? null : !hayAlgo ? <>
      <section style={{ ...tarjeta, padding:20 }}>
       <button onClick={()=>fileRef.current?.click()} style={{
        width:'100%', minHeight:225, padding:'24px 20px', background:T.color.superficie,
@@ -1251,7 +1324,7 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
       <span style={{ width:36, height:36, flexShrink:0, borderRadius:10, display:'grid', placeItems:'center', background:T.color.bienSuave, color:T.color.bien }}><Check size={18}/></span>
       <div style={{minWidth:0,flex:1}}>
        <div style={{fontWeight:700,fontSize:13.5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{archivo}</div>
-       <div style={{fontSize:11.5,color:T.color.tinta3}}>{filasLeidas} filas · {pedidos.length} pedidos</div>
+       <div style={{fontSize:11.5,color:T.color.tinta3}}>{`${filasLeidas} filas · ${pedidos.length + rechazados.length} pedidos`}</div>
       </div>
       <button onClick={()=>fileRef.current?.click()} style={{border:'none',background:'transparent',color:T.color.marca,fontWeight:700,cursor:'pointer'}}>Cambiar</button>
      </section>
@@ -1263,7 +1336,8 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
        </div>
       ))}
      </section>
-     <section style={{ ...tarjeta, padding:'2px 14px' }}>
+     {rechazados.length > 0 && <PedidosConError pedidos={rechazados} onDescargar={onDescargarRechazados} />}
+     {pedidos.length > 0 && <section style={{ ...tarjeta, padding:'2px 14px' }}>
       {pedidos.slice(0,100).map(p=>{
        const est=ESTADOS_CARTERA[p.estado_cartera]||ESTADOS_CARTERA.pendiente;
        return <div key={p.numero_pedido} style={{padding:'12px 0',borderBottom:`1px solid ${T.color.divisor}`,display:'flex',gap:12,justifyContent:'space-between'}}>
@@ -1275,15 +1349,15 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
        </div>;
       })}
       {pedidos.length>100 && <div style={{padding:10,fontSize:12,color:T.color.tinta3}}>Mostrando 100 de {pedidos.length}; se cargan todos.</div>}
-     </section>
+     </section>}
      <p style={{textAlign:'center',fontSize:12,color:T.color.tinta3,margin:0}}>Se carga tal como viene; no se puede editar aquí.</p>
     </>}
     {errMsg && <div role="alert" style={{background:T.color.malSuave,color:T.color.mal,padding:12,borderRadius:10,fontSize:13}}><strong>{errMsg.titulo}</strong> {errMsg.detalle}</div>}
-    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} compacto />}
-    {pedidos.length>0 && !resultado && <div style={{height:65}}/>}
-    {pedidos.length>0 && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
+    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} onDescargarErrores={rechazados.length ? onDescargarRechazados : null} compacto />}
+    {hayAlgo && !resultado && <div style={{height:65}}/>}
+    {hayAlgo && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
      <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
-     <button onClick={confirmar} disabled={carg} style={{...botonPrincipal,justifyContent:'center'}}><Upload size={16}/> {carg?textoCargando:`Cargar ${pedidos.length} pedidos`}</button>
+     <button onClick={confirmar} disabled={carg||pedidos.length===0} style={{...botonPrincipal,justifyContent:'center',opacity:pedidos.length===0?0.6:1}}><Upload size={16}/> {carg?textoCargando:pedidos.length===0?'Nada para cargar':`Cargar ${pedidos.length} pedidos`}</button>
     </div>}
    </Pagina>
   );

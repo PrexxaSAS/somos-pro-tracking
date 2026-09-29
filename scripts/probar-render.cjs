@@ -26,7 +26,7 @@ import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
-import { razonCorteNoCabe, razonSedeNoCabe, ResultadoCargue, ArchivoFila, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
+import { razonCorteNoCabe, razonSedeNoCabe, ResultadoCargue, ArchivoFila, PedidosConError, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
 import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
@@ -715,6 +715,21 @@ if (window.matchMedia("").matches) {
  exigir(limitePromesa({ fecha_pedido:"2026-09-25" }, prom) === "2026-09-27", "salta el fin de semana: deben ser dias calendario");
  exigir(limitePromesa({ fecha_pedido:"2026-09-29", fecha_estimada:"2026-10-09" }, null) === "2026-10-09", "sin promesa no usa la fecha estimada");
  exigir(limiteDePromesa({ fecha_pedido:"2026-09-29" }, null) === null, "inventa un limite sin promesa");
+}
+
+// Cargue: los pedidos sin DANE origen no se suben; se listan con su error y se
+// descargan. El resultado los cuenta aparte y ofrece la descarga.
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  sin dane origen: " + queja); fallos++; } };
+ const lista = renderToString(React.createElement(PedidosConError, { onDescargar(){}, pedidos:[
+  { numero_pedido:"PT000010660", cliente:"GALLEGO CASTANO", error:"Sin DANE origen", filas:[] },
+  { numero_pedido:"PT000010656", cliente:"IMPRESIONES MEDELLIN", error:"Sin DANE origen", filas:[] },
+ ]}));
+ exigir(lista.includes("2 pedidos con error no se cargarán") && lista.includes("PT000010660") && lista.includes("Sin DANE origen"), "no lista los pedidos con su error");
+ exigir(lista.includes("Descargar CSV (2)"), "no ofrece descargar los pedidos con error");
+ const res = renderToString(React.createElement(ResultadoCargue, { onOtro(){}, onIrGestion(){}, onDescargarErrores(){},
+  resultado:{ ok:185, total:185, errores:0, duplicados:[], aprobados:185, pendientes:0, sinCorte:0, conError:15 } }));
+ exigir(res.includes("Sin DANE origen (no se subieron)") && res.includes("Descargar los 15 con error"), "el resultado no cuenta ni descarga los que no se subieron");
 }
 
 globalThis.__fallos = fallos;
