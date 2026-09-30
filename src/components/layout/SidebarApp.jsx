@@ -12,6 +12,7 @@ import {
   LogOut,
   MapPin,
   PackageCheck,
+  PackageSearch,
   Printer,
   RotateCcw,
   Search,
@@ -32,6 +33,8 @@ export const MENUS = {
     ["Operacion", [
       ["dashboard", "Dashboard", BarChart3],
       ["pedidos", "Pedidos", Box],
+      // La misma vista del cliente: el estado de los pedidos, con rastreo y guia.
+      ["consultas", "Estado de pedidos", PackageSearch],
       ["rastreo", "Rastreo GPS", MapPin],
       ["recogidas", "Recogidas", PackageCheck],
       ["devoluciones", "Devoluciones", RotateCcw],
@@ -48,6 +51,7 @@ export const MENUS = {
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
       // El admin tiene todas las funciones, tambien las del operador.
       ["cartera_logistica", "Logistica cartera", Printer],
+      ["cartera_consultas", "Consultas cartera", Search],
       ["cartera_sedes", "Sedes y cortes", Warehouse],
       ["cartera_asesores", "Asesores", Users],
     ]]] : []),
