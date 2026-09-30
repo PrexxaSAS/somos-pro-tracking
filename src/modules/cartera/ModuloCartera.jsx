@@ -1411,6 +1411,9 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const aprobarPedido = async (id) => {
     const pedido = pedidos.find(p=>p.id===id);
     if(!pedido) return {ok:false};
+    // Solo se aprueba lo que esta por decidir. Aprobar de nuevo un aprobado le
+    // asignaba otro corte y le sumaba un cupo; un rechazado se reactiva primero.
+    if(!['pendiente','preaprobado','cartera_vencida'].includes(pedido.estado_cartera)) return {ok:false, yaDecidido:true};
     const ahora = new Date().toISOString();
     const corte = await asignarCorte(pedido.dane_origen);
     const upd = { estado_cartera:'aprobado', fecha_aprobacion:ahora, aprobado_por:user.id, estado_impresion:'no_impreso' };
@@ -1432,14 +1435,16 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const aprobarSeleccionados = async () => {
     if(!seleccion.size){showToast("Selecciona al menos un pedido","error");return;}
     setAprobando(true);
-    let ok=0; let sinCorte=0;
+    let ok=0; let sinCorte=0; let omitidos=0;
     for(const id of seleccion){
       const res = await aprobarPedido(id);
       if(res.ok){ ok++; if(res.sinCorte) sinCorte++; }
+      else if(res.yaDecidido) omitidos++;
     }
     setAprobando(false);
     let msg=`✓ ${ok} pedido(s) aprobado(s)`;
     if(sinCorte>0) msg+=` · ${sinCorte} sin sede configurada (verificar DANE Origen)`;
+    if(omitidos>0) msg+=` · ${omitidos} ya estaban aprobados o rechazados`;
     showToast(msg,"success");
     cargar();
     if(ok>0) onPedidosCambiaron?.();
@@ -1487,7 +1492,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const conteos={};
   pedidos.forEach(p=>{conteos[p.estado_cartera]=(conteos[p.estado_cartera]||0)+1;});
 
-  const todosVisiblesMarcados = filtrados.length > 0 && filtrados.every(x => seleccion.has(x.id));
+  const todosVisiblesMarcados = pendientesAprobacion.length > 0 && pendientesAprobacion.every(x => seleccion.has(x.id));
 
   if (esMovil) return <GestionPedidosMovil
     pedidos={pedidos} filtrados={filtrados} tabs={tabs} conteos={conteos}
@@ -1549,8 +1554,9 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
          <tr>
           <th style={{ ...th, width:42 }}>
            <input type="checkbox" checked={todosVisiblesMarcados} onChange={selTodos}
-            title="Seleccionar los visibles"
-            style={{ width:15, height:15, accentColor:T.color.marca, cursor:"pointer" }}/>
+            disabled={pendientesAprobacion.length === 0}
+            title={pendientesAprobacion.length ? "Seleccionar los pendientes visibles" : "No hay pedidos por aprobar"}
+            style={{ width:15, height:15, accentColor:T.color.marca, cursor: pendientesAprobacion.length ? "pointer" : "not-allowed" }}/>
           </th>
           <th style={th}>Pedido</th>
           <th style={th}>Cliente</th>
@@ -1570,8 +1576,11 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
           return (
            <tr key={x.id} style={{ background: marcado ? T.color.marcaSuave : "transparent" }}>
             <td style={td}>
-             <input type="checkbox" checked={marcado} onChange={()=>toggleSel(x.id)}
-              style={{ width:15, height:15, accentColor:T.color.marca, cursor:"pointer" }}/>
+             {decidible && (
+              <input type="checkbox" checked={marcado} onChange={()=>toggleSel(x.id)}
+               title="Seleccionar para aprobar"
+               style={{ width:15, height:15, accentColor:T.color.marca, cursor:"pointer" }}/>
+             )}
             </td>
             <td style={td}>
              <span style={chipMono}>{x.numero_pedido}</span>
