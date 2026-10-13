@@ -17,3 +17,16 @@ export function comprimirImagen(file, maxW=800, quality=0.75) {
     reader.readAsDataURL(file);
   });
 }
+
+// Lee lo que entrega un <input type="file">, descarta lo que no sea imagen y
+// devuelve las fotos ya comprimidas, sin pasarse del cupo que queda. La usan
+// las dos pantallas que adjuntan soportes, para que el limite y la compresion
+// se decidan en un solo sitio.
+export async function leerFotos(files, cupo) {
+  const fotos = [];
+  for (const file of Array.from(files || []).slice(0, Math.max(0, cupo))) {
+    if (!file.type.startsWith('image/')) continue;
+    fotos.push({ data: await comprimirImagen(file), nombre: file.name });
+  }
+  return fotos;
+}

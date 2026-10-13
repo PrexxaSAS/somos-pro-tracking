@@ -98,7 +98,7 @@ export function Field({ label, value, onChange, type = "text", placeholder = "",
  );
 }
 
-export function Modal({ title, children, onClose, wide = false }) {
+export function Modal({ title, children, onClose, wide = false, extraWide = false }) {
  return (
   <div
    style={{
@@ -109,7 +109,7 @@ export function Modal({ title, children, onClose, wide = false }) {
   >
    <div style={{
     background: "#fff", borderRadius: 20, padding: 28,
-    width: "100%", maxWidth: wide ? 720 : 520,
+    width: "100%", maxWidth: extraWide ? 940 : wide ? 720 : 520,
     maxHeight: "92vh", overflowY: "auto",
     boxShadow: "0 24px 64px #0004",
    }}>
