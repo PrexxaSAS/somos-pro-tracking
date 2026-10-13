@@ -208,8 +208,11 @@ const selectFiltro = {
  cursor: "pointer", outline: "none", maxWidth: 210,
 };
 
-export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
+export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false }) {
+ const [nuevoCond, setNuevoCond] = useState("");
  const {
+  puedeReasignar,
+  reasignarConductor,
   condId,
   setCondId,
   direccion,
@@ -266,7 +269,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
   caPrev,
  } = usePedidoEditable({
   pedido, conductores, ciudades, promesas, setPedidos, showToast, onClose,
-  canEdit, canBasicEdit, canAssign, canDeliver,
+  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar,
  });
 
  return (
@@ -332,6 +335,27 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
    )}
    {!pedidoCerrado && pedidoEnTransito && !canDeliver && (
     <FranjaInfo>En transito: solo el conductor asignado puede registrar la entrega.</FranjaInfo>
+   )}
+   {puedeReasignar && (
+    <>
+     <Seccion titulo="Cambiar conductor" />
+     <div style={{ display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
+      <div style={{ flex:"1 1 260px", minWidth:0 }}>
+       <Selector label={`Conductor actual: ${cond ? cond.nombre : "sin conductor"}`} valor={nuevoCond} onChange={setNuevoCond}
+        placeholder="Elige el nuevo conductor"
+        opciones={[
+         { value:"__sin__", label:"Sin conductor (vuelve a bodega)" },
+         ...conductoresOpciones.filter(c => String(c.id) !== String(pedido.conductor_id))
+          .map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` })),
+        ]} />
+      </div>
+      <button disabled={!nuevoCond} onClick={() => reasignarConductor(nuevoCond === "__sin__" ? "" : nuevoCond)} style={{
+       ...botonBarra, background:T.color.marca, border:"none", color:"#fff",
+       opacity: nuevoCond ? 1 : 0.5, cursor: nuevoCond ? "pointer" : "not-allowed",
+      }}>{nuevoCond === "__sin__" ? "Devolver a bodega" : "Reasignar"}</button>
+     </div>
+     <span style={{ fontSize:12, color:T.color.tinta3 }}>Cuando el conductor devuelve el pedido sin entregarlo. Solo cambia el conductor; el resto del pedido sigue bloqueado.</span>
+    </>
    )}
 
    {(canEdit || canBasicEdit) && (
@@ -2088,6 +2112,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       canEdit={user?.rol !== "operador"}
       canBasicEdit={user?.rol === "operador"}
       canAssign={user?.rol === "operador"}
+      canReasignar={user?.rol === "admin"}
      />
     );
    })()}
@@ -2189,7 +2214,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </ModalForm>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (

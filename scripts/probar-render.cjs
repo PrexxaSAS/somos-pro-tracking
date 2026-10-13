@@ -517,7 +517,10 @@ for (const [nombre, elemento] of casos) {
  exigir(gestionada.includes("Gestiones") && gestionada.includes("Operador") && gestionada.includes("confirmacion-cliente.pdf"), "la gestionada no muestra el historial");
  exigir(!gestionada.includes("Que se hizo y que se le respondio") && gestionada.includes("ya fue registrada"), "la gestionada deja escribir otra respuesta");
  exigir(!cerrada.includes("Registrar gestion") && !cerrada.includes("Cerrar PQRS"), "la cerrada ofrece acciones");
- const consultas = renderToString(React.createElement(Consultas, { pedidos, conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){} }));
+ // Fechas de hoy: Estado de pedidos muestra por defecto los ultimos 30 dias, y
+ // con las fechas fijas de los datos de prueba la tabla quedaba vacia con el tiempo.
+ const hoyPrueba = new Date().toISOString().slice(0, 10);
+ const consultas = renderToString(React.createElement(Consultas, { pedidos: pedidos.map(x => ({ ...x, fecha_creacion: hoyPrueba })), conductores: conductoresPrueba, ciudades: ciudadesPrueba, showToast(){}, onNuevaPQRS(){} }));
  if (!window.matchMedia("").matches) {
   exigir(consultas.includes("Estado de pedidos") && consultas.includes("Nueva PQRS") && consultas.includes("Exportar"), "estado de pedidos sin cabecera");
   exigir(consultas.includes("Total pedidos") && consultas.includes("Novedades"), "estado de pedidos sin indicadores");
@@ -730,6 +733,21 @@ if (window.matchMedia("").matches) {
  const res = renderToString(React.createElement(ResultadoCargue, { onOtro(){}, onIrGestion(){}, onDescargarErrores(){},
   resultado:{ ok:185, total:185, errores:0, duplicados:[], aprobados:185, pendientes:0, sinCorte:0, conError:15 } }));
  exigir(res.includes("Sin DANE origen (no se subieron)") && res.includes("Descargar los 15 con error"), "el resultado no cuenta ni descarga los que no se subieron");
+}
+
+// Cambiar el conductor de un pedido en transito: solo el admin, y solo en
+// transito (el resto del pedido sigue bloqueado).
+{
+ const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  reasignar: " + queja); fallos++; } };
+ const enTransito = { ...pedidos[0], tipo:"propio" };
+ const conds = [{ id:7, nombre:"Juan Castrillon", placa:"NLX290", activo:true }, { id:8, nombre:"Otro Conductor", placa:"ABC123", activo:true }];
+ const base = { pedido: enTransito, conductores: conds, ciudades:[], transportistas:[], paqueterias:[], promesas:[], onClose(){}, setPedidos(){}, showToast(){} };
+ const admin = renderToString(React.createElement(ModalDetalle, { ...base, canEdit:true, canReasignar:true }));
+ const oper = renderToString(React.createElement(ModalDetalle, { ...base, canEdit:false, canBasicEdit:true, canAssign:true }));
+ const entregado = renderToString(React.createElement(ModalDetalle, { ...base, pedido:{ ...enTransito, estado:"entregado" }, canEdit:true, canReasignar:true }));
+ exigir(admin.includes("Cambiar conductor") && admin.includes("Otro Conductor") && admin.includes("Sin conductor (vuelve a bodega)"), "el admin no puede cambiar el conductor en transito");
+ exigir(!oper.includes("Cambiar conductor"), "el operador puede cambiar el conductor en transito");
+ exigir(!entregado.includes("Cambiar conductor"), "se ofrece cambiar el conductor de un pedido cerrado");
 }
 
 globalThis.__fallos = fallos;

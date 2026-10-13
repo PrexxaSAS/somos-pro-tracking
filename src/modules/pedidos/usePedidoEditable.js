@@ -13,7 +13,7 @@ import { limiteDePromesa } from '../../utils/promesa';
 // trigger que exige que el conductor no toque nada mas se aplican una sola vez.
 export function usePedidoEditable({
  pedido, conductores, ciudades, promesas = [], setPedidos, showToast, onClose,
- canEdit, canBasicEdit = false, canAssign = false, canDeliver = false,
+ canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false,
 }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
  const [direccion, setDireccion] = useState(pedido.direccion||"");
@@ -56,6 +56,11 @@ export function usePedidoEditable({
  const pedidoEnTransito = pedido.estado === "en_transito";
  const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
  const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
+ // El admin puede cambiar el conductor de un pedido en transito: a veces el
+ // conductor no alcanza a entregar, devuelve el pedido y sale con otro. Solo
+ // eso: el resto del pedido sigue bloqueado mientras esta en transito, y la
+ // base lo hace cumplir (docs/pedidos_reasignar_conductor.sql).
+ const puedeReasignar = canReasignar && pedidoEnTransito && pedido.tipo !== "paqueteria";
  // Cliente Recoge y Solo Facturar no se despachan: no hay conductor ni transportadora
  // que asignar. El formulario oculta esos campos y el guardado los deja en null, para
  // que ningun conductor figure moviendo un pedido que nunca salio con el.
@@ -266,6 +271,27 @@ export function usePedidoEditable({
   return true;
  };
 
+ // nuevoId vacio = el pedido vuelve a bodega sin conductor ("Sin asignar").
+ const reasignarConductor = async (nuevoId) => {
+  if (!puedeReasignar) { showToast("Solo el administrador puede cambiar el conductor de un pedido en transito", "error"); return false; }
+  const nuevo = conductores.find(x => String(x.id) === String(nuevoId)) || null;
+  if (nuevo && String(nuevo.id) === String(pedido.conductor_id)) { showToast("Ese conductor ya tiene el pedido", "info"); return false; }
+  const cambios = {
+   conductor_id: nuevo ? nuevo.id : null,
+   placa: nuevo ? (nuevo.placa || null) : null,
+   nit_proveedor: nuevo ? (nuevo.nit_proveedor || null) : null,
+   ...(pedido.tipo === "empresa_transporte" ? { empresa_transporte: nuevo ? (nuevo.empresa || nuevo.nit_proveedor || null) : null } : {}),
+   estado: nuevo ? "en_transito" : "sin_asignar",
+  };
+  showToast("Guardando...", "info");
+  const { error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select("id").single();
+  if (error) { showToast(mensajeError(error, "el cambio de conductor"), "error"); return false; }
+  setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, ...cambios } : p));
+  showToast(nuevo ? `Pedido reasignado a ${nuevo.nombre}` : "Pedido devuelto: queda Sin asignar", "success");
+  onClose();
+  return true;
+ };
+
  const adjuntarFotos = (fotos) => {
   if (pedidoCerrado) {
    showToast("No se puede modificar un pedido que ya fue entregado","error");
@@ -332,6 +358,8 @@ export function usePedidoEditable({
   pedidoEnTransito,
   pedidoBloqueadoEdicion,
   puedeMarcarNovedadEntrega,
+  puedeReasignar,
+  reasignarConductor,
   sinTransporte,
   conductoresActivos,
   conductorHistorico,

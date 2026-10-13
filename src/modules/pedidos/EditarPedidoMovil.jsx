@@ -275,13 +275,15 @@ export function HojaConductores({ conductores, pedidos = [], tipo, seleccionado,
 export function EditarPedidoMovil({
  pedido, pedidos = [], conductores, ciudades, paqueterias = [], transportistas = [],
  promesas = [], setPedidos, showToast, onClose, onGuia, onMapa,
- canEdit, canBasicEdit = false, canAssign = false, canDeliver = false,
+ canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false,
 }) {
  const e = usePedidoEditable({
   pedido, conductores, ciudades, promesas, setPedidos, showToast, onClose,
-  canEdit, canBasicEdit, canAssign, canDeliver,
+  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar,
  });
  const [hoja, setHoja] = useState(false);
+ // "elegir" = hoja para asignar; "reasignar" = cambiar el conductor en transito.
+ const [hojaReasignar, setHojaReasignar] = useState(false);
  const camRef = useRef(null);
  const galeriaRef = useRef(null);
 
@@ -437,6 +439,20 @@ export function EditarPedidoMovil({
         ? "El pedido ya se cerro: sus datos no se pueden modificar."
         : "Solo el conductor asignado puede registrar la entrega o una novedad desde su app."}
       </div>
+      {e.puedeReasignar && (
+       <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setHojaReasignar(true)} style={{
+         flex: 1, minHeight: 44, borderRadius: T.radio.control, border: "none",
+         background: T.color.marcaSuave, color: T.color.marca, fontFamily: "inherit",
+         fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+        }}>Cambiar conductor</button>
+        <button onClick={() => { if (window.confirm("¿Devolver el pedido a bodega sin conductor?")) e.reasignarConductor(""); }} style={{
+         flex: 1, minHeight: 44, borderRadius: T.radio.control, border: `1px solid ${T.color.borde2}`,
+         background: T.color.superficie, color: T.color.tinta2, fontFamily: "inherit",
+         fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+        }}>Devolver a bodega</button>
+       </div>
+      )}
      </section>
     ) : (
      <section style={{
@@ -749,6 +765,16 @@ export function EditarPedidoMovil({
     }}>Guardar</button>
    </footer>
 
+   {hojaReasignar && (
+    <HojaConductores
+     conductores={e.conductoresOpciones.filter(c => String(c.id) !== String(pedido.conductor_id))}
+     pedidos={pedidos}
+     tipo={e.tipoModal}
+     seleccionado=""
+     onElegir={id => { setHojaReasignar(false); e.reasignarConductor(id); }}
+     onClose={() => setHojaReasignar(false)}
+    />
+   )}
    {hoja && (
     <HojaConductores
      conductores={e.conductoresOpciones}
