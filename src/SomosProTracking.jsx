@@ -157,8 +157,9 @@ async function abrirArchivoRemoto(tabla, id, colData, colNombre, nombreFallback,
  }
 }
 
-function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
+ const [nuevoCond, setNuevoCond] = useState("");
  const [direccion, setDireccion] = useState(pedido.direccion||"");
  const [cajas,   setCajas]   = useState(numTexto(pedido.cajas));
  const [estadoDesp, setEstadoDesp] = useState(ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : (pedido.estado_despacho||"despachado"));
@@ -358,6 +359,29 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
 
  const caPrev = condId!==(pedido.conductor_id?.toString()||"") && condId!=="";
 
+ // El admin puede cambiar el conductor de un pedido en transito: a veces el
+ // conductor no alcanza a entregar, devuelve el pedido y sale con otro. Solo
+ // eso: el resto del pedido sigue bloqueado, y la base lo hace cumplir
+ // (docs/pedidos_reasignar_conductor.sql). Vacio = vuelve a bodega sin conductor.
+ const puedeReasignar = canReasignar && pedidoEnTransito && pedido.tipo !== "paqueteria";
+ const reasignarConductor = async (nuevoId) => {
+  if (!puedeReasignar) return;
+  const nuevo = conductores.find(x => String(x.id) === String(nuevoId)) || null;
+  const cambios = {
+   conductor_id: nuevo ? nuevo.id : null,
+   placa: nuevo ? (nuevo.placa || null) : null,
+   nit_proveedor: nuevo ? (nuevo.nit_proveedor || null) : null,
+   ...(pedido.tipo === "empresa_transporte" ? { empresa_transporte: nuevo ? (nuevo.empresa || nuevo.nit_proveedor || null) : null } : {}),
+   estado: nuevo ? "en_transito" : "sin_asignar",
+  };
+  showToast("Guardando...", "info");
+  const { error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select("id").single();
+  if (error) { showToast(mensajeError(error, "el cambio de conductor"), "error"); return; }
+  setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, ...cambios } : p));
+  showToast(nuevo ? `Pedido reasignado a ${nuevo.nombre}` : "Pedido devuelto: queda Sin asignar", "success");
+  onClose();
+ };
+
  return (
   <Modal title={`Pedido ${pedido.id}${pedido.guia_interna?" - "+pedido.guia_interna:""}`} onClose={onClose} wide>
    <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -394,6 +418,25 @@ function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueteri
     {!pedidoCerrado&&pedidoEnTransito&&!canDeliver&&(
      <div style={{background:"#fff7ed",border:"1px solid #fdba74",borderRadius:10,padding:12,color:"#9a3412",fontSize:13,fontWeight:700}}>
       Pedido en transito: solo el conductor asignado puede registrar soporte de entrega y novedad.
+     </div>
+    )}
+    {puedeReasignar&&(
+     <div style={{background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:10,padding:14,display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontWeight:700,color:P[800],fontSize:13}}>Cambiar conductor · actual: {cond ? cond.nombre : "sin conductor"}</div>
+      <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
+       <div style={{flex:"1 1 260px",minWidth:0}}>
+        <Field label="Nuevo conductor" value={nuevoCond} onChange={setNuevoCond} as="select"
+         options={[
+          {value:"",label:"Elige el nuevo conductor"},
+          {value:"__sin__",label:"Sin conductor (vuelve a bodega)"},
+          ...conductoresOpciones.filter(c=>String(c.id)!==String(pedido.conductor_id)).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}`})),
+         ]}/>
+       </div>
+       <Btn disabled={!nuevoCond} onClick={()=>reasignarConductor(nuevoCond==="__sin__"?"":nuevoCond)}>
+        {nuevoCond==="__sin__" ? "Devolver a bodega" : "Reasignar"}
+       </Btn>
+      </div>
+      <span style={{fontSize:12,color:"#64748b"}}>Cuando el conductor devuelve el pedido sin entregarlo. Solo cambia el conductor; el resto del pedido sigue bloqueado.</span>
      </div>
     )}
 
@@ -1767,7 +1810,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </Modal>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
