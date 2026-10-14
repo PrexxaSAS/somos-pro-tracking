@@ -1,61 +1,23 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
+import React, { useState, useEffect, useRef } from 'react';
+import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, SEDES_DESTINO } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
+import { generarGuia } from './utils/guides';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv, filasCsv } from './utils/files';
 import { mensajeError, mensajeErrorFuncion } from './utils/errors';
-import { numTexto, cargarSoportesPedido } from './utils/pedidos';
-import { esTextoSoloFacturar, transportePedido, faltantesPedido } from './utils/transporte';
+import { esTextoSoloFacturar, transportePedido } from './utils/transporte';
 import { generarPDFSoportes } from './utils/pdf';
 import { Login } from './components/auth/Login';
 import { CargadorFotos } from './components/delivery/CargadorFotos';
 import { GuiaImprimible } from './components/delivery/GuiaImprimible';
 import { SidebarApp } from './components/layout/SidebarApp';
-import { NavegacionMovil } from './components/layout/NavegacionMovil';
-import { PedidosMovil } from './modules/pedidos/PedidosMovil';
-import { DetallePedidoMovil, fechaCorta } from './modules/pedidos/DetallePedidoMovil';
-import { usePedidoEditable } from './modules/pedidos/usePedidoEditable';
-import { EditarPedidoMovil } from './modules/pedidos/EditarPedidoMovil';
-import { RegistrarEntregaMovil } from './modules/pedidos/RegistrarEntregaMovil';
-import { RegistrarEntregaOperador } from './modules/pedidos/RegistrarEntregaOperador';
-import { NuevoPedidoMovil } from './modules/pedidos/NuevoPedidoMovil';
-import { GestionEnvioMovil } from './modules/gestion/GestionEnvioMovil';
-import { GestionPqrsMovil } from './modules/gestion/GestionPqrsMovil';
-import { ConteosTransp, BloqueTransp, TarjetaConductorTransp, TarjetaPedidoTransp } from './modules/transportista/TransportistaMovil';
-import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
-import { T, tarjeta } from './design/tokens';
-import {
- Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
- botonBarra, botonFila, botonPrincipal, iconoAccion,
-} from './components/ui/listas';
-import {
- CabeceraConductor, ProgresoRuta, BuscadorConductor, Pestanas, LineaResumen, ListaVacia,
- TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, fechaLarga, iniciales, abrirEnMapa,
- ReordenarRuta,
-} from './modules/conductor/PantallasConductor';
-import { ordenarRuta, useRutaConductor } from './modules/conductor/ruta';
-import { DetallePedidoConductor } from './modules/conductor/DetallePedidoConductor';
-import {
- ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
- Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto, SelectorPedido,
-} from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
-import { Conductores } from './modules/conductores/Conductores';
-import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
 import { hoyLocal, hoyMas } from './utils/fechas';
-import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
-import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
-import { EstadoPedidosMovil } from './modules/cliente/EstadoPedidosMovil';
-import { PromesasMovil, CiudadesMovil, ResumenMovil } from './modules/configuracion/ConfiguracionMovil';
-import { BotonEliminar } from './components/ui/listas';
-import { TransportistasMovil, PaqueteriasMovil } from './modules/red/RedMovil';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -65,6 +27,9 @@ const iSt = {
 
 // Un 0 valido debe mostrarse como "0". Con `valor || ""` el cero cae a cadena
 // vacia y el input pinta su placeholder, que se lee como si fuera un dato real.
+function numTexto(v) {
+ return v === null || v === undefined || v === "" ? "" : String(v);
+}
 
 function esVacio(v) {
  return v === null || v === undefined || String(v).trim() === "";
@@ -162,6 +127,11 @@ async function buscarPedidosPorId(ids, columnas) {
 
 // Las listas ya no descargan las columnas base64 (soportes_data, soporte_data, doc_data)
 // para no agotar el egress de Supabase; estos helpers las piden solo al abrir el archivo.
+async function cargarSoportesPedido(pedidoId) {
+ const { data, error } = await supabase.from('pedidos').select('soportes_data').eq('id', pedidoId).single();
+ if (error) throw error;
+ return Array.isArray(data?.soportes_data) ? data.soportes_data : [];
+}
 
 async function verPDFSoportes(pedido, showToast) {
  try {
@@ -187,297 +157,443 @@ async function abrirArchivoRemoto(tabla, id, colData, colNombre, nombreFallback,
  }
 }
 
-// Rangos del filtro de fecha del modulo de Pedidos.
-const RANGOS_PEDIDOS = [
- { id: "todo", label: "Todo el historico", dias: null },
- { id: "7",   label: "Ultimos 7 dias",   dias: 7 },
- { id: "30",  label: "Ultimos 30 dias",  dias: 30 },
- { id: "90",  label: "Ultimos 90 dias",  dias: 90 },
-];
+function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false }) {
+ const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
+ const [direccion, setDireccion] = useState(pedido.direccion||"");
+ const [cajas,   setCajas]   = useState(numTexto(pedido.cajas));
+ const [estadoDesp, setEstadoDesp] = useState(ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : (pedido.estado_despacho||"despachado"));
+ const [novedad,  setNovedad]  = useState(pedido.novedad||false);
+ const [tipoModal, setTipoModal] = useState(pedido.tipo||"propio");
+ const [facturaEdit, setFacturaEdit] = useState(pedido.factura||"");
+ const [fechaEdit,  setFechaEdit]  = useState(pedido.fecha_estimada||"");
+ const [ciudadEdit, setCiudadEdit] = useState(pedido.ciudad_codigo||"");
+ const [empTrans,  setEmpTrans]  = useState(pedido.empresa_transporte||"");
+ const [paqModal,  setPaqModal]  = useState(pedido.paqueteria||"");
+ const [guiaPaq,  setGuiaPaq]  = useState(pedido.guia_paqueteria||"");
+ const [verMapa,  setVerMapa]  = useState(false);
+ const [verGuia,  setVerGuia]  = useState(false);
+ const [verCamara, setVerCamara] = useState(false);
+ const [novedadEntrega, setNovedadEntrega] = useState(pedido.novedad||false);
+ const [soportesData, setSoportesData] = useState(Array.isArray(pedido.soportes_data)?pedido.soportes_data:[]);
+ // Fotos adjuntadas que aun no se han guardado. La entrega se registra al presionar
+ // Guardar, no al subir la foto: asi los datos del formulario y el cierre del pedido
+ // viajan en una sola escritura y no queda a medias si el usuario no alcanza a guardar.
+ const [fotosPendientes, setFotosPendientes] = useState([]);
 
-// Orden de las pestanas por estado.
-const ORDEN_ESTADOS_PEDIDO = [
- "sin_asignar", "pendiente", "en_transito", "paqueteria",
- "novedad", "entregado", "solo_facturar", "cliente_recoge",
-];
+ useEffect(() => {
+  let activo = true;
+  if ((pedido.soportes||[]).length > 0 && soportesData.length === 0) {
+   cargarSoportesPedido(pedido.id).then(d => { if (activo && d.length) setSoportesData(d); }).catch(()=>{});
+  }
+  return () => { activo = false; };
+ }, [pedido.id]);
 
-const selectFiltro = {
- padding: "9px 12px", border: `1px solid ${T.color.borde2}`,
- borderRadius: T.radio.control, background: T.color.superficie,
- fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
- cursor: "pointer", outline: "none", maxWidth: 210,
-};
+ const cond  = conductores.find(c=>String(c.id)===String(condId||pedido.conductor_id||""));
+ const ciudad = (ciudades||[]).find(c=>c.code===pedido.ciudad_codigo);
+ const promesa = (promesas||[]).find(p=>p.ciudad_codigo===pedido.ciudad_codigo);
+ const fechaLimitePromesa = promesa && pedido.fecha_creacion ? (() => {
+  const d = new Date(pedido.fecha_creacion);
+  d.setDate(d.getDate() + Number(promesa.dias_plazo || 0));
+  return d.toISOString().split("T")[0];
+ })() : null;
+ const fuenteRiesgo = fechaLimitePromesa ? "Promesa de servicio" : "Fecha estimada";
+ const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0) || (fotosPendientes.length > 0);
+ const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
+ const pedidoEnTransito = pedido.estado === "en_transito";
+ const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
+ const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
+ // Cliente Recoge y Solo Facturar no se despachan: no hay conductor ni transportadora
+ // que asignar. El formulario oculta esos campos y el guardado los deja en null, para
+ // que ningun conductor figure moviendo un pedido que nunca salio con el.
+ const sinTransporte = ESTADOS_SIN_DESPACHO.includes(estadoDesp);
+ const conductoresActivos = conductores.filter(c=>c.activo!==false);
+ const conductorHistorico = cond && !conductoresActivos.some(c=>String(c.id)===String(cond.id)) ? cond : null;
+ const conductoresOpciones = conductorHistorico ? [conductorHistorico, ...conductoresActivos] : conductoresActivos;
 
-export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false }) {
- const [nuevoCond, setNuevoCond] = useState("");
- const {
-  puedeReasignar,
-  reasignarConductor,
-  condId,
-  setCondId,
-  direccion,
-  setDireccion,
-  cajas,
-  setCajas,
-  estadoDesp,
-  setEstadoDesp,
-  novedad,
-  setNovedad,
-  tipoModal,
-  setTipoModal,
-  facturaEdit,
-  setFacturaEdit,
-  fechaEdit,
-  setFechaEdit,
-  ciudadEdit,
-  setCiudadEdit,
-  empTrans,
-  setEmpTrans,
-  paqModal,
-  setPaqModal,
-  guiaPaq,
-  setGuiaPaq,
-  verMapa,
-  setVerMapa,
-  verGuia,
-  setVerGuia,
-  verCamara,
-  setVerCamara,
-  novedadEntrega,
-  setNovedadEntrega,
-  soportesData,
-  setSoportesData,
-  fotosPendientes,
-  setFotosPendientes,
-  cond,
-  ciudad,
-  promesa,
-  fechaLimitePromesa,
-  fuenteRiesgo,
-  tieneSoportes,
-  pedidoCerrado,
-  pedidoEnTransito,
-  pedidoBloqueadoEdicion,
-  puedeMarcarNovedadEntrega,
-  sinTransporte,
-  conductoresActivos,
-  conductorHistorico,
-  conductoresOpciones,
-  guardar,
-  cambiosPendientesDelFormulario,
-  adjuntarFotos,
-  caPrev,
- } = usePedidoEditable({
-  pedido, conductores, ciudades, promesas, setPedidos, showToast, onClose,
-  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar,
- });
+ const guardar = async () => {
+  if (pedidoBloqueadoEdicion) {
+   showToast(pedidoCerrado ? "No se puede modificar un pedido que ya fue entregado" : "No se puede editar un pedido en transito","error");
+   return;
+  }
+  // Cliente Recoge saca el pedido de los despachos pendientes, de los vencidos y de los
+  // que estan en riesgo, asi que no se guarda sin la prueba de que el cliente se llevo la
+  // mercancia. La excepcion es un pedido que YA estaba en ese estado: a ese hay que poder
+  // corregirle las cajas o la factura sin obligarlo a tener soporte todavia.
+  const marcandoClienteRecoge = estadoDesp === "cliente_recoge" && pedido.estado !== "cliente_recoge";
+  if (marcandoClienteRecoge && !tieneSoportes) {
+   showToast("Para marcar Cliente Recoge adjunta el soporte de entrega: al subirlo se guardan tambien los datos del formulario","error");
+   return;
+  }
+  const c = conductores.find(c=>String(c.id)===String(condId));
+  let nuevoEstado = pedido.estado;
+  if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
+  if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
+  if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
+  if(tipoModal==="paqueteria") nuevoEstado="paqueteria";
+  // "Solo Facturar" y "Cliente Recoge" se eligen en el desplegable de despacho, pero se
+  // guardan como estado del pedido para que los reconozcan el badge, el filtro y el dashboard.
+  if (ESTADOS_SIN_DESPACHO.includes(estadoDesp)) {
+   nuevoEstado = estadoDesp;
+  } else if (ESTADOS_SIN_DESPACHO.includes(pedido.estado)) {
+   // Se quita: el pedido vuelve al estado que le corresponde.
+   const conTransporte = c || (tipoModal === "empresa_transporte" && empTrans.trim());
+   nuevoEstado = tipoModal === "paqueteria" ? "paqueteria" : conTransporte ? "en_transito" : "sin_asignar";
+  }
+  const fechaDespacho = hoyLocal();
+  const debeMarcarDespacho = nuevoEstado === "en_transito" && pedido.estado !== "en_transito" && !pedido.fecha_despacho;
+  const ciudad = (ciudades||[]).find(c => c.code === ciudadEdit);
+  const cambiosBase = {
+   direccion: direccion.trim()||pedido.direccion,
+   cajas: parseInt(cajas)||pedido.cajas,
+   factura: facturaEdit.trim()||pedido.factura,
+   ciudad_codigo: ciudadEdit||pedido.ciudad_codigo,
+   ciudad_nombre: ciudad?.name||pedido.ciudad_nombre||"",
+   fecha_estimada: fechaEdit||pedido.fecha_estimada||null,
+  };
+  if (canBasicEdit && pedidoCerrado && tieneSoportes) {
+   cambiosBase.estado = novedad ? "novedad" : "entregado";
+   cambiosBase.novedad = novedad;
+  }
+  // Con fotos adjuntas, este guardado ES la entrega: escribe los soportes, cierra el
+  // pedido y conserva la modalidad (Cliente Recoge / Solo Facturar) en estado_despacho,
+  // porque la columna estado pasa a "entregado".
+  const hoyEntrega = hoyLocal();
+  const conNovedadEntrega = Boolean(novedadEntrega);
+  const modalidad = ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp
+   : ESTADOS_SIN_DESPACHO.includes(pedido.estado) ? pedido.estado : null;
+  const entrega = fotosPendientes.length > 0 ? {
+   soportes: [...(pedido.soportes||[]), ...fotosPendientes.map((_,i)=>`soporte_${pedido.id}_${(pedido.soportes||[]).length+i+1}.jpg`)],
+   soportes_data: [...soportesData, ...fotosPendientes],
+   estado: conNovedadEntrega ? "novedad" : "entregado",
+   fecha_real: hoyEntrega,
+   novedad: conNovedadEntrega,
+   ...(modalidad ? { estado_despacho: modalidad } : {}),
+  } : {};
+
+  // Quien solo puede registrar la entrega (el conductor) no manda el formulario
+  // completo: el trigger de la base exige que cierre el pedido sin tocar nada mas.
+  const soloEntrega = fotosPendientes.length > 0 && !canEdit && !canBasicEdit && !canAssign;
+  if (soloEntrega) {
+   const cambiosEntrega = { ...cambiosPendientesDelFormulario(), ...entrega };
+   setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambiosEntrega}:p));
+   showToast("Guardando...","info");
+   const { error: errEntrega } = await supabase.from("pedidos").update(cambiosEntrega).eq("id", pedido.id).select("id").single();
+   if (errEntrega) { showToast(mensajeError(errEntrega, "el registro de la entrega"),"error"); return; }
+   showToast("Entrega registrada","success");
+   if (window._recargarPedidos) await window._recargarPedidos();
+   onClose();
+   return;
+  }
+
+  const cambios = canBasicEdit && !canEdit && !canAssign ? { ...cambiosBase, ...entrega } : {
+   ...cambiosBase,
+   ...(canEdit || canAssign ? {
+    conductor_id: (tipoModal==="paqueteria" || sinTransporte) ? null : (c?.id||null),
+    placa: (tipoModal==="paqueteria" || sinTransporte) ? null : (c?.placa||null),
+    nit_proveedor: (tipoModal==="paqueteria" || sinTransporte) ? null : (c?.nit_proveedor||null),
+    estado: nuevoEstado,
+    ...(debeMarcarDespacho ? { fecha_despacho: fechaDespacho } : {}),
+   } : {}),
+   ...(canEdit ? {
+    estado_despacho: ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? (pedido.estado_despacho || "despachado") : estadoDesp,
+    novedad,
+    tipo: tipoModal,
+    empresa_transporte: tipoModal==="empresa_transporte" ? (empTrans||c?.empresa||null) : null,
+    paqueteria: tipoModal==="paqueteria" ? paqModal : null,
+    guia_paqueteria: tipoModal==="paqueteria" ? guiaPaq : null,
+   } : {}),
+   // Va de ultimo a proposito: si hay soportes adjuntos, el pedido se cierra.
+   ...entrega,
+  };
+  setPedidos(prev=>prev.map(p=>p.id===pedido.id?{...p,...cambios}:p));
+
+  showToast("Guardando...","info");
+  // select("id") confirma que la fila existe y que RLS permitio el update, sin
+  // descargar soportes_data. La actualizacion optimista ya dejo la interfaz al dia,
+  // asi que no hace falta recargar las diez tablas ni desmontar la pantalla.
+  const { error } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id).select("id").single();
+  if (error) { showToast(mensajeError(error, "los cambios del pedido"),"error"); return; }
+  const estadoFinal = entrega.estado || nuevoEstado;
+  showToast(" Cambios guardados Estado: "+(ESTADOS_PEDIDO[estadoFinal]?.label || estadoFinal),"success");
+  if (fotosPendientes.length > 0 && window._recargarPedidos) await window._recargarPedidos();
+  onClose();
+ };
+
+
+ // Lo que el usuario escribio en el formulario y aun no ha guardado. Solo incluye
+ // los campos que de verdad cambiaron: el trigger de la base exige que el conductor
+ // cierre un pedido en transito sin tocar ningun otro dato, asi que mandar un campo
+ // con su mismo valor esta bien, pero mandarlo cambiado haria fallar la entrega.
+ const cambiosPendientesDelFormulario = () => {
+  const cambios = {};
+  const dir = direccion.trim();
+  if (dir && dir !== (pedido.direccion || "")) cambios.direccion = dir;
+  const nCajas = parseInt(cajas);
+  if (!Number.isNaN(nCajas) && nCajas !== Number(pedido.cajas || 0)) cambios.cajas = nCajas;
+  const fac = facturaEdit.trim();
+  if (fac && fac !== (pedido.factura || "")) cambios.factura = fac;
+  if (ciudadEdit && ciudadEdit !== (pedido.ciudad_codigo || "")) {
+   cambios.ciudad_codigo = ciudadEdit;
+   const ciu = (ciudades || []).find(c => c.code === ciudadEdit);
+   if (ciu) cambios.ciudad_nombre = ciu.name;
+  }
+  if (fechaEdit && fechaEdit !== (pedido.fecha_estimada || "")) cambios.fecha_estimada = fechaEdit;
+  return cambios;
+ };
+
+ const adjuntarFotos = (fotos) => {
+  if (pedidoCerrado) {
+   showToast("No se puede modificar un pedido que ya fue entregado","error");
+   return;
+  }
+  if (pedidoEnTransito && !canDeliver) {
+   showToast("Solo el conductor puede registrar la entrega de un pedido en transito","error");
+   return;
+  }
+  setFotosPendientes(prev => [...prev, ...fotos]);
+  setVerCamara(false);
+  showToast(`${fotos.length} soporte(s) adjuntos. Presiona Guardar Cambios para registrar la entrega.`,"info");
+ };
+
+
+ const caPrev = condId!==(pedido.conductor_id?.toString()||"") && condId!=="";
 
  return (
-  <ModalGestion
-   titulo="Pedido"
-   id={pedido.guia_interna || pedido.id}
-   estado={<ChipEstado estado={pedido.estado} novedad={pedido.novedad} />}
-   descripcion={`${pedido.id} · estado calculado automaticamente`}
-   onClose={onClose}
-   onGuardar={(canEdit || canBasicEdit || fotosPendientes.length > 0) && !pedidoBloqueadoEdicion ? guardar : null}
-   textoGuardar={fotosPendientes.length > 0 ? "Guardar y registrar entrega" : "Guardar"}
-   enlaces={<>
-    <EnlacePie icono={<FileText size={15} />} onClick={()=>setVerGuia(true)}>Guia</EnlacePie>
-    <EnlacePie icono={<MapPin size={15} />} onClick={()=>setVerMapa(!verMapa)}>
-     {verMapa ? "Ocultar mapa" : "Mapa"}
-    </EnlacePie>
-    {tieneSoportes && (
-     <EnlacePie icono={<FileText size={15} />}
-      onClick={()=>verPDFSoportes({ ...pedido, soportes_data:soportesData }, showToast)}>
-      Soportes
-     </EnlacePie>
-    )}
-   </>}
-  >
-   <Resumen titulo={pedido.cliente} datos={[
-    { label:"Ciudad destino", valor:ciudad?.name || pedido.ciudad_nombre || "Sin definir", falta:!pedido.ciudad_codigo },
-    { label:"Factura", valor:pedido.factura || "Sin registrar", falta:!pedido.factura, mono:!!pedido.factura },
-    { label:"Estimado", valor:pedido.fecha_estimada || "Sin fecha", falta:!pedido.fecha_estimada },
-    {
-     // El dia que salio a ruta. En paqueteria no se marca nunca -- el pedido
-     // pasa a "paqueteria", no a "en transito" -- asi que ahi no es un hueco.
-     label:"Despachado",
-     valor: pedido.fecha_despacho
-      || (pedido.tipo === "paqueteria" ? "No aplica" : "Sin despachar"),
-     falta: !pedido.fecha_despacho && pedido.tipo !== "paqueteria"
-      && ["en_transito","entregado","novedad"].includes(pedido.estado),
-    },
-    { label:"Real", valor:pedido.fecha_real || "Pendiente", falta:!pedido.fecha_real },
-    { label:"Fuente de riesgo", valor:fuenteRiesgo },
-    { label:"Cajas", valor:pedido.cajas || 0 },
-   ]}>
-    {(pedido.fecha_pedido || pedido.hora_pedido) && (
-     <div style={{ fontSize:12.5, color:T.color.tinta3 }}>
-      Pedido generado: <strong style={{ color:T.color.tinta2 }}>
-       {pedido.fecha_pedido || "sin fecha"}{pedido.hora_pedido ? " " + pedido.hora_pedido : ""}
-      </strong>
+  <Modal title={`Pedido ${pedido.id}${pedido.guia_interna?" - "+pedido.guia_interna:""}`} onClose={onClose} wide>
+   <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+    <div style={{background:P[50],borderRadius:12,padding:16}}>
+     <div style={{fontWeight:800,fontSize:16,color:P[800],marginBottom:10}}>{pedido.cliente}</div>
+     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8,fontSize:13,color:"#64748b"}}>
+      {pedido.ciudad_origen_nombre&&<span> Origen: <strong>{pedido.ciudad_origen_nombre}</strong>{pedido.direccion_origen&&` ${pedido.direccion_origen}`}</span>}
+      <span>Ciudad destino: {ciudad?.name} ({pedido.ciudad_codigo})</span>
+      <span>Factura: {pedido.factura}</span>
+      {(pedido.fecha_pedido||pedido.hora_pedido)&&(
+       <span>Pedido: {pedido.fecha_pedido||"sin fecha"}{pedido.hora_pedido?" "+pedido.hora_pedido:""}</span>
+      )}
+      <span>Estimado: {pedido.fecha_estimada||""}</span>
+      {fechaLimitePromesa&&<span>Limite promesa: {fechaLimitePromesa} ({promesa.dias_plazo} dia(s))</span>}
+      <span>Fuente riesgo: {fuenteRiesgo}</span>
+      <span>Real: {pedido.fecha_real||"Pendiente"}</span>
+      {pedido.guia_interna&&<span style={{fontFamily:"monospace",color:P[600],fontWeight:700}}>{pedido.guia_interna}</span>}
      </div>
-    )}
-    {fechaLimitePromesa && (
-     <div style={{ fontSize:12.5, color:T.color.tinta3 }}>
-      Limite de promesa: <strong style={{ color:T.color.tinta2 }}>{fechaLimitePromesa}</strong>
-      {" "}({promesa.dias_plazo} dia(s))
-     </div>
-    )}
-    {pedido.notas && <FranjaAviso etiqueta="Notas">{pedido.notas}</FranjaAviso>}
-    {pedido.tipo === "paqueteria" && pedido.guia_paqueteria && (
-     <FranjaInfo>{pedido.paqueteria} · guia {pedido.guia_paqueteria}</FranjaInfo>
-    )}
-   </Resumen>
-
-   {pedidoCerrado && (
-    <FranjaInfo>Pedido cerrado: no se permiten modificaciones despues de la entrega.</FranjaInfo>
-   )}
-   {!pedidoCerrado && pedidoEnTransito && !canDeliver && (
-    <FranjaInfo>En transito: solo el conductor asignado puede registrar la entrega.</FranjaInfo>
-   )}
-   {puedeReasignar && (
-    <>
-     <Seccion titulo="Cambiar conductor" />
-     <div style={{ display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
-      <div style={{ flex:"1 1 260px", minWidth:0 }}>
-       <Selector label={`Conductor actual: ${cond ? cond.nombre : "sin conductor"}`} valor={nuevoCond} onChange={setNuevoCond}
-        placeholder="Elige el nuevo conductor"
-        opciones={[
-         { value:"__sin__", label:"Sin conductor (vuelve a bodega)" },
-         ...conductoresOpciones.filter(c => String(c.id) !== String(pedido.conductor_id))
-          .map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` })),
-        ]} />
-      </div>
-      <button disabled={!nuevoCond} onClick={() => reasignarConductor(nuevoCond === "__sin__" ? "" : nuevoCond)} style={{
-       ...botonBarra, background:T.color.marca, border:"none", color:"#fff",
-       opacity: nuevoCond ? 1 : 0.5, cursor: nuevoCond ? "pointer" : "not-allowed",
-      }}>{nuevoCond === "__sin__" ? "Devolver a bodega" : "Reasignar"}</button>
-     </div>
-     <span style={{ fontSize:12, color:T.color.tinta3 }}>Cuando el conductor devuelve el pedido sin entregarlo. Solo cambia el conductor; el resto del pedido sigue bloqueado.</span>
-    </>
-   )}
-
-   {(canEdit || canBasicEdit) && (
-    <>
-     <Seccion titulo="Datos del pedido" />
-     <Fila>
-      <Texto label="Direccion de entrega" valor={direccion} onChange={setDireccion}
-       placeholder="Cra 15 #93-47" deshabilitado={pedidoBloqueadoEdicion} />
-      <Selector label="Ciudad destino (DANE)" valor={ciudadEdit} onChange={setCiudadEdit}
-       placeholder="Seleccione" deshabilitado={pedidoBloqueadoEdicion}
-       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
-     </Fila>
-     <Fila>
-      <Texto label="Cajas" tipo="number" valor={cajas} onChange={setCajas} deshabilitado={pedidoBloqueadoEdicion} />
-      <Texto label="N de factura" mono valor={facturaEdit} onChange={setFacturaEdit}
-       placeholder="FAC-3000" deshabilitado={pedidoBloqueadoEdicion} />
-     </Fila>
-     <Texto label="Fecha estimada" tipo="date" valor={fechaEdit} onChange={setFechaEdit}
-      deshabilitado={pedidoBloqueadoEdicion} style={{ maxWidth:"50%" }} />
-    </>
-   )}
-
-   {canEdit && (
-    <>
-     <Seccion titulo="Transporte" />
-     {sinTransporte ? (
-      <FranjaInfo>
-       {estadoDesp === "cliente_recoge" ? "Recoge el cliente:" : "Solo se factura:"} este pedido no lleva
-       conductor ni transportadora. Si tenia uno asignado, se quita al guardar.
-      </FranjaInfo>
-     ) : (
-      <Fila>
-       <Selector label="Tipo de transporte" valor={tipoModal} onChange={setTipoModal}
-        deshabilitado={pedidoBloqueadoEdicion}
-        opciones={[
-         { value:"propio", label:"Transporte propio" },
-         { value:"empresa_transporte", label:"Empresa transportista" },
-         { value:"mensajeria", label:"Mensajeria" },
-         { value:"paqueteria", label:"Paqueteria tercero" },
-        ]} />
-       {tipoModal === "paqueteria" ? (
-        <Selector label="Paqueteria" valor={paqModal} onChange={setPaqModal}
-         placeholder="Seleccione" deshabilitado={pedidoBloqueadoEdicion}
-         opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
-       ) : (
-        <Selector label="Asignar conductor" valor={condId}
-         onChange={v => {
-          setCondId(v);
-          const c = conductores.find(cx => String(cx.id) === String(v));
-          if (c && tipoModal === "empresa_transporte") setEmpTrans(c.empresa || c.nit_proveedor || "");
-         }}
-         placeholder="Sin asignar" deshabilitado={pedidoBloqueadoEdicion}
-         opciones={conductoresOpciones.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-       )}
-      </Fila>
-     )}
-     {tipoModal === "paqueteria" && !sinTransporte && (
-      <Texto label="No. guia de paqueteria" mono valor={guiaPaq} onChange={setGuiaPaq}
-       placeholder="SRV-2026-0001" deshabilitado={pedidoBloqueadoEdicion} />
-     )}
-     {caPrev && !sinTransporte && (
-      <FranjaInfo>Al guardar, el pedido pasa a En transito.</FranjaInfo>
-     )}
-     <Selector label="Estado de despacho" valor={estadoDesp} onChange={setEstadoDesp}
-      deshabilitado={pedidoBloqueadoEdicion}
-      opciones={[
-       { value:"despachado", label:"Despachado" },
-       { value:"bloqueado", label:"Bloqueado cartera" },
-       { value:"novedad_despacho", label:"Despachado con novedad" },
-       { value:"solo_facturar", label:"Solo facturar (no se despacha)" },
-       { value:"cliente_recoge", label:"Cliente recoge (no se despacha)" },
-      ]} />
-    </>
-   )}
-
-   {canAssign && !canEdit && !sinTransporte && tipoModal !== "paqueteria" && (
-    <>
-     <Seccion titulo="Transporte" />
-     <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
-      placeholder="Sin asignar" deshabilitado={pedidoBloqueadoEdicion}
-      opciones={conductoresOpciones.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-    </>
-   )}
-
-   <Seccion titulo="Entrega" />
-   {(soportesData.length > 0 || fotosPendientes.length > 0) && (
-    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))", gap:10 }}>
-     {[...soportesData, ...fotosPendientes].map((f, i) => (
-      <div key={i} style={{ borderRadius:T.radio.chico, overflow:"hidden", border:`1px solid ${T.color.borde}` }}>
-       <img src={f.data || f} alt={"soporte " + (i+1)} style={{ width:"100%", height:78, objectFit:"cover", display:"block" }} />
-      </div>
-     ))}
+     {pedido.notas&&<p style={{margin:"8px 0 0",fontSize:12,color:"#94a3b8"}}>{pedido.notas}</p>}
     </div>
-   )}
-   {fotosPendientes.length > 0 && (
-    <FranjaAviso>
-     {fotosPendientes.length} soporte(s) adjuntos sin guardar. Presiona
-     <strong> Guardar y registrar entrega</strong> para cerrar el pedido.
-    </FranjaAviso>
-   )}
-   <ZonaFotos
-    actuales={(pedido.soportes||[]).length + fotosPendientes.length}
-    maximo={3}
-    deshabilitada={pedidoCerrado || (pedidoEnTransito && !canDeliver) || (pedido.soportes||[]).length >= 3}
-    onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}
-   />
-   <CasillaNovedad marcada={novedadEntrega} onChange={setNovedadEntrega}
-    deshabilitada={!puedeMarcarNovedadEntrega}>
-    Entregar con novedad al cargar soporte
-   </CasillaNovedad>
 
-   {verMapa && (
-    <iframe
-     title="Mapa del destino"
-     src={`https://maps.google.com/maps?q=${encodeURIComponent((pedido.direccion||"") + ", " + (ciudad?.name||"") + ", Colombia")}&output=embed`}
-     style={{ width:"100%", height:240, border:"none", borderRadius:T.radio.control }}
-     loading="lazy" />
-   )}
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+     <span style={{fontSize:13,fontWeight:700,color:P[800]}}>Estado actual:</span>
+     <Badge estado={pedido.estado}/>
+     {pedido.novedad&&<span style={{fontSize:12,color:"#dc2626",fontWeight:700}}>Con Novedad</span>}
+     <span style={{fontSize:11,color:"#94a3b8"}}>(automatico)</span>
+    </div>
+    {pedidoCerrado&&(
+     <div style={{background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:12,color:"#475569",fontSize:13,fontWeight:700}}>
+      Pedido cerrado: no se permiten modificaciones despues de la entrega.
+     </div>
+    )}
+    {!pedidoCerrado&&pedidoEnTransito&&!canDeliver&&(
+     <div style={{background:"#fff7ed",border:"1px solid #fdba74",borderRadius:10,padding:12,color:"#9a3412",fontSize:13,fontWeight:700}}>
+      Pedido en transito: solo el conductor asignado puede registrar soporte de entrega y novedad.
+     </div>
+    )}
 
-   {verGuia && <GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)} />}
-   {verCamara && <CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast} />}
-  </ModalGestion>
+    {pedido.tipo==="paqueteria"&&(
+     <div style={{background:"#ecfeff",borderRadius:10,padding:14,border:"1px solid #67e8f9"}}>
+      <span style={{fontWeight:700,color:"#0891b2"}}>{pedido.paqueteria}</span>
+      <span style={{marginLeft:14,color:"#0e7490"}}>Guia: <strong style={{fontFamily:"monospace"}}>{pedido.guia_paqueteria}</strong></span>
+     </div>
+    )}
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+     <Field label="Direccion de entrega" value={direccion} onChange={setDireccion} placeholder="Cra 15 #93-47" disabled={pedidoBloqueadoEdicion}/>
+     <Field label="Ciudad destino" value={ciudadEdit} onChange={setCiudadEdit} as="select"
+      options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}
+      disabled={pedidoBloqueadoEdicion}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+     <Field label="Cajas" value={cajas} onChange={setCajas} type="number" placeholder={pedidoBloqueadoEdicion ? "" : "10"} disabled={pedidoBloqueadoEdicion}/>
+     <Field label="No. Factura (editable)" value={facturaEdit} onChange={setFacturaEdit} placeholder="FAC-3000" disabled={pedidoBloqueadoEdicion}/>
+     <Field label="Fecha Estimada" value={fechaEdit} onChange={setFechaEdit} type="date" disabled={pedidoBloqueadoEdicion}/>
+    </div>
+
+    {canEdit&&sinTransporte&&(
+     <p style={{fontSize:12,color:P[700],background:P[50],border:`1px solid ${P[200]}`,borderRadius:8,padding:"8px 12px",margin:0}}>
+      {estadoDesp==="cliente_recoge"?"Recoge el cliente:":"Solo se factura:"} este pedido no lleva conductor ni transportadora. Si tenia uno asignado, se quita al guardar.
+     </p>
+    )}
+
+    {canEdit&&!sinTransporte&&(
+     <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Field label="Tipo de Transporte" value={tipoModal} onChange={setTipoModal} as="select"
+       options={[
+        {value:"propio",label:" Transporte Propio"},
+        {value:"empresa_transporte",label:" Empresa Transportista"},
+        {value:"mensajeria",label:" Mensajeria"},
+        {value:"paqueteria",label:" Paqueteria Tercero"},
+       ]}
+       disabled={pedidoBloqueadoEdicion}/>
+      {tipoModal==="paqueteria"?(
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Field label="Paqueteria" value={paqModal} onChange={setPaqModal} as="select" options={[{ value:"", label:"Seleccione" }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} disabled={pedidoBloqueadoEdicion}/>
+        <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX" disabled={pedidoBloqueadoEdicion}/>
+       </div>
+      ):(
+       <div>
+        <Field label="Asignar Conductor" value={condId} onChange={v=>{
+         setCondId(v);
+         // Auto-fill empresa from conductor
+         const c = conductores.find(cx=>String(cx.id)===String(v));
+         if(c && tipoModal==="empresa_transporte") setEmpTrans(c.empresa||c.nit_proveedor||"");
+        }} as="select"
+         options={[
+          {value:"",label:"Sin asignar"},
+          ...(tipoModal==="empresa_transporte"
+           ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
+           : conductoresOpciones
+          ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
+         ]}
+         disabled={pedidoBloqueadoEdicion}/>
+        {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiar a En Transito.</p>}
+       </div>
+      )}
+     </div>
+    )}
+
+    {canAssign&&!sinTransporte&&tipoModal!=="paqueteria"&&(
+     <div>
+      <Field label="Asignar Conductor" value={condId} onChange={v=>{
+       setCondId(v);
+       const c = conductores.find(cx=>String(cx.id)===String(v));
+       if(c && tipoModal==="empresa_transporte") setEmpTrans(c.empresa||c.nit_proveedor||"");
+      }} as="select"
+       options={[
+        {value:"",label:"Sin asignar"},
+        ...(tipoModal==="empresa_transporte"
+         ? conductoresOpciones.filter(c=>String(c.id)===String(condId)||(c.nit_proveedor||(c.empresa&&c.empresa.trim())))
+         : conductoresOpciones
+        ).map(c=>({value:c.id,label:`${c.nombre} - ${c.placa}${c.empresa?" - "+c.empresa:""}`}))
+       ]}
+       disabled={pedidoBloqueadoEdicion}/>
+      {caPrev&&<p style={{fontSize:11,color:P[600],margin:"6px 0 0",fontWeight:700}}>Al guardar el estado cambiara a En Transito.</p>}
+     </div>
+    )}
+
+    {!canEdit&&!canAssign&&cond&&(
+     <div style={{background:"#eff6ff",borderRadius:10,padding:12}}>
+      <span style={{fontSize:13,color:"#1e40af"}}>
+       {cond.nombre} - Placa: {pedido.placa}{cond.cedula&&` - CC: ${cond.cedula}`}{cond.celular&&` - Tel: ${cond.celular}`}
+      </span>
+     </div>
+    )}
+
+    {/* El operador no ve el desplegable de despacho (la base le bloquea estado_despacho),
+        pero puede marcar Solo Facturar: guardar() solo cambia el estado del pedido. */}
+    {!canEdit&&canAssign&&(
+     <Field label="Marcar pedido" as="select"
+      value={ESTADOS_SIN_DESPACHO.includes(estadoDesp) ? estadoDesp : ""}
+      onChange={v=>setEstadoDesp(v || (pedido.estado_despacho||"despachado"))}
+      options={[
+       {value:"",label:"Normal (se despacha)"},
+       {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
+       {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
+      ]}
+      disabled={pedidoBloqueadoEdicion}/>
+    )}
+
+    {canEdit&&(
+     <Field label="Estado de Despacho" value={estadoDesp} onChange={setEstadoDesp} as="select"
+      options={[
+       {value:"despachado",label:"Despachado"},
+       {value:"bloqueado",label:"Bloqueado Cartera"},
+       {value:"novedad_despacho",label:"Despachado con Novedad"},
+       {value:"solo_facturar",label:"Solo Facturar (no se despacha)"},
+       {value:"cliente_recoge",label:"Cliente Recoge (no se despacha)"},
+      ]}
+      disabled={pedidoBloqueadoEdicion}/>
+    )}
+    {estadoDesp==="cliente_recoge"&&!tieneSoportes&&(
+     <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
+      Cliente Recoge necesita el soporte de entrega. Adjuntalo con el boton de soportes: al subirlo se guardan tambien las cajas, la factura y los demas datos, y el pedido queda como Entregado con esta modalidad.
+     </p>
+    )}
+
+    <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:puedeMarcarNovedadEntrega?"pointer":"not-allowed",opacity:puedeMarcarNovedadEntrega?1:0.65}}
+     onClick={()=>{ if (puedeMarcarNovedadEntrega) setNovedad(!novedad); }}>
+     <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>v</span>}
+     </div>
+     <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>
+      {pedidoCerrado&&tieneSoportes ? "Entrega con Novedad" : "Entregar con Novedad al cargar soporte"}
+     </span>
+     {novedad&&<span style={{fontSize:11,color:"#dc2626",marginLeft:4}}>
+      {pedidoCerrado&&tieneSoportes ? "Guardar Cambios actualizara la novedad." : "La novedad se aplicara al cargar fotos y marcar entregado."}
+     </span>}
+    </div>
+
+    <div>
+     <div style={{fontWeight:700,fontSize:13,color:P[800],marginBottom:10}}>Soportes Fotograficos de Entrega</div>
+     {fotosPendientes.length>0&&(
+      <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:"0 0 10px"}}>
+       {fotosPendientes.length} soporte(s) adjuntos sin guardar. Presiona <strong>Guardar Cambios</strong> para registrar la entrega.
+      </p>
+     )}
+     {[...soportesData, ...fotosPendientes].length>0?(
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:12}}>
+       {[...soportesData, ...fotosPendientes].map((s,i)=>(
+        <div key={i} style={{borderRadius:8,overflow:"hidden",border:`2px solid ${P[200]}`}}>
+         <img src={s.data} alt={"s"+i} style={{width:"100%",height:90,objectFit:"cover",display:"block"}} />
+         <div style={{fontSize:10,color:P[700],padding:"4px 8px",fontWeight:600,background:P[50]}}>Soporte {i+1}</div>
+        </div>
+       ))}
+      </div>
+     ):(pedido.soportes||[]).length>0?(
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
+       {(pedido.soportes||[]).map((s,i)=>(
+        <div key={i} style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"5px 12px",fontSize:12,color:"#15803d"}}>{s}</div>
+       ))}
+      </div>
+     ):(
+      <p style={{color:"#94a3b8",fontSize:13,margin:"0 0 10px"}}>Sin soportes fotograficos.</p>
+     )}
+     <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+      {!pedidoCerrado&&(!pedidoEnTransito||canDeliver)&&(pedido.soportes||[]).length<3&&(
+     <Btn variant="success" onClick={()=>{ setNovedadEntrega(novedad); setVerCamara(true); }}>
+        Cargar Fotos (max 3) y Marcar Entregado
+       </Btn>
+      )}
+      {tieneSoportes&&(
+       <Btn variant="secondary" onClick={()=>verPDFSoportes({...pedido, soportes_data:soportesData}, showToast)}>Ver PDF Soportes</Btn>
+      )}
+     </div>
+    </div>
+
+    <div>
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <span style={{fontWeight:700,fontSize:13,color:P[800]}}>Mapa de destino</span>
+      <Btn size="sm" variant={verMapa?"danger":"secondary"} onClick={()=>setVerMapa(!verMapa)}>{verMapa?"Ocultar":"Ver Mapa"}</Btn>
+     </div>
+     {verMapa&&(
+      <div style={{borderRadius:12,overflow:"hidden",border:`2px solid ${P[200]}`}}>
+       <iframe title="mapa" width="100%" height="240" style={{border:"none",display:"block"}}
+        src={`https://maps.google.com/maps?q=${encodeURIComponent(direccion+", "+(ciudad?.name||"")+", Colombia")}&output=embed&z=14`}
+        allowFullScreen loading="lazy"/>
+      </div>
+     )}
+    </div>
+
+    <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+     <Btn variant="secondary" size="sm" onClick={()=>setVerGuia(true)}>Ver Guia / Planilla</Btn>
+     <div style={{display:"flex",gap:10}}>
+      <Btn variant="secondary" onClick={onClose}>Cerrar</Btn>
+      {(canEdit||canBasicEdit||fotosPendientes.length>0)&&!pedidoBloqueadoEdicion&&(
+       <Btn onClick={guardar}>{fotosPendientes.length>0?"Guardar y Registrar Entrega":"Guardar Cambios"}</Btn>
+      )}
+     </div>
+    </div>
+   </div>
+   {verGuia&&<GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)}/>}
+   {verCamara&&<CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast}/>}
+  </Modal>
  );
 }
 
@@ -793,81 +909,31 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
  const totalAplicar = matches.filter(seActualiza).length;
 
  return (
-  <ModalForm
-   titulo="Cargar guias de paqueteria"
-   descripcion={resultado ? "Resultado de la carga" : "Asocia una guia a cada pedido existente"}
-   ancho="M"
-   onClose={onClose}
-   onPrimario={matches.length > 0 && !resultado ? aplicar : null}
-   guardando={aplicando}
-   primarioDeshabilitado={totalAplicar === 0}
-   textoPrimario={`Cargar ${totalAplicar > 0 ? totalAplicar + " guias" : "guias"}`}
-  >
-   {!matches.length && !resultado && (
-    <>
-     <button onClick={()=>fileRef.current?.click()}
+  <Modal title=" Cargar Guias de Paqueteria" onClose={onClose} wide>
+   <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+    {/* Info */}
+    <div style={{ background:"#eff6ff", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#1e40af" }}>
+     <strong>Regla:</strong> 1 pedido = 1 guia. Columnas requeridias: <code>Guia Estado_Pro Pedido_Pro</code>.
+     <br/><span style={{fontSize:12,color:"#64748b"}}>El match se hace por <strong>Pedido_Pro = No. Pedido</strong> en el sistema. Acepta CSV con coma o punto y coma.</span>
+     <br/><span style={{fontSize:12,color:"#64748b"}}>Si un pedido viene repetido con <strong>guias diferentes</strong>, se toma la de <strong>fecha de elaboracion mas reciente</strong> (DD/MM/AAAA o AAAA-MM-DD). Repetido con la <strong>misma guia</strong> es error del archivo y no se carga.</span>
+    </div>
+
+    {/* Drop zone */}
+    {!matches.length && !resultado && (
+     <div style={{ border:`2px dashed ${cargando?"#7c3aed":"#e2e8f0"}`, borderRadius:12,
+      padding:"28px 20px", textAlign:"center", cursor:"pointer", background:archivo?"#f5f3ff":"#fafafa" }}
+      onClick={()=>fileRef.current?.click()}
       onDragOver={e=>e.preventDefault()}
-      onDrop={e=>{e.preventDefault();leerArchivo(e.dataTransfer.files[0]);}}
-      style={{
-       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
-       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
-       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
-      }}>
-      <span style={{
-       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
-       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
-      }}><Upload size={20} /></span>
-      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
-       {cargando ? "Procesando el archivo..." : "Arrastra el archivo CSV o haz clic para seleccionarlo"}
-      </span>
-      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
-       Solo archivos .csv · separador coma o punto y coma
-      </span>
-     </button>
-
-     <EnlacePie icono={<Download size={15} />}
-      onClick={()=>descargarCSV("plantilla_guias.csv", "Guia,Estado_Pro,Pedido_Pro,Fecha_Elaboracion",
-       "205022008549,ENTREGADO,PX000117858,15/07/2026")}>
-      Descargar plantilla CSV
-     </EnlacePie>
-
-     <div style={{ ...tarjeta, padding:14, display:"flex", flexDirection:"column", gap:12 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-       <FileText size={15} style={{ color:T.color.tinta3 }} />
-       <span style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>Formato del archivo</span>
-       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>· 1 pedido = 1 guia</span>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"90px 1fr", gap:10, alignItems:"start" }}>
-       <span style={{ fontSize:12.5, color:T.color.tinta3, paddingTop:3 }}>Requeridas</span>
-       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-        {["Guia","Estado_Pro","Pedido_Pro"].map(x => (
-         <span key={x} style={{
-          fontFamily:T.fuente.mono, fontSize:11.5, padding:"3px 8px",
-          borderRadius:T.radio.chico, background:T.color.superficie2,
-          border:`1px solid ${T.color.borde}`, color:T.color.tinta2,
-         }}>{x}</span>
-        ))}
-       </div>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"90px 1fr", gap:10, alignItems:"start" }}>
-       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>Cruce</span>
-       <span style={{ fontSize:12.5, color:T.color.tinta2 }}>
-        Pedido_Pro = N de pedido en el sistema
-       </span>
-      </div>
+      onDrop={e=>{e.preventDefault();leerArchivo(e.dataTransfer.files[0]);}}>
+      <div style={{fontSize:36,marginBottom:8}}>{cargando?"":""}</div>
+      {cargando ? <div style={{color:"#7c3aed",fontWeight:700}}>Procesando...</div>
+       : archivo ? <div style={{color:"#059669",fontWeight:700}}> {archivo}</div>
+       : <div style={{color:"#64748b",fontWeight:600}}>Clic o arrastra el archivo CSV aqu</div>}
      </div>
-
-     <FranjaInfo>
-      Si un pedido se repite con <strong>guias diferentes</strong>, se toma la de fecha de elaboracion
-      mas reciente (DD/MM/AAAA o AAAA-MM-DD).
-     </FranjaInfo>
-     <FranjaAviso>
-      Si se repite con la <strong>misma guia</strong>, es error del archivo y esa fila no se carga.
-     </FranjaAviso>
-    </>
-   )}
-   <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}}
-    onChange={e=>leerArchivo(e.target.files[0])}/>
+    )}
+    <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}}
+     onChange={e=>leerArchivo(e.target.files[0])}/>
 
     {/* Error de parseo */}
     {err && <div style={{background:"#fef2f2",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#dc2626",fontWeight:600}}> {err}</div>}
@@ -928,6 +994,7 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
         ))}
        </div>
       )}
+      <Btn size="sm" variant="secondary" style={{marginTop:12}} onClick={onClose}>Cerrar</Btn>
      </div>
     )}
 
@@ -1054,63 +1121,55 @@ function ModalCSVGuias({ onClose, pedidos, ciudades = [], showToast, recargar })
        </div>
       )}
 
-      <EnlacePie onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);setResultado(null);}}>Cambiar archivo</EnlacePie>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+       <Btn variant="secondary" onClick={()=>{setMatches([]);setArchivo("");setErrores([]);setResueltos([]);}}> Cambiar archivo</Btn>
+       <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
+       <Btn disabled={aplicando||totalAplicar===0} onClick={aplicar}>
+        {aplicando?" Aplicando...":` Aplicar ${totalAplicar} actualizacion(es)`}
+       </Btn>
+      </div>
      </>
     )}
-  </ModalForm>
+   </div>
+  </Modal>
  );
 }
 
-
-// Importador de pedidos: valida el archivo antes de escribir nada, para que los
-// errores se vean y se corrijan sin dejar la base a medias. Lo que la base decide
-// (RLS, triggers, choques) se sigue reportando durante la importacion.
-const MODOS_IMPORTACION = [
- // Crear pedidos desde el plano se quito: los pedidos entran por el cargue de
- // cartera y nacen en produccion al aprobarse. Lo que queda son reparaciones
- // sobre pedidos que ya existen.
- { id: "completar", titulo: "Completar datos de pedidos existentes",
-   detalle: "Llena solo ciudad, direccion, cajas, factura y fecha/hora que esten vacias. No cambia estado, conductor ni guia." },
- { id: "fechahora", titulo: "Cargar unicamente fecha y hora",
-   detalle: "Escribe solo la fecha y hora vacias en pedidos existentes. No crea pedidos ni toca otras columnas." },
- { id: "notas", titulo: "Actualizar notas desde el plano",
-   detalle: "Reemplaza el texto de las notas aunque ya tengan contenido. No escribe ninguna otra columna." },
-];
-
-const COLUMNAS_REQUERIDAS = ["id","cliente","ciudad_codigo","direccion","cajas","factura","fecha_estimada","tipo"];
-const COLUMNAS_ALIAS = ["Pedido_Pro","DANE_Destino","Total_Cajas","Factura_Pro","Paqueteria","Guia"];
-const COLUMNAS_OPCIONALES = ["empresa_transporte","paqueteria","guia_paqueteria","notas","ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","fecha","hora"];
-
-function Chips({ items, color }) {
- return (
-  <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-   {items.map(x => (
-    <span key={x} style={{
-     fontFamily:T.fuente.mono, fontSize:11.5, padding:"3px 8px",
-     borderRadius:T.radio.chico, background:color || T.color.superficie2,
-     border:`1px solid ${T.color.borde}`, color:T.color.tinta2,
-    }}>{x}</span>
-   ))}
-  </div>
- );
-}
 
 function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
- const [txt, setTxt] = useState("");
- const [prev, setPrev] = useState([]);
- const [err, setErr] = useState("");
+ const [txt,    setTxt]    = useState("");
+ const [prev,   setPrev]   = useState([]);
+ const [err,    setErr]    = useState("");
  const [cargando, setCargando] = useState(false);
- const [validando, setValidando] = useState(false);
- const [archivo, setArchivo] = useState(null);   // { nombre, filas, tam, sep }
- const [validacion, setValidacion] = useState(null);
- const [modo, setModo] = useState("completar");
- const [verFormato, setVerFormato] = useState(true);
- const [verPegar, setVerPegar] = useState(false);
- const [aviso, setAviso] = useState("");
+ const [nombreArchivo, setNombreArchivo] = useState("");
  const fileRef = useRef(null);
 
+ const [aviso, setAviso] = useState("");
+ const [completar, setCompletar] = useState(false);
+ // Modo estricto para recargar el plano sobre pedidos que ya existen: escribe
+ // unicamente fecha_pedido y hora_pedido. No crea pedidos ni toca ningun otro campo.
+ const [soloFechaHora, setSoloFechaHora] = useState(false);
+ // Modo reparacion: el parser viejo cortaba las observaciones que traian una coma o
+ // un salto de linea. Este modo las vuelve a escribir desde el plano original.
+ const [actualizarNotas, setActualizarNotas] = useState(false);
  const CABECERA = "id,cliente,ciudad_codigo,direccion,cajas,factura,fecha_estimada,tipo,empresa_transporte,paqueteria,guia_paqueteria,notas,ciudad_origen_codigo,ciudad_origen_nombre,direccion_origen,fecha_pedido,hora_pedido";
  const EJEMPLO = "PT000001,Empresa Ejemplo S.A.S,11001,Cra 10 #20-30 Of 201,5,FAC-3000,2026-05-10,propio,,,,Fragil,05001,Medellin,Bodega Principal,2026-05-08,08:30\nPT000002,Comercio del Norte,76001,Av 6N #23-10,12,FAC-3001,2026-05-12,paqueteria,,Servientrega,SRV-001,,,,,2026-05-11,14:05";
+
+
+ // Leer archivo CSV desde el disco
+ const leerArchivo = async (file) => {
+  if (!file) return;
+  if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+   setErr("Solo se aceptan archivos .CSV"); return;
+  }
+  setNombreArchivo(file.name);
+  try {
+   const texto = await leerTextoCsv(file);
+   setTxt(texto);
+   setErr("");
+   setPrev(parsear(texto));
+  } catch(ex) { setErr(ex.message); setPrev([]); }
+ };
 
  const parsear = (texto) => {
   // Acepta coma, punto y coma o tabulador, y respeta los campos entre comillas.
@@ -1201,316 +1260,129 @@ function ModalCSVPedidos({ onClose, onImportar, ciudades }) {
   });
  };
 
- // Valida sin escribir: formato, tipos, catalogo DANE, duplicados del archivo y
- // cuales ids existen. Lo que decide la base se comprueba despues, al importar.
- const validar = async (filas) => {
-  setValidando(true);
-  const errores = [];
-  const vistos = new Set();
-  const codigosValidos = new Set((ciudades || []).map(c => c.code));
-
-  filas.forEach((r, i) => {
-   const fila = i + 2; // +1 por el encabezado, +1 porque las filas se cuentan desde 1
-   const id = String(r.id || "").trim();
-   if (!id || id.startsWith("IMP-")) {
-    errores.push({ fila, campo:"id", mensaje:"La fila no trae numero de pedido" });
-    return;
-   }
-   if (vistos.has(id)) {
-    errores.push({ fila, campo:"id", mensaje:`Pedido ${id} repetido dentro del archivo` });
-    return;
-   }
-   vistos.add(id);
-   const codigo = String(r.ciudad_codigo || "").trim();
-   if (codigo && codigosValidos.size > 0 && !codigosValidos.has(codigo)) {
-    errores.push({ fila, campo:"ciudad_codigo", mensaje:`Codigo DANE ${codigo} no existe en el catalogo` });
-   }
-   const cajasOriginal = r._csvOriginal ? Object.entries(r._csvOriginal).find(([k]) => /cajas/i.test(k))?.[1] : null;
-   if (cajasOriginal && String(cajasOriginal).trim() && Number.isNaN(Number(String(cajasOriginal).replace(",", ".")))) {
-    errores.push({ fila, campo:"cajas", mensaje:`Valor "${cajasOriginal}" no es numerico` });
-   }
-  });
-
-  const ids = [...vistos];
-  let existentes = new Set();
-  try {
-   const mapa = await buscarPedidosPorId(ids, "id");
-   existentes = new Set([...mapa.keys()].map(String));
-  } catch (e) {
-   setErr("No se pudo comprobar cuales pedidos ya existen: " + e.message);
-  }
-
-  const nuevos = ids.filter(id => !existentes.has(id));
-  setValidacion({
-   total: filas.length,
-   existentes: ids.length - nuevos.length,
-   nuevos: nuevos.length,
-   errores,
-  });
-  setValidando(false);
- };
-
- const leerArchivo = async (file) => {
-  if (!file) return;
-  if (!/\.(csv|txt)$/i.test(file.name)) {
-   setErr("Solo se aceptan archivos .CSV. Si tienes un Excel, guardalo como CSV.");
-   return;
-  }
-  setErr(""); setValidacion(null);
-  try {
-   const texto = await leerTextoCsv(file);
-   const filas = parsear(texto);
-   const primeraLinea = texto.split(/\r?\n/)[0] || "";
-   setTxt(texto);
-   setPrev(filas);
-   setArchivo({
-    nombre: file.name,
-    filas: filas.length,
-    tam: (file.size / 1024).toFixed(0) + " KB",
-    sep: primeraLinea.includes(";") ? ";" : primeraLinea.includes("\t") ? "tabulador" : ",",
-   });
-   await validar(filas);
-  } catch (ex) { setErr(ex.message); setPrev([]); setArchivo(null); }
- };
-
- const filasConError = new Set((validacion?.errores || []).map(e => e.fila));
- const filasValidas = prev.filter((_, i) => !filasConError.has(i + 2));
- const aImportar = validacion?.existentes || 0;
-
- const descargarErrores = () => {
-  const filas = (validacion?.errores || []).map(e =>
-   [e.fila, e.campo, `"${e.mensaje.replace(/"/g, '""')}"`].join(","));
-  descargarCSV("errores_validacion.csv", "fila,columna,error", filas.join("\n"));
- };
-
  const importar = async () => {
-  if (filasValidas.length === 0) { setErr("No hay filas validas para importar."); return; }
+  if (prev.length === 0) { setErr("Primero carga un archivo o previsualiza el contenido."); return; }
   setCargando(true);
   try {
-   await onImportar(filasValidas, {
-    completarExistentes: true,
-    soloFechaHora: modo === "fechahora",
-    actualizarNotas: modo === "notas",
+   await onImportar(prev, {
+    completarExistentes: completar || soloFechaHora || actualizarNotas,
+    soloFechaHora,
+    actualizarNotas,
    });
-  } catch (e) { setErr("Error importando: " + e.message); }
+  } catch(e) {
+   setErr("Error importando: " + e.message);
+  }
   setCargando(false);
  };
 
- const modoActual = MODOS_IMPORTACION.find(m => m.id === modo);
-
  return (
-  <ModalForm
-   titulo="Importar pedidos desde CSV"
-   descripcion={archivo ? "Revisa el resultado de la validacion antes de importar" : "Crea pedidos en lote o completa los existentes"}
-   ancho="M"
-   onClose={onClose}
-   onPrimario={archivo && !validando ? importar : null}
-   guardando={cargando}
-   primarioDeshabilitado={!archivo || validando || filasValidas.length === 0}
-   textoPrimario={archivo ? `Importar ${aImportar > 0 ? aImportar + " pedidos" : "pedidos"}` : "Importar"}
-  >
-   {!archivo ? (
-    <>
-     <button onClick={() => fileRef.current && fileRef.current.click()}
-      onDragOver={e => e.preventDefault()}
-      onDrop={e => { e.preventDefault(); leerArchivo(e.dataTransfer.files[0]); }}
-      style={{
-       width:"100%", padding:"32px 20px", borderRadius:T.radio.tarjeta,
-       border:`1px dashed ${T.color.borde2}`, background:T.color.superficie2,
-       cursor:"pointer", fontFamily:"inherit", textAlign:"center",
-      }}>
-      <span style={{
-       width:44, height:44, borderRadius:T.radio.control, margin:"0 auto 12px",
-       background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
-      }}><FileText size={20} /></span>
-      <span style={{ display:"block", fontSize:14, fontWeight:700, color:T.color.tinta }}>
-       Arrastra el archivo CSV o haz clic para seleccionarlo
-      </span>
-      <span style={{ display:"block", fontSize:12.5, color:T.color.tinta3, marginTop:4 }}>
-       Solo archivos .csv · separador coma o punto y coma
-      </span>
-     </button>
-     <input ref={fileRef} type="file" accept=".csv" style={{ display:"none" }}
-      onChange={e => leerArchivo(e.target.files[0])} />
+  <Modal title="Importar Pedidos desde CSV" onClose={onClose} wide>
+   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-     <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-      <EnlacePie icono={<Download size={15} />}
-       onClick={() => descargarCSV("plantilla_pedidos.csv", CABECERA, EJEMPLO)}>
-       Descargar plantilla CSV
-      </EnlacePie>
-      <EnlacePie icono={<ClipboardList size={15} />} onClick={() => setVerPegar(!verPegar)}>
-       Pegar texto directamente
-      </EnlacePie>
-     </div>
+    {/* Info columnas */}
+    <div style={{ background: "#fffbeb", borderRadius: 10, padding: 12, fontSize: 13, color: "#92400e" }}>
+     <strong>Columnas requeridias:</strong> id, cliente, ciudad_codigo, direccion, cajas, factura, fecha_estimada, tipo<br/>
+     <strong>Tambien acepta los nombres del plano:</strong> Pedido_Pro, DANE_Destino, Total_Cajas, Factura_Pro, Paqueteria, Guia<br/>
+     <strong>Opcionales:</strong> empresa_transporte, paqueteria, guia_paqueteria, notas, ciudad_origen_codigo, ciudad_origen_nombre, direccion_origen<br/>
+     <strong>Fecha y Hora</strong> (cuando se genero el pedido) son opcionales: si el plano las trae se guardan, y si no, el pedido se importa igual.
+    </div>
 
-     {verPegar && (
+    {/* Descargar plantilla */}
+    <Btn size="sm" variant="success"
+     onClick={()=>descargarCSV("plantilla_pedidos.csv", CABECERA, EJEMPLO)}>
+      Descargar Plantilla CSV
+    </Btn>
+
+    {/* Upload de archivo */}
+    <div
+     style={{ border: `2px dashed ${P[300]}`, borderRadius: 12, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: nombreArchivo ? "#f0fdf4" : P[50] }}
+     onClick={()=>fileRef.current&&fileRef.current.click()}
+     onDragOver={e=>{e.preventDefault();}}
+     onDrop={e=>{e.preventDefault();leerArchivo(e.dataTransfer.files[0]);}}
+    >
+     <div style={{ fontSize: 32, marginBottom: 8 }}></div>
+     {nombreArchivo ? (
+      <div style={{ color: "#059669", fontWeight: 700, fontSize: 14 }}> {nombreArchivo}</div>
+     ) : (
       <>
-       <AreaTexto label="Contenido del CSV" filas={5} valor={txt} onChange={setTxt}
-        placeholder="Pega aqui el contenido del archivo..." />
-       <button style={botonBarra} onClick={() => {
-        try {
-         const filas = parsear(txt);
-         setPrev(filas);
-         setArchivo({ nombre:"texto pegado", filas:filas.length, tam:"-", sep:txt.includes(";") ? ";" : "," });
-         validar(filas);
-        } catch (e) { setErr(e.message); }
-       }}>Validar texto</button>
+       <div style={{ fontWeight: 700, color: P[700], fontSize: 14 }}>Haz clic para seleccionar el archivo CSV</div>
+       <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 4 }}>o arrastralo aqu Solo archivos .CSV</div>
       </>
      )}
+    </div>
+    <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display:"none" }}
+     onChange={e=>leerArchivo(e.target.files[0])}/>
 
-     <div style={{ ...tarjeta, overflow:"hidden" }}>
-      <button onClick={() => setVerFormato(!verFormato)} style={{
-       display:"flex", alignItems:"center", gap:10, width:"100%", padding:"12px 14px",
-       border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left",
-      }}>
-       <FileText size={15} style={{ color:T.color.tinta3 }} />
-       <span style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>Formato del archivo</span>
-       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>· {COLUMNAS_REQUERIDAS.length} columnas requeridas</span>
-       <span style={{ marginLeft:"auto", color:T.color.tinta3, display:"grid", placeItems:"center" }}>
-        {verFormato ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-       </span>
-      </button>
-      {verFormato && (
-       <div style={{ padding:"0 14px 14px", display:"flex", flexDirection:"column", gap:12 }}>
-        {[["Requeridas", COLUMNAS_REQUERIDAS], ["Alias del plano", COLUMNAS_ALIAS], ["Opcionales", COLUMNAS_OPCIONALES]].map(([titulo, items]) => (
-         <div key={titulo} style={{ display:"grid", gridTemplateColumns:"120px 1fr", gap:10, alignItems:"start" }}>
-          <span style={{ fontSize:12.5, color:T.color.tinta3, paddingTop:3 }}>{titulo}</span>
-          <Chips items={items} />
-         </div>
-        ))}
-        <FranjaInfo>
-         <strong>Fecha y hora</strong> (cuando se genero el pedido) son opcionales: si el plano las trae se guardan;
-         si no, el pedido se importa igual.
-        </FranjaInfo>
+    {/* Tambin permite pegar texto */}
+    <details style={{ fontSize: 13 }}>
+     <summary style={{ cursor:"pointer", color:P[600], fontWeight:600 }}>Tambin puedes pegar el texto directamente</summary>
+     <textarea value={txt} onChange={e=>{setTxt(e.target.value);setNombreArchivo("");}} rows={5}
+      style={{ ...iSt, fontFamily:"monospace", fontSize:11, resize:"vertical", marginTop:8 }}
+      placeholder="Pega el contenido CSV aqu..."/>
+     <Btn size="sm" variant="secondary" style={{ marginTop:6 }}
+      onClick={()=>{setErr("");try{setPrev(parsear(txt));}catch(e){setErr(e.message);setPrev([]);}}}>
+       Previsualizar texto
+     </Btn>
+    </details>
+
+    {err && <p style={{ color:"#dc2626", background:"#fef2f2", padding:"8px 12px", borderRadius:8, fontSize:13, margin:0 }}> {err}</p>}
+    {aviso && <p style={{ color:"#92400e", background:"#fffbeb", border:"1px solid #fcd34d", padding:"8px 12px", borderRadius:8, fontSize:13, margin:0 }}>{aviso}</p>}
+
+    {/* Preview */}
+    {prev.length > 0 && (
+     <div style={{ background:"#f0fdf4", borderRadius:10, padding:14, border:"1px solid #86efac", maxHeight:200, overflowY:"auto" }}>
+      <p style={{ margin:"0 0 8px", fontWeight:700, color:"#15803d", fontSize:13 }}> {prev.length} pedido(s) listos para importar:</p>
+      {prev.map((p,i) => (
+       <div key={i} style={{ fontSize:12, color:"#334155", padding:"2px 0", borderBottom:"1px solid #dcfce7" }}>
+        <strong>{p.id}</strong> {p.cliente} {p.ciudad_nombre} {p.cajas} cajas {p.factura}
        </div>
-      )}
-     </div>
-
-     <Seccion titulo="Modo de importacion" />
-     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-      {MODOS_IMPORTACION.map(m => (
-       <button key={m.id} onClick={() => setModo(m.id)} style={{
-        display:"flex", gap:10, alignItems:"flex-start", textAlign:"left",
-        padding:"12px 14px", borderRadius:T.radio.control, cursor:"pointer", fontFamily:"inherit",
-        border:`1px solid ${modo === m.id ? T.color.marca : T.color.borde2}`,
-        background: modo === m.id ? T.color.marcaSuave : T.color.superficie,
-       }}>
-        <span style={{
-         width:16, height:16, borderRadius:8, marginTop:1, flexShrink:0,
-         border:`2px solid ${modo === m.id ? T.color.marca : T.color.borde2}`,
-         display:"grid", placeItems:"center",
-        }}>
-         {modo === m.id && <span style={{ width:7, height:7, borderRadius:4, background:T.color.marca }} />}
-        </span>
-        <span style={{ minWidth:0 }}>
-         <span style={{ display:"block", fontSize:13, fontWeight:600, color:T.color.tinta }}>{m.titulo}</span>
-         <span style={{ display:"block", fontSize:12, color:T.color.tinta3, marginTop:3, lineHeight:1.45 }}>{m.detalle}</span>
-        </span>
-       </button>
       ))}
      </div>
-    </>
-   ) : (
-    <>
-     <div style={{ ...tarjeta, padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
-      <span style={{
-       width:34, height:34, borderRadius:T.radio.chico, flexShrink:0,
-       background:T.color.bienSuave, color:T.color.bien, display:"grid", placeItems:"center",
-      }}><FileText size={16} /></span>
-      <span style={{ flex:1, minWidth:0 }}>
-       <span style={{ display:"block", fontSize:13.5, fontWeight:700, color:T.color.tinta }}>{archivo.nombre}</span>
-       <span style={{ display:"block", fontSize:12, color:T.color.tinta3 }}>
-        {archivo.filas} filas · {archivo.tam} · separador {archivo.sep}
-       </span>
-      </span>
-      <EnlacePie onClick={() => { setArchivo(null); setValidacion(null); setPrev([]); setErr(""); }}>
-       Cambiar archivo
-      </EnlacePie>
-     </div>
+    )}
 
-     {validando ? (
-      <div style={{ padding:24, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
-       Validando el archivo...
-      </div>
-     ) : validacion && (
-      <>
-       <div style={{ ...tarjeta, display:"grid", gridTemplateColumns:"repeat(4,1fr)" }}>
-        {[
-         { label:"Filas leidas", valor:validacion.total, color:T.color.neutroPunto },
-         { label:"Pedidos existentes", valor:validacion.existentes, color:T.color.marca, destacado:true },
-         { label:"Nuevos (se omiten)", valor:validacion.nuevos, color:T.color.tinta3 },
-         { label:"Con errores", valor:validacion.errores.length, color:T.color.malPunto, malo:true },
-        ].map((k, i) => (
-         <div key={k.label} style={{ padding:"14px 16px", borderLeft: i === 0 ? "none" : `1px solid ${T.color.borde}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-           <span style={{ width:6, height:6, borderRadius:3, background:k.color, flexShrink:0 }} />
-           <span style={{ fontSize:12, color:T.color.tinta3, whiteSpace:"nowrap" }}>{k.label}</span>
-          </div>
-          <div style={{
-           ...T.texto.cifra, fontSize:24,
-           color: k.malo && k.valor > 0 ? T.color.mal : k.destacado ? T.color.marca : T.color.tinta,
-          }}>{k.valor}</div>
-         </div>
-        ))}
-       </div>
+    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f5f3ff", border:`1px solid ${P[200]}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:P[800], cursor:"pointer" }}>
+     <input type="checkbox" checked={completar && !soloFechaHora && !actualizarNotas} disabled={soloFechaHora || actualizarNotas} onChange={e=>setCompletar(e.target.checked)} style={{ marginTop:2 }}/>
+     <span>
+      <strong>Completar datos de pedidos existentes</strong><br/>
+      <span style={{ color:"#64748b" }}>Si el pedido ya existe, llena solo ciudad, direccion, cajas, factura y la fecha y hora del pedido que esten vacios. No sobrescribe datos ni cambia estado, conductor o guia.</span>
+     </span>
+    </label>
 
-       {validacion.errores.length > 0 && (
-        <div style={{ border:`1px solid ${T.color.malBorde}`, borderRadius:T.radio.tarjeta, overflow:"hidden" }}>
-         <div style={{
-          display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
-          background:T.color.malSuave, color:T.color.mal, fontSize:13, fontWeight:700,
-         }}>
-          <AlertTriangle size={15} />
-          {validacion.errores.length} fila(s) con errores no se importaran
-          <span style={{ marginLeft:"auto" }}>
-           <EnlacePie onClick={descargarErrores}>Descargar detalle</EnlacePie>
-          </span>
-         </div>
-         <div style={{ maxHeight:200, overflowY:"auto" }}>
-          {validacion.errores.slice(0, 50).map((e, i) => (
-           <div key={i} style={{
-            display:"grid", gridTemplateColumns:"70px 130px 1fr", gap:10,
-            padding:"9px 14px", borderTop:`1px solid ${T.color.divisor}`, fontSize:12.5,
-           }}>
-            <span style={{ color:T.color.tinta3 }}>Fila {e.fila}</span>
-            <span style={{ fontFamily:T.fuente.mono, color:T.color.tinta2 }}>{e.campo}</span>
-            <span style={{ color:T.color.mal }}>{e.mensaje}</span>
-           </div>
-          ))}
-         </div>
-        </div>
-       )}
+    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
+     <input type="checkbox" checked={soloFechaHora && !actualizarNotas} disabled={actualizarNotas} onChange={e=>setSoloFechaHora(e.target.checked)} style={{ marginTop:2 }}/>
+     <span>
+      <strong>Cargar unicamente Fecha y Hora del pedido</strong><br/>
+      <span style={{ color:"#64748b" }}>Para recargar el plano sobre pedidos que ya existen. Escribe solo la fecha y la hora que esten vacias:
+      no crea pedidos nuevos y no modifica ninguna otra columna.</span>
+     </span>
+    </label>
 
-       <FranjaInfo>
-        <strong>Modo:</strong> {modoActual.titulo}. {modoActual.detalle}
-        <span style={{ marginLeft:8 }}>
-         <EnlacePie onClick={() => setArchivo(null)}>Cambiar</EnlacePie>
-        </span>
-       </FranjaInfo>
-      </>
-     )}
-    </>
-   )}
+    <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#fff7ed", border:"1px solid #fdba74", borderRadius:10, padding:"10px 14px", fontSize:13 }}>
+     <input type="checkbox" checked={actualizarNotas} onChange={e=>setActualizarNotas(e.target.checked)} style={{ marginTop:2 }}/>
+     <span>
+      <strong>Actualizar notas desde el plano</strong><br/>
+      <span style={{ color:"#64748b" }}>Para reparar las observaciones que quedaron cortadas. Reemplaza el texto de las notas
+      aunque ya tengan contenido, y no escribe ninguna otra columna ni crea pedidos.</span>
+     </span>
+    </label>
 
-   {err && (
-    <div style={{
-     background:T.color.malSuave, border:`1px solid ${T.color.malBorde}`,
-     color:T.color.mal, borderRadius:T.radio.control, padding:"10px 12px", fontSize:13,
-    }}>{err}</div>
-   )}
-   {aviso && <FranjaInfo>{aviso}</FranjaInfo>}
-  </ModalForm>
+    <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+     <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
+     <Btn disabled={prev.length===0||cargando} onClick={importar}>
+      {cargando ? " Importando..."
+       : actualizarNotas ? ` Actualizar notas (${prev.length})`
+       : soloFechaHora ? ` Cargar fecha y hora (${prev.length})`
+       : ` Importar (${prev.length})`}
+     </Btn>
+    </div>
+   </div>
+  </Modal>
  );
 }
 
-
-function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], busquedaInicial = "", estadoInicial = "", recargar, user }) {
- const [filtro, setFiltro] = useState(estadoInicial || "todos");
- // Al llegar desde la barra del dashboard, se filtra por el estado que se toco.
- useEffect(() => { if (estadoInicial) setFiltro(estadoInicial); }, [estadoInicial]);
- const [busq, setBusq] = useState(busquedaInicial || "");
- // Cuando el dashboard manda una consulta, se aplica aunque el modulo ya estuviera montado.
- useEffect(() => { if (busquedaInicial) setBusq(busquedaInicial); }, [busquedaInicial]);
+function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paqueterias, transportistas, promesas = [], recargar, user }) {
+ const [filtro, setFiltro] = useState("todos");
+ const [busq, setBusq] = useState("");
  const [modNuevo, setModNuevo] = useState(false);
  const [modDet, setModDet] = useState(null);
  const [modGuia, setModGuia] = useState(null);
@@ -1518,50 +1390,15 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [modGuias, setModGuias] = useState(false);
  const [reporteImportacion, setReporteImportacion] = useState(null);
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(100);
- const [rango, setRango] = useState("todo");
- const [ciudadF, setCiudadF] = useState("");
- const [conductorF, setConductorF] = useState("");
- // Transporte propio o paqueteria. Es filtro propio y no una pestana mas:
- // se cruza con el estado en vez de reemplazarlo.
- const [tipoF, setTipoF] = useState("");
- // Solo los pedidos por completar: les falta cajas, factura o tipo de envio.
- // Es para no olvidar los que entraron de cartera sin esos datos.
- const [completarF, setCompletarF] = useState(false);
- // En el celular el detalle es una pantalla completa, no el modal de escritorio.
- const [detMovil, setDetMovil] = useState(null);
- // La edicion en el celular es otra pantalla completa, no el modal de escritorio.
- const [editMovil, setEditMovil] = useState(null);
- // Registrar la entrega desde el listado de pedidos: es para los que nunca
- // salen con conductor (Solo facturar, Cliente recoge) y para los que aun no
- // se han despachado. Los que van en transito los cierra su conductor.
- const [entregaMovil, setEntregaMovil] = useState(null);
- const esMovil = useEsMovil();
- // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
- // sin seleccion, la planilla sale con todo lo que este filtrado.
- const [seleccion, setSeleccion] = useState(() => new Set());
+ const [pageSize, setPageSize] = useState(10);
 
  const vacio = { id: "", cliente: "", ciudad_codigo: "", direccion: "", cajas: "", factura: "", fecha_estimada: "", notas: "", conductor_id: "", tipo: "propio", paqueteria: "", guia_paqueteria: "" };
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const conductoresActivos = conductores.filter(c => c.activo !== false);
 
- const desdeRango = (() => {
-  const r = RANGOS_PEDIDOS.find(x => x.id === rango);
-  if (!r || !r.dias) return null;
-  return hoyMas(-r.dias);
- })();
-
  const filtrados = pedidos.filter(p => {
   const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria");
-  const okFecha = !desdeRango || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeRango;
-  const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
-  const okCond = !conductorF
-   || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
-  const okTipo = !tipoF
-   || (tipoF === "paqueteria" ? p.tipo === "paqueteria" : p.tipo !== "paqueteria");
-  const okCompletar = !completarF || faltantesPedido(p).length > 0;
-  if (!okFecha || !okCiudad || !okCond || !okTipo || !okCompletar) return false;
   const q = busq.toLowerCase();
   const okB = !busq ||
    (p.id || "").toLowerCase().includes(q) ||
@@ -1569,16 +1406,14 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    (p.cliente || "").toLowerCase().includes(q) ||
    (p.factura || "").toLowerCase().includes(q) ||
    (p.ciudad_nombre || "").toLowerCase().includes(q) ||
-   (p.guia_paqueteria || "").toLowerCase().includes(q) ||
-   (p.placa || "").toLowerCase().includes(q);
+   (p.guia_paqueteria || "").toLowerCase().includes(q);
   return okF && okB;
  });
  const totalCajas = filtrados.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
  const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
  const pageEnd = Math.min(filtrados.length, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF]);
- const porCompletar = pedidos.filter(p => faltantesPedido(p).length > 0).length;
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize]);
 
  const guardar = async () => {
   if (!form.id.trim() || !form.cliente.trim() || !form.ciudad_codigo || !form.factura.trim()) {
@@ -1591,11 +1426,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const ciudadOrigen = (ciudades || []).find(c => c.code === form.ciudad_origen_codigo);
   const cond = conductoresActivos.find(c => String(c.id) === String(form.conductor_id));
   const esPaq = form.tipo === "paqueteria";
-  // La guia la pone la base (trg_asignar_guia_interna). Calcularla aqui leia
-  // una lista en memoria que podia estar vieja, y dos pedidos creados al tiempo
-  // —o uno a mano mientras cartera aprobaba— salian con la misma guia.
+  const guia_interna = !esPaq ? generarGuia(pedidos) : null;
   const nuevo = {
-   id: form.id.trim(),
+   id: form.id.trim(), guia_interna,
    cliente: form.cliente.trim(),
    ciudad_codigo: form.ciudad_codigo, ciudad_nombre: ciudad?.name || "",
    direccion: form.direccion.trim(), cajas: parseInt(form.cajas) || 0,
@@ -1617,24 +1450,19 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    fecha_creacion: hoyLocal(),
    fecha_real: null, soportes: [], soportes_data: [],
   };
-  let guiaAsignada = null;
   if (supabase) {
-   const { data, error } = await supabase.from("pedidos").insert(nuevo)
-    .select("guia_interna").single();
+   const { error } = await supabase.from("pedidos").insert(nuevo);
    if (error) { showToast(mensajeError(error, "el pedido"), "error"); return; }
-   guiaAsignada = data?.guia_interna || null;
    if (recargar) await recargar(); else if (window._recargar) await window._recargar();
   } else {
    setPedidos(prev => [nuevo, ...prev]);
   }
   setModNuevo(false);
   setForm(vacio);
-  showToast(`Pedido ${form.id} creado. Guia: ${guiaAsignada || "N/A"}`, "success");
+  showToast(`Pedido ${form.id} creado. Guia: ${guia_interna || "N/A"}`, "success");
  };
 
  const imprimirPlanilla = () => {
-  // Con casillas marcadas se imprime solo eso; sin ellas, todo lo filtrado.
-  const paraPlanilla = seleccion.size > 0 ? filtrados.filter(x => seleccion.has(x.id)) : filtrados;
   const win = window.open('', '_blank');
   if (!win) { showToast("Permite ventanas emergentes para imprimir", "error"); return; }
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Planilla Somos PRO Tracking</title>
@@ -1642,9 +1470,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}
   td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.footer{margin-top:30px;font-size:10px;color:#94a3b8;text-align:center}</style></head>
   <body><h1>Planilla de Despachos Somos PRO Tracking</h1>
-  <p>Fecha de impresion: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })} Total pedidos: ${paraPlanilla.length}</p>
+  <p>Fecha de impresion: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })} Total pedidos: ${filtrados.length}</p>
   <table><thead><tr><th>#</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad / DANE</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Conductor / Paqueteria</th><th>Firma Recibido</th></tr></thead>
-  <tbody>${paraPlanilla.map((p, i) => {
+  <tbody>${filtrados.map((p, i) => {
    const cond = conductores.find(c => c.id === p.conductor_id);
    const tr = transportePedido(p, cond);
    const trans = tr.principal ? `${tr.principal} ${tr.detalle || ""}`.trim() : "Sin asignar";
@@ -1719,34 +1547,58 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const duplicadosSet = new Set(duplicadosUnicos.map(String));
   const paraCompletar = [];
 
-  // El plano ya no crea pedidos: los pedidos nacen en produccion cuando cartera
-  // los aprueba. Aqui solo se reparan los que ya existen, asi que una fila sin
-  // pedido en la base es un error que se reporta, no un pedido nuevo.
-  rows.forEach((r) => {
+  const baseGuias = [...pedidos];
+  const conGuias = rows.map((r) => {
    const pedidoId = String(r.id || "").trim();
    if (!pedidoId) {
     registrarError(r, "Sin ID", "El pedido no tiene numero de pedido.");
-    return;
+    return null;
    }
    if (idsProcesadosCsv.has(pedidoId)) {
     registrarError(r, pedidoId, "Esta repetido dentro del CSV.");
-    return;
+    return null;
    }
    idsProcesadosCsv.add(pedidoId);
    if (duplicadosSet.has(pedidoId)) {
     registrarError(r, pedidoId, "Tiene mas de una fila en el CSV; se omitio para evitar inconsistencias.");
-    return;
+    return null;
    }
    if (existentesSet.has(pedidoId)) {
-    paraCompletar.push({ r, actual: existentesPorId.get(pedidoId) });
-    return;
+    if (completarExistentes) paraCompletar.push({ r, actual: existentesPorId.get(pedidoId) });
+    else registrarError(r, pedidoId, "Ya existe en la base de datos. Marca \"Completar datos de pedidos existentes\" para rellenar sus campos vacios.");
+    return null;
    }
-   registrarError(r, pedidoId, actualizarNotas
-    ? "No existe en la base de datos y la carga es solo de notas: no se creo nada."
-    : soloFechaHora
-    ? "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada."
-    : "No existe en la base de datos. Los pedidos entran por el cargue de cartera, no por el plano.");
-  });
+   // Modos acotados: el plano no puede crear pedidos.
+   if (soloFechaHora || actualizarNotas) {
+    registrarError(r, pedidoId, actualizarNotas
+     ? "No existe en la base de datos y la carga es solo de notas: no se creo nada."
+     : "No existe en la base de datos y la carga es solo de fecha y hora: no se creo nada.");
+    return null;
+   }
+   const guiaInterna = r.tipo !== "paqueteria" ? generarGuia(baseGuias) : null;
+   const pedidoConGuia = {
+    ...limpiarFilaPedidoCSV(r),
+    guia_interna: guiaInterna,
+    estado_despacho: r.estado_despacho || "despachado",
+    novedad: false,
+    soportes_data: [],
+   };
+   baseGuias.push(pedidoConGuia);
+   return pedidoConGuia;
+  }).filter(Boolean);
+
+  let insertados = 0;
+  const pedidosInsertados = [];
+  for (const p of conGuias) {
+   const { error } = await supabase.from("pedidos").insert(p);
+   if (error) {
+    const rowOriginal = rows.find(r => String(r.id || "").trim() === String(p.id));
+    registrarError(rowOriginal || p, p.id, error.message);
+   } else {
+    insertados += 1;
+    pedidosInsertados.push(p);
+   }
+  }
 
   // Completar pedidos existentes: solo llena campos vacios. Nunca sobrescribe un
   // dato ya cargado ni toca estado, conductor, guia o soportes.
@@ -1782,15 +1634,15 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
    ? `${completados} nota(s) actualizadas, ${sinCambios} sin cambios`
    : soloFechaHora
    ? `${completados} pedido(s) con fecha y hora, ${sinCambios} sin cambios`
-   : `${completados} pedido(s) completados, ${sinCambios} sin cambios`;
+   : `${insertados} pedido(s) creados` + (completarExistentes ? `, ${completados} completados, ${sinCambios} sin cambios` : "");
   if (erroresImportacion.length > 0) {
-   setReporteImportacion({ completados, sinCambios, errores: erroresImportacion, headers: csvHeaders });
-   showToast(`${resumen}. ${erroresImportacion.length} con error.`, completados > 0 ? "info" : "error");
+   setReporteImportacion({ insertados, completados, sinCambios, completar: completarExistentes, errores: erroresImportacion, headers: csvHeaders });
+   showToast(`${resumen}. ${erroresImportacion.length} con error.`, insertados + completados > 0 ? "info" : "error");
   } else {
    setReporteImportacion(null);
    showToast(resumen, "success");
   }
-  if (completados > 0 && recargar) await recargar();
+  if ((insertados > 0 || completados > 0) && recargar) await recargar();
  };
 
  const pageBg = "#fafafa";
@@ -1799,429 +1651,131 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
- const conteoPorEstado = (clave) => clave === "todos"
-  ? pedidos.length
-  : pedidos.filter(x => x.estado === clave).length;
-
- const alternarSeleccion = (id) => setSeleccion(prev => {
-  const s = new Set(prev);
-  if (s.has(id)) s.delete(id); else s.add(id);
-  return s;
- });
- const todosVisiblesMarcados = pageItems.length > 0 && pageItems.every(x => seleccion.has(x.id));
- const alternarPagina = () => setSeleccion(prev => {
-  const s = new Set(prev);
-  if (todosVisiblesMarcados) pageItems.forEach(x => s.delete(x.id));
-  else pageItems.forEach(x => s.add(x.id));
-  return s;
- });
-
- const th2 = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5 };
- const td2 = { padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
- const botonBarra = {
-  display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 14px",
-  border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
-  background: T.color.superficie, cursor: "pointer", fontFamily: "inherit",
-  fontSize: 13.5, fontWeight: 600, color: T.color.tinta, whiteSpace: "nowrap",
- };
-
  return (
-  <div style={esMovil
-   ? { color:T.color.tinta }
-   : { minHeight:"100%", background:T.color.fondo, margin:"-28px -24px", padding:"24px 28px 40px", color:T.color.tinta }}>
-
-   {esMovil ? (
-    <PedidosMovil
-     pedidos={pedidos}
-     filtrados={filtrados}
-     conductores={conductores}
-     ciudades={ciudades}
-     conductoresActivos={conductoresActivos}
-     busq={busq} setBusq={setBusq}
-     filtro={filtro} setFiltro={setFiltro}
-     conteoPorEstado={conteoPorEstado}
-     estadosOrden={ORDEN_ESTADOS_PEDIDO}
-     rango={rango} setRango={setRango}
-     ciudadF={ciudadF} setCiudadF={setCiudadF}
-     conductorF={conductorF} setConductorF={setConductorF}
-     tipoF={tipoF} setTipoF={setTipoF}
-     completarF={completarF} setCompletarF={setCompletarF} porCompletar={porCompletar}
-     onAbrir={setDetMovil}
-     onNuevo={() => setModNuevo(true)}
-     onPlanilla={imprimirPlanilla}
-     onCSV={() => setModCSV(true)}
-     onCargarGuias={() => setModGuias(true)}
-     avisos={pedidos.filter(x => x.novedad).length}
-    />
-   ) : (
-   <div style={{ maxWidth:1320, margin:"0 auto", display:"flex", flexDirection:"column", gap:16 }}>
-
-    <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
-     <div>
-      <h1 style={{ margin:0, ...T.texto.titulo }}>Pedidos</h1>
-      <p style={{ margin:"4px 0 0", color:T.color.tinta3, fontSize:13.5 }}>Gestion y seguimiento de todos los pedidos</p>
-     </div>
-     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-      <button style={botonBarra} onClick={imprimirPlanilla}>
-       <ClipboardList size={15} style={{ color:T.color.tinta3 }} />
-       Planilla{seleccion.size > 0 ? ` (${seleccion.size})` : ""}
-      </button>
-      <button style={botonBarra} onClick={() => setModCSV(true)}>
-       <Download size={15} style={{ color:T.color.tinta3 }} /> CSV pedidos
-      </button>
-      <button style={botonBarra} onClick={() => setModGuias(true)}>
-       <Upload size={15} style={{ color:T.color.tinta3 }} /> Cargar guias paqueteria
-      </button>
-      <button onClick={() => setModNuevo(true)} style={{
-       ...botonBarra, background:T.color.marca, border:"none", color:"#fff", fontWeight:700,
-      }}><Plus size={16} /> Nuevo pedido</button>
-     </div>
-    </header>
-
-    {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
-        para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
-    <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:`1px solid ${T.color.borde}` }}>
-     {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k])].map(([clave,label]) => {
-      const activo = filtro === clave;
-      const n = conteoPorEstado(clave);
-      return (
-       <button key={clave} onClick={() => { setFiltro(clave); setPage(1); }} style={{
-        display:"inline-flex", alignItems:"center", gap:8, padding:"10px 12px",
-        border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-        fontSize:13.5, fontWeight: activo ? 700 : 500,
-        color: activo ? T.color.marca : T.color.tinta2,
-        borderBottom: `2px solid ${activo ? T.color.marca : "transparent"}`,
-        marginBottom:-1,
-       }}>
-        {label}
-        <span style={{
-         fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
-         background: activo ? T.color.marcaSuave : T.color.superficie2,
-         color: activo ? T.color.marca : T.color.tinta3,
-        }}>{n}</span>
-       </button>
-      );
-     })}
+  <div style={{ minHeight:"100%", background:pageBg, margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Pedidos</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de todos los pedidos</p>
     </div>
+    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+     <button style={buttonBase} onClick={imprimirPlanilla}>Planilla</button>
+     <button style={buttonBase} onClick={() => setModCSV(true)}>CSV Pedidos</button>
+     <button style={buttonBase} onClick={() => setModGuias(true)}>Cargar Guias Paqueteria</button>
+     <button style={primaryButton} onClick={() => setModNuevo(true)}>+ Nuevo Pedido</button>
+    </div>
+   </header>
 
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:14, borderBottom:`1px solid ${T.color.borde}` }}>
-      <div style={{ position:"relative", flex:"1 1 260px", minWidth:220 }}>
-       <Search size={15} style={{ position:"absolute", left:12, top:11, color:T.color.tinta3 }} />
-       <input value={busq} onChange={e => { setBusq(e.target.value); setPage(1); }}
-        placeholder="Buscar por N pedido, factura, cliente o ciudad"
-        style={{
-         width:"100%", boxSizing:"border-box", padding:"9px 12px 9px 34px",
-         border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
-         fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
-        }}/>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
+    <section style={{ ...cardStyle, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr 180px", gap:12, borderBottom:`1px solid ${border}` }}>
+      <div style={{ position:"relative" }}>
+       <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#6b7280", fontSize:18 }}>⌕</span>
+       <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar por N pedido, factura, cliente o ciudad..." style={{ width:"100%", height:38, border:`1px solid ${border}`, borderRadius:12, padding:"0 14px 0 38px", boxSizing:"border-box", fontSize:14, fontFamily:"inherit", outline:"none", background:"#fff" }} />
       </div>
-
-      <select value={rango} onChange={e => { setRango(e.target.value); setPage(1); }} style={selectFiltro}>
-       {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+      <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width:"100%", height:38, border:`1px solid ${border}`, borderRadius:12, padding:"0 12px", fontSize:14, fontFamily:"inherit", outline:"none", background:"#fff" }}>
+       <option value="todos">Todos los estados</option>
+       {Object.entries(ESTADOS_PEDIDO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+       <option value="paqueteria_tipo">Solo Paqueteria</option>
       </select>
+     </div>
 
-      <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
-       <option value="">Todas las ciudades</option>
-       {[...new Set(pedidos.map(x => x.ciudad_codigo).filter(Boolean))]
-        .map(code => [code, (ciudades || []).find(c => c.code === code)?.name || code])
-        .sort((a,b) => a[1].localeCompare(b[1], "es"))
-        .map(([code,nombre]) => <option key={code} value={code}>{nombre}</option>)}
-      </select>
-
-      <select value={conductorF} onChange={e => { setConductorF(e.target.value); setPage(1); }} style={selectFiltro}>
-       <option value="">Todos los conductores</option>
-       <option value="sin">Sin asignar</option>
-       {conductoresActivos.slice().sort((a,b) => (a.nombre||"").localeCompare(b.nombre||"", "es"))
-        .map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
-      </select>
-
-      {/* Encendido deja solo los pedidos a los que les falta cajas, factura o
-          tipo de envio; el numero es el total, con o sin los demas filtros. */}
-      <button onClick={() => setCompletarF(v => !v)} title="Pedidos sin cajas, factura o tipo de envio" style={{
-       display:"inline-flex", alignItems:"center", gap:7, height:36, padding:"0 12px",
-       borderRadius:T.radio.control, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
-       background: completarF ? T.color.ojoSuave : T.color.superficie,
-       border:`1px solid ${completarF ? T.color.ojoPunto : T.color.borde2}`,
-       color: completarF ? T.color.ojo : T.color.tinta2, whiteSpace:"nowrap",
-      }}>
-       <AlertTriangle size={14}/> Por completar
-       <span style={{
-        fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
-        background: completarF ? "rgba(255,255,255,.6)" : T.color.superficie2,
-        color: porCompletar ? T.color.ojo : T.color.tinta3,
-       }}>{porCompletar}</span>
-      </button>
-
-      <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
-       {seleccion.size > 0 ? `${seleccion.size} seleccionados` : `${pageItems.length} en esta pagina`}
-      </div>
+     <div style={{ padding:"12px 16px", color:"#6b7280", fontSize:13, borderBottom:`1px solid ${border}` }}>
+      Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
      </div>
 
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
        <thead>
-        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-         <th style={{ ...th2, width:42 }}>
-          <input type="checkbox" checked={todosVisiblesMarcados} onChange={alternarPagina}
-           title="Seleccionar los de esta pagina" style={{ cursor:"pointer" }}/>
-         </th>
-         <th style={th2}>N pedido</th>
-         <th style={th2}>Factura</th>
-         <th style={th2}>Cliente</th>
-         <th style={th2}>Ciudad / DANE</th>
-         <th style={th2}>Fecha pedido</th>
-         <th style={th2}>Hora pedido</th>
-         <th style={{ ...th2, textAlign:"right" }}>Cajas</th>
-         <th style={th2}>Estado</th>
-         <th style={th2}>Conductor</th>
-         <th style={{ ...th2, textAlign:"right" }}>Acciones</th>
+        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+         {[
+          ["No. Pedido", "left"], ["Factura", "left"], ["Cliente", "left"], ["Ciudad / DANE", "left"], ["Cajas", "right"], ["Estado", "left"], ["Conductor", "left"], ["Acciones", "right"]
+         ].map(([h, align]) => <th key={h} style={{ textAlign:align, padding:"14px 16px", borderBottom:`1px solid ${border}`, fontWeight:800 }}>{h}</th>)}
         </tr>
        </thead>
        <tbody>
-        {filtrados.length === 0 && (
-         <tr><td colSpan={11} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
-          Ningun pedido coincide con los filtros.
-         </td></tr>
-        )}
+        {filtrados.length === 0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin pedidos</td></tr>}
         {pageItems.map(p => {
          const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-         const tr = transportePedido(p, cond);
-         const marcado = seleccion.has(p.id);
          return (
-          <tr key={p.id} style={{ borderBottom:`1px solid ${T.color.borde}`, background: marcado ? T.color.marcaSuave : "transparent" }}>
-           <td style={td2}>
-            <input type="checkbox" checked={marcado} onChange={() => alternarSeleccion(p.id)} style={{ cursor:"pointer" }}/>
-           </td>
-           <td style={td2}>
-            <button onClick={() => setModDet(p)} style={{
-             border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-             padding:0, textAlign:"left", color:T.color.marca, fontWeight:700, fontSize:13.5,
-            }}>{p.guia_interna || p.id}</button>
-            {p.guia_interna && p.guia_interna !== p.id && (
-             <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</div>
-            )}
-            {faltantesPedido(p).length > 0 && (
-             <div style={{ color:T.color.ojo, fontSize:11.5, fontWeight:600, marginTop:2 }}>{`Falta: ${faltantesPedido(p).join(", ")}`}</div>
+          <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
+           <td style={{ padding:"16px" }}>
+            <div style={{ color:"#5b33d6", fontWeight:850 }}>{p.guia_interna || p.id}</div>
+            {p.tipo !== "paqueteria" && p.guia_interna && p.guia_interna !== p.id && (
+             <div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div>
             )}
            </td>
-           <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>
-            {p.factura || <span style={{ color:T.color.tinta3 }}>-</span>}
+           <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace", fontSize:13 }}>{p.factura}</td>
+           <td style={{ padding:"16px", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
+           <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.ciudad_codigo}</div></td>
+           <td style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>{p.cajas}</td>
+           <td style={{ padding:"16px" }}><Badge estado={p.estado} /></td>
+           <td style={{ padding:"16px" }}>
+            {(() => {
+             const tr = transportePedido(p, cond);
+             if (tr.noAplica) return <span style={{ color:"#9ca3af" }}>No aplica</span>;
+             if (!tr.principal) return <span style={{ color:"#ef4444" }}>Sin asignar</span>;
+             return <><div>{tr.principal}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{tr.detalle}</div></>;
+            })()}
            </td>
-           <td style={{ ...td2, maxWidth:210, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
-           <td style={td2}>
-            {p.ciudad_nombre
-             ? <><div>{p.ciudad_nombre}</div><div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.ciudad_codigo}</div></>
-             : <span style={{ color:T.color.tinta3 }}>-</span>}
-           </td>
-           <td style={td2}>
-            {p.fecha_pedido || <span style={{ color:T.color.tinta3 }}>-</span>}
-           </td>
-           <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>
-            {p.hora_pedido ? String(p.hora_pedido).slice(0, 5) : <span style={{ color:T.color.tinta3 }}>-</span>}
-           </td>
-           <td style={{ ...td2, textAlign:"right", fontWeight:700, color:T.color.tinta }}>{p.cajas || 0}</td>
-           <td style={td2}>
-            <span style={{
-             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-             borderRadius:T.radio.pastilla, background:T.color.superficie2,
-             fontSize:12, fontWeight:600, color:T.color.tinta2, whiteSpace:"nowrap",
-            }}>
-             <span style={{ width:7, height:7, borderRadius:4, background:T.estado[p.estado] || T.color.tinta3 }} />
-             {ESTADOS_PEDIDO[p.estado]?.label || p.estado}
-            </span>
-           </td>
-           <td style={td2}>
-            {tr.noAplica ? <span style={{ color:T.color.tinta3 }}>No aplica</span>
-             : !tr.principal ? (
-              <button onClick={() => setModDet(p)} style={{
-               border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-               padding:0, color:T.color.ojo, fontWeight:600, fontSize:13.5,
-              }}>Asignar</button>
-             ) : (
-              <><div>{tr.principal}</div>
-               {tr.detalle && <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{tr.detalle}</div>}</>
-             )}
-           </td>
-           <td style={{ ...td2, textAlign:"right" }}>
-            <div style={{ display:"inline-flex", gap:6 }}>
-             <button onClick={() => setModDet(p)} style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}>Ver</button>
-             <button onClick={() => setModGuia(p)} style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}>Guia</button>
+           <td style={{ padding:"16px", textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:8 }}>
+             <button onClick={() => setModDet(p)} style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }}>Ver</button>
+             <button onClick={() => setModGuia(p)} style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }}>Guia</button>
             </div>
            </td>
           </tr>
          );
         })}
        </tbody>
-      </table>
+     </table>
      </div>
-
-     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderTop:`1px solid ${T.color.borde}` }}>
-      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
-       Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
-      </span>
-      <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
-     </div>
+     <PaginationControls total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
     </section>
-   </div>
+   </main>
+
+   {modNuevo && (
+    <Modal title="Nuevo Pedido" onClose={() => setModNuevo(false)}>
+     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+       <Field label="N de Pedido" value={form.id} onChange={f("id")} required placeholder="PED-012" />
+       <Field label="N de Factura" value={form.factura} onChange={f("factura")} required placeholder="FAC-3000" />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+       <Field label="Cantidad de Cajas" value={form.cajas} onChange={f("cajas")} type="number" placeholder="10" />
+       <Field label="Fecha Entrega Estimada" value={form.fecha_estimada} onChange={f("fecha_estimada")} type="date" />
+      </div>
+      <Field label="Nombre del Cliente / Destinatario" value={form.cliente} onChange={f("cliente")} required placeholder="Empresa Destino S.A.S" />
+      <Field label="Ciudad de Entrega (Codigo DANE)" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} required as="select" options={[{ value:"", label:" Seleccione ciudad " }, ...(ciudades || []).map(c => ({ value:c.code, label:`${c.name} ${c.code}` }))]} />
+      <Field label="Direccion de Entrega" value={form.direccion} onChange={f("direccion")} placeholder="Cra 15 #93-47 Of 302" />
+      <div style={{ background:"#f8fafc", borderRadius:12, padding:"12px 14px", border:`1px solid ${border}` }}>
+       <div style={{ fontSize:11, fontWeight:800, color:"#6b7280", textTransform:"uppercase", marginBottom:10 }}>Origen / CEDI de Despacho</div>
+       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <Field label="Ciudad Origen (DANE)" value={form.ciudad_origen_codigo} onChange={f("ciudad_origen_codigo")} as="select" options={[{ value:"", label:" Sin especificar " }, ...(ciudades || []).map(c => ({ value:c.code, label:`${c.name} ${c.code}` }))]} />
+        <Field label="Direccion Origen / CEDI" value={form.direccion_origen} onChange={f("direccion_origen")} placeholder="Bodega principal" />
+       </div>
+      </div>
+      <Field label="Tipo de Envio" value={form.tipo} onChange={f("tipo")} as="select" options={[{ value:"propio", label:"Transporte Propio" }, { value:"empresa_transporte", label:"Empresa Transportista" }, { value:"mensajeria", label:"Mensajeria" }, { value:"paqueteria", label:"Paqueteria Tercero" }]} />
+      {form.tipo === "paqueteria" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Paqueteria" value={form.paqueteria} onChange={f("paqueteria")} as="select" options={[{ value:"", label:"Seleccione" }, ...(paqueterias || []).filter(p => typeof p === "string" && p).map(p => ({ value:p, label:p }))]} /><Field label="No. Guia" value={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-XXXXX" /></div>}
+      {form.tipo !== "paqueteria" && <Field label="Asignar Conductor (opcional)" value={form.conductor_id} onChange={v => { f("conductor_id")(v); const c = conductoresActivos.find(cx => String(cx.id) === String(v)); if (c && form.tipo === "empresa_transporte") f("empresa_transporte")(c.empresa || ""); }} as="select" options={[{ value:"", label:" Sin asignar " }, ...(form.tipo === "empresa_transporte" ? conductoresActivos.filter(c => c.empresa || c.nit_proveedor) : conductoresActivos).map(c => ({ value:c.id, label:`${c.nombre} - ${c.placa}${c.empresa ? " - " + c.empresa : ""}` }))]} />}
+      <Field label="Notas / Observaciones" value={form.notas} onChange={f("notas")} as="textarea" placeholder="Instrucciones especiales..." />
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+       <Btn variant="secondary" onClick={() => setModNuevo(false)}>Cancelar</Btn>
+       <Btn onClick={guardar}>Guardar Pedido</Btn>
+      </div>
+     </div>
+    </Modal>
    )}
 
-   {detMovil && (() => {
-    // Se busca de nuevo en la lista para que, al guardar en el modal completo,
-    // el detalle muestre los datos recien guardados y no los de la apertura.
-    const ped = pedidos.find(x => x.id === detMovil.id) || detMovil;
-    return (
-     <DetallePedidoMovil
-      pedido={ped}
-      conductor={conductores.find(c => String(c.id) === String(ped.conductor_id))}
-      promesa={(promesas || []).find(x => x.ciudad_codigo === ped.ciudad_codigo)}
-      onCerrar={() => setDetMovil(null)}
-      onEditar={() => setEditMovil(ped)}
-      onAcciones={() => setEditMovil(ped)}
-      onEntregar={() => setEntregaMovil(ped)}
-      onGuia={() => setModGuia(ped)}
-      // La pantalla aparte de registrar la entrega es solo para Cliente
-      // recoge: ahi la mercancia sale sin conductor y el soporte lo sube el
-      // operador. En los demas el soporte va dentro de la edicion, junto al
-      // resto del pedido, y en Solo facturar no hay entrega que soportar.
-      puedeEntregar={ped.estado === "cliente_recoge"}
-     />
-    );
-   })()}
-
-   {editMovil && (() => {
-    const ped = pedidos.find(x => x.id === editMovil.id) || editMovil;
-    const irAlMapa = () => {
-     const destino = [ped.direccion, ped.ciudad_nombre, "Colombia"].filter(Boolean).join(", ");
-     window.open("https://maps.google.com/maps?q=" + encodeURIComponent(destino), "_blank");
-    };
-    return (
-     <EditarPedidoMovil
-      pedido={ped}
-      pedidos={pedidos}
-      conductores={conductores}
-      ciudades={ciudades}
-      paqueterias={paqueterias}
-      transportistas={transportistas}
-      promesas={promesas}
-      setPedidos={setPedidos}
-      showToast={showToast}
-      onClose={() => setEditMovil(null)}
-      onGuia={() => setModGuia(ped)}
-      onMapa={irAlMapa}
-      canEdit={user?.rol !== "operador"}
-      canBasicEdit={user?.rol === "operador"}
-      canAssign={user?.rol === "operador"}
-      canReasignar={user?.rol === "admin"}
-     />
-    );
-   })()}
-
-   {entregaMovil && (() => {
-    const ped = pedidos.find(x => x.id === entregaMovil.id) || entregaMovil;
-    return (
-     <RegistrarEntregaOperador
-      pedido={ped}
-      conductores={conductores}
-      ciudades={ciudades}
-      promesas={promesas}
-      setPedidos={setPedidos}
-      showToast={showToast}
-      onClose={() => setEntregaMovil(null)}
-      canEdit={user?.rol !== "operador"}
-      canBasicEdit={user?.rol === "operador"}
-      canAssign={user?.rol === "operador"}
-     />
-    );
-   })()}
-
-   {/* Disenio 12: en el celular el formulario va en dos pasos y a pantalla
-       completa. Crea con el mismo guardar que el modal de escritorio. */}
-   {modNuevo && esMovil && (
-    <NuevoPedidoMovil
-     form={form} setForm={setForm}
-     ciudades={ciudades} conductores={conductores} conductoresActivos={conductoresActivos}
-     paqueterias={paqueterias} transportistas={transportistas} pedidos={pedidos}
-     onCrear={guardar}
-     onClose={() => { setModNuevo(false); setForm(vacio); }}
-    />
-   )}
-   {modNuevo && !esMovil && (
-    <ModalForm
-     titulo="Nuevo pedido"
-     descripcion="Registra un pedido y su destino de entrega"
-     ancho="M"
-     onClose={() => setModNuevo(false)}
-     onPrimario={guardar}
-     textoPrimario="Crear pedido"
-    >
-     <Seccion titulo="Identificacion" />
-     <Fila>
-      <Texto label="N de pedido" obligatorio valor={form.id} onChange={f("id")} placeholder="PED-012" mono />
-      <Texto label="N de factura" obligatorio valor={form.factura} onChange={f("factura")} placeholder="FAC-3000" mono />
-     </Fila>
-     <Fila>
-      <Texto label="Cantidad de cajas" valor={form.cajas} onChange={f("cajas")} tipo="number" placeholder="10" />
-      <Texto label="Fecha estimada de entrega" valor={form.fecha_estimada} onChange={f("fecha_estimada")} tipo="date" />
-     </Fila>
-
-     <Seccion titulo="Destino" />
-     <Texto label="Cliente / destinatario" obligatorio valor={form.cliente} onChange={f("cliente")} placeholder="Empresa Destino S.A.S" />
-     <Fila>
-      <Selector label="Ciudad de entrega (DANE)" obligatorio valor={form.ciudad_codigo} onChange={f("ciudad_codigo")}
-       placeholder="Seleccione ciudad"
-       opciones={(ciudades || []).map(c => ({ value:c.code, label:`${c.name} - ${c.code}` }))} />
-      <Texto label="Direccion de entrega" valor={form.direccion} onChange={f("direccion")} placeholder="Cra 15 #93-47 Of 302" />
-     </Fila>
-
-     <Seccion titulo="Origen / CEDI de despacho" />
-     <Fila>
-      <Selector label="Ciudad origen (DANE)" valor={form.ciudad_origen_codigo} onChange={f("ciudad_origen_codigo")}
-       placeholder="Sin especificar"
-       opciones={(ciudades || []).map(c => ({ value:c.code, label:`${c.name} - ${c.code}` }))} />
-      <Texto label="Direccion origen / CEDI" valor={form.direccion_origen} onChange={f("direccion_origen")} placeholder="Bodega principal" />
-     </Fila>
-
-     <Seccion titulo="Transporte" />
-     <Fila>
-      <Selector label="Tipo de envio" valor={form.tipo} onChange={f("tipo")}
-       opciones={[
-        { value:"propio", label:"Transporte propio" },
-        { value:"empresa_transporte", label:"Empresa transportista" },
-        { value:"mensajeria", label:"Mensajeria" },
-        { value:"paqueteria", label:"Paqueteria tercero" },
-       ]} />
-      {form.tipo === "paqueteria" ? (
-       <Selector label="Paqueteria" valor={form.paqueteria} onChange={f("paqueteria")}
-        placeholder="Seleccione"
-        opciones={(paqueterias || []).filter(x => typeof x === "string" && x).map(x => ({ value:x, label:x }))} />
-      ) : (
-       <Selector label="Conductor" opcional valor={form.conductor_id}
-        onChange={v => {
-         f("conductor_id")(v);
-         const c = conductoresActivos.find(cx => String(cx.id) === String(v));
-         if (c) setForm(pp => ({ ...pp, placa:c.placa || "", nit_proveedor:c.nit_proveedor || "" }));
-        }}
-        placeholder="Sin asignar"
-        opciones={conductoresActivos.map(c => ({ value:c.id, label:`${c.nombre} - ${c.placa || ""}` }))} />
-      )}
-     </Fila>
-     {form.tipo === "paqueteria" && (
-      <Texto label="No. guia de paqueteria" valor={form.guia_paqueteria} onChange={f("guia_paqueteria")} placeholder="SRV-2026-0001" mono />
-     )}
-
-     <AreaTexto label="Notas / observaciones" opcional valor={form.notas} onChange={f("notas")} placeholder="Instrucciones especiales..." />
-    </ModalForm>
-   )}
-
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
     <Modal title="Resultado de importacion CSV" onClose={async () => { setReporteImportacion(null); if (recargar) await recargar(); }} wide>
      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ background:"#fffbeb", border:"1px solid #fde68a", color:"#92400e", borderRadius:12, padding:14, fontSize:14 }}>
-       <strong>{reporteImportacion.completados}</strong> pedido(s) completados, <strong>{reporteImportacion.sinCambios}</strong> sin cambios.{" "}
+       <strong>{reporteImportacion.insertados}</strong> pedido(s) creados.{" "}
+       {reporteImportacion.completar && <><strong>{reporteImportacion.completados}</strong> completados, <strong>{reporteImportacion.sinCambios}</strong> sin cambios.{" "}</>}
        <strong>{reporteImportacion.errores.length}</strong> pedido(s) quedaron con error.
       </div>
       <div style={{ maxHeight:280, overflow:"auto", border:"1px solid #e5e7eb", borderRadius:12 }}>
@@ -2254,7 +1808,6 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  );
 }
 function RastreoGPS({ pedidos, conductores, ciudades }) {
- const esMovil = useEsMovil();
  const conCond = pedidos.filter(p => p.conductor_id);
  const [sel, setSel] = useState(conCond[0] || null);
  const cond = conductores.find(c => String(c.id) === String(sel?.conductor_id));
@@ -2264,114 +1817,198 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
 
  return (
-  <Pagina>
-   <Encabezado
-    titulo="Rastreo GPS"
-    descripcion="Seguimiento geografico de pedidos con conductor asignado"
-   />
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Rastreo GPS</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Seguimiento geografico de pedidos con conductor asignado</p>
+   </header>
 
-   <div style={{
-    display:"grid", gap:16, alignItems:"start",
-    gridTemplateColumns: esMovil ? "minmax(0,1fr)" : "340px minmax(0,1fr)",
-   }}>
-    <section style={{
-     ...tarjeta, overflow:"hidden", display:"flex", flexDirection:"column",
-     maxHeight: esMovil ? "38vh" : "72vh",
-    }}>
-     <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
-      <div style={{ ...T.texto.tarjeta }}>En ruta</div>
-      <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
-       {conCond.length} {conCond.length===1 ? "pedido con conductor" : "pedidos con conductor"}
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
+    <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:16, alignItems:"start" }}>
+     <section style={{ ...cardStyle, overflow:"hidden" }}>
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}` }}>
+       <h2 style={{ margin:0, fontSize:14, fontWeight:850 }}>Pedidos con conductor</h2>
+       <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:12 }}>{conCond.length} pedido(s) disponibles</p>
       </div>
-     </div>
-     <div style={{ overflowY:"auto" }}>
-      {conCond.length===0 && (
-       <div style={{ padding:40, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-        Ningun pedido tiene conductor asignado.
-       </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:0, maxHeight:"calc(100vh - 190px)", overflowY:"auto" }}>
+       {conCond.length === 0 && <p style={{ color:"#9ca3af", fontSize:13, padding:20, margin:0 }}>Sin pedidos asignados.</p>}
+       {conCond.map(p => {
+        const active = sel?.id === p.id;
+        return (
+         <button key={p.id} onClick={() => setSel(p)} style={{ width:"100%", padding:"14px 18px", background:active?"#f0eef9":"#fff", border:"none", borderBottom:`1px solid ${border}`, cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"flex-start" }}>
+           <div>
+            <div style={{ fontWeight:850, color:active?"#5b33d6":"#111827" }}>{p.guia_interna || p.id}</div>
+            <div style={{ fontSize:13, color:"#4b5563", marginTop:4 }}>{p.cliente}</div>
+            <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>{p.ciudad_nombre}</div>
+           </div>
+           <Badge estado={p.estado} />
+          </div>
+         </button>
+        );
+       })}
+      </div>
+     </section>
+
+     <section style={{ ...cardStyle, minHeight:520, overflow:"hidden" }}>
+      {sel && mapUrl ? (
+       <>
+        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
+         <div>
+          <div style={{ fontWeight:850, fontSize:17 }}>{sel.guia_interna || sel.id} <span style={{ color:"#6b7280", fontWeight:650 }}>{sel.cliente}</span></div>
+          <div style={{ fontSize:13, color:"#6b7280", marginTop:6 }}>{sel.direccion}, {ciudad?.name || sel.ciudad_nombre}</div>
+          {cond && <div style={{ fontSize:13, color:"#5b33d6", marginTop:4 }}>{cond.nombre} · Placa: {sel.placa || cond.placa}</div>}
+         </div>
+         <Badge estado={sel.estado} />
+        </div>
+        <iframe title="mapa-rastreo" src={mapUrl} width="100%" height="458" style={{ border:"none", display:"block" }} allowFullScreen loading="lazy" />
+       </>
+      ) : (
+       <div style={{ minHeight:520, display:"grid", placeItems:"center", color:"#9ca3af", textAlign:"center", padding:40 }}>Selecciona un pedido para ver el mapa de entrega.</div>
       )}
-      {conCond.map(p=>{
-       const c = conductores.find(x=>String(x.id)===String(p.conductor_id));
-       const activo = sel?.id === p.id;
-       return (
-        <button key={p.id} onClick={()=>setSel(p)} style={{
-         width:"100%", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit",
-         padding:"12px 16px", borderBottom:`1px solid ${T.color.divisor}`,
-         background: activo ? T.color.marcaSuave : "transparent",
-        }}>
-         <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center" }}>
-          <span style={{ fontSize:13, fontWeight:700, color: activo ? T.color.marca : T.color.tinta }}>
-           {p.guia_interna || p.id}
-          </span>
-          <ChipEstado estado={p.estado}/>
-         </div>
-         <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:4 }}>
-          {p.cliente} · {p.ciudad_nombre || "sin ciudad"}
-         </div>
-         <div style={{ ...T.texto.meta, color:T.color.tinta4, marginTop:2 }}>
-          {c ? `${c.nombre} · ${c.placa || "sin placa"}` : "conductor no encontrado"}
-         </div>
-        </button>
-       );
-      })}
-     </div>
-    </section>
-
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
-     {!sel ? (
-      <div style={{ padding:60, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-       Selecciona un pedido para ver su destino en el mapa.
-      </div>
-     ) : (
-      <>
-       <div style={{ padding:"14px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
-        <div>
-         <div style={{ ...T.texto.tarjeta }}>{sel.cliente}</div>
-         <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
-          {sel.direccion || "Sin direccion"}{ciudad ? ` · ${ciudad.name}` : ""}
-         </div>
-        </div>
-        <div style={{ textAlign:"right" }}>
-         <div style={{ fontSize:13, fontWeight:600, color:T.color.tinta }}>{cond?.nombre || "Sin conductor"}</div>
-         {cond?.placa && <div style={{ ...mono, marginTop:2 }}>{cond.placa}</div>}
-        </div>
-       </div>
-       <iframe title="Mapa del destino" src={mapUrl} loading="lazy"
-        style={{ width:"100%", height: esMovil ? "52vh" : "62vh", border:"none", display:"block" }}/>
-      </>
-     )}
-    </section>
-   </div>
-
-  </Pagina>
+     </section>
+    </div>
+   </main>
+  </div>
  );
 }
 
-export function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno, vista = "empresa", conductorInicial = "", onIr }) {
- // Filtros de las pantallas del transportista. Viven arriba y no dentro de su
- // rama para que los hooks se llamen siempre en el mismo orden.
- const [busqT, setBusqT] = useState("");
- const [condT, setCondT] = useState(conductorInicial || "");
- // Arranca en todo el historico: con "ultimos 30 dias" Pedidos escondia lo que
- // Mi empresa si mostraba, y parecia que no hubiera pedidos.
- const [rangoT, setRangoT] = useState("todo");
- const [pestanaT, setPestanaT] = useState("todos");
- const [pageT, setPageT] = useState(1);
- const [verPed, setVerPed] = useState(null);
- const [busqC, setBusqC] = useState("");
- const [filtroCond, setFiltroCond] = useState("todos");
- useEffect(() => { setPageT(1); }, [busqT, condT, rangoT, pestanaT]);
- useEffect(() => { setCondT(conductorInicial || ""); }, [conductorInicial]);
- const esMovil = useEsMovil();
+function Conductores({ conductores, pedidos, showToast, transportistas, recargar }) {
+ const [modal, setModal] = useState(false);
+ const [guardando, setGuardando] = useState(false);
+ const vacio = { nombre:"", cedula:"", placa:"", celular:"", nit_proveedor:"", empresa:"", user_login:"", pass_login:"" };
+ const [form, setForm] = useState(vacio);
+ const f = k => v => setForm(p => ({ ...p, [k]: v }));
+ const conductoresActivos = conductores.filter(c => c.activo !== false);
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+ const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
+
+ const guardar = async () => {
+  if (!form.nombre.trim() || !form.cedula.trim() || !form.placa.trim()) {
+   showToast("Nombre, cedula y placa son obligatorios", "error"); return;
+  }
+  if (!form.user_login.trim() || !form.pass_login.trim()) {
+   showToast("Usuario y contrasena son obligatorios", "error"); return;
+  }
+  if (form.nit_proveedor.trim()) {
+   const existe = (transportistas || []).find(t => t.nit === form.nit_proveedor.trim());
+   if (!existe) { showToast("El NIT no corresponde a ninguna empresa registrada", "error"); return; }
+  }
+  setGuardando(true);
+  try {
+   const { data, error } = await supabase.functions.invoke('create-system-user', {
+    body: {
+     type: 'conductor',
+     nombre: form.nombre.trim(),
+     cedula: form.cedula.trim(),
+     placa: form.placa.trim(),
+     celular: form.celular.trim(),
+     user_login: form.user_login.trim(),
+     pass_login: form.pass_login.trim(),
+     nit_proveedor: form.nit_proveedor.trim(),
+     empresa: form.empresa.trim(),
+    },
+   });
+   if (error) { showToast(await mensajeErrorFuncion(error, "el acceso del conductor"), "error"); setGuardando(false); return; }
+   if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
+   setModal(false); setForm(vacio);
+   showToast("Conductor y usuario creados", "success");
+   if (recargar) await recargar(); else if (window._recargar) await window._recargar();
+  } catch(e) {
+   showToast("Error inesperado: " + e.message, "error");
+  }
+  setGuardando(false);
+ };
+
+ return (
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Conductores</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion de conductores, placas y disponibilidad operativa</p>
+    </div>
+    <button style={primaryButton} onClick={() => setModal(true)}>+ Registrar Conductor</button>
+   </header>
+
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px" }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:14 }}>
+     {conductoresActivos.map(c => {
+      const asignados = pedidos.filter(p => String(p.conductor_id) === String(c.id)).length;
+      const transito = pedidos.filter(p => String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
+      return (
+       <article key={c.id} style={{ ...cardStyle, padding:18 }}>
+        <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
+         <div style={{ width:46, height:46, borderRadius:23, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900, fontSize:15, flexShrink:0 }}>
+          {c.nombre?.split(/\s+/).slice(0,2).map(x => x[0]).join("").toUpperCase() || "C"}
+         </div>
+         <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:850, fontSize:16, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nombre}</div>
+          <div style={{ color:"#6b7280", fontSize:13, marginTop:3 }}>Placa: <span style={{ fontFamily:"monospace", color:"#111827" }}>{c.placa}</span></div>
+         </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+         <div style={{ background:"#fafafa", border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:800, textTransform:"uppercase" }}>Asignados</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:900 }}>{asignados}</div>
+         </div>
+         <div style={{ background:"#fafafa", border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:800, textTransform:"uppercase" }}>En Transito</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:900, color:transito ? "#6d42d8" : "#111827" }}>{transito}</div>
+         </div>
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
+         {c.cedula && <span>CC: {c.cedula}</span>}
+         {c.celular && <span>Tel: {c.celular}</span>}
+         {c.empresa && <span>{c.empresa}</span>}
+        </div>
+       </article>
+      );
+     })}
+     {conductoresActivos.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores registrados.</div>}
+    </section>
+   </main>
+
+   {modal && (
+    <Modal title="Registrar Conductor" onClose={() => setModal(false)}>
+     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>
+       Se creara automaticamente el usuario de acceso al sistema.
+      </div>
+      <Field label="Nombre completo *" value={form.nombre} onChange={f("nombre")} required placeholder="Juan Perez" />
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+       <Field label="Cedula *" value={form.cedula} onChange={f("cedula")} required placeholder="1012345678" />
+       <Field label="Celular" value={form.celular} onChange={f("celular")} placeholder="3001234567" />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+       <Field label="Placa *" value={form.placa} onChange={f("placa")} required placeholder="ABC-123" />
+       <Field label="NIT proveedor" value={form.nit_proveedor} onChange={f("nit_proveedor")} placeholder="900123456-1" />
+      </div>
+      <Field label="Empresa de transporte" value={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ S.A.S" />
+      <div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}>
+       <p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p>
+       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <Field label="Usuario (login) *" value={form.user_login} onChange={f("user_login")} required placeholder="juan.perez" name="spt_driver_login" autoComplete="off" data-lpignore="true" />
+        <Field label="Contrasena *" value={form.pass_login} onChange={f("pass_login")} required type="password" placeholder="" name="spt_driver_password" autoComplete="new-password" data-lpignore="true" />
+       </div>
+      </div>
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+       <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
+       <Btn onClick={guardar} disabled={guardando}>{guardando ? "Guardando..." : "Guardar y Crear Usuario"}</Btn>
+      </div>
+     </div>
+    </Modal>
+   )}
+  </div>
+ );
+}
+function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar }) {
  const [modEmpresa, setModEmpresa] = useState(false);
  const [modEditEmp, setModEditEmp] = useState(null);
  const [modCond, setModCond] = useState(null);
  const [modEdit, setModEdit] = useState(null);
  const [modSoportes, setModSoportes] = useState(null);
- const [busqEmp, setBusqEmp] = useState("");
- const [vistaEmp, setVistaEmp] = useState("todas");
- // Empresas con su lista de conductores desplegada.
- const [abiertas, setAbiertas] = useState(() => new Set());
  const [guardando, setGuardando] = useState(false);
  const [formE, setFormE] = useState({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
  const [formC, setFormC] = useState({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
@@ -2484,151 +2121,143 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
   setGuardando(false);
  };
 
- // Empresas con sus conductores y sus conteos, en orden alfabetico.
- const empresas = useMemo(() => misEmp
-  .map(t => {
-   const suyos = conductoresActivos.filter(c => c.nit_proveedor === t.nit);
-   const enTransito = pedidos.filter(p =>
-    p.estado === "en_transito" && suyos.some(c => String(c.id) === String(p.conductor_id))).length;
-   return { ...t, conductores: suyos, enTransito };
-  })
-  .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })),
-  [misEmp, conductoresActivos, pedidos]);
+ return (
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esMia ? "Mi Empresa" : "Transportistas"}</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>{esMia ? "Conductores asociados a tu empresa" : "Gestion de empresas transportistas y sus conductores"}</p>
+    </div>
+    {!esMia && <button style={primaryButton} onClick={() => setModEmpresa(true)}>+ Nueva Empresa</button>}
+    {esMia && <button style={primaryButton} onClick={() => { setModCond({ nit:miNit, nombre:user.empresa || user.nombre }); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" }); }}>+ Inscribir Conductor</button>}
+   </header>
 
- const empresasFiltradas = useMemo(() => {
-  const q = busqEmp.trim().toLowerCase();
-  return empresas.filter(e => {
-   const okVista = vistaEmp === "todas"
-    || (vistaEmp === "con" && e.conductores.length > 0)
-    || (vistaEmp === "sin" && e.conductores.length === 0);
-   const okBusq = !q ||
-    (e.nombre || "").toLowerCase().includes(q) ||
-    (e.nit || "").toLowerCase().includes(q) ||
-    (e.contacto || "").toLowerCase().includes(q) ||
-    e.conductores.some(c =>
-     (c.nombre || "").toLowerCase().includes(q) || (c.placa || "").toLowerCase().includes(q));
-   return okVista && okBusq;
-  });
- }, [empresas, busqEmp, vistaEmp]);
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:24 }}>
+    {esMia && (
+     <section style={{ ...cardStyle, padding:22 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+       <div style={{ width:46, height:46, borderRadius:14, background:"#6d42d8", color:"#fff", display:"grid", placeItems:"center", fontWeight:900 }}>PRO</div>
+       <div>
+        <h2 style={{ margin:0, fontSize:18, fontWeight:850 }}>{user.empresa || user.nombre}</h2>
+        <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:13 }}>NIT: {miNit} · {misCon.length} conductor(es)</p>
+       </div>
+      </div>
+     </section>
+    )}
 
- const alternarFila = (nit) => setAbiertas(prev => {
-  const s = new Set(prev);
-  if (s.has(nit)) s.delete(nit); else s.add(nit);
-  return s;
- });
- const todasAbiertas = empresasFiltradas.length > 0 && empresasFiltradas.every(e => abiertas.has(e.nit));
- const alternarTodas = () => setAbiertas(todasAbiertas ? new Set() : new Set(empresasFiltradas.map(e => e.nit)));
+    {!esMia && (
+     <section>
+      <h2 style={{ margin:"0 0 14px", fontSize:16, fontWeight:850 }}>Empresas Transportistas</h2>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))", gap:14 }}>
+       {misEmp.map(t => {
+        const total = conductoresActivos.filter(c => c.nit_proveedor === t.nit).length;
+        return (
+         <article key={t.id} style={{ ...cardStyle, padding:18 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start" }}>
+           <div>
+            <div style={{ fontSize:16, fontWeight:850 }}>{t.nombre}</div>
+            <div style={{ color:"#6b7280", fontSize:13, marginTop:5, fontFamily:"monospace" }}>{t.nit}</div>
+           </div>
+           <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"4px 10px", fontSize:12, fontWeight:800 }}>{total}</span>
+          </div>
+          <div style={{ marginTop:14, color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
+           {t.contacto && <span>Contacto: {t.contacto}</span>}
+           {t.tel && <span>Tel: {t.tel}</span>}
+           <span>{total} conductor(es)</span>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap" }}>
+           <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => abrirEditarEmpresa(t)}>Editar</button>
+           <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => { setModCond(t); setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" }); }}>+ Conductor</button>
+          </div>
+         </article>
+        );
+       })}
+       {misEmp.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin empresas registradas.</div>}
+      </div>
+     </section>
+    )}
 
- const exportarEmpresas = () => {
-  const esc = (v) => { const x = String(v ?? ""); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
-  const filas = empresasFiltradas.flatMap(e => e.conductores.length === 0
-   ? [[e.nombre, e.nit, e.contacto, e.tel, "", "", ""].map(esc).join(",")]
-   : e.conductores.map(c => [e.nombre, e.nit, e.contacto, e.tel, c.nombre, c.cedula, c.placa].map(esc).join(",")));
-  descargarCSV(
-   `transportistas_${hoyLocal()}.csv`,
-   "empresa,nit,contacto,telefono,conductor,cedula,placa",
-   filas.join("\n"),
-  );
-  showToast(`${empresasFiltradas.length} empresa(s) exportadas`, "success");
- };
+    <section>
+     <h2 style={{ margin:"0 0 14px", fontSize:16, fontWeight:850 }}>{esMia ? "Mis Conductores" : "Todos los Conductores"}</h2>
+     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
+      {misCon.map(c => (
+       <article key={c.id} style={{ ...cardStyle, padding:18 }}>
+        <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:12 }}>
+         <div style={{ width:40, height:40, borderRadius:20, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{c.nombre?.[0]?.toUpperCase() || "C"}</div>
+         <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:850, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nombre}</div>
+          <div style={{ color:"#6b7280", fontSize:13 }}>Placa: <span style={{ fontFamily:"monospace", color:"#111827" }}>{c.placa}</span></div>
+         </div>
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13, display:"flex", flexDirection:"column", gap:5 }}>
+         {c.cedula && <span>CC: {c.cedula}</span>}
+         {c.celular && <span>Tel: {c.celular}</span>}
+         {c.empresa && <span>{c.empresa}</span>}
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:14 }}>
+         <span style={{ background:"#ecfdf5", color:"#059669", borderRadius:99, padding:"4px 10px", fontSize:12, fontWeight:800 }}>Activo</span>
+         <button style={{ ...buttonBase, padding:"7px 12px", borderRadius:10, fontSize:13 }} onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>Editar</button>
+        </div>
+       </article>
+      ))}
+     {misCon.length === 0 && <div style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>Sin conductores inscritos.</div>}
+     </div>
+    </section>
 
- const modales = (<>
-
-   {modEmpresa && (
-    <ModalForm
-     titulo="Nueva empresa transportista"
-     descripcion="Crea la empresa y su usuario de acceso"
-     ancho="M"
-     onClose={() => setModEmpresa(false)}
-     onPrimario={crearEmpresa}
-     guardando={guardando}
-     textoPrimario="Crear empresa y usuario"
-    >
-     <Texto label="Razon social" obligatorio valor={formE.nombre} onChange={fe("nombre")} placeholder="Transportes XYZ S.A.S" />
-     <Fila>
-      <Texto label="NIT" obligatorio mono valor={formE.nit} onChange={fe("nit")} placeholder="900123456-1" />
-      <Texto label="Telefono" valor={formE.tel} onChange={fe("tel")} placeholder="300 123 4567" />
-     </Fila>
-     <Texto label="Persona de contacto" valor={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz" />
-     <Seccion titulo="Acceso al sistema" />
-     <Fila>
-      <Texto label="Usuario" obligatorio mono valor={formE.user_login} onChange={fe("user_login")} placeholder="trans.xyz" />
-      <Clave label="Contrasena" obligatorio valor={formE.pass_login} onChange={fe("pass_login")} />
-     </Fila>
-    </ModalForm>
-   )}
-   {modEditEmp && (
-    <ModalForm
-     titulo={`Editar ${modEditEmp.nombre}`}
-     descripcion="Datos de contacto de la empresa"
-     onClose={() => setModEditEmp(null)}
-     onPrimario={guardarEdicionEmpresa}
-     guardando={guardando}
-     textoPrimario="Guardar cambios"
-    >
-     <Texto label="Razon social" obligatorio valor={formE.nombre} onChange={fe("nombre")} />
-     <FranjaInfo>El NIT no se puede cambiar: es la llave con la que se vinculan los conductores.</FranjaInfo>
-     <Fila>
-      <Texto label="Persona de contacto" valor={formE.contacto} onChange={fe("contacto")} />
-      <Texto label="Telefono" valor={formE.tel} onChange={fe("tel")} />
-     </Fila>
-    </ModalForm>
-   )}
-   {modCond && (
-    <ModalForm
-     titulo="Inscribir conductor"
-     descripcion="Quedara vinculado a la empresa indicada"
-     ancho="M"
-     onClose={() => setModCond(null)}
-     onPrimario={inscribirConductor}
-     guardando={guardando}
-     textoPrimario="Inscribir y crear usuario"
-    >
-     <FranjaInfo icono={<Truck size={15} />}>
-      Empresa: <strong>{modCond.nombre}</strong> · NIT {modCond.nit}
-     </FranjaInfo>
-     <Texto label="Nombre" obligatorio valor={formC.nombre} onChange={fc("nombre")} placeholder="Juan Perez" />
-     <Fila>
-      <Texto label="Cedula" obligatorio mono valor={formC.cedula} onChange={fc("cedula")} placeholder="1012345678" />
-      <Texto label="Celular" valor={formC.celular} onChange={fc("celular")} placeholder="300 123 4567" />
-     </Fila>
-     <Texto label="Placa" obligatorio mono valor={formC.placa} onChange={fc("placa")} placeholder="XYZ-456" style={{ maxWidth:"50%" }} />
-     <Seccion titulo="Acceso del conductor" />
-     <Fila>
-      <Texto label="Usuario" obligatorio mono valor={formC.user_login} onChange={fc("user_login")} placeholder="juan.perez" />
-      <Clave label="Contrasena" obligatorio valor={formC.pass_login} onChange={fc("pass_login")} />
-     </Fila>
-    </ModalForm>
-   )}
-   {modEdit && (
-    <ModalForm
-     titulo={`Editar ${modEdit.nombre}`}
-     descripcion="Datos del conductor"
-     ancho="M"
-     onClose={() => setModEdit(null)}
-     onPrimario={guardarEdicionConductor}
-     guardando={guardando}
-     textoPrimario="Guardar cambios"
-    >
-     <Texto label="Nombre" obligatorio valor={formEdit.nombre} onChange={v => setFormEdit(pp => ({ ...pp, nombre:v }))} />
-     <Fila>
-      <Texto label="Cedula" obligatorio mono valor={formEdit.cedula} onChange={v => setFormEdit(pp => ({ ...pp, cedula:v }))} />
-      <Texto label="Celular" valor={formEdit.celular} onChange={v => setFormEdit(pp => ({ ...pp, celular:v }))} />
-     </Fila>
-     <Fila>
-      <Texto label="Placa" obligatorio mono valor={formEdit.placa} onChange={v => setFormEdit(pp => ({ ...pp, placa:v }))} />
-      {!esMia && (
-       <Selector label="Empresa" valor={formEdit.nit_proveedor}
-        onChange={v => {
-         const emp = (transportistas || []).find(x => x.nit === v);
-         setFormEdit(pp => ({ ...pp, nit_proveedor:v, empresa:emp?.nombre || emp?.empresa || "" }));
-        }}
-        placeholder="Sin asignar"
-        opciones={(transportistas || []).filter(x => x?.nit).map(x => ({ value:x.nit, label:x.nombre || x.empresa || x.nit }))} />
+    {esMia && (
+     <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+       <div>
+        <h2 style={{ margin:0, fontSize:16, fontWeight:850 }}>Pedidos de mis conductores</h2>
+        <p style={{ margin:"4px 0 0", color:"#6b7280", fontSize:13 }}>Consulta los pedidos asignados y reemplaza soportes de entrega si hubo error de archivo.</p>
+       </div>
+       <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{pedidosMisConductores.length} pedidos</span>
+      </div>
+      {pedidosMisConductores.length === 0 ? (
+       <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Aun no hay pedidos asociados a tus conductores.</div>
+      ) : (
+       <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+         <thead>
+          <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+           {["Pedido", "Factura", "Cliente", "Destino", "Conductor", "Estado", "Soportes", "Acciones"].map(h => (
+            <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+           ))}
+          </tr>
+         </thead>
+         <tbody>
+          {pedidosMisConductores.map(p => {
+           const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
+           const soportesCount = Array.isArray(p.soportes) && p.soportes.length > 0 ? p.soportes.length : (Array.isArray(p.soportes_data) ? p.soportes_data.length : 0);
+           return (
+            <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
+             <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
+             <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
+             <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
+             <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
+             <td style={{ padding:"16px" }}><div>{cond?.nombre || "Sin conductor"}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{p.placa || cond?.placa || ""}</div></td>
+             <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
+             <td style={{ padding:"16px" }}>{soportesCount > 0 ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>verPDFSoportes(p, showToast)}>Ver ({soportesCount})</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soportes</span>}</td>
+             <td style={{ padding:"16px", textAlign:"right" }}>
+              <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModSoportes(p)} disabled={soportesCount === 0}>
+               Reemplazar soportes
+              </button>
+             </td>
+            </tr>
+           );
+          })}
+         </tbody>
+        </table>
+       </div>
       )}
-     </Fila>
-    </ModalForm>
-   )}
+     </section>
+    )}
+   </main>
+
+   {modEmpresa && <Modal title="Nueva Empresa Transportista" onClose={() => setModEmpresa(false)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required placeholder="Transportes XYZ S.A.S"/><Field label="NIT *" value={formE.nit} onChange={fe("nit")} required placeholder="900123456-1"/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Persona de Contacto" value={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz"/><Field label="Telefono" value={formE.tel} onChange={fe("tel")} placeholder="3001234567"/></div><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso al Sistema</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formE.user_login} onChange={fe("user_login")} required placeholder="trans.xyz" name="spt_transportista_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formE.pass_login} onChange={fe("pass_login")} required type="password" placeholder="" name="spt_transportista_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEmpresa(false)}>Cancelar</Btn><Btn onClick={crearEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Crear Empresa y Usuario"}</Btn></div></div></Modal>}
+   {modEditEmp && <Modal title={`Editar ${modEditEmp.nombre}`} onClose={() => setModEditEmp(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Razon Social *" value={formE.nombre} onChange={fe("nombre")} required/><p style={{ fontSize:12, color:"#64748b", margin:0 }}>NIT: <strong>{modEditEmp.nit}</strong> (no modificable)</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Contacto" value={formE.contacto} onChange={fe("contacto")}/><Field label="Telefono" value={formE.tel} onChange={fe("tel")}/></div><Field label="Nueva Contrasena (vacio = sin cambio)" value={formE.pass_login} onChange={fe("pass_login")} type="password" placeholder="Nueva contrasena..." name="spt_transportista_new_password" autoComplete="new-password" data-lpignore="true"/><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEditEmp(null)}>Cancelar</Btn><Btn onClick={guardarEdicionEmpresa} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
+   {modCond && <Modal title={`Inscribir Conductor ${modCond.nombre}`} onClose={() => setModCond(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><div style={{ background:"#f8fafc", borderRadius:12, padding:12, fontSize:13, color:"#4b5563", border:`1px solid ${border}` }}>Empresa: <strong>{modCond.nombre}</strong> · NIT: <strong>{modCond.nit}</strong></div><Field label="Nombre *" value={formC.nombre} onChange={fc("nombre")} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula *" value={formC.cedula} onChange={fc("cedula")} required placeholder="1012345678"/><Field label="Celular" value={formC.celular} onChange={fc("celular")} placeholder="3001234567"/></div><Field label="Placa *" value={formC.placa} onChange={fc("placa")} required placeholder="XYZ-456"/><div style={{ borderTop:`1px solid ${border}`, paddingTop:12 }}><p style={{ fontSize:12, fontWeight:800, color:"#6b7280", margin:"0 0 10px", textTransform:"uppercase" }}>Acceso del conductor</p><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Usuario *" value={formC.user_login} onChange={fc("user_login")} required placeholder="juan.perez" name="spt_transportista_driver_login" autoComplete="off" data-lpignore="true"/><Field label="Contrasena *" value={formC.pass_login} onChange={fc("pass_login")} required type="password" placeholder="" name="spt_transportista_driver_password" autoComplete="new-password" data-lpignore="true"/></div></div><div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModCond(null)}>Cancelar</Btn><Btn onClick={inscribirConductor} disabled={guardando}>{guardando ? "Guardando..." : "Inscribir y Crear Usuario"}</Btn></div></div></Modal>}
+   {modEdit && <Modal title={`Editar Conductor ${modEdit.nombre}`} onClose={() => setModEdit(null)}><div style={{ display:"flex", flexDirection:"column", gap:14 }}><Field label="Nombre *" value={formEdit.nombre} onChange={v => setFormEdit(p => ({ ...p, nombre:v }))} required/><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Cedula" value={formEdit.cedula} onChange={v => setFormEdit(p => ({ ...p, cedula:v }))} placeholder="1012345678"/><Field label="Celular" value={formEdit.celular} onChange={v => setFormEdit(p => ({ ...p, celular:v }))} placeholder="3001234567"/></div><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><Field label="Placa *" value={formEdit.placa} onChange={v => setFormEdit(p => ({ ...p, placa:v }))} required placeholder="ABC-123"/>{!esMia && <Field label="NIT proveedor" value={formEdit.nit_proveedor} onChange={v => setFormEdit(p => ({ ...p, nit_proveedor:v }))} placeholder="900123456-1"/>}</div>{esMia ? <div style={{ background:"#f8fafc", border:`1px solid ${border}`, borderRadius:12, padding:12, fontSize:13, color:"#4b5563" }}><div style={{ fontWeight:800, marginBottom:4 }}>Pertenencia del conductor</div><div>NIT proveedor: <strong>{formEdit.nit_proveedor || miNit}</strong></div><div>Empresa: <strong>{formEdit.empresa || user.empresa || user.nombre}</strong></div><div style={{ color:"#6b7280", marginTop:6 }}>Estos datos solo pueden ser modificados por un administrador.</div></div> : <Field label="Empresa" value={formEdit.empresa} onChange={v => setFormEdit(p => ({ ...p, empresa:v }))} placeholder="Transportes XYZ"/>}<div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}><Btn variant="secondary" onClick={() => setModEdit(null)}>Cancelar</Btn><Btn onClick={guardarEdicionConductor} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</Btn></div></div></Modal>}
    {modSoportes && (
     <Modal title={`Reemplazar soportes ${modSoportes.guia_interna || modSoportes.id}`} onClose={() => setModSoportes(null)}>
      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -2650,650 +2279,11 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
      </div>
     </Modal>
    )}
- </>);
-
- const abrirInscribir = (t) => {
-  setModCond(t);
-  setFormC({ nombre:"", cedula:"", placa:"", celular:"", user_login:"", pass_login:"" });
- };
-
- // ── Vista del propio transportista ────────────────────────────────────────
- // Tres pantallas segun `vista`: Mi empresa, Conductores y Pedidos. Solo se
- // ofrece lo que los permisos dejan hacer: la empresa no se edita (el
- // transportista solo lee su fila de transportistas), los conductores si, y el
- // soporte se carga o reemplaza unicamente en pedidos cerrados de su NIT, que
- // es lo que permite docs/transportista_pedidos_soportes.sql. En un pedido en
- // transito el trigger lo rechazaria, asi que ahi no se ofrece.
- if (esMia) {
-  const nombreEmpresa = user.empresa || empresas[0]?.nombre || user.nombre;
-  const inactivos = conductores.filter(c => c.nit_proveedor === miNit && c.activo === false);
-  const pedidosDe = (c) => pedidosMisConductores.filter(p => String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
-  const soportesDe = (p) => (p.soportes || p.soportes_data || []).length;
-  const puedeSoporte = (p) => ["entregado", "novedad"].includes(p.estado) && p.nit_proveedor === miNit;
-  const enRuta = misCon.filter(c => pedidosDe(c) > 0);
-
-  const avatar = (nombre) => (
-   <span style={{
-    width:30, height:30, borderRadius:15, flexShrink:0, display:"grid", placeItems:"center",
-    background:T.color.marcaAvatar, color:T.color.marca, fontSize:11.5, fontWeight:700,
-   }}>{iniciales(nombre)}</span>
-  );
-  const chipCond = (c, conCuenta) => {
-   const n = pedidosDe(c);
-   const [bg, color, punto, texto] = c.activo === false
-    ? [T.color.superficie3, T.color.tinta3, T.color.neutroPunto, "Inactivo"]
-    : n > 0
-     ? [T.color.marcaSuave, T.color.marca, T.estado.en_transito, conCuenta ? `En ruta · ${n} ${n === 1 ? "pedido" : "pedidos"}` : "En ruta"]
-     : [T.color.bienSuave, T.color.bien, T.color.bienPunto, "Disponible"];
-   return (
-    <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 9px", borderRadius:T.radio.pastilla, background:bg, color, fontSize:12, fontWeight:600, whiteSpace:"nowrap" }}>
-     <span style={{ width:6, height:6, borderRadius:3, background:punto }}/>{texto}
-    </span>
-   );
-  };
-  const editarCond = (c) => {
-   setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" });
-   setModEdit(c);
-  };
-  const accionesCond = (c) => (
-   <div style={{ display:"inline-flex", gap:6 }}>
-    <button style={botonFila} title="Ver sus pedidos" onClick={() => onIr && onIr("mis_pedidos_transp", String(c.id))}>Ver</button>
-    <button style={{ ...botonFila, display:"inline-flex", alignItems:"center", gap:5 }} onClick={() => editarCond(c)}><Pencil size={12}/> Editar</button>
-   </div>
-  );
-
-  // ── Pedidos: filtros compartidos por Mi empresa y Pedidos ───────────────
-  const desdeT = (() => { const r = RANGOS_PEDIDOS.find(x => x.id === rangoT); return vista === "pedidos" && r && r.dias ? hoyMas(-r.dias) : null; })();
-  const baseT = pedidosMisConductores
-   .filter(p => !desdeT || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeT)
-   .filter(p => !condT || String(p.conductor_id) === String(condT));
-  const PESTANAS_T = [
-   ["todos", "Todos", () => true],
-   ["en_transito", "En transito", p => p.estado === "en_transito"],
-   ["novedad", "Con novedad", p => p.estado === "novedad"],
-   ["entregado", "Entregado", p => p.estado === "entregado"],
-   ["sin_soporte", "Sin soporte", p => soportesDe(p) === 0],
-  ];
-  const pruebaPestana = (PESTANAS_T.find(x => x[0] === pestanaT) || PESTANAS_T[0])[2];
-  const q = busqT.trim().toLowerCase();
-  const filtradosT = baseT
-   .filter(p => vista !== "pedidos" || pruebaPestana(p))
-   .filter(p => {
-    if (!q) return true;
-    const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-    return [p.id, p.guia_interna, p.cliente, p.ciudad_nombre, p.direccion, cond?.nombre].some(v => String(v || "").toLowerCase().includes(q));
-   });
-  const porPaginaT = 10;
-  const itemsT = filtradosT.slice((pageT - 1) * porPaginaT, pageT * porPaginaT);
-  const desdeN = filtradosT.length === 0 ? 0 : (pageT - 1) * porPaginaT + 1;
-  const hastaN = Math.min(filtradosT.length, pageT * porPaginaT);
-  const cajasT = filtradosT.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
-
-  const filaPedido = (p, completa) => {
-   const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-   const n = soportesDe(p);
-   return (
-    <tr key={p.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-     <td style={td}>
-      <div style={{ color:T.color.marca, fontWeight:700, fontSize:13.5 }}>{p.guia_interna || p.id}</div>
-      {completa && p.guia_interna && p.guia_interna !== p.id && <div style={{ ...mono, color:T.color.tinta3, fontSize:11.5 }}>{p.id}</div>}
-     </td>
-     <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
-     <td style={{ ...td, maxWidth:220 }}>
-      <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color: p.direccion ? T.color.tinta2 : T.color.tinta4 }}>{p.direccion || "Sin direccion"}</div>
-      <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{p.ciudad_nombre || ""}</div>
-     </td>
-     {completa && <td style={{ ...td, textAlign:"right", fontWeight:700, color: p.cajas ? T.color.tinta : T.color.tinta4 }}>{p.cajas || 0}</td>}
-     <td style={td}>
-      {completa && cond
-       ? <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>{avatar(cond.nombre)}{cond.nombre}</span>
-       : (cond?.nombre || "—")}
-     </td>
-     <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
-     <td style={{ ...td, color: n ? T.color.tinta2 : T.color.tinta4, whiteSpace:"nowrap" }}>
-      {n ? `${n} ${n === 1 ? "foto" : "fotos"}` : "Sin soporte"}
-     </td>
-     <td style={{ ...td, textAlign:"right" }}>
-      <div style={{ display:"inline-flex", gap:6 }}>
-       <button style={botonFila} onClick={() => setVerPed(p)}>Ver</button>
-       {puedeSoporte(p) && (
-        <button onClick={() => setModSoportes(p)} style={{
-         ...botonFila, display:"inline-flex", alignItems:"center", gap:5,
-         ...(n ? {} : { color:T.color.marca, borderColor:T.color.marcaBorde, background:T.color.marcaSuave }),
-        }}>
-         {n ? <><RefreshCw size={12}/> Reemplazar</> : <><Upload size={12}/> Cargar</>}
-        </button>
-       )}
-      </div>
-     </td>
-    </tr>
-   );
-  };
-
-  const vacioPedidos = (cols) => (
-   <tr><td colSpan={cols} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>
-    {pedidosMisConductores.length === 0 ? "Aun no hay pedidos asociados a tus conductores." : "Ningun pedido coincide con los filtros."}
-   </td></tr>
-  );
-
-  const selectorConductor = (
-   <SelectFiltro valor={condT} onChange={setCondT} ancho={190}>
-    <option value="">Conductor</option>
-    {misCon.map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
-   </SelectFiltro>
-  );
-
-  const pie = (
-   <PieTabla
-    izquierda={`Mostrando ${desdeN}–${hastaN} de ${filtradosT.length} pedidos${vista === "pedidos" ? ` · ${cajasT} cajas` : ""}`}
-    derecha={filtradosT.length > porPaginaT ? <Paginador total={filtradosT.length} page={pageT} setPage={setPageT} pageSize={porPaginaT}/> : null}
-   />
-  );
-
-  const botonInscribir = (
-   <button onClick={() => abrirInscribir({ nit: miNit, nombre: nombreEmpresa })} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:6 }}>
-    <UserPlus size={16}/> Inscribir conductor
-   </button>
-  );
-
-  const detalle = verPed && (
-   <ModalDetalle pedido={pedidos.find(x => x.id === verPed.id) || verPed} conductores={conductores} ciudades={[]} transportistas={[]}
-    onClose={() => setVerPed(null)} setPedidos={() => {}} showToast={showToast} canEdit={false}/>
-  );
-
-  // ── Conductores ─────────────────────────────────────────────────────────
-  if (vista === "conductores") {
-   const qc = busqC.trim().toLowerCase();
-   const base = filtroCond === "inactivos" ? inactivos
-    : filtroCond === "en_ruta" ? enRuta
-    : filtroCond === "disponibles" ? misCon.filter(c => pedidosDe(c) === 0)
-    : misCon;
-   const lista = base.filter(c => !qc || [c.nombre, c.cedula, c.placa].some(v => String(v || "").toLowerCase().includes(qc)));
-   const kpi = (clave, label, valor, color) => ({ label, valor, color, activo: filtroCond === clave, onClick: () => setFiltroCond(clave) });
-   // Disenio 21b: tarjetas con pestanias Todos · En ruta · Disponibles.
-   if (esMovil) return (
-    <Pagina>
-     <CabeceraConductor user={{ nombre: nombreEmpresa }} sobre={nombreEmpresa} titulo="Conductores" />
-     <BuscadorConductor valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" />
-     <Pestanas valor={filtroCond} onChange={setFiltroCond} opciones={[
-      { clave:"todos", label:"Todos", n: misCon.length },
-      { clave:"en_ruta", label:"En ruta", n: enRuta.length },
-      { clave:"disponibles", label:"Disponibles", n: misCon.length - enRuta.length },
-      ...(inactivos.length ? [{ clave:"inactivos", label:"Inactivos", n: inactivos.length }] : []),
-     ]}/>
-     {lista.length === 0 ? (
-      <ListaVacia>{misCon.length === 0 && filtroCond === "todos" ? "Aun no tienes conductores inscritos." : "Ningun conductor coincide."}</ListaVacia>
-     ) : (
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-       {lista.map(c => (
-        <TarjetaConductorTransp key={c.id} c={c} activos={pedidosDe(c)} completa
-         onVer={x => onIr && onIr("mis_pedidos_transp", String(x.id))} onEditar={editarCond} />
-       ))}
-      </div>
-     )}
-     <button onClick={() => abrirInscribir({ nit: miNit, nombre: nombreEmpresa })} style={{ ...botonPrincipal, justifyContent:"center", display:"flex", alignItems:"center", gap:6, height:48 }}>
-      <UserPlus size={16}/> Inscribir conductor
-     </button>
-     {modales}
-    </Pagina>
-   );
-   return (
-    <Pagina>
-     <Encabezado titulo="Conductores" descripcion={`Conductores inscritos por ${nombreEmpresa}`} acciones={botonInscribir}/>
-     <Indicadores items={[
-      kpi("todos", "Conductores", misCon.length, T.color.tinta),
-      kpi("en_ruta", "En ruta", enRuta.length, T.color.marca),
-      kpi("disponibles", "Disponibles", misCon.length - enRuta.length, T.color.bienPunto),
-      kpi("inactivos", "Inactivos", inactivos.length, T.color.neutroPunto),
-     ]}/>
-     <section style={{ ...tarjeta, overflow:"hidden" }}>
-      <BarraFiltros derecha={`${lista.length} en esta pagina`}>
-       <Buscador valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" ancho={400}/>
-      </BarraFiltros>
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
-        <thead><tr>
-         <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
-         <th style={{ ...th, textAlign:"right" }}>Activos</th><th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
-        </tr></thead>
-        <tbody>
-         {lista.length === 0 && (
-          <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>
-           {misCon.length === 0 && filtroCond === "todos" ? "Aun no tienes conductores inscritos." : "Ningun conductor coincide."}
-          </td></tr>
-         )}
-         {lista.map(c => (
-          <tr key={c.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-           <td style={td}>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-             {avatar(c.nombre)}
-             <div>
-              <div style={{ fontWeight:600, color:T.color.tinta }}>{c.nombre}</div>
-              {c.created_at && <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>Inscrito {fechaCorta(c.created_at)}</div>}
-             </div>
-            </div>
-           </td>
-           <td style={td}><span style={chipMono}>{c.placa || "—"}</span></td>
-           <td style={td}>{c.cedula || "—"}</td>
-           <td style={td}>{c.celular || "—"}</td>
-           <td style={{ ...td, textAlign:"right", fontWeight:700, color: pedidosDe(c) ? T.color.tinta : T.color.tinta4 }}>{pedidosDe(c)}</td>
-           <td style={td}>{chipCond(c, false)}</td>
-           <td style={{ ...td, textAlign:"right" }}>{accionesCond(c)}</td>
-          </tr>
-         ))}
-        </tbody>
-       </table>
-      </div>
-      <PieTabla izquierda={`Mostrando ${lista.length} de ${base.length} conductores`}/>
-     </section>
-     {modales}
-    </Pagina>
-   );
-  }
-
-  // ── Pedidos ─────────────────────────────────────────────────────────────
-  if (vista === "pedidos") {
-   const exportar = () => {
-    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const filas = filtradosT.map(p => {
-     const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-     return [p.id, p.guia_interna, p.cliente, p.direccion, p.ciudad_nombre, p.cajas || 0, cond?.nombre,
-      ESTADOS_PEDIDO[p.estado]?.label || p.estado, soportesDe(p), p.fecha_creacion, p.fecha_real].map(esc).join(",");
-    });
-    descargarCSV(`pedidos_${hoyLocal()}.csv`, "pedido,guia,cliente,direccion,ciudad,cajas,conductor,estado,soportes,fecha_creacion,fecha_real", filas.join("\n"));
-   };
-   // Disenio 21c: tarjetas con el conductor y el soporte al pie.
-   if (esMovil) return (
-    <Pagina>
-     <CabeceraConductor user={{ nombre: nombreEmpresa }} sobre={nombreEmpresa} titulo="Pedidos" />
-     <div style={{ display:"flex", gap:8 }}>
-      <div style={{ flex:1, minWidth:0 }}><BuscadorConductor valor={busqT} onChange={setBusqT} placeholder="Buscar pedido o cliente" /></div>
-      <select value={condT} onChange={e => setCondT(e.target.value)} style={{
-       height:40, maxWidth:140, padding:"0 10px", border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
-       background:T.color.superficie, fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.tinta2,
-      }}>
-       <option value="">Conductor</option>
-       {misCon.map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
-      </select>
-     </div>
-     <Pestanas valor={pestanaT} onChange={setPestanaT} opciones={PESTANAS_T.map(([clave, label, prueba]) => ({ clave, label, n: baseT.filter(prueba).length }))}/>
-     <LineaResumen izquierda={`${filtradosT.length} ${filtradosT.length === 1 ? "pedido" : "pedidos"} · ${cajasT} cajas`} derecha={rangoT === "todo" ? "Todo el historico" : `Ultimos ${rangoT} dias`} />
-     {filtradosT.length === 0 ? (
-      <ListaVacia>{pedidosMisConductores.length === 0 ? "Aun no hay pedidos asociados a tus conductores." : "Ningun pedido coincide con los filtros."}</ListaVacia>
-     ) : (
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-       {filtradosT.slice(0, pageT * 20).map(p => (
-        <TarjetaPedidoTransp key={p.id} p={p} completa
-         conductor={conductores.find(c => String(c.id) === String(p.conductor_id))}
-         soportes={soportesDe(p)} puedeSoporte={puedeSoporte(p)}
-         onVer={setVerPed} onSoporte={setModSoportes} />
-       ))}
-       {filtradosT.length > pageT * 20 && (
-        <button onClick={() => setPageT(x => x + 1)} style={{ minHeight:46, borderRadius:T.radio.control, border:`1px solid ${T.color.borde2}`, background:T.color.superficie, color:T.color.tinta2, fontFamily:"inherit", fontSize:13.5, fontWeight:600, cursor:"pointer" }}>Ver mas pedidos</button>
-       )}
-      </div>
-     )}
-     {detalle}
-     {modales}
-    </Pagina>
-   );
-   return (
-    <Pagina>
-     <Encabezado titulo="Pedidos" descripcion="Pedidos asignados a los conductores de tu empresa"
-      acciones={<button onClick={exportar} disabled={filtradosT.length === 0} style={{ ...botonBarra, display:"inline-flex", alignItems:"center", gap:6 }}><Download size={15}/> Exportar</button>}/>
-
-     <div style={{ display:"flex", gap:4, borderBottom:`1px solid ${T.color.borde}`, overflowX:"auto" }}>
-      {PESTANAS_T.map(([clave, label, prueba]) => {
-       const activo = pestanaT === clave;
-       return (
-        <button key={clave} onClick={() => setPestanaT(clave)} style={{
-         display:"flex", alignItems:"center", gap:7, padding:"10px 12px", border:"none", background:"transparent",
-         borderBottom:`2px solid ${activo ? T.color.tinta : "transparent"}`, marginBottom:-1, cursor:"pointer",
-         fontFamily:"inherit", fontSize:13.5, fontWeight: activo ? 700 : 500, color: activo ? T.color.tinta : T.color.tinta3, whiteSpace:"nowrap",
-        }}>
-         {label}
-         <span style={{ fontSize:11, fontWeight:700, padding:"0 6px", borderRadius:T.radio.pastilla, background:T.color.superficie3, color:T.color.tinta3 }}>{baseT.filter(prueba).length}</span>
-        </button>
-       );
-      })}
-     </div>
-
-     <section style={{ ...tarjeta, overflow:"hidden" }}>
-      <BarraFiltros derecha={`${itemsT.length} en esta pagina`}>
-       <Buscador valor={busqT} onChange={setBusqT} placeholder="Buscar por N° pedido, cliente o ciudad" ancho={400}/>
-       <SelectFiltro valor={rangoT} onChange={setRangoT} ancho={170}>
-        {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-       </SelectFiltro>
-       {selectorConductor}
-      </BarraFiltros>
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
-        <thead><tr>
-         <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={{ ...th, textAlign:"right" }}>Cajas</th>
-         <th style={th}>Conductor</th><th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
-        </tr></thead>
-        <tbody>
-         {filtradosT.length === 0 && vacioPedidos(8)}
-         {itemsT.map(p => filaPedido(p, true))}
-        </tbody>
-       </table>
-      </div>
-      {pie}
-     </section>
-     {detalle}
-     {modales}
-    </Pagina>
-   );
-  }
-
-  // ── Mi empresa ──────────────────────────────────────────────────────────
-  const primeros = misCon.slice(0, 5);
-  // Disenio 21a: el inicio del transportista. NIT, cuatro conteos en 2x2, y
-  // un resumen de conductores y de pedidos con "Ver todos" hacia sus pestanias.
-  if (esMovil) return (
-   <Pagina>
-    <CabeceraConductor user={{ nombre: nombreEmpresa }} sobre={miNit ? `Mi empresa · NIT ${miNit}` : "Mi empresa"} titulo={nombreEmpresa} />
-    <ConteosTransp items={[
-     { label:"Conductores", valor:misCon.length, color:T.color.tinta },
-     { label:"Pedidos asignados", valor:pedidosMisConductores.length, color:T.color.marca },
-     { label:"En transito", valor:pedidosMisConductores.filter(p => p.estado === "en_transito").length, color:T.color.ojo, punto:T.color.ojoPunto },
-     { label:"Entregados", valor:pedidosMisConductores.filter(p => p.estado === "entregado").length, color:T.color.tinta, punto:T.color.bienPunto },
-    ]}/>
-    <button onClick={() => abrirInscribir({ nit: miNit, nombre: nombreEmpresa })} style={{ ...botonPrincipal, justifyContent:"center", display:"flex", alignItems:"center", gap:6, height:48 }}>
-     <UserPlus size={16}/> Inscribir conductor
-    </button>
-    <BloqueTransp titulo="Conductores" onVerTodos={misCon.length ? () => onIr && onIr("mis_conductores_transp") : null}>
-     {misCon.length === 0 ? <ListaVacia>Aun no tienes conductores inscritos.</ListaVacia> : (
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-       {misCon.slice(0, 3).map(c => (
-        <TarjetaConductorTransp key={c.id} c={c} activos={pedidosDe(c)}
-         onVer={x => onIr && onIr("mis_pedidos_transp", String(x.id))} onEditar={editarCond} />
-       ))}
-      </div>
-     )}
-    </BloqueTransp>
-    <BloqueTransp titulo="Pedidos de mis conductores" onVerTodos={pedidosMisConductores.length ? () => onIr && onIr("mis_pedidos_transp") : null}>
-     {pedidosMisConductores.length === 0 ? <ListaVacia>Aun no hay pedidos asociados a tus conductores.</ListaVacia> : (
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-       {pedidosMisConductores.slice(0, 3).map(p => (
-        <TarjetaPedidoTransp key={p.id} p={p}
-         conductor={conductores.find(c => String(c.id) === String(p.conductor_id))}
-         soportes={soportesDe(p)} puedeSoporte={puedeSoporte(p)}
-         onVer={setVerPed} onSoporte={setModSoportes} />
-       ))}
-      </div>
-     )}
-    </BloqueTransp>
-    {detalle}
-    {modales}
-   </Pagina>
-  );
-  return (
-   <Pagina>
-    <Encabezado
-     titulo={<span style={{ display:"inline-flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-      {nombreEmpresa}
-      {miNit && <span style={{ ...chipMono, fontSize:12, fontWeight:500 }}>{`NIT ${miNit}`}</span>}
-     </span>}
-     descripcion="Conductores asociados a tu empresa y sus pedidos"
-     acciones={botonInscribir}
-    />
-
-    <Indicadores items={[
-     { label:"Conductores", valor:misCon.length, color:T.color.tinta },
-     { label:"Pedidos asignados", valor:pedidosMisConductores.length, color:T.color.marca, destacado:true },
-     { label:"En transito", valor:pedidosMisConductores.filter(p => p.estado === "en_transito").length, color:T.color.ojoPunto },
-     { label:"Entregados", valor:pedidosMisConductores.filter(p => p.estado === "entregado").length, color:T.color.bienPunto },
-    ]}/>
-
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
-      <div>
-       <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Conductores</div>
-       <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>{misCon.length} inscritos · {enRuta.length} en ruta</div>
-      </div>
-      {misCon.length > 0 && (
-       <button onClick={() => onIr && onIr("mis_conductores_transp")} style={{ border:"none", background:"transparent", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca }}>Ver todos</button>
-      )}
-     </div>
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead><tr>
-        <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
-        <th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
-       </tr></thead>
-       <tbody>
-        {misCon.length === 0 && (
-         <tr><td colSpan={6} style={{ ...td, textAlign:"center", padding:36, color:T.color.tinta3 }}>Aun no tienes conductores inscritos.</td></tr>
-        )}
-        {primeros.map(c => (
-         <tr key={c.id} style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-          <td style={td}><span style={{ display:"inline-flex", alignItems:"center", gap:10, fontWeight:600, color:T.color.tinta }}>{avatar(c.nombre)}{c.nombre}</span></td>
-          <td style={td}><span style={chipMono}>{c.placa || "—"}</span></td>
-          <td style={td}>{c.cedula || "—"}</td>
-          <td style={td}>{c.celular || "—"}</td>
-          <td style={td}>{chipCond(c, true)}</td>
-          <td style={{ ...td, textAlign:"right" }}>{accionesCond(c)}</td>
-         </tr>
-        ))}
-       </tbody>
-      </table>
-     </div>
-    </section>
-
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-      <div>
-       <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Pedidos de mis conductores</div>
-       <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>Puedes cargar o reemplazar el soporte de un pedido entregado si hubo un error de carga</div>
-      </div>
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-       <Buscador valor={busqT} onChange={setBusqT} placeholder="Buscar pedido, cliente o conductor" ancho={240}/>
-       {selectorConductor}
-      </div>
-     </div>
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead><tr>
-        <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={th}>Conductor</th>
-        <th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
-       </tr></thead>
-       <tbody>
-        {filtradosT.length === 0 && vacioPedidos(7)}
-        {itemsT.map(p => filaPedido(p, false))}
-       </tbody>
-      </table>
-     </div>
-     {pie}
-    </section>
-    {detalle}
-    {modales}
-   </Pagina>
-  );
- }
-
- // ── Vista de administracion ───────────────────────────────────────────────
- // Disenio 27c: cada empresa en una tarjeta, con sus conductores desplegables.
- if (esMovil) return (
-  <Pagina>
-   <TransportistasMovil empresas={empresas} pedidos={pedidos}
-    onNueva={() => setModEmpresa(true)} onEditarEmpresa={abrirEditarEmpresa} onInscribir={abrirInscribir}
-    onEditarConductor={(c) => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }} />
-   {modales}
-  </Pagina>
- );
-
- return (
-  <Pagina>
-   <Encabezado
-    titulo="Transportistas"
-    descripcion="Gestion de empresas transportistas y sus conductores"
-    acciones={<>
-     <button onClick={exportarEmpresas} style={botonBarra}><Download size={15} /> Exportar</button>
-     <button onClick={() => setModEmpresa(true)} style={botonPrincipal}><Plus size={16} /> Nueva empresa</button>
-    </>}
-   />
-
-   <Indicadores items={[
-    { label: "Empresas", valor: empresas.length },
-    { label: "Con conductores", valor: empresas.filter(e => e.conductores.length > 0).length, color: T.color.marca, destacado: true },
-    { label: "Sin conductores", valor: empresas.filter(e => e.conductores.length === 0).length, color: T.color.ojo },
-    { label: "Conductores vinculados", valor: conductoresActivos.filter(c => c.nit_proveedor).length, color: T.color.bien },
-   ]}/>
-
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={
-     <span style={{ display:"inline-flex", alignItems:"center", gap:14 }}>
-      <button onClick={alternarTodas} style={{
-       border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-       color:T.color.marca, fontSize:12.5, fontWeight:600, padding:0,
-      }}>{todasAbiertas ? "Contraer todo" : "Expandir todo"}</button>
-      <span>{empresasFiltradas.length} {empresasFiltradas.length === 1 ? "empresa" : "empresas"} · orden A-Z</span>
-     </span>
-    }>
-     <Buscador valor={busqEmp} onChange={setBusqEmp} placeholder="Buscar empresa, NIT, conductor o placa" ancho={300} />
-     <Segmentado valor={vistaEmp} onChange={setVistaEmp}
-      opciones={[["todas","Todas"], ["con","Con conductores"], ["sin","Sin conductores"]]} />
-    </BarraFiltros>
-
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse" }}>
-      <thead>
-       <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-        <th style={{ ...th, width:44 }} />
-        <th style={th}>Empresa</th>
-        <th style={th}>NIT</th>
-        <th style={th}>Contacto</th>
-        <th style={th}>Telefono</th>
-        <th style={{ ...th, textAlign:"right" }}>Conductores</th>
-        <th style={{ ...th, width:200 }} />
-       </tr>
-      </thead>
-      <tbody>
-       {empresasFiltradas.length === 0 && (
-        <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:40, color:T.color.tinta3 }}>
-         {empresas.length === 0 ? "Sin empresas registradas." : "Ninguna empresa coincide con el filtro."}
-        </td></tr>
-       )}
-       {empresasFiltradas.map(e => {
-        const abierta = abiertas.has(e.nit);
-        return (
-         <React.Fragment key={e.nit || e.id}>
-          <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-           <td style={td}>
-            <button onClick={() => alternarFila(e.nit)} title={abierta ? "Contraer" : "Ver conductores"} style={{
-             ...iconoAccion, border:`1px solid ${T.color.borde2}`, background:T.color.superficie,
-            }}>{abierta ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
-           </td>
-           <td style={td}>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-             <span style={{
-              width:34, height:34, borderRadius:T.radio.chico, flexShrink:0,
-              background:T.color.marcaSuave, color:T.color.marca, display:"grid", placeItems:"center",
-             }}><Truck size={16} /></span>
-             <span style={{ fontSize:13.5, fontWeight:700, color:T.color.tinta }}>{e.nombre}</span>
-            </div>
-           </td>
-           <td style={{ ...td, ...mono }}>{e.nit}</td>
-           <td style={td}>{e.contacto || <span style={{ color:T.color.tinta3 }}>-</span>}</td>
-           <td style={td}>{e.tel || <span style={{ color:T.color.tinta3 }}>-</span>}</td>
-           <td style={{ ...td, textAlign:"right" }}>
-            <span style={{
-             display:"inline-flex", minWidth:26, justifyContent:"center", padding:"3px 9px",
-             borderRadius:T.radio.chico, fontSize:12, fontWeight:700,
-             background: e.conductores.length ? T.color.marcaSuave : T.color.superficie2,
-             color: e.conductores.length ? T.color.marca : T.color.tinta3,
-            }}>{e.conductores.length}</span>
-           </td>
-           <td style={{ ...td, textAlign:"right" }}>
-            <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
-             <button onClick={() => abrirInscribir(e)} style={{ ...botonBarra, padding:"6px 12px", fontSize:13 }}>
-              <UserPlus size={14} /> Conductor
-             </button>
-             <MenuFila opciones={[
-              { texto: "Editar empresa", accion: () => abrirEditarEmpresa(e) },
-              { texto: abierta ? "Contraer conductores" : "Ver conductores", accion: () => alternarFila(e.nit) },
-             ]}/>
-            </div>
-           </td>
-          </tr>
-
-          {abierta && (
-           <tr style={{ borderBottom:`1px solid ${T.color.borde}`, background:T.color.superficie2 }}>
-            <td colSpan={7} style={{ padding:0 }}>
-             {e.conductores.length === 0 ? (
-              <div style={{ padding:"16px 20px", display:"flex", alignItems:"center", gap:10, fontSize:13, color:T.color.tinta3 }}>
-               Esta empresa aun no tiene conductores.
-               <button onClick={() => abrirInscribir(e)} style={{
-                border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-                color:T.color.marca, fontSize:13, fontWeight:600, padding:0,
-               }}>Agregar el primero</button>
-              </div>
-             ) : (
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
-               <thead>
-                <tr>
-                 <th style={{ ...th, paddingLeft:74 }}>Conductor</th>
-                 <th style={th}>Placa</th>
-                 <th style={th}>Cedula</th>
-                 <th style={th}>Telefono</th>
-                 <th style={{ ...th, textAlign:"right" }}>En transito</th>
-                 <th style={{ ...th, width:120 }} />
-                </tr>
-               </thead>
-               <tbody>
-                {e.conductores.map(c => {
-                 const transito = pedidos.filter(p =>
-                  String(p.conductor_id) === String(c.id) && p.estado === "en_transito").length;
-                 return (
-                  <tr key={c.id}>
-                   <td style={{ ...td, paddingLeft:74, fontWeight:600, color:T.color.tinta }}>{c.nombre}</td>
-                   <td style={td}>
-                    <span style={{ ...mono, background:T.color.superficie, padding:"3px 9px", borderRadius:T.radio.chico, border:`1px solid ${T.color.borde}` }}>{c.placa}</span>
-                   </td>
-                   <td style={td}>{c.cedula || "-"}</td>
-                   <td style={td}>{c.celular || "-"}</td>
-                   <td style={{ ...td, textAlign:"right", fontWeight:700, color: transito ? T.color.marca : T.color.tinta3 }}>{transito}</td>
-                   <td style={{ ...td, textAlign:"right" }}>
-                    <button style={{ ...botonBarra, padding:"5px 11px", fontSize:12.5 }}
-                     onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>
-                     Editar
-                    </button>
-                   </td>
-                  </tr>
-                 );
-                })}
-               </tbody>
-              </table>
-             )}
-            </td>
-           </tr>
-          )}
-         </React.Fragment>
-        );
-       })}
-      </tbody>
-     </table>
-    </div>
-
-    <PieTabla
-     izquierda={`${empresasFiltradas.length} ${empresasFiltradas.length === 1 ? "empresa" : "empresas"}`}
-     derecha={
-      <button onClick={() => setActiveTabExterno && setActiveTabExterno("conductores")} style={{
-       border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-       color:T.color.marca, fontSize:13, fontWeight:600, padding:0,
-      }}>Ver todos los conductores &rarr;</button>
-     }
-    />
-   </section>
-
-   {modales}
-  </Pagina>
+  </div>
  );
 }
 
-export function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
- const esMovil = useEsMovil();
+function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
  const [selCond, setSelCond] = useState("");
@@ -3316,136 +2306,27 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
   win.print();
  };
 
- const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
- const gpsFresco = gpsCond && (Date.now() - gpsCond.ts) < 300000;
-
- // Disenio 26d: mismo calculo, en tarjetas numeradas; imprime con la misma funcion.
- if (esMovil) return (
-  <Pagina>
-   <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond}
-    misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} onImprimir={imprimir} />
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo="Resumen transportador"
-    descripcion="Pedidos, devoluciones y recogidas activas por conductor"
-    acciones={
-     <button onClick={imprimir} disabled={!cond} style={{ ...botonBarra, opacity: cond ? 1 : 0.5, cursor: cond ? "pointer" : "not-allowed" }}>
-      <ClipboardList size={15} /> Imprimir resumen
-     </button>
-    }
-   />
-
-   <section style={{ ...tarjeta, padding:14 }}>
-    <SelectFiltro valor={selCond} onChange={setSelCond} ancho={420}>
-     <option value="">Seleccione un conductor</option>
-     {condOpts.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"))
-      .map(c=><option key={c.id} value={c.id}>{c.nombre} - {c.placa || "sin placa"}</option>)}
-    </SelectFiltro>
-   </section>
-
-   {!cond ? (
-    <section style={{ ...tarjeta, padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-     {condOpts.length === 0
-      ? "No hay pedidos con conductor asignado."
-      : "Selecciona un conductor para ver lo que lleva en ruta."}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Resumen Transportador</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Pedidos, devoluciones y recogidas activas por conductor</p>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:18 }}>
+     <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"end" }}>
+      <Field label="Seleccionar Conductor / Transportador" value={selCond} onChange={setSelCond} as="select" options={[{ value:"", label:"Seleccione conductor" }, ...condOpts.map(c => ({ value:c.id, label:`${c.nombre} ${c.placa} ${c.empresa || ""}` }))]} />
+      <button style={{ ...buttonBase, height:40 }} onClick={imprimir} disabled={!cond}>Imprimir Resumen</button>
+     </div>
     </section>
-   ) : (
-    <>
-     <Indicadores items={[
-      { label:"Pedidos en transito", valor:misPeds.length, color:T.color.marca, destacado:true },
-      { label:"Cajas", valor:totalCajas, color:T.color.neutroPunto },
-      { label:"Devoluciones", valor:misDV.length, color:T.color.infoPunto },
-      { label:"Recogidas", valor:misRC.length, color:T.color.bienPunto },
-     ]}/>
-
-     <section style={{ ...tarjeta, padding:16, display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
-      <span style={{
-       width:40, height:40, borderRadius:T.radio.pastilla, flexShrink:0,
-       background:T.color.marcaAvatar, color:T.color.marca,
-       display:"grid", placeItems:"center", fontSize:13, fontWeight:800,
-      }}>
-       {(cond.nombre||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
-      </span>
-      <div style={{ minWidth:0 }}>
-       <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>{cond.nombre}</div>
-       <div style={{ ...mono, marginTop:2 }}>
-        {cond.placa || "sin placa"}{cond.cedula ? `  ·  CC ${cond.cedula}` : ""}
-       </div>
-      </div>
-      <span style={{
-       marginLeft:"auto", display:"inline-flex", alignItems:"center", gap:7,
-       padding:"4px 11px", borderRadius:T.radio.pastilla,
-       background: gpsFresco ? T.color.bienSuave : T.color.neutroSuave,
-       color: gpsFresco ? T.color.bien : T.color.tinta3, fontSize:12, fontWeight:600,
-      }}>
-       <span style={{ width:6, height:6, borderRadius:3, background: gpsFresco ? T.color.bienPunto : T.color.neutroPunto }}/>
-       {gpsFresco ? "GPS activo" : "Sin reporte GPS"}
-      </span>
-     </section>
-
-     {[
-      { titulo:"Pedidos en transito", filas:misPeds, tipo:"pedido" },
-      { titulo:"Devoluciones asignadas", filas:misDV, tipo:"devolucion" },
-      { titulo:"Recogidas asignadas", filas:misRC, tipo:"recogida" },
-     ].map(bloque => (
-      <section key={bloque.titulo} style={{ ...tarjeta, overflow:"hidden" }}>
-       <div style={{
-        display:"flex", alignItems:"center", gap:10,
-        padding:"13px 18px", borderBottom:`1px solid ${T.color.borde}`,
-       }}>
-        <span style={{ ...T.texto.tarjeta }}>{bloque.titulo}</span>
-        <span style={{
-         fontSize:12, fontWeight:700, padding:"2px 9px", borderRadius:T.radio.pastilla,
-         background: bloque.filas.length ? T.color.marcaSuave : T.color.neutroSuave,
-         color: bloque.filas.length ? T.color.marca : T.color.tinta4,
-        }}>{bloque.filas.length}</span>
-       </div>
-       {bloque.filas.length === 0 ? (
-        <div style={{ padding:28, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
-         Nada asignado en este momento.
-        </div>
-       ) : (
-        <div style={{ overflowX:"auto" }}>
-         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead>
-           <tr>
-            <th style={th}>{bloque.tipo === "pedido" ? "Pedido" : "Guia"}</th>
-            <th style={th}>{bloque.tipo === "pedido" ? "Cliente" : "Ciudad"}</th>
-            <th style={th}>Destino</th>
-            <th style={{...th, textAlign:"right"}}>{bloque.tipo === "pedido" ? "Cajas" : "Unidades"}</th>
-           </tr>
-          </thead>
-          <tbody>
-           {bloque.filas.map(x => (
-            <tr key={x.id}>
-             <td style={td}><span style={chipMono}>{x.guia_interna || x.guia || x.id}</span></td>
-             <td style={td}>{x.cliente || x.ciudad_nombre || x.ciudad_recogida_nombre || "-"}</td>
-             <td style={td}>
-              <div>{x.ciudad_nombre || x.ciudad_entrega_nombre || "-"}</div>
-              <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>
-               {x.direccion || x.dir_entrega || x.dir_recogida || ""}
-              </div>
-             </td>
-             <td style={tdCifra}>{x.cajas || x.unidades || 0}</td>
-            </tr>
-           ))}
-          </tbody>
-         </table>
-        </div>
-       )}
-      </section>
-     ))}
-    </>
-   )}
-  </Pagina>
+    {cond && <section style={{ ...cardStyle, padding:22 }}><div style={{ display:"flex", alignItems:"center", gap:16, justifyContent:"space-between", flexWrap:"wrap" }}><div style={{ display:"flex", alignItems:"center", gap:14 }}><div style={{ width:48, height:48, borderRadius:24, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{cond.nombre?.[0]?.toUpperCase() || "C"}</div><div><h2 style={{ margin:0, fontSize:18 }}>{cond.nombre}</h2><p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:13 }}>Placa: {cond.placa}{cond.celular && ` · ${cond.celular}`}</p><p style={{ margin:"3px 0 0", color:"#6b7280", fontSize:12 }}>{cond.empresa || ""} {cond.nit_proveedor ? `· NIT: ${cond.nit_proveedor}` : ""}</p></div></div><div style={{ display:"flex", gap:14 }}><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900 }}>{misPeds.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>pedidos</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900, color:"#ef4444" }}>{misDV.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>devoluc.</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:28, fontWeight:900, color:"#059669" }}>{misRC.length}</div><div style={{ color:"#6b7280", fontSize:12 }}>recogidas</div></div></div></div></section>}
+    {cond && <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}><div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}><thead><tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>{["#", "Guia Interna", "No. Pedido", "Factura", "Cliente", "Ciudad", "Cajas", "Estado", "Fecha Est."].map(h => <th key={h} style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>{h}</th>)}</tr></thead><tbody>{misPeds.map((p,i) => <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}><td style={{ padding:"16px", color:"#6b7280" }}>{i+1}</td><td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}>{p.guia_interna || ""}</td><td style={{ padding:"16px", fontWeight:800 }}>{p.id}</td><td style={{ padding:"16px", fontFamily:"monospace", color:"#4b5563" }}>{p.factura}</td><td style={{ padding:"16px" }}>{p.cliente}</td><td style={{ padding:"16px", color:"#4b5563" }}>{p.ciudad_nombre}</td><td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td><td style={{ padding:"16px" }}><Badge estado={p.estado} /></td><td style={{ padding:"16px", color:"#6b7280" }}>{p.fecha_estimada || ""}</td></tr>)}<tr style={{ background:"#fafafa" }}><td colSpan={6} style={{ padding:"16px", textAlign:"right", fontWeight:850 }}>TOTAL</td><td style={{ padding:"16px", fontWeight:900, fontSize:16 }}>{totalCajas}</td><td colSpan={2} style={{ padding:"16px", color:"#6b7280" }}>{misPeds.length} pedido(s)</td></tr></tbody></table></div></section>}
+    {!cond && condOpts.length === 0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No hay pedidos con conductor asignado.</section>}
+   </main>
+  </div>
  );
 }
-export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
- const esMovil = useEsMovil();
+function Ciudades({ ciudades, showToast, recargar }) {
  const [modNueva,setModNueva]=useState(false);
  const [modCSV,setModCSV]=useState(false);
  const [busq,setBusq]=useState("");
@@ -3465,99 +2346,71 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
 
- const usosCiudad = (code) => (pedidos || []).filter(p => p.ciudad_codigo === code).length;
-
- // Los formularios de crear e importar son los mismos en las dos vistas.
- const modales = (<>
-  {modNueva&&(
-   <ModalForm
-    titulo="Nueva ciudad / municipio"
-    descripcion="Se agrega al catalogo DANE del sistema"
-    onClose={()=>setModNueva(false)}
-    onPrimario={guardar}
-    textoPrimario="Guardar ciudad"
-   >
-    <Texto label="Codigo DANE" obligatorio mono valor={form.code}
-     onChange={v=>setForm(p=>({...p,code:v}))} placeholder="05045" />
-    <Texto label="Nombre del municipio" obligatorio valor={form.name}
-     onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Apartado" />
-   </ModalForm>
-  )}
-  {modCSV&&(
-   <ModalCSVCiudades onClose={()=>setModCSV(false)} onImportar={async (nuevas)=>{
-    for(const c of nuevas){
-     await supabase.from('ciudades').upsert({code:c.code,name:c.name},{onConflict:'code'});
-    }
-    setModCSV(false);
-    showToast(` ${nuevas.length} ciudad(es) importada(s)`,"success");
-    if(recargar) await recargar();
-   }} />
-  )}
- </>);
-
- // Disenio 26c.
- if (esMovil) return (
-  <Pagina>
-   <CiudadesMovil ciudades={ciudades||[]} usos={usosCiudad}
-    onNueva={()=>{setForm({code:"",name:""});setModNueva(true);}} onImportar={()=>setModCSV(true)} />
-   {modales}
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo="Ciudades / DANE"
-    descripcion="Catalogo de municipios con su codigo DANE"
-    acciones={<>
-     <button onClick={()=>setModCSV(true)} style={botonBarra}><Upload size={15}/> Importar CSV</button>
-     <button onClick={()=>{setForm({code:"",name:""});setModNueva(true);}} style={botonPrincipal}>
-      <Plus size={16}/> Nueva ciudad
-     </button>
-    </>}
-   />
-
-   <Indicadores items={[
-    { label:"Ciudades", valor:(ciudades||[]).length, color:T.color.marca, destacado:true },
-    { label:"Con pedidos", valor:(ciudades||[]).filter(c=>usosCiudad(c.code)>0).length, color:T.color.bienPunto },
-    { label:"Sin usar", valor:(ciudades||[]).filter(c=>usosCiudad(c.code)===0).length, color:T.color.neutroPunto },
-   ]}/>
-
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${filt.length} de ${(ciudades||[]).length} · orden A-Z`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar ciudad o codigo DANE" ancho={300}/>
-    </BarraFiltros>
-
-    {filt.length === 0 ? (
-     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-      {(ciudades||[]).length === 0 ? "Sin ciudades registradas." : "Ninguna ciudad coincide con la busqueda."}
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Ciudades / DANE</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Catalogo de ciudades y codigos DANE usados en la operacion</p>
+    </div>
+    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+     <button style={buttonBase} onClick={()=>setModCSV(true)}>CSV Masivo</button>
+     <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Ciudad</button>
+    </div>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar ciudad o codigo DANE..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{filt.length} de {ciudades.length}</span>
      </div>
-    ) : (
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead>
-        <tr>
-         <th style={th}>Municipio</th>
-         <th style={th}>Codigo DANE</th>
-         <th style={{...th, textAlign:"right"}}>Pedidos</th>
+     <div style={{ overflowX:"auto", maxHeight:560, overflowY:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+       <thead style={{ position:"sticky", top:0, background:"#fff", zIndex:1 }}>
+        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+         <th style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>Codigo DANE</th>
+         <th style={{ padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}` }}>Ciudad / Municipio</th>
         </tr>
        </thead>
        <tbody>
-        {filt.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es",{sensitivity:"base"})).map(c => (
-         <tr key={c.code}>
-          <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.name}</td>
-          <td style={td}><span style={chipMono}>{c.code}</span></td>
-          <td style={tdCifra}>{usosCiudad(c.code)}</td>
+        {filt.map(c=>(
+         <tr key={c.code} style={{ borderBottom:`1px solid ${border}` }}>
+          <td style={{ padding:"14px 16px", fontFamily:"monospace", fontWeight:850, color:"#5b33d6" }}>{c.code}</td>
+          <td style={{ padding:"14px 16px", color:"#111827", fontWeight:700 }}>{c.name}</td>
          </tr>
         ))}
+        {filt.length===0&&(
+         <tr><td colSpan={2} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin ciudades encontradas.</td></tr>
+        )}
        </tbody>
       </table>
      </div>
-    )}
-   </section>
+    </section>
+   </main>
 
-   {modales}
-  </Pagina>
+   {modNueva&&(
+    <Modal title="Nueva Ciudad / Municipio" onClose={()=>setModNueva(false)}>
+     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <Field label="Codigo DANE" value={form.code} onChange={v=>setForm(p=>({...p,code:v}))} required placeholder="05045"/>
+      <Field label="Nombre del municipio" value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} required placeholder="Apartad"/>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+       <Btn variant="secondary" onClick={()=>setModNueva(false)}>Cancelar</Btn>
+       <Btn onClick={guardar}> Guardar</Btn>
+      </div>
+     </div>
+    </Modal>
+   )}
+   {modCSV&&(
+    <ModalCSVCiudades onClose={()=>setModCSV(false)} onImportar={async (nuevas)=>{
+     for(const c of nuevas){
+      await supabase.from('ciudades').upsert({code:c.code,name:c.name},{onConflict:'code'});
+     }
+     setModCSV(false);
+     showToast(` ${nuevas.length} ciudad(es) importada(s)`,"success");
+     if(recargar) await recargar();
+    }} />
+   )}
+  </div>
  );
 }
 
@@ -3652,34 +2505,20 @@ function ModalCSVCiudades({ onClose, onImportar }) {
  );
 }
 
-function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = [], showToast, recargar }) {
- const esMovil = useEsMovil();
+function MisPedidosConductor({ pedidos, user, conductores, ciudades, showToast, recargar }) {
  const [modDet,  setModDet]  = useState(null);
  const [modFotos, setModFotos] = useState(null); // pedido para cargar soportes
  const [novedad,  setNovedad]  = useState(false);
- // Solo en el celular (disenio 15 y 18): la pestania, la busqueda, el pedido
- // abierto en el detalle del conductor, la guia y lo que el detalle ya eligio
- // (fotos, novedad, motivo) para que el flujo de entrega arranque con eso.
- const [pestana,  setPestana]  = useState("pendientes");
- const [busqCond, setBusqCond] = useState("");
- const [detCond,  setDetCond]  = useState(null);
- const [guiaCond, setGuiaCond] = useState(null);
- const [entregaInicial, setEntregaInicial] = useState(null);
- const [reordenando, setReordenando] = useState(false);
  const condId = user.conductor_db_id || user.id;
- const rutaCond = useRutaConductor(condId);
  const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
- // Por urgencia de la promesa, salvo lo que el conductor ordeno a mano.
- const activos = ordenarRuta(
-  misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado)),
-  rutaCond.ruta, promesas || []);
+ const activos = misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado));
  const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const thStyle = { padding:"14px 16px", textAlign:"left", borderBottom:`1px solid ${border}`, color:"#6b7280", fontSize:12, textTransform:"uppercase", whiteSpace:"nowrap" };
  const tdStyle = { padding:"16px", borderBottom:`1px solid ${border}`, verticalAlign:"middle" };
 
- const marcarEntregado = async (pedido, fotos, conNovedad, extra = {}) => {
+ const marcarEntregado = async (pedido, fotos, conNovedad) => {
   if (["entregado","novedad"].includes(pedido.estado)) {
    showToast("No se puede modificar un pedido que ya fue entregado", "error");
    setModFotos(null);
@@ -3699,20 +2538,8 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
    fecha_real: hoy,
    novedad: conNovedad,
   };
-  // Quien recibio y donde. Van aparte porque son columnas nuevas: si la base
-  // todavia no las tiene (docs/pedidos_entrega.sql sin correr), la entrega se
-  // guarda igual sin ellas en vez de fallar entera.
-  const extras = {};
-  for (const [k, v] of Object.entries(extra)) {
-   if (v !== null && v !== undefined && v !== "") extras[k] = v;
-  }
   try {
-   let { error: e1 } = await supabase.from("pedidos")
-    .update({ ...cambios, ...extras }).eq("id", pedido.id);
-   if (e1 && /column .* does not exist|could not find the .* column/i.test(e1.message || "")) {
-    showToast("Falta correr docs/pedidos_entrega.sql: se guarda la entrega sin los datos de quien recibe","warning");
-    ({ error: e1 } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id));
-   }
+   const { error: e1 } = await supabase.from("pedidos").update(cambios).eq("id", pedido.id);
    if (e1 && e1.message && e1.message.includes('too large')) {
     await supabase.from("pedidos").update({
      estado: estadoFinal, fecha_real: hoy, novedad: conNovedad, soportes: cambios.soportes,
@@ -3729,158 +2556,6 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
   setModFotos(null);
   if (recargar) await recargar();
  };
-
- // Los modales son los mismos en las dos versiones: se arman una vez y se
- // dibujan en la que toque.
- const modales = (
-  <>
-    {/* Modal detalle (solo lectura) */}
-    {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
-     onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
- 
-    {/* Modal cargar soportes de entrega */}
-    {modFotos && esMovil && (
-     <RegistrarEntregaMovil
-      pedido={modFotos}
-      promesa={(promesas || []).find(x => x.ciudad_codigo === modFotos.ciudad_codigo)}
-      fotosInicial={entregaInicial?.fotos || []}
-      novedadInicial={!!entregaInicial?.conNovedad}
-      observacionesInicial={entregaInicial?.observaciones || ""}
-      onConfirmar={async ({ fotos, conNovedad, ...datos }) => {
-       await marcarEntregado(modFotos, fotos, conNovedad, datos);
-       setEntregaInicial(null);
-       setDetCond(null);
-      }}
-      onClose={() => { setModFotos(null); setEntregaInicial(null); }}
-     />
-    )}
- 
-    {modFotos && !esMovil && (
-     <Modal title={`Registrar Entrega - ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-       {/* Info pedido */}
-       <div style={{background:P[50],borderRadius:10,padding:14}}>
-        <div style={{fontWeight:700,color:P[800],marginBottom:4}}>{modFotos.cliente}</div>
-        <div style={{fontSize:13,color:"#64748b"}}>Direccion: {modFotos.direccion} - {modFotos.ciudad_nombre}</div>
-        <div style={{fontSize:13,color:"#64748b"}}>Factura: {modFotos.factura} - {modFotos.cajas} cajas</div>
-       </div>
- 
-       {/* Checkbox novedad */}
-       <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"12px 16px",cursor:"pointer",border:`2px solid ${novedad?"#dc2626":P[200]}`}}
-        onClick={()=>setNovedad(!novedad)}>
-        <div style={{width:22,height:22,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-         {novedad&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}></span>}
-        </div>
-        <div>
-         <div style={{fontWeight:700,color:novedad?"#dc2626":P[800],fontSize:14}}>Entrega con Novedad</div>
-         <div style={{fontSize:12,color:"#94a3b8"}}>Marca esto si hubo algun inconveniente en la entrega</div>
-        </div>
-       </div>
- 
-       {/* Cargador de fotos */}
-       <CargadorFotos
-        pedido={modFotos}
-        onGuardar={(fotos)=>marcarEntregado(modFotos, fotos, novedad)}
-        onClose={()=>setModFotos(null)}
-        showToast={showToast}
-       />
-      </div>
-     </Modal>
-    )}
-  </>
- );
-
- // En el celular (disenio 15): solo lo suyo, en tarjetas orientadas a la ruta,
- // con el avance del dia y tres pestanias por estado. Sin indicadores globales
- // ni crear: eso es de la central.
- // Las cerradas, de la mas reciente a la mas vieja: es lo que dice la linea de
- // resumen y lo que el conductor espera al revisar lo que ya hizo.
- const masReciente = (a, b) => String(b.fecha_real || "").localeCompare(String(a.fecha_real || ""));
- const entregados = misPeds.filter(p => p.estado === "entregado").sort(masReciente);
- const conNovedad = misPeds.filter(p => p.estado === "novedad").sort(masReciente);
- const promesaDe = (p) => (promesas || []).find(x => x.ciudad_codigo === p.ciudad_codigo);
- const coincide = (p) => {
-  const q = busqCond.trim().toLowerCase();
-  if (!q) return true;
-  return [p.id, p.guia_interna, p.cliente, p.factura].some(v => String(v || "").toLowerCase().includes(q));
- };
- const lista = (pestana === "pendientes" ? activos : pestana === "entregadas" ? entregados : conNovedad).filter(coincide);
- const cajasDe = (xs) => xs.reduce((n, p) => n + (Number(p.cajas) || 0), 0);
- const abrirEntrega = (p, inicial) => { setEntregaInicial(inicial || null); setModFotos(p); setNovedad(false); };
- const paradaDe = (p) => activos.findIndex(x => x.id === p.id) + 1;
-
- if (esMovil) return (
-  <Pagina>
-   <CabeceraConductor user={user} sobre={fechaLarga()} titulo="Mis entregas" />
-   <ProgresoRuta hechas={entregados.length} total={misPeds.length} placa={user.placa} />
-   <BuscadorConductor valor={busqCond} onChange={setBusqCond} placeholder="Buscar pedido o cliente" />
-   <Pestanas valor={pestana} onChange={setPestana} opciones={[
-    { clave: "pendientes", label: "Pendientes", n: activos.length },
-    { clave: "entregadas", label: "Entregadas", n: entregados.length },
-    { clave: "novedad", label: "Novedad", n: conNovedad.length },
-   ]}/>
-
-   <LineaResumen
-    izquierda={`${lista.length} ${pestana === "pendientes" ? "pendientes" : pestana === "entregadas" ? "entregadas" : "con novedad"} · ${cajasDe(lista)} cajas`}
-    derecha={pestana !== "pendientes" ? "Mas reciente"
-     : rutaCond.disponible && !busqCond && activos.length > 1 && !reordenando ? (
-      <button onClick={() => setReordenando(true)} style={{
-       border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit",
-       fontSize: 12, fontWeight: 600, color: T.color.marca,
-      }}>{rutaCond.aMano ? "Tu orden · cambiar" : "Por promesa · reordenar"}</button>
-     ) : rutaCond.aMano ? "Tu orden" : "Por promesa"} />
-
-   {pestana === "pendientes" && reordenando ? (
-    <ReordenarRuta
-     pedidos={activos}
-     aMano={rutaCond.aMano}
-     onCancelar={() => setReordenando(false)}
-     onGuardar={async orden => {
-      const e = await rutaCond.guardar(orden);
-      if (e) showToast("No se pudo guardar el orden: " + e.message, "error");
-      else { showToast("Orden de ruta guardado", "success"); setReordenando(false); }
-     }}
-     onRestablecer={async () => {
-      const e = await rutaCond.restablecer();
-      if (e) showToast("No se pudo restablecer: " + e.message, "error");
-      else { showToast("La ruta vuelve al orden por promesa", "info"); setReordenando(false); }
-     }}
-    />
-   ) : lista.length === 0 ? (
-    <ListaVacia>
-     {busqCond ? "Ningun pedido coincide con la busqueda."
-      : pestana === "pendientes" ? "No tienes pedidos pendientes. Ruta terminada."
-      : pestana === "entregadas" ? "Aun no tienes pedidos entregados."
-      : "Sin pedidos con novedad."}
-    </ListaVacia>
-   ) : (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-     {lista.map((p, i) => pestana === "pendientes"
-      ? <TarjetaEntrega key={p.id} pedido={p} parada={paradaDe(p)} actual={i === 0 && !busqCond}
-         promesa={promesaDe(p)} onAbrir={setDetCond} />
-      : <TarjetaEntregada key={p.id} pedido={p} onAbrir={setDetCond}
-         onSoporte={x => verPDFSoportes(x, showToast)} />
-     )}
-    </div>
-   )}
-
-   {detCond && (
-    <DetallePedidoConductor
-     pedido={pedidos.find(x => x.id === detCond.id) || detCond}
-     parada={paradaDe(detCond) || null}
-     totalParadas={activos.length}
-     promesa={promesaDe(detCond)}
-     onCerrar={() => setDetCond(null)}
-     onGuia={() => setGuiaCond(detCond)}
-     onVerSoportes={x => verPDFSoportes(x, showToast)}
-     onEntregar={inicial => abrirEntrega(detCond, inicial)}
-    />
-   )}
-   {guiaCond && <GuiaImprimible pedido={guiaCond} conductores={conductores} ciudades={ciudades} onClose={() => setGuiaCond(null)} />}
-
-   {modales}
-  </Pagina>
- );
 
  return (
   <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
@@ -4017,88 +2692,137 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
     </section>
    </main>
 
-   {modales}
+   {/* Modal detalle (solo lectura) */}
+   {modDet&&<ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={[]}
+    onClose={()=>setModDet(null)} setPedidos={()=>{}} showToast={showToast} canEdit={false} canDeliver/>}
+
+   {/* Modal cargar soportes de entrega */}
+   {modFotos&&(
+    <Modal title={`Registrar Entrega - ${modFotos.guia_interna||modFotos.id}`} onClose={()=>setModFotos(null)} wide>
+     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Info pedido */}
+      <div style={{background:P[50],borderRadius:10,padding:14}}>
+       <div style={{fontWeight:700,color:P[800],marginBottom:4}}>{modFotos.cliente}</div>
+       <div style={{fontSize:13,color:"#64748b"}}>Direccion: {modFotos.direccion} - {modFotos.ciudad_nombre}</div>
+       <div style={{fontSize:13,color:"#64748b"}}>Factura: {modFotos.factura} - {modFotos.cajas} cajas</div>
+      </div>
+
+      {/* Checkbox novedad */}
+      <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"12px 16px",cursor:"pointer",border:`2px solid ${novedad?"#dc2626":P[200]}`}}
+       onClick={()=>setNovedad(!novedad)}>
+       <div style={{width:22,height:22,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        {novedad&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}></span>}
+       </div>
+       <div>
+        <div style={{fontWeight:700,color:novedad?"#dc2626":P[800],fontSize:14}}>Entrega con Novedad</div>
+        <div style={{fontSize:12,color:"#94a3b8"}}>Marca esto si hubo algun inconveniente en la entrega</div>
+       </div>
+      </div>
+
+      {/* Cargador de fotos */}
+      <CargadorFotos
+       pedido={modFotos}
+       onGuardar={(fotos)=>marcarEntregado(modFotos, fotos, novedad)}
+       onClose={()=>setModFotos(null)}
+       showToast={showToast}
+      />
+     </div>
+    </Modal>
+   )}
   </div>
  );
 }
 
-// Disenio 16a. Tres pestanias por estado y busqueda; la tarjeta trae el motivo
-// visible, porque es lo que el conductor verifica al recoger.
 function MisDevolucionesConductor({ devoluciones = [], user }) {
- const [pestana, setPestana] = useState("transito");
- const [busq, setBusq] = useState("");
  const condId = user.conductor_db_id || user.id;
  const items = devoluciones.filter(d => String(d.conductor_id) === String(condId));
- const enTransito = items.filter(d => ["sin_asignar", "pendiente", "en_transito"].includes(d.estado));
- const completadas = items.filter(d => d.estado === "entregado");
- const conNovedad = items.filter(d => d.estado === "novedad" || d.novedad);
- const q = busq.trim().toLowerCase();
- const lista = (pestana === "transito" ? enTransito : pestana === "completadas" ? completadas : conNovedad)
-  .filter(d => !q || [d.guia, d.factura, d.pedido_ref, d.dir_recogida].some(v => String(v || "").toLowerCase().includes(q)));
- const uds = lista.reduce((n, d) => n + (Number(d.unidades) || 0), 0);
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  return (
-  <Pagina>
-   <CabeceraConductor user={user} sobre="Asignadas a tu ruta" titulo="Mis devoluciones" />
-   <BuscadorConductor valor={busq} onChange={setBusq} placeholder="Buscar devolucion, factura o pedido" />
-   <Pestanas valor={pestana} onChange={setPestana} opciones={[
-    { clave: "transito", label: "En transito", n: enTransito.length },
-    { clave: "completadas", label: "Completadas", n: completadas.length },
-    { clave: "novedad", label: "Novedad", n: conNovedad.length },
-   ]}/>
-   <LineaResumen izquierda={`${lista.length} ${pestana === "transito" ? "en transito" : pestana === "completadas" ? "completadas" : "con novedad"} · ${uds} uds`} derecha="Mas reciente" />
-   {lista.length === 0 ? (
-    <ListaVacia>{q ? "Ninguna devolucion coincide." : "No tienes devoluciones aqui."}</ListaVacia>
-   ) : (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-     {lista.map(d => (
-      <TarjetaDevolucion key={d.id} d={d}
-       onSoporte={x => abrirArchivoRemoto('devoluciones', x.id, 'soporte_data', 'soporte_nombre', `soporte-${x.guia}`)} />
-     ))}
-    </div>
-   )}
-  </Pagina>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Devoluciones</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Devoluciones asignadas a tu ruta</p>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:14 }}>
+    {items.length===0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes devoluciones asignadas.</section>}
+    {items.map(d=>(
+     <section key={d.id} style={{ ...cardStyle, padding:18, borderLeft:"4px solid #dc2626" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+       <div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+         <span style={{ fontFamily:"monospace", fontWeight:900, color:"#dc2626", fontSize:15 }}>{d.guia}</span>
+         <Badge estado={d.estado}/>
+         {d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13 }}>Factura: <strong>{d.factura}</strong> · Pedido: <strong>{d.pedido_ref}</strong></div>
+        <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>Recogida: {d.dir_recogida} · {d.ciudad_nombre}</div>
+        <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{d.unidades} uds · {d.volumen_m3} m3 · {d.peso_kg} kg</div>
+        {d.motivo&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>Motivo: {d.motivo}</div>}
+       </div>
+       {(d.soporte_nombre||d.soporte_data)&&(
+        <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
+         onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`)}>
+         Ver Soporte
+        </button>
+       )}
+      </div>
+     </section>
+    ))}
+   </main>
+  </div>
  );
 }
 
-// Disenio 16b. Dos paradas en una tarjeta: de donde sale y a donde llega.
 function MisRecogidasConductor({ recogidas = [], user }) {
- const [pestana, setPestana] = useState("transito");
- const [busq, setBusq] = useState("");
  const condId = user.conductor_db_id || user.id;
  const items = recogidas.filter(r => String(r.conductor_id) === String(condId));
- const enTransito = items.filter(r => ["sin_asignar", "pendiente", "en_transito"].includes(r.estado));
- const completadas = items.filter(r => r.estado === "entregado");
- const conNovedad = items.filter(r => r.estado === "novedad" || r.novedad);
- const q = busq.trim().toLowerCase();
- const lista = (pestana === "transito" ? enTransito : pestana === "completadas" ? completadas : conNovedad)
-  .filter(r => !q || [r.guia, r.dir_recogida, r.dir_entrega, r.ciudad_recogida_nombre, r.ciudad_entrega_nombre].some(v => String(v || "").toLowerCase().includes(q)));
- const uds = lista.reduce((n, r) => n + (Number(r.unidades) || 0), 0);
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  return (
-  <Pagina>
-   <CabeceraConductor user={user} sobre="Asignadas a tu ruta" titulo="Mis recogidas" />
-   <BuscadorConductor valor={busq} onChange={setBusq} placeholder="Buscar recogida o direccion" />
-   <Pestanas valor={pestana} onChange={setPestana} opciones={[
-    { clave: "transito", label: "En transito", n: enTransito.length },
-    { clave: "completadas", label: "Completadas", n: completadas.length },
-    { clave: "novedad", label: "Novedad", n: conNovedad.length },
-   ]}/>
-   <LineaResumen izquierda={`${lista.length} ${pestana === "transito" ? "en transito" : pestana === "completadas" ? "completadas" : "con novedad"} · ${uds} uds`} derecha="Mas reciente" />
-   {lista.length === 0 ? (
-    <ListaVacia>{q ? "Ninguna recogida coincide." : "No tienes recogidas aqui."}</ListaVacia>
-   ) : (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-     {lista.map(r => (
-      <TarjetaRecogida key={r.id} r={r}
-       onDocumento={x => abrirArchivoRemoto('recogidas', x.id, 'doc_data', 'doc_nombre', `documento-${x.guia}`)} />
-     ))}
-    </div>
-   )}
-  </Pagina>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Mis Recogidas</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Recogidas asignadas a tu ruta</p>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:14 }}>
+    {items.length===0 && <section style={{ ...cardStyle, padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes recogidas asignadas.</section>}
+    {items.map(r=>(
+     <section key={r.id} style={{ ...cardStyle, padding:18, borderLeft:"4px solid #0891b2" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+       <div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+         <span style={{ fontFamily:"monospace", fontWeight:900, color:"#0891b2", fontSize:15 }}>{r.guia}</span>
+         <Badge estado={r.estado}/>
+         {r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}
+        </div>
+        <div style={{ color:"#4b5563", fontSize:13 }}>Recogida: <strong>{r.ciudad_recogida_nombre}</strong> · Entrega: <strong>{r.ciudad_entrega_nombre}</strong></div>
+        <div style={{ color:"#6b7280", fontSize:13, marginTop:5 }}>{r.dir_recogida} → {r.dir_entrega}</div>
+        <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{r.unidades} uds · {r.volumen_m3} m3 · {r.peso_kg} kg</div>
+        {r.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>Obs: {r.observaciones}</div>}
+       </div>
+       {(r.doc_nombre||r.doc_data)&&(
+        <button style={{ border:`1px solid ${border}`, background:"#fff", color:"#059669", borderRadius:12, padding:"8px 12px", fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}
+         onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`)}>
+         Ver Documento
+        </button>
+       )}
+      </div>
+     </section>
+    ))}
+   </main>
+  </div>
  );
 }
 
-export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
- const esMovil = useEsMovil();
+
+// GestionPaqueterias 
+
+// GestionPromesas 
+
+// FacturasProveedor 
+
+function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const [editando, setEditando] = useState(null); // ciudad_codigo being edited
  const [diasEdit, setDiasEdit] = useState("");
  const [nueva,  setNueva]  = useState({ ciudad_codigo: "", dias_plazo: "" });
@@ -4125,311 +2849,198 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const pageItems = conPromesa.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
- const guardarNueva = async (datos = nueva) => {
-  if (!datos.ciudad_codigo || !datos.dias_plazo) {
-   showToast("Selecciona ciudad y escribe los dias", "error"); return false;
+ const guardarNueva = async () => {
+  if (!nueva.ciudad_codigo || !nueva.dias_plazo) {
+   showToast("Selecciona ciudad y escribe los dias", "error"); return;
   }
-  const dias = parseInt(datos.dias_plazo);
-  if (isNaN(dias) || dias < 1) { showToast("Los dias deben ser un numero mayor a 0", "error"); return false; }
+  const dias = parseInt(nueva.dias_plazo);
+  if (isNaN(dias) || dias < 1) { showToast("Los dias deben ser un numero mayor a 0", "error"); return; }
   setGuard(true);
   const { error } = await supabase.from('promesas_servicio')
-   .upsert({ ciudad_codigo: datos.ciudad_codigo, dias_plazo: dias }, { onConflict: 'ciudad_codigo' });
-  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); setGuard(false); return false; }
+   .upsert({ ciudad_codigo: nueva.ciudad_codigo, dias_plazo: dias }, { onConflict: 'ciudad_codigo' });
+  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); setGuard(false); return; }
   setNueva({ ciudad_codigo: "", dias_plazo: "" });
   showToast(" Promesa registrada", "success");
   if (recargar) await recargar();
   setGuard(false);
-  return true;
  };
 
- const guardarEdit = async (codigo, valor = diasEdit) => {
-  const dias = parseInt(valor);
-  if (isNaN(dias) || dias < 1) { showToast("Dias invlidos", "error"); return false; }
+ const guardarEdit = async (codigo) => {
+  const dias = parseInt(diasEdit);
+  if (isNaN(dias) || dias < 1) { showToast("Dias invlidos", "error"); return; }
   const { error } = await supabase.from('promesas_servicio')
    .update({ dias_plazo: dias }).eq('ciudad_codigo', codigo);
-  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return false; }
+  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return; }
   setEditando(null);
   showToast(" Promesa actualizada", "success");
   if (recargar) await recargar();
-  return true;
  };
 
  const eliminar = async (codigo, nombre) => {
-  if (!window.confirm(`Eliminar promesa de servicio para ${nombre}?`)) return false;
+  if (!window.confirm(`Eliminar promesa de servicio para ${nombre}?`)) return;
   const { error } = await supabase.from('promesas_servicio').delete().eq('ciudad_codigo', codigo);
-  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return false; }
+  if (error) { showToast(mensajeError(error, "la promesa de servicio"), "error"); return; }
   showToast("Promesa eliminada", "info");
   if (recargar) await recargar();
-  return true;
  };
 
- // Disenio 26b: la ciudad es una fila con el plazo como pastilla; agregar y
- // editar abren una hoja.
- if (esMovil) return (
-  <Pagina>
-   <PromesasMovil ciudades={ciudades||[]} promMap={promMap}
-    onAgregar={guardarNueva} onEditar={guardarEdit} onEliminar={eliminar} />
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo="Promesas de servicio"
-    descripcion="Dias calendario de entrega prometidos por ciudad destino, contados desde la fecha del corte"
-   />
-
-   <Indicadores items={[
-    { label:"Ciudades con promesa", valor:conPromesa.length, color:T.color.marca, destacado:true },
-    { label:"Sin configurar", valor:sinPromesa.length, color:T.color.ojoPunto },
-    { label:"Promedio de dias", valor:conPromesa.length
-      ? (conPromesa.reduce((a,c)=>a+Number(promMap[c.code]||0),0)/conPromesa.length).toFixed(1)
-      : 0, color:T.color.neutroPunto },
-   ]}/>
-
-   <section style={{ ...tarjeta, padding:14 }}>
-    <div style={{ display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
-     <div style={{ flex:"1 1 280px", minWidth:220 }}>
-      <Selector label="Ciudad destino" valor={nueva.ciudad_codigo}
-       onChange={v=>setNueva(p=>({...p, ciudad_codigo:v}))}
-       placeholder="Selecciona una ciudad"
-       opciones={(ciudades||[]).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es"))
-        .map(c=>({ value:c.code, label:`${c.name} (${c.code})${promMap[c.code] ? " · " + promMap[c.code] + " dias" : ""}` }))}/>
-     </div>
-     <div style={{ width:130 }}>
-      <Texto label="Dias de plazo" tipo="number" valor={nueva.dias_plazo}
-       onChange={v=>setNueva(p=>({...p, dias_plazo:v}))} placeholder="2"/>
-     </div>
-     <button onClick={()=>guardarNueva()} disabled={guard} style={{ ...botonPrincipal, marginBottom:0 }}>
-      <Plus size={16}/> {guard ? "Guardando..." : "Agregar"}
-     </button>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Promesas de Servicio</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Dias habiles de entrega prometidos por ciudad destino</p>
     </div>
-   </section>
+    <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"7px 12px", fontSize:13, fontWeight:850 }}>
+     {conPromesa.length}/{ciudades.length} configuradas
+    </span>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:18 }}>
+     <div style={{ fontWeight:850, marginBottom:12 }}>Agregar promesa</div>
+     <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "end" }}>
+     <Field label="Ciudad destino" value={nueva.ciudad_codigo} onChange={v => setNueva(p => ({...p, ciudad_codigo: v}))} as="select"
+      options={[
+       { value: "", label: "Selecciona ciudad" },
+       ...(ciudades||[]).map(c => ({ value: c.code, label: `${c.name} (${c.code})${promMap[c.code] ? " " + promMap[c.code] + " dias" : ""}` }))
+      ]}/>
+     <Field label="Dias plazo" value={nueva.dias_plazo} onChange={v => setNueva(p => ({...p, dias_plazo: v}))}
+      type="number" placeholder="2" style={{ width: 110 }}/>
+     <button style={{ ...primaryButton, alignSelf:"end", height:40 }} onClick={guardarNueva} disabled={guard}>Guardar</button>
+    </div>
+    </section>
 
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${conPromesa.length} configuradas · ${sinPromesa.length} sin promesa`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar ciudad o codigo DANE" ancho={300}/>
-    </BarraFiltros>
-
-    {conPromesa.length === 0 ? (
-     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-      Aun no hay promesas configuradas. Sin promesa, el riesgo de un pedido se calcula con su fecha estimada.
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{conPromesa.length} con promesa</span>
      </div>
-    ) : (
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead>
-        <tr>
-         <th style={th}>Ciudad</th>
-         <th style={th}>Codigo DANE</th>
-         <th style={{...th, textAlign:"right"}}>Dias de plazo</th>
-         <th style={{...th, textAlign:"right", width:130}}>Acciones</th>
-        </tr>
-       </thead>
-       <tbody>
-        {conPromesa.slice((page-1)*pageSize, page*pageSize).map(c => (
-         <tr key={c.code}>
-          <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.name}</td>
-          <td style={td}><span style={chipMono}>{c.code}</span></td>
-          <td style={{ ...tdCifra, width:150 }}>
-           {editando === c.code ? (
-            <input value={diasEdit} onChange={e=>setDiasEdit(e.target.value)} type="number" autoFocus
-             style={{
-              width:80, height:32, padding:"0 10px", textAlign:"right",
-              border:`1px solid ${T.color.marca}`, borderRadius:T.radio.chico,
-              fontSize:13, fontFamily:"inherit", outline:"none",
-             }}/>
-           ) : (
-            <span>{promMap[c.code]} {Number(promMap[c.code]) === 1 ? "dia" : "dias"}</span>
-           )}
-          </td>
-          <td style={{ ...td, textAlign:"right" }}>
-           <div style={{ display:"inline-flex", gap:6 }}>
-            {editando === c.code ? (
-             <>
-              <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
-               onClick={()=>guardarEdit(c.code)}>Guardar</button>
-              <button style={botonFila} onClick={()=>setEditando(null)}>Cancelar</button>
-             </>
-            ) : (
-             <>
-              <button style={botonFila}
-               onClick={()=>{ setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}>Editar</button>
-              <BotonEliminar title="Quitar promesa" onClick={()=>eliminar(c.code, c.name)} />
-             </>
-            )}
-           </div>
-          </td>
-         </tr>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      <thead>
+       <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+        {["Ciudad", "Codigo DANE", "Dias Plazo", "Acciones"].map(h => (
+         <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
         ))}
-       </tbody>
-      </table>
+       </tr>
+      </thead>
+      <tbody>
+       {pageItems.map((c, i) => (
+        <tr key={c.code} style={{ borderBottom:`1px solid ${border}` }}>
+         <td style={{ padding:"16px", fontWeight:800 }}>{c.name}</td>
+         <td style={{ padding:"16px", fontFamily:"monospace", color:"#5b33d6", fontWeight:850 }}>{c.code}</td>
+         <td style={{ padding:"16px" }}>
+          {editando === c.code ? (
+           <input type="number" value={diasEdit} onChange={e => setDiasEdit(e.target.value)}
+            style={{ width:70, padding:"8px 10px", borderRadius:10, border:`1px solid ${border}`, fontSize:14, fontWeight:800 }}
+            autoFocus onKeyDown={e => e.key === "Enter" && guardarEdit(c.code)}/>
+          ) : (
+           <span style={{ background:"#f0eef9", border:"1px solid #ddd6fe", borderRadius:99, padding:"5px 12px", fontWeight:850, color:"#5b33d6", fontSize:13 }}>
+            {promMap[c.code]} dia{promMap[c.code] !== 1 ? "s" : ""}
+           </span>
+          )}
+         </td>
+         <td style={{ padding:"16px", textAlign:"right" }}>
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+           {editando === c.code ? (
+            <>
+             <button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={() => guardarEdit(c.code)}>Guardar</button>
+             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={() => setEditando(null)}>Cancelar</button>
+            </>
+           ) : (
+            <>
+             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={() => { setEditando(c.code); setDiasEdit(String(promMap[c.code])); }}>Editar</button>
+             <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={() => eliminar(c.code, c.name)}>Quitar</button>
+            </>
+           )}
+          </div>
+         </td>
+        </tr>
+       ))}
+      </tbody>
+     </table>
      </div>
-    )}
+     <PaginationControls total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+    </section>
 
-    <PieTabla
-     izquierda={`${conPromesa.length} ${conPromesa.length === 1 ? "ciudad" : "ciudades"} con promesa`}
-     derecha={<Paginador total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize}/>}
-    />
-   </section>
-
-   {sinPromesa.length > 0 && (
-    <section style={{ ...tarjeta, padding:16 }}>
-     <div style={{ ...T.texto.tarjeta, marginBottom:4 }}>Ciudades sin promesa</div>
-     <div style={{ fontSize:12.5, color:T.color.tinta3, marginBottom:12 }}>
-      Sus pedidos calculan el riesgo con la fecha estimada de cada uno.
+   {sinFiltradias.length > 0 && (
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:"14px 18px", borderBottom:`1px solid ${border}`, display:"flex", justifyContent:"space-between", gap:12 }}>
+      <span style={{ fontWeight:850 }}>Sin promesa configurada</span>
+      <span style={{ color:"#dc2626", fontSize:13, fontWeight:850 }}>{sinFiltradias.length}</span>
      </div>
-     <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-      {sinFiltradias.slice(0, 60).map(c => (
-       <button key={c.code} onClick={()=>setNueva({ ciudad_codigo:c.code, dias_plazo:"" })} style={{
-        border:`1px solid ${T.color.borde}`, background:T.color.superficie2,
-        borderRadius:T.radio.chico, padding:"4px 9px", cursor:"pointer",
-        fontFamily:"inherit", fontSize:12.5, color:T.color.tinta2,
-       }}>{c.name}</button>
-      ))}
-      {sinFiltradias.length > 60 && (
-       <span style={{ fontSize:12.5, color:T.color.tinta3, alignSelf:"center" }}>
-        y {sinFiltradias.length - 60} mas
+     <div style={{ display:"flex", flexWrap:"wrap", gap:8, padding:16 }}>
+      {sinFiltradias.map(c => (
+       <span key={c.code} style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:99, padding:"6px 12px", fontSize:12, color:"#dc2626", fontWeight:750 }}>
+        {c.name}
        </span>
-      )}
+      ))}
      </div>
     </section>
    )}
-
-  </Pagina>
+   </main>
+  </div>
  );
 }
 
 
-export function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recargar }) {
- const esMovil = useEsMovil();
+function GestionPaqueterias({ paqueterias, showToast, recargar }) {
  const [nueva, setNueva] = useState("");
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
  const primaryButton = { ...buttonBase, background:"#6d42d8", borderColor:"#6d42d8", color:"#fff" };
- // Reciben el nombre por parametro y devuelven si guardaron, para que la hoja
- // del celular sepa si cerrarse. Validan y guardan lo mismo que antes.
- const agregar = async (valor = nueva) => {
-  if (!valor.trim()) { showToast("Escribe el nombre de la empresa","error"); return false; }
-  if ((paqueterias||[]).includes(valor.trim())) { showToast("Ya existe esa empresa","error"); return false; }
-  const { error } = await supabase.from('paqueterias').insert({ nombre: valor.trim() });
-  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"),"error"); return false; }
+ const agregar = async () => {
+  if (!nueva.trim()) { showToast("Escribe el nombre de la empresa","error"); return; }
+  if ((paqueterias||[]).includes(nueva.trim())) { showToast("Ya existe esa empresa","error"); return; }
+  const { error } = await supabase.from('paqueterias').insert({ nombre: nueva.trim() });
+  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"),"error"); return; }
   setNueva("");
   showToast(" Empresa de paqueteria agregada","success");
   if (recargar) await recargar();
-  return true;
  };
- // Solo se puede quitar una empresa que ningun pedido este usando: si no, el
- // pedido quedaria apuntando a una paqueteria que ya no existe en el catalogo.
- const eliminar = async (nombre) => {
-  if (!window.confirm(`Quitar "${nombre}" del catalogo de paqueterias?`)) return false;
-  const { error } = await supabase.from('paqueterias').delete().eq('nombre', nombre);
-  if (error) { showToast(mensajeError(error, "la empresa de paqueteria"), "error"); return false; }
-  showToast("Empresa quitada del catalogo", "info");
-  if (recargar) await recargar();
-  return true;
- };
-
- const lista = (paqueterias || []).slice()
-  .sort((a,b)=>String(a).localeCompare(String(b), "es", { sensitivity:"base" }));
- const usos = (nombre) => (pedidos || []).filter(p => p.paqueteria === nombre).length;
- // Disenio 28: el nombre repetido se avisa mientras se escribe y bloquea el alta.
- const repetida = Boolean(nueva.trim()) && (paqueterias||[]).includes(nueva.trim());
-
- if (esMovil) return (
-  <Pagina>
-   <PaqueteriasMovil lista={lista} usos={usos} onAgregar={agregar} onEliminar={eliminar} />
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo="Paqueterias"
-    descripcion="Empresas externas usadas para guias de paqueteria"
-   />
-
-   <section style={{ ...tarjeta, padding:14, display:"flex", gap:10, flexWrap:"wrap" }}>
-    <div style={{ flex:"1 1 280px", minWidth:220 }}>
-     <input value={nueva} onChange={e=>setNueva(e.target.value)}
-      onKeyDown={e=>e.key==="Enter"&&!repetida&&agregar()}
-      placeholder="Nombre de la empresa (Servientrega, TCC, Coordinadora...)"
-      style={{
-       width:"100%", boxSizing:"border-box", height:38, padding:"0 12px",
-       border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control,
-       fontSize:13, fontFamily:"inherit", color:T.color.tinta, outline:"none",
-       background:T.color.superficie2,
-      }}/>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Paqueterias</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Empresas externas usadas para guias de paqueteria</p>
     </div>
-    <button onClick={()=>agregar()} disabled={repetida} style={{ ...botonPrincipal, opacity: repetida ? 0.5 : 1, cursor: repetida ? "not-allowed" : "pointer" }}><Plus size={16}/> Agregar</button>
-    {repetida && (
-     <div style={{ flexBasis:"100%", fontSize:12.5, color:T.color.mal }}>Esa paqueteria ya existe.</div>
-    )}
-   </section>
-
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${lista.length} ${lista.length === 1 ? "empresa" : "empresas"} · orden A-Z`}>
-     <span style={{ fontSize:13, color:T.color.tinta3 }}>
-      Estas son las opciones que aparecen al marcar un envio como paqueteria.
-     </span>
-    </BarraFiltros>
-
-    {lista.length === 0 ? (
-     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-      Sin empresas registradas. Agrega la primera arriba.
-     </div>
-    ) : (
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
-       <thead>
-        <tr>
-         <th style={th}>Empresa</th>
-         <th style={{...th, textAlign:"right"}}>Pedidos con esta paqueteria</th>
-         <th style={{...th, width:60}} />
-        </tr>
-       </thead>
-       <tbody>
-        {lista.map((nombre, i) => {
-         const enUso = usos(nombre);
-         return (
-          <tr key={i}>
-           <td style={td}>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-             <span style={{
-              width:34, height:34, borderRadius:T.radio.chico, flexShrink:0,
-              background:T.color.marcaAvatar, color:T.color.marca,
-              display:"grid", placeItems:"center", fontSize:13, fontWeight:800,
-             }}>{String(nombre || "?").charAt(0).toUpperCase()}</span>
-             <span style={{ fontSize:13.5, fontWeight:600, color:T.color.tinta }}>{nombre}</span>
-            </div>
-           </td>
-           <td style={tdCifra}>{enUso}</td>
-           <td style={{ ...td, textAlign:"right" }}>
-            {/* Con pedidos no se puede quitar: un candado con la razon, en vez
-                de una papelera gris que parece un boton roto. */}
-            {enUso > 0 ? (
-             <span title={`No se puede quitar: ${enUso} pedido(s) la usan`}
-              style={{ ...iconoAccion, cursor:"help", color:T.color.tinta4 }}><Lock size={15}/></span>
-            ) : (
-             <BotonEliminar title="Quitar" onClick={()=>eliminar(nombre)} />
-            )}
-           </td>
-          </tr>
-         );
-        })}
-       </tbody>
-      </table>
-     </div>
-    )}
-   </section>
-  </Pagina>
+    <span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"7px 12px", fontSize:13, fontWeight:850 }}>
+     {(paqueterias||[]).length} registradas
+    </span>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ ...cardStyle, padding:18 }}>
+     <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center" }}>
+     <input value={nueva} onChange={e=>setNueva(e.target.value)}
+      onKeyDown={e=>e.key==="Enter"&&agregar()}
+      placeholder="Nombre de la empresa (ej: Servientrega, TCC...)"
+      style={{...iSt, borderRadius:12, background:"#fff"}}/>
+     <button style={primaryButton} onClick={agregar}>+ Agregar</button>
+    </div>
+    </section>
+    {(paqueterias||[]).length===0&&<section style={{ ...cardStyle, textAlign:"center", padding:42, color:"#9ca3af" }}>Sin empresas registradas.</section>}
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
+    {(paqueterias||[]).map((p,i)=>(
+     <article key={i} style={{ ...cardStyle, padding:18, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
+       <div style={{ width:38, height:38, borderRadius:12, background:"#f0eef9", color:"#5b33d6", display:"grid", placeItems:"center", fontWeight:900 }}>{String(p || "P").slice(0,1).toUpperCase()}</div>
+       <span style={{ fontWeight:800, color:"#111827", whiteSpace:"normal", overflowWrap:"anywhere", lineHeight:1.25 }}>{p}</span>
+      </div>
+      <button onClick={async ()=>{const{error}=await supabase.from('paqueterias').delete().eq('nombre',p); if(!error){showToast('Eliminado','info'); if(recargar) await recargar();}}}
+       style={{ ...buttonBase, padding:"7px 10px", fontSize:13, color:"#dc2626" }}>Eliminar</button>
+     </article>
+    ))}
+    </section>
+   </main>
+  </div>
  );
 }
 
 // ModuloDevoluciones 
 
-export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, paqueterias = [], pedidos = [], showToast, user, recargar }) {
+function ModuloDevoluciones({ devoluciones, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -4447,7 +3058,6 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const esCliente = user.rol==="cliente";
- const esMovil = useEsMovil();
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
  const abrirEditarCliente = (dev) => {
@@ -4482,10 +3092,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  };
 
  const crear = async () => {
-  // La factura ya no se pide: sale del pedido elegido. Puede quedar vacia si
-  // el pedido aun no tiene factura (los de cartera entran sin ella) o si el
-  // pedido se escribio a mano.
-  const req = ["pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
+  const req = ["factura","pedido_ref","unidades","volumen_m3","peso_kg","dir_recogida","dir_entrega","ciudad_codigo","motivo"];
   for (const k of req) {
    if (!form[k].toString().trim()) { showToast("Todos los campos son obligatorios","error"); return; }
   }
@@ -4591,180 +3198,121 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
- // Disenios 22a, 24a y 25a: en el celular la lista va en tarjetas, el
- // formulario a pantalla completa y la gestion (19) tambien. Todo llama a los
- // mismos crear, asignar y marcarEntregado del escritorio.
- if (esMovil) return (
-  <Pagina>
-   <EnviosMovil tipo="devolucion" conductores={conductores} vistaCliente={esCliente}
-    items={devoluciones.filter(d => !esCliente || [user.nombre, user.user].includes(d.solicitado_por))}
-    sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
-    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
-   {(modNueva||modEditar)&&(
-    <FormDevolucionMovil form={form} setForm={setForm} ciudades={ciudades} pedidos={pedidos} sedes={SEDES_DESTINO}
-     editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
-     onArchivo={(file)=>cargarDoc([file])} onEnviar={crear} onClose={cerrarFormulario} />
-   )}
-   {modDet&&(
-    <GestionEnvioMovil tipo="devolucion" item={modDet} conductores={conductores}
-     transportistas={transportistas} paqueterias={paqueterias}
-     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
-     showToast={showToast} canEdit={user.rol!=="cliente"}/>
-   )}
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo={esCliente ? "Mis devoluciones" : "Devoluciones"}
-    descripcion="Gestion y seguimiento de solicitudes de devolucion"
-    acciones={<button onClick={()=>setModNueva(true)} style={botonPrincipal}><Plus size={16}/> Nueva devolucion</button>}
-   />
-
-   <Indicadores items={[
-    { label:"Abiertas", valor:totalAbiertas, color:T.color.marca, destacado:true },
-    { label:"Cerradas", valor:totalCerradas, color:T.color.bienPunto },
-    { label:"Con soporte", valor:filtradas.filter(d=>d.soporte_nombre).length, color:T.color.infoPunto },
-    { label:"Total", valor:devoluciones.length, color:T.color.neutroPunto },
-   ]}/>
-
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${filtradas.length} de ${devoluciones.length}`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, factura, pedido o ciudad" ancho={300}/>
-    </BarraFiltros>
-
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
-      <thead>
-       <tr>
-        <th style={th}>Guia</th>
-        <th style={th}>Factura</th>
-        <th style={th}>Pedido</th>
-        <th style={th}>Recogida</th>
-        <th style={th}>Sede destino</th>
-        <th style={{...th, textAlign:"right"}}>Unidades</th>
-        <th style={th}>Estado</th>
-        <th style={{...th, textAlign:"right"}}>Acciones</th>
-       </tr>
-      </thead>
-      <tbody>
-       {pageItems.length===0 && (
-        <tr><td colSpan={8} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
-         {devoluciones.length===0 ? "Sin devoluciones registradas." : "Ninguna devolucion coincide con la busqueda."}
-        </td></tr>
-       )}
-       {pageItems.map(d=>(
-        <tr key={d.id} style={{ cursor:"pointer" }} onClick={()=>setModDet(d)}>
-         <td style={td}><span style={chipMono}>{d.guia}</span></td>
-         <td style={td}><span style={mono}>{d.factura || "-"}</span></td>
-         <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{d.pedido_ref || "-"}</td>
-         <td style={td}>
-          <div style={{ color:T.color.tinta, fontWeight:600 }}>{d.ciudad_nombre || "-"}</div>
-          <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{d.dir_recogida}</div>
-         </td>
-         <td style={td}>{d.dir_entrega || <span style={{ color:T.color.tinta4 }}>Sin registrar</span>}</td>
-         <td style={tdCifra}>{d.unidades}</td>
-         <td style={td}><ChipEstado estado={d.estado} novedad={d.novedad}/></td>
-         <td style={{ ...td, textAlign:"right" }} onClick={e=>e.stopPropagation()}>
-          <div style={{ display:"inline-flex", gap:6 }}>
-           {(d.soporte_nombre || d.soporte_data) && (
-            <button style={botonFila} onClick={()=>abrirArchivoRemoto("devoluciones", d.id, "soporte_data", "soporte_nombre", d.soporte_nombre || "soporte", showToast)}>Soporte</button>
-           )}
-           {esCliente && !d.conductor_id && d.estado==="sin_asignar" && (
-            <button style={botonFila} onClick={()=>abrirEditarCliente(d)}>Editar</button>
-           )}
-           <button style={botonFila} onClick={()=>setModDet(d)}>Ver</button>
-          </div>
-         </td>
-        </tr>
-       ))}
-      </tbody>
-     </table>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esCliente ? "Mis Devoluciones" : "Devoluciones"}</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de solicitudes de devolucion</p>
     </div>
-
-    <PieTabla
-     izquierda={`${filtradas.length} ${filtradas.length===1 ? "devolucion" : "devoluciones"}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
-    />
-   </section>
-
+    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Devolucion</button>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{totalAbiertas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con soporte</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(d=>d.soporte_nombre||d.soporte_data).length}</div></div>
+    </section>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia, factura o pedido..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{filtradas.length} de {devoluciones.length}</span>
+      <span style={{ background:"#fef2f2", color:"#dc2626", borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800 }}>{totalAbiertas} abiertas</span>
+     </div>
+     {filtradas.length===0 ? (
+      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin devoluciones registradas.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+          {["Guia", "Factura", "Pedido", "Ciudad", "Unidades", "Estado", "Soporte", "Acciones"].map(h => (
+           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+          ))}
+         </tr>
+        </thead>
+        <tbody>
+         {pageItems.map(d=>(
+          <tr key={d.id} style={{ borderBottom:`1px solid ${border}` }}>
+           <td style={{ padding:"16px", color:"#dc2626", fontWeight:850, fontFamily:"monospace" }}>{d.guia}</td>
+           <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{d.factura}</td>
+           <td style={{ padding:"16px", fontWeight:750 }}>{d.pedido_ref}</td>
+           <td style={{ padding:"16px" }}><div>{d.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{d.dir_recogida}</div></td>
+           <td style={{ padding:"16px", fontWeight:850 }}>{d.unidades}</td>
+           <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={d.estado}/>{d.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{d.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {d.fecha_real}</div>}</td>
+           <td style={{ padding:"16px" }}>{(d.soporte_nombre||d.soporte_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('devoluciones', d.id, 'soporte_data', 'soporte_nombre', `soporte-${d.guia}`, showToast)}>Ver Soporte</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin soporte</span>}</td>
+           <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !d.conductor_id && d.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(d)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(d)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+     )}
+     <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+    </section>
+   </main>
    {(modNueva||modEditar)&&(
-    <ModalForm
-     titulo={modEditar ? "Editar solicitud de devolucion" : "Nueva solicitud de devolucion"}
-     descripcion="Genera una guia de devolucion para el pedido"
-     ancho="M"
-     onClose={cerrarFormulario}
-     onPrimario={crear}
-     textoPrimario={modEditar ? "Guardar cambios" : "Crear devolucion"}
-    >
-     {!modEditar && (
-      <FranjaInfo>Se generara automaticamente la guia DV-{new Date().getFullYear()}-XXXX</FranjaInfo>
-     )}
-
-     {/* Un solo campo: el pedido se elige de la lista (o se escribe). Su
-         factura se toma del pedido, no se pide aparte; y al elegirlo tambien
-         se llenan la direccion y la ciudad de recogida, que se pueden corregir. */}
-     <SelectorPedido label="Pedido" obligatorio valor={form.pedido_ref} pedidos={pedidos}
-      onChange={v=>setForm(x=>({ ...x, pedido_ref:v, factura: (pedidos.find(p=>String(p.id)===String(v))||{}).factura || "" }))}
-      onElegirPedido={p=>setForm(x=>({ ...x, factura: p.factura || "", dir_recogida: p.direccion || x.dir_recogida, ciudad_codigo: p.ciudad_codigo || x.ciudad_codigo }))}
-      ayuda={form.factura ? `Factura ${form.factura} · se toma del pedido`
-       : form.pedido_ref ? "Sin factura: el pedido todavia no la tiene."
-       : "Al elegir el pedido se completan su factura, la direccion y la ciudad de recogida."} />
-
-     <Seccion titulo="Carga" />
-     <Fila columnas={3}>
-      <Texto label="Unidades" obligatorio tipo="number" valor={form.unidades} onChange={f("unidades")} placeholder="5" />
-      <Texto label="Volumen" obligatorio tipo="number" prefijo="m3" valor={form.volumen_m3} onChange={f("volumen_m3")} placeholder="0.5" />
-      <Texto label="Peso" obligatorio tipo="number" prefijo="kg" valor={form.peso_kg} onChange={f("peso_kg")} placeholder="10" />
-     </Fila>
-
-     <Seccion titulo="Recogida y destino" />
-     <Fila>
-      <Texto label="Direccion de recogida" obligatorio valor={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47" />
-      <Selector label="Ciudad de recogida" obligatorio valor={form.ciudad_codigo} onChange={f("ciudad_codigo")}
-       placeholder="Seleccione"
-       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
-     </Fila>
-     <Selector label="Sede destino" obligatorio valor={form.dir_entrega} onChange={f("dir_entrega")}
-      placeholder="Seleccione"
-      opciones={[
-       ...SEDES_DESTINO.map(x=>({ value:x, label:x })),
-       ...(form.dir_entrega && !SEDES_DESTINO.includes(form.dir_entrega)
-        ? [{ value:form.dir_entrega, label:form.dir_entrega }] : []),
-      ]} />
-     <AreaTexto label="Motivo" obligatorio valor={form.motivo} onChange={f("motivo")}
-      placeholder="Describe el motivo de la devolucion..." />
-
-     {!esCliente && !modEditar && (
-      <>
-       <Seccion titulo="Transporte" />
-       <Fila>
-        <Selector label="Tipo de envio" valor={form.tipo_envio||"conductor"} onChange={f("tipo_envio")}
-         opciones={[
-          { value:"conductor", label:"Conductor propio" },
-          { value:"empresa_transporte", label:"Empresa transportista" },
-          { value:"mensajeria", label:"Mensajeria" },
-          { value:"paqueteria", label:"Paqueteria tercero" },
-         ]} />
-        {(form.tipo_envio||"conductor")==="paqueteria" ? (
-         <Selector label="Paqueteria" valor={form.paqueteria||""} onChange={f("paqueteria")}
-          placeholder="Seleccione"
-          opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
-        ) : (
-         <Selector label="Conductor" opcional valor={form.conductor_id} onChange={f("conductor_id")}
-          placeholder="Sin asignar"
-          opciones={conductoresActivos.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-        )}
-       </Fila>
-       {(form.tipo_envio||"conductor")==="paqueteria" && (
-        <Texto label="No. guia de paqueteria" mono valor={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-0001" />
-       )}
-      </>
-     )}
-
-     <Adjunto label="Soporte" nombre={form.soporte_nombre} onArchivo={(file)=>cargarDoc([file])} />
-    </ModalForm>
+    <Modal title={modEditar ? "Editar Solicitud de Devolucion" : "Nueva Solicitud de Devolucion"} onClose={cerrarFormulario} wide>
+     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {!modEditar&&<div style={{background:"#fef2f2",borderRadius:10,padding:10,fontSize:12,color:"#dc2626",fontWeight:600}}>
+       Se generar automaticamente una Guia (DV-{new Date().getFullYear()}-XXXX).
+      </div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+       <Field label="No. Factura *" value={form.factura} onChange={f("factura")} placeholder="FAC-2200"/>
+       <Field label="No. Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
+       <Field label="Unidades *" value={form.unidades} onChange={f("unidades")} type="number" placeholder="5"/>
+       <Field label="Volumen m *" value={form.volumen_m3} onChange={f("volumen_m3")} type="number" placeholder="0.5"/>
+       <Field label="Peso kg *" value={form.peso_kg} onChange={f("peso_kg")} type="number" placeholder="10"/>
+      </div>
+      <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
+      <Field label="Ciudad de Recogida *" value={form.ciudad_codigo} onChange={f("ciudad_codigo")} as="select"
+       options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
+      <Field label="Sede destino *" value={form.dir_entrega} onChange={f("dir_entrega")} as="select"
+       options={[
+        {value:"",label:" Seleccione "},
+        ...SEDES_DESTINO.map(x=>({value:x,label:x})),
+        // Si la devolucion ya tenia un valor que no esta en la lista, se conserva
+        // como opcion para no borrarlo al editar.
+        ...(form.dir_entrega && !SEDES_DESTINO.includes(form.dir_entrega) ? [{value:form.dir_entrega,label:form.dir_entrega}] : []),
+       ]}/>
+      <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="textarea" placeholder="Describe el motivo de la devolucin..."/>
+      {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
+       options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
+      }
+      {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"&&(
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <Field label="Empresa Paqueteria" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega, TCC..."/>
+        <Field label="No. Guia" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
+       </div>
+      )}
+      {!esCliente && !modEditar && ((form.tipo_envio||"conductor")!=="paqueteria")&&(
+       <Field label="Conductor (opcional)" value={form.conductor_id}
+        onChange={v=>{
+         f("conductor_id")(v);
+         const c=conductoresActivos.find(cx=>String(cx.id)===String(v));
+         if(c&&form.tipo_envio==="empresa_transporte") f("paqueteria")(c.empresa||"");
+        }} as="select"
+        options={[
+         {value:"",label:" Sin asignar "},
+         ...((form.tipo_envio||"conductor")==="empresa_transporte"
+          ? conductoresActivos.filter(c=>c.empresa||c.nit_proveedor)
+          : conductoresActivos
+         ).map(c=>({value:c.id,label:`${c.nombre} ${c.placa}${c.empresa?" "+c.empresa:""}`}))
+        ]}/>
+      )}
+      <div style={{border:`1px dashed ${P[300]}`,borderRadius:10,padding:14,textAlign:"center",cursor:"pointer"}}
+       onClick={()=>fileRef.current&&fileRef.current.click()}>
+       {form.soporte_nombre?<span style={{color:"#059669",fontWeight:700}}> {form.soporte_nombre}</span>:<span style={{color:P[600]}}> Adjuntar soporte (opcional)</span>}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+       <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+       <Btn onClick={crear}>{modEditar ? " Guardar Cambios" : " Registrar Devolucion"}</Btn>
+      </div>
+     </div>
+    </Modal>
    )}
    {modDet&&(
     <ModalDetalleDV dev={modDet} conductores={conductores} ciudades={ciudades}
@@ -4772,7 +3320,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
      onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
      showToast={showToast} canEdit={user.rol!=="cliente"}/>
    )}
-  </Pagina>
+  </div>
  );
 }
 
@@ -4819,78 +3367,87 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
  };
 
  return (
-  <ModalGestion
-   titulo="Devolucion"
-   id={dev.guia}
-   estado={<ChipEstado estado={dev.estado} novedad={dev.novedad} />}
-   descripcion={canEdit ? "Asigna transporte o cierra la devolucion" : "Detalle de la devolucion"}
-   onClose={onClose}
-   onGuardar={canEdit ? guardar : null}
-   textoGuardar="Guardar asignacion"
-   textoCierre="Marcar completada"
-   onCierre={canEdit ? marcar : null}
-  >
-   <Resumen datos={[
-    { label:"Factura", valor:dev.factura || "-", mono:true },
-    { label:"Pedido", valor:dev.pedido_ref || "-", mono:true },
-    { label:"Unidades · peso", valor:`${dev.unidades} uds · ${dev.peso_kg} kg` },
-    { label:"Ciudad", valor:ciudad?.name || dev.ciudad_nombre || "Sin definir", falta:!dev.ciudad_nombre },
-    { label:"Recogida", valor:dev.dir_recogida || "Sin registrar", falta:!dev.dir_recogida },
-    { label:"Sede destino", valor:dev.dir_entrega || "Sin registrar", falta:!dev.dir_entrega },
-   ]}>
-    {dev.motivo && <FranjaAviso etiqueta="Motivo">{dev.motivo}</FranjaAviso>}
-   </Resumen>
-
-   {canEdit && (
-    <>
-     <Seccion titulo="Transporte" />
-     <Fila>
-      <Selector label="Tipo de transporte" valor={tipoEnvio} onChange={cambiarTipo}
-       opciones={[
-        { value:"propio", label:"Transporte propio" },
-        { value:"empresa_transporte", label:"Empresa transportista" },
-        { value:"mensajeria", label:"Mensajeria" },
-        { value:"paqueteria", label:"Paqueteria tercero" },
-       ]} />
-      {tipoEnvio === "paqueteria" ? (
-       <Selector label="Paqueteria" valor={paqSel} onChange={setPaqSel}
-        placeholder="Seleccione"
-        opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
-      ) : tipoEnvio === "empresa_transporte" ? (
-       <Selector label="Empresa transportista" valor={empresa} onChange={cambiarEmpresa}
-        placeholder="Seleccione la empresa" opciones={empresasOpciones} />
-      ) : (
-       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
-        placeholder="Sin asignar"
-        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-      )}
-     </Fila>
-     {tipoEnvio === "paqueteria" && (
-      <Texto label="No. guia de paqueteria" mono valor={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-0001" />
+  <Modal title={`Devolucion ${dev.guia}`} onClose={onClose} wide>
+   <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{background:"#fef2f2",borderRadius:12,padding:16,border:"1px solid #fca5a5"}}>
+     <div style={{fontWeight:800,fontSize:15,color:"#dc2626",marginBottom:8}}> {dev.guia}</div>
+     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:13,color:"#64748b"}}>
+      <span> Factura: <strong>{dev.factura}</strong></span>
+      <span> Pedido: <strong>{dev.pedido_ref}</strong></span>
+      <span> Unidades: <strong>{dev.unidades}</strong></span>
+      <span> Peso: <strong>{dev.peso_kg} kg</strong></span>
+      <span> Ciudad: <strong>{dev.ciudad_nombre}</strong></span>
+      <span> Recogida: <strong>{dev.dir_recogida}</strong></span>
+      <span> Sede destino: <strong>{dev.dir_entrega||"Sin registrar"}</strong></span>
+     </div>
+     <div style={{marginTop:8,padding:"8px 12px",background:"#fffbeb",borderRadius:8,fontSize:13,color:"#92400e",whiteSpace:"pre-wrap"}}>
+       Motivo: {dev.motivo}
+     </div>
+     {(dev.soporte_nombre||dev.soporte_data)&&(
+      <Btn size="sm" variant="success" style={{marginTop:10}}
+       onClick={()=>abrirArchivoRemoto('devoluciones', dev.id, 'soporte_data', 'soporte_nombre', `soporte-${dev.guia}`, showToast)}>
+        Ver Soporte
+      </Btn>
      )}
-     {tipoEnvio === "empresa_transporte" && (
-      <>
-       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
-        deshabilitado={!empresa}
-        placeholder={empresa ? "Sin asignar" : "Selecciona primero la empresa"}
-        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-       {empresa && conductoresElegibles.length === 0 && (
-        <FranjaInfo>Esa empresa no tiene conductores activos registrados.</FranjaInfo>
+    </div>
+    <Badge estado={dev.estado}/>
+    {canEdit&&dev.estado!=="entregado"&&dev.estado!=="novedad"&&(
+     <>
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+       <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
+        options={[
+         {value:"propio",label:" Transporte Propio"},
+         {value:"empresa_transporte",label:" Empresa Transportista"},
+         {value:"mensajeria",label:" Mensajeria"},
+         {value:"paqueteria",label:" Paqueteria Tercero"},
+        ]}/>
+       {tipoEnvio==="paqueteria"?(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+         <Field label="Paqueteria" value={paqSel} onChange={setPaqSel} as="select"
+          options={[{value:"",label:"Seleccione"},...(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({value:x,label:x}))]}/>
+         <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
+        </div>
+       ):(
+        <>
+         {tipoEnvio==="empresa_transporte"&&(
+          <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
+           options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
+         )}
+         <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
+          disabled={tipoEnvio==="empresa_transporte" && !empresa}
+          options={[
+           {value:"",label:(tipoEnvio==="empresa_transporte"&&!empresa)?"Selecciona primero la empresa":"Sin asignar"},
+           ...conductoresElegibles.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}${c.empresa?" - "+c.empresa:""}`}))
+          ]}/>
+         {tipoEnvio==="empresa_transporte"&&empresa&&conductoresElegibles.length===0&&(
+          <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
+           Esa empresa no tiene conductores activos registrados.
+          </p>
+         )}
+        </>
        )}
-      </>
-     )}
-     <CasillaNovedad marcada={novedad} onChange={setNovedad}>
-      Marcar con novedad
-     </CasillaNovedad>
-    </>
-   )}
-  </ModalGestion>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
+       onClick={()=>setNovedad(!novedad)}>
+       <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}></span>}
+       </div>
+       <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>Marcar con Novedad</span>
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
+       <Btn onClick={guardar}> Guardar Asignacion</Btn>
+       <Btn variant="success" onClick={marcar}> Marcar Devolucion Completada</Btn>
+      </div>
+     </>
+    )}
+   </div>
+  </Modal>
  );
 }
 
 // ModuloRecogidas 
 
-export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
+function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -4908,7 +3465,6 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const esCliente = user.rol==="cliente";
- const esMovil = useEsMovil();
  const conductoresActivos = conductores.filter(c=>c.activo!==false);
 
  const abrirEditarCliente = (rec) => {
@@ -5050,169 +3606,101 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, pageSize]);
 
- // Disenios 22b, 24b y 25b, con los mismos crear, asignar y marcarEntregado.
- if (esMovil) return (
-  <Pagina>
-   <EnviosMovil tipo="recogida" conductores={conductores} vistaCliente={esCliente}
-    items={recogidas.filter(r => !esCliente || [user.nombre, user.user].includes(r.solicitado_por))}
-    sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
-    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
-   {(modNueva||modEditar)&&(
-    <FormRecogidaMovil form={form} setForm={setForm} ciudades={ciudades}
-     editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
-     onArchivo={(file)=>cargarDoc([file])} onEnviar={crear} onClose={cerrarFormulario} />
-   )}
-   {modDet&&(
-    <GestionEnvioMovil tipo="recogida" item={modDet} conductores={conductores}
-     transportistas={transportistas} paqueterias={paqueterias}
-     onClose={()=>setModDet(null)} onAsignar={asignar} onEntregado={marcarEntregado}
-     showToast={showToast} canEdit={user.rol!=="cliente"}/>
-   )}
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo={esCliente ? "Mis recogidas" : "Recogidas"}
-    descripcion="Gestion y seguimiento de solicitudes de recogida"
-    acciones={<button onClick={()=>setModNueva(true)} style={botonPrincipal}><Plus size={16}/> Nueva recogida</button>}
-   />
-
-   <Indicadores items={[
-    { label:"Abiertas", valor:totalAbiertas, color:T.color.marca, destacado:true },
-    { label:"Cerradas", valor:totalCerradas, color:T.color.bienPunto },
-    { label:"Con documento", valor:filtradas.filter(r=>r.doc_nombre).length, color:T.color.infoPunto },
-    { label:"Total", valor:recogidas.length, color:T.color.neutroPunto },
-   ]}/>
-
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${filtradas.length} de ${recogidas.length}`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, ciudad o direccion" ancho={280}/>
-    </BarraFiltros>
-
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
-      <thead>
-       <tr>
-        <th style={th}>Guia</th>
-        <th style={th}>Recogida</th>
-        <th style={th}>Entrega</th>
-        <th style={{...th, textAlign:"right"}}>Unidades</th>
-        <th style={{...th, textAlign:"right"}}>Peso</th>
-        <th style={th}>Estado</th>
-        <th style={th}>Documento</th>
-        <th style={{...th, textAlign:"right"}}>Acciones</th>
-       </tr>
-      </thead>
-      <tbody>
-       {pageItems.length===0 && (
-        <tr><td colSpan={8} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
-         {recogidas.length===0 ? "Sin recogidas registradas." : "Ninguna recogida coincide con la busqueda."}
-        </td></tr>
-       )}
-       {pageItems.map(r=>(
-        <tr key={r.id} style={{ cursor:"pointer" }} onClick={()=>setModDet(r)}>
-         <td style={td}><span style={chipMono}>{r.guia}</span></td>
-         <td style={td}>
-          <div style={{ color:T.color.tinta, fontWeight:600 }}>{r.ciudad_recogida_nombre || "-"}</div>
-          <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{r.dir_recogida}</div>
-         </td>
-         <td style={td}>
-          <div style={{ color:T.color.tinta, fontWeight:600 }}>{r.ciudad_entrega_nombre || "-"}</div>
-          <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{r.dir_entrega}</div>
-         </td>
-         <td style={tdCifra}>{r.unidades}</td>
-         <td style={tdCifra}>{r.peso_kg} kg</td>
-         <td style={td}><ChipEstado estado={r.estado} novedad={r.novedad}/></td>
-         <td style={td} onClick={e=>e.stopPropagation()}>
-          {(r.doc_nombre || r.doc_data)
-           ? <button style={botonFila} onClick={()=>abrirArchivoRemoto("recogidas", r.id, "doc_data", "doc_nombre", r.doc_nombre || "documento", showToast)}>Ver</button>
-           : <span style={{ color:T.color.tinta4 }}>-</span>}
-         </td>
-         <td style={{ ...td, textAlign:"right" }} onClick={e=>e.stopPropagation()}>
-          <div style={{ display:"inline-flex", gap:6 }}>
-           {esCliente && !r.conductor_id && r.estado==="sin_asignar" && (
-            <button style={botonFila} onClick={()=>abrirEditarCliente(r)}>Editar</button>
-           )}
-           <button style={botonFila} onClick={()=>setModDet(r)}>Ver</button>
-          </div>
-         </td>
-        </tr>
-       ))}
-      </tbody>
-     </table>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>{esCliente ? "Mis Recogidas" : "Recogidas"}</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion y seguimiento de solicitudes de recogida</p>
     </div>
-
-    <PieTabla
-     izquierda={`${filtradas.length} ${filtradas.length===1 ? "recogida" : "recogidas"}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
-    />
-   </section>
-
-   {(modNueva||modEditar)&&(
-    <ModalForm
-     titulo={modEditar ? "Editar solicitud de recogida" : "Nueva solicitud de recogida"}
-     descripcion="Programa una recogida en origen y su entrega"
-     ancho="M"
-     onClose={cerrarFormulario}
-     onPrimario={crear}
-     textoPrimario={modEditar ? "Guardar cambios" : "Registrar recogida"}
-    >
-     <Seccion titulo="Recogida" />
-     <Fila>
-      <Texto label="Direccion de recogida" obligatorio valor={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47" />
-      <Selector label="Ciudad de recogida" obligatorio valor={form.ciudad_recogida_cod} onChange={f("ciudad_recogida_cod")}
-       placeholder="Seleccione"
-       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
-     </Fila>
-
-     <Seccion titulo="Entrega" />
-     <Fila>
-      <Texto label="Direccion de entrega" obligatorio valor={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Av El Poblado #43A-15" />
-      <Selector label="Ciudad de entrega" obligatorio valor={form.ciudad_entrega_cod} onChange={f("ciudad_entrega_cod")}
-       placeholder="Seleccione"
-       opciones={(ciudades||[]).map(c=>({ value:c.code, label:`${c.name} - ${c.code}` }))} />
-     </Fila>
-
-     <Seccion titulo="Carga" />
-     <Fila columnas={3}>
-      <Texto label="Unidades" obligatorio tipo="number" valor={form.unidades} onChange={f("unidades")} placeholder="5" />
-      <Texto label="Volumen" obligatorio tipo="number" prefijo="m3" valor={form.volumen_m3} onChange={f("volumen_m3")} placeholder="0.5" />
-      <Texto label="Peso" obligatorio tipo="number" prefijo="kg" valor={form.peso_kg} onChange={f("peso_kg")} placeholder="10" />
-     </Fila>
-     <AreaTexto label="Observaciones" opcional valor={form.observaciones} onChange={f("observaciones")}
-      placeholder="Instrucciones especiales..." />
-
-     {!esCliente && !modEditar && (
-      <>
-       <Seccion titulo="Transporte" />
-       <Fila>
-        <Selector label="Tipo de envio" valor={form.tipo_envio||"conductor"} onChange={f("tipo_envio")}
-         opciones={[
-          { value:"conductor", label:"Conductor propio" },
-          { value:"empresa_transporte", label:"Empresa transportista" },
-          { value:"mensajeria", label:"Mensajeria" },
-          { value:"paqueteria", label:"Paqueteria tercero" },
-         ]} />
-        {(form.tipo_envio||"conductor")==="paqueteria" ? (
-         <Selector label="Paqueteria" valor={form.paqueteria||""} onChange={f("paqueteria")}
-          placeholder="Seleccione"
-          opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
-        ) : (
-         <Selector label="Conductor" opcional valor={form.conductor_id} onChange={f("conductor_id")}
-          placeholder="Sin asignar"
-          opciones={conductoresActivos.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-        )}
-       </Fila>
-       {(form.tipo_envio||"conductor")==="paqueteria" && (
-        <Texto label="No. guia de paqueteria" mono valor={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-0001" />
-       )}
-      </>
+    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Recogida</button>
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Abiertas</div><div style={{ fontSize:28, fontWeight:900, color:"#0891b2", marginTop:8 }}>{totalAbiertas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Cerradas</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{totalCerradas}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Con documento</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtradas.filter(r=>r.doc_nombre||r.doc_data).length}</div></div>
+    </section>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por guia o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{filtradas.length} de {recogidas.length}</span>
+      <span style={{ background:"#ecfeff", color:"#0891b2", borderRadius:99, padding:"6px 12px", fontSize:12, fontWeight:800 }}>{totalAbiertas} abiertas</span>
+     </div>
+     {filtradas.length===0 ? (
+      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin recogidas registradas.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+          {["Guia", "Recogida", "Entrega", "Unidades", "Peso", "Estado", "Documento", "Acciones"].map(h => (
+           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+          ))}
+         </tr>
+        </thead>
+        <tbody>
+         {pageItems.map(r=>(
+          <tr key={r.id} style={{ borderBottom:`1px solid ${border}` }}>
+           <td style={{ padding:"16px", color:"#0891b2", fontWeight:850, fontFamily:"monospace" }}>{r.guia}</td>
+           <td style={{ padding:"16px" }}><div>{r.ciudad_recogida_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_recogida}</div></td>
+           <td style={{ padding:"16px" }}><div>{r.ciudad_entrega_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{r.dir_entrega}</div></td>
+           <td style={{ padding:"16px", fontWeight:850 }}>{r.unidades}</td>
+           <td style={{ padding:"16px", color:"#4b5563" }}>{r.peso_kg} kg</td>
+           <td style={{ padding:"16px" }}><div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><Badge estado={r.estado}/>{r.novedad&&<span style={{ fontSize:12, color:"#dc2626", fontWeight:800 }}>Con Novedad</span>}</div>{r.fecha_real&&<div style={{ color:"#059669", fontSize:12, marginTop:4 }}>Completado: {r.fecha_real}</div>}</td>
+           <td style={{ padding:"16px" }}>{(r.doc_nombre||r.doc_data) ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirArchivoRemoto('recogidas', r.id, 'doc_data', 'doc_nombre', `documento-${r.guia}`, showToast)}>Ver Documento</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin documento</span>}</td>
+           <td style={{ padding:"16px", textAlign:"right" }}>{esCliente && !r.conductor_id && r.estado==="sin_asignar" ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(r)}>Editar</button> : !esCliente ? <button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(r)}>Gestionar</button> : <span style={{ color:"#9ca3af", fontSize:13 }}>Solo lectura</span>}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
      )}
-
-     <Adjunto label="Documento de soporte" nombre={form.doc_nombre} onArchivo={(file)=>cargarDoc([file])} />
-    </ModalForm>
+     <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+    </section>
+   </main>
+   {(modNueva||modEditar)&&(
+    <Modal title={modEditar ? "Editar Solicitud de Recogida" : "Nueva Solicitud de Recogida"} onClose={cerrarFormulario} wide>
+     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+       <Field label="Direccion de Recogida *" value={form.dir_recogida} onChange={f("dir_recogida")} placeholder="Cra 15 #93-47"/>
+       <Field label="Ciudad de Recogida *" value={form.ciudad_recogida_cod} onChange={f("ciudad_recogida_cod")} as="select"
+        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+       <Field label="Direccion de Entrega *" value={form.dir_entrega} onChange={f("dir_entrega")} placeholder="Av El Poblado #43A-15"/>
+       <Field label="Ciudad de Entrega *" value={form.ciudad_entrega_cod} onChange={f("ciudad_entrega_cod")} as="select"
+        options={[{value:"",label:" Seleccione "},...(ciudades||[]).map(c=>({value:c.code,label:`${c.name} ${c.code}`}))]}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
+       <Field label="Unidades *" value={form.unidades} onChange={f("unidades")} type="number" placeholder="5"/>
+       <Field label="Volumen m *" value={form.volumen_m3} onChange={f("volumen_m3")} type="number" placeholder="0.5"/>
+       <Field label="Peso kg *" value={form.peso_kg} onChange={f("peso_kg")} type="number" placeholder="10"/>
+      </div>
+      <Field label="Observaciones" value={form.observaciones} onChange={f("observaciones")} as="textarea" placeholder="Instrucciones especiales..."/>
+      {!esCliente && !modEditar && <Field label="Tipo de Envio" value={form.tipo_envio||"conductor"} onChange={f("tipo_envio")} as="select"
+       options={[{value:"conductor",label:" Conductor Propio"},{value:"empresa_transporte",label:" Empresa Transportista"},{value:"mensajeria",label:" Mensajeria"},{value:"paqueteria",label:" Paqueteria Tercero"}]}/>
+      }
+      {!esCliente && !modEditar && (form.tipo_envio||"conductor")==="paqueteria"?(
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <Field label="Empresa Paqueteria" value={form.paqueteria||""} onChange={f("paqueteria")} placeholder="Servientrega..."/>
+        <Field label="No. Guia" value={form.guia_paqueteria||""} onChange={f("guia_paqueteria")} placeholder="SRV-2026-"/>
+       </div>
+      ):(!esCliente && !modEditar &&
+       <Field label="Conductor (opcional)" value={form.conductor_id} onChange={f("conductor_id")} as="select"
+        options={[{value:"",label:" Sin asignar "},...conductoresActivos.map(c=>({value:c.id,label:`${c.nombre} ${c.placa}`}))]}/>
+      )}
+      <div style={{border:`1px dashed ${P[300]}`,borderRadius:10,padding:14,textAlign:"center",cursor:"pointer"}}
+       onClick={()=>fileRef.current&&fileRef.current.click()}>
+       {form.doc_nombre?<span style={{color:"#059669",fontWeight:700}}> {form.doc_nombre}</span>:<span style={{color:P[600]}}> Adjuntar documento (opcional)</span>}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>cargarDoc(e.target.files)}/>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+       <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+       <Btn onClick={crear}>{modEditar ? " Guardar Cambios" : " Registrar Recogida"}</Btn>
+      </div>
+     </div>
+    </Modal>
    )}
    {modDet&&(
     <Modal title={`Recogida ${modDet.guia}`} onClose={()=>setModDet(null)} wide>
@@ -5222,7 +3710,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
       showToast={showToast} canEdit={user.rol!=="cliente"}/>
     </Modal>
    )}
-  </Pagina>
+  </div>
  );
 }
 
@@ -5268,79 +3756,83 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
  };
 
  return (
-  <ModalGestion
-   titulo="Recogida"
-   id={rec.guia}
-   estado={<ChipEstado estado={rec.estado} novedad={rec.novedad} />}
-   descripcion={canEdit ? "Asigna transporte o cierra la recogida" : "Detalle de la recogida"}
-   onClose={onClose}
-   onGuardar={canEdit ? guardar : null}
-   textoGuardar="Guardar asignacion"
-   textoCierre="Marcar completada"
-   onCierre={canEdit ? marcar : null}
-  >
-   <Resumen datos={[
-    { label:"Recogida", valor:rec.ciudad_recogida_nombre || "Sin definir", falta:!rec.ciudad_recogida_nombre },
-    { label:"Entrega", valor:rec.ciudad_entrega_nombre || "Sin definir", falta:!rec.ciudad_entrega_nombre },
-    { label:"Carga", valor:`${rec.unidades} uds · ${rec.peso_kg} kg` },
-    { label:"Direccion de recogida", valor:rec.dir_recogida || "Sin registrar", falta:!rec.dir_recogida },
-    { label:"Direccion de entrega", valor:rec.dir_entrega || "Sin registrar", falta:!rec.dir_entrega },
-    { label:"Volumen", valor:`${rec.volumen_m3} m3` },
-   ]}>
-    {rec.observaciones && <FranjaAviso etiqueta="Observaciones">{rec.observaciones}</FranjaAviso>}
-   </Resumen>
-
-   {canEdit && (
+  <div style={{display:"flex",flexDirection:"column",gap:16}}>
+   <div style={{background:"#ecfeff",borderRadius:12,padding:16,border:"1px solid #67e8f9"}}>
+    <div style={{fontWeight:800,fontSize:15,color:"#0891b2",marginBottom:8}}> {rec.guia}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:13,color:"#64748b"}}>
+     <span> Recogida: {rec.ciudad_recogida_nombre}</span>
+     <span> Entrega: {rec.ciudad_entrega_nombre}</span>
+     <span> {rec.unidades} uds {rec.peso_kg} kg</span>
+    </div>
+    {rec.observaciones&&(
+     <div style={{marginTop:8,padding:"8px 12px",background:"#f8fafc",borderRadius:8,fontSize:13,color:"#334155",whiteSpace:"pre-wrap"}}>
+      Observaciones: {rec.observaciones}
+     </div>
+    )}
+    {(rec.doc_nombre||rec.doc_data)&&(
+     <Btn size="sm" variant="success" style={{marginTop:10}}
+      onClick={()=>abrirArchivoRemoto('recogidas', rec.id, 'doc_data', 'doc_nombre', `documento-${rec.guia}`, showToast)}>
+       Ver Documento
+     </Btn>
+    )}
+   </div>
+   <Badge estado={rec.estado}/>
+   {canEdit&&rec.estado!=="entregado"&&rec.estado!=="novedad"&&(
     <>
-     <Seccion titulo="Transporte" />
-     <Fila>
-      <Selector label="Tipo de transporte" valor={tipoEnvio} onChange={cambiarTipo}
-       opciones={[
-        { value:"propio", label:"Transporte propio" },
-        { value:"empresa_transporte", label:"Empresa transportista" },
-        { value:"mensajeria", label:"Mensajeria" },
-        { value:"paqueteria", label:"Paqueteria tercero" },
-       ]} />
-      {tipoEnvio === "paqueteria" ? (
-       <Selector label="Paqueteria" valor={paqSel} onChange={setPaqSel}
-        placeholder="Seleccione"
-        opciones={(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({ value:x, label:x }))} />
-      ) : tipoEnvio === "empresa_transporte" ? (
-       <Selector label="Empresa transportista" valor={empresa} onChange={cambiarEmpresa}
-        placeholder="Seleccione la empresa" opciones={empresasOpciones} />
-      ) : (
-       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
-        placeholder="Sin asignar"
-        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
+     <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Field label="Tipo de Transporte" value={tipoEnvio} onChange={cambiarTipo} as="select"
+       options={[
+        {value:"propio",label:" Transporte Propio"},
+        {value:"empresa_transporte",label:" Empresa Transportista"},
+        {value:"mensajeria",label:" Mensajeria"},
+        {value:"paqueteria",label:" Paqueteria Tercero"},
+       ]}/>
+      {tipoEnvio==="paqueteria"?(
+       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Field label="Paqueteria" value={paqSel} onChange={setPaqSel} as="select"
+         options={[{value:"",label:"Seleccione"},...(paqueterias||[]).filter(x=>typeof x==="string"&&x).map(x=>({value:x,label:x}))]}/>
+        <Field label="No. Guia" value={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-XXXX"/>
+       </div>
+      ):(
+       <>
+        {tipoEnvio==="empresa_transporte"&&(
+         <Field label="Empresa Transportista" value={empresa} onChange={cambiarEmpresa} as="select"
+          options={[{value:"",label:"Seleccione la empresa"},...empresasOpciones]}/>
+        )}
+        <Field label="Asignar Conductor" value={condId} onChange={setCondId} as="select"
+         disabled={tipoEnvio==="empresa_transporte" && !empresa}
+         options={[
+          {value:"",label:(tipoEnvio==="empresa_transporte"&&!empresa)?"Selecciona primero la empresa":"Sin asignar"},
+          ...conductoresElegibles.map(c=>({value:c.id,label:`${c.nombre} - ${c.placa||""}${c.empresa?" - "+c.empresa:""}`}))
+         ]}/>
+        {tipoEnvio==="empresa_transporte"&&empresa&&conductoresElegibles.length===0&&(
+         <p style={{fontSize:12,color:"#92400e",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 12px",margin:0}}>
+          Esa empresa no tiene conductores activos registrados.
+         </p>
+        )}
+       </>
       )}
-     </Fila>
-     {tipoEnvio === "paqueteria" && (
-      <Texto label="No. guia de paqueteria" mono valor={guiaPaq} onChange={setGuiaPaq} placeholder="SRV-2026-0001" />
-     )}
-     {tipoEnvio === "empresa_transporte" && (
-      <>
-       <Selector label="Asignar conductor" valor={condId} onChange={setCondId}
-        deshabilitado={!empresa}
-        placeholder={empresa ? "Sin asignar" : "Selecciona primero la empresa"}
-        opciones={conductoresElegibles.map(c=>({ value:c.id, label:`${c.nombre} - ${c.placa||""}` }))} />
-       {empresa && conductoresElegibles.length === 0 && (
-        <FranjaInfo>Esa empresa no tiene conductores activos registrados.</FranjaInfo>
-       )}
-      </>
-     )}
-     <CasillaNovedad marcada={novedad} onChange={setNovedad}>
-      Marcar con novedad
-     </CasillaNovedad>
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:10,background:novedad?"#fef2f2":P[50],borderRadius:10,padding:"10px 14px",cursor:"pointer"}}
+      onClick={()=>setNovedad(!novedad)}>
+      <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${novedad?"#dc2626":P[400]}`,background:novedad?"#dc2626":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+       {novedad&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}></span>}
+      </div>
+      <span style={{fontSize:13,fontWeight:700,color:novedad?"#dc2626":P[800]}}>Marcar con Novedad</span>
+     </div>
+     <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
+      <Btn onClick={guardar}> Guardar Asignacion</Btn>
+      <Btn variant="success" onClick={marcar}> Marcar Recogida Completada</Btn>
+     </div>
     </>
    )}
-  </ModalGestion>
+  </div>
  );
 }
 
 // ModuloPQRS 
 
-export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva }) {
- const esMovil = useEsMovil();
+function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar }) {
  const MOTIVOS = [
   "Entrega tarda fuera de tiempo estimado",
   "Mercancia averiada o daada en transito",
@@ -5372,10 +3864,6 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  const [modNueva,  setModNueva]  = useState(false);
  const [modEditar, setModEditar] = useState(null);
  const [modGestion, setModGestion] = useState(null);
- // El aviso de "Nueva PQRS" se atiende aqui, ya con el estado declarado.
- useEffect(() => {
-  if (nuevaInicial) { setModNueva(true); if (onConsumirNueva) onConsumirNueva(); }
- }, [nuevaInicial]);
  const [busq,    setBusq]    = useState("");
  const [filtroEst, setFiltroEst] = useState("todos");
  const [gestion,  setGestion]  = useState("");
@@ -5438,19 +3926,16 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
   if (recargar) await recargar();
  };
 
- // El texto y el soporte llegan por parametro cuando la gestion se registra
- // desde la pantalla del celular (disenio 20), que lleva su propio estado; el
- // modal de escritorio sigue usando el estado del modulo.
- const guardarGestion = async (texto = gestion, soporte = gestionSoporte) => {
+ const guardarGestion = async () => {
   if ((modGestion.respuesta||"").trim() || modGestion.fecha_gestion || modGestion.gestionado_por) {
    showToast("La respuesta de esta PQRS ya fue registrada y no se puede editar","error");
    return;
   }
-  if (!String(texto || "").trim()) { showToast("Escribe una respuesta de gestion","error"); return; }
-  const cambios = { respuesta:texto, gestionado_por:user.nombre||user.user,
+  if (!gestion.trim()) { showToast("Escribe una respuesta de gestin","error"); return; }
+  const cambios = { respuesta:gestion, gestionado_por:user.nombre||user.user,
    fecha_gestion:hoyLocal(), estado:"en_gestion",
-   soporte_data: soporte?.data || null,
-   soporte_nombre: soporte?.nombre || "" };
+   soporte_data: gestionSoporte.data || null,
+   soporte_nombre: gestionSoporte.nombre || "" };
   const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
   if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return; }
   setModGestion(null); setGestion(""); setGestionSoporte({ data:null, nombre:"" });
@@ -5473,8 +3958,6 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  };
 
  const esCliente = user.rol==="cliente";
- // Gestionar una PQRS (responder y cerrarla) es tarea de la operacion, no del cliente.
- const puedeGestionar = ["admin", "operador"].includes(user.rol);
  const esOperador = user.rol==="admin"||user.rol==="operador";
  const filt = pqrs.filter(p=>{
   if (esCliente && ![user.nombre, user.user].includes(p.solicitado_por)) return false;
@@ -5490,274 +3973,152 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  const pageItems = filt.slice((page - 1) * pageSize, page * pageSize);
  useEffect(() => { setPage(1); }, [busq, filtroEst, pageSize]);
 
- // Disenios 22c, 24c y 25c. Toda la tarjeta abre la gestion (20); para quien
- // no gestiona, o si el caso ya esta cerrado, esa misma pantalla es de solo
- // lectura. Crear y editar usan el mismo crear del escritorio.
- if (esMovil) return (
-  <Pagina>
-   <PqrsMovil vistaCliente={esCliente}
-    items={pqrs.filter(p => !esCliente || [user.nombre, user.user].includes(p.solicitado_por))}
-    sobre={esCliente ? (user.nombre || user.user) : "Peticiones, quejas, reclamos y sugerencias"}
-    onAbrir={x => { setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}
-    onNueva={() => setModNueva(true)} onEditar={abrirEditarCliente} />
-   {(modNueva||modEditar)&&(
-    <FormPqrsMovil form={form} setForm={setForm} pedidos={pedidos || []} motivos={MOTIVOS}
-     editando={Boolean(modEditar)} onEnviar={crear} onClose={cerrarFormulario} />
-   )}
-   {modGestion&&(
-    <GestionPqrsMovil item={modGestion} puedeGestionar={puedeGestionar}
-     onClose={()=>setModGestion(null)}
-     onRegistrar={(texto, soporte)=>guardarGestion(texto, soporte)}
-     onCerrar={async ()=>{ await cerrar(modGestion.id, "cerrada"); setModGestion(null); }}
-     onSoporte={(x)=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}
-     showToast={showToast}/>
-   )}
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo="PQRS"
-    descripcion="Peticiones, quejas, reclamos y sugerencias"
-    acciones={<button onClick={()=>setModNueva(true)} style={botonPrincipal}><Plus size={16}/> Nueva PQRS</button>}
-   />
-
-   {/* Cada indicador filtra por su estado; volver a tocarlo quita el filtro. */}
-   <Indicadores items={[
-    { label:"Abiertas", valor:pqrs.filter(x=>x.estado==="abierta").length, color:T.color.malPunto,
-      activo:filtroEst==="abierta", onClick:()=>setFiltroEst(filtroEst==="abierta"?"todos":"abierta") },
-    { label:"En gestion", valor:pqrs.filter(x=>x.estado==="en_gestion").length, color:T.color.ojoPunto,
-      activo:filtroEst==="en_gestion", onClick:()=>setFiltroEst(filtroEst==="en_gestion"?"todos":"en_gestion") },
-    { label:"Cerradas", valor:pqrs.filter(x=>x.estado==="cerrada").length, color:T.color.bienPunto,
-      activo:filtroEst==="cerrada", onClick:()=>setFiltroEst(filtroEst==="cerrada"?"todos":"cerrada") },
-    { label:"Todas", valor:pqrs.length, color:T.color.neutroPunto,
-      activo:filtroEst==="todos", onClick:()=>setFiltroEst("todos") },
-   ]}/>
-
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${filt.length} de ${pqrs.length}`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar caso, factura, pedido o motivo" ancho={300}/>
-     <SelectFiltro valor={filtroEst} onChange={setFiltroEst} ancho={190}>
-      <option value="todos">Todos los estados</option>
-      <option value="abierta">Abiertas</option>
-      <option value="en_gestion">En gestion</option>
-      <option value="cerrada">Cerradas</option>
-     </SelectFiltro>
-    </BarraFiltros>
-
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
-      <thead>
-       <tr>
-        <th style={th}>Caso</th>
-        <th style={th}>Factura</th>
-        <th style={th}>Pedido</th>
-        <th style={th}>Motivo</th>
-        <th style={th}>Solicitado por</th>
-        <th style={th}>Estado</th>
-        <th style={{...th, textAlign:"right"}}>Acciones</th>
-       </tr>
-      </thead>
-      <tbody>
-       {pageItems.length===0 && (
-        <tr><td colSpan={7} style={{ ...td, textAlign:"center", padding:48, color:T.color.tinta3, fontSize:14 }}>
-         {pqrs.length===0 ? "Sin PQRS registradas." : "Ninguna PQRS coincide con el filtro."}
-        </td></tr>
-       )}
-       {pageItems.map(x=>{
-        // Cada estado con su nombre. Antes todo lo que no era abierta o en
-        // gestion se pintaba como "Cerrada", incluida la rechazada.
-        const estilo = x.estado==="abierta"
-         ? { fondo:T.color.malSuave, texto:T.color.mal, punto:T.color.malPunto, label:"Abierta" }
-         : x.estado==="en_gestion"
-         ? { fondo:T.color.ojoSuave, texto:T.color.ojo, punto:T.color.ojoPunto, label:"En gestion" }
-         : x.estado==="cerrada"
-         ? { fondo:T.color.bienSuave, texto:T.color.bien, punto:T.color.bienPunto, label:"Cerrada" }
-         : { fondo:T.color.superficie3, texto:T.color.tinta2, punto:T.color.neutroPunto, label:ESTADOS_PQRS[x.estado]?.label || x.estado || "Sin estado" };
-        return (
-         <tr key={x.id}>
-          <td style={td}><span style={chipMono}>{x.id}</span></td>
-          <td style={td}><span style={mono}>{x.factura || "-"}</span></td>
-          <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{x.pedido_ref || "-"}</td>
-          <td style={{ ...td, maxWidth:260 }}>
-           <div style={{ color:T.color.tinta, fontWeight:600 }}>{x.motivo}</div>
-           {x.descripcion && (
-            <div style={{ ...T.texto.meta, color:T.color.tinta3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-             {x.descripcion}
-            </div>
-           )}
-          </td>
-          <td style={td}>
-           <div>{x.solicitado_por || "-"}</div>
-           <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{x.fecha_creacion}</div>
-          </td>
-          <td style={td}>
-           <span style={{
-            display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-            borderRadius:T.radio.pastilla, background:estilo.fondo, color:estilo.texto,
-            fontSize:12, fontWeight:600, whiteSpace:"nowrap",
-           }}>
-            <span style={{ width:6, height:6, borderRadius:3, background:estilo.punto }}/>
-            {estilo.label}
-           </span>
-          </td>
-          <td style={{ ...td, textAlign:"right" }}>
-           <div style={{ display:"inline-flex", gap:6 }}>
-            {(x.soporte_nombre || x.soporte_data) && (
-             <button style={botonFila} onClick={()=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}>Soporte</button>
-            )}
-            {puedeGestionar && ["abierta","en_gestion"].includes(x.estado) && (
-             <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
-              onClick={()=>{ setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}>
-              Gestionar
-             </button>
-            )}
-            {esCliente && x.estado==="abierta" && (
-             <button style={botonFila} onClick={()=>abrirEditarCliente(x)}>Editar</button>
-            )}
-           </div>
-          </td>
-         </tr>
-        );
-       })}
-      </tbody>
-     </table>
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+    <div>
+     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>PQRS</h1>
+     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Peticiones, quejas, reclamos y solicitudes de gestion</p>
     </div>
-
-    <PieTabla
-     izquierda={`${filt.length} ${filt.length===1 ? "caso" : "casos"}`}
-     derecha={<Paginador total={filt.length} page={page} setPage={setPage} pageSize={pageSize}/>}
-    />
-   </section>
-
-   {(modNueva||modEditar)&&(
-    <ModalForm
-     titulo={modEditar ? "Editar PQRS" : "Nueva PQRS"}
-     descripcion="Peticion, queja, reclamo o sugerencia"
-     onClose={cerrarFormulario}
-     onPrimario={crear}
-     textoPrimario={modEditar ? "Guardar cambios" : "Radicar PQRS"}
-    >
-     {!modEditar && (
-      <FranjaInfo>Se generara automaticamente el numero de caso PQRS-{new Date().getFullYear()}-XXXX</FranjaInfo>
+    {esCliente&&<button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva PQRS</button>}
+   </header>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:14 }}>
+     {Object.entries(ESTADOS_PQRS).map(([k,v])=>(
+      <button key={k} onClick={()=>setFiltroEst(filtroEst===k?"todos":k)} style={{ ...cardStyle, padding:18, textAlign:"left", cursor:"pointer", borderColor:filtroEst===k?v.color:border, background:filtroEst===k?v.bg:"#fff" }}>
+       <div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>{v.label}</div>
+       <div style={{ fontSize:30, fontWeight:900, color:v.color, marginTop:8 }}>{pqrs.filter(p=>p.estado===k).length}</div>
+      </button>
+     ))}
+    </section>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por caso, factura, pedido o motivo..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <select value={filtroEst} onChange={e=>setFiltroEst(e.target.value)} style={{ ...iSt, width:"auto", borderRadius:12, background:"#fff" }}>
+       <option value="todos">Todos los estados</option>
+       {Object.entries(ESTADOS_PQRS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+      </select>
+      <span style={{ color:"#6b7280", fontSize:13 }}>{filt.length} de {pqrs.length}</span>
+     </div>
+     {filt.length===0 ? (
+      <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin PQRS registradas.</div>
+     ) : (
+      <div style={{ overflowX:"auto" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <thead>
+         <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+          {["Caso", "Factura", "Pedido", "Motivo", "Solicitado", "Estado", "Gestion", "Acciones"].map(h => (
+           <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
+          ))}
+         </tr>
+        </thead>
+        <tbody>
+         {pageItems.map(p=>{
+          const est = ESTADOS_PQRS[p.estado]||ESTADOS_PQRS.abierta;
+          const tieneGestion = Boolean((p.respuesta||"").trim() || p.fecha_gestion || p.gestionado_por);
+          return (
+           <tr key={p.id} style={{ borderBottom:`1px solid ${border}` }}>
+            <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850, fontFamily:"monospace" }}>{p.id}</td>
+            <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
+            <td style={{ padding:"16px", fontWeight:750 }}>{p.pedido_ref}</td>
+            <td style={{ padding:"16px", minWidth:260 }}><div style={{ fontWeight:800 }}>{p.motivo}</div><div style={{ color:"#6b7280", fontSize:12, marginTop:4, whiteSpace:"pre-wrap" }}>{p.descripcion}</div></td>
+            <td style={{ padding:"16px" }}><div>{p.solicitado_por}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.fecha_creacion}</div></td>
+            <td style={{ padding:"16px" }}><span style={{ background:est.bg, color:est.color, border:`1px solid ${est.color}40`, borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800, whiteSpace:"nowrap" }}>{est.label}</span></td>
+            <td style={{ padding:"16px", minWidth:220 }}>{p.respuesta ? <div><div style={{ color:"#059669", fontSize:12, fontWeight:800 }}>{p.gestionado_por} · {p.fecha_gestion}</div><div style={{ color:"#4b5563", fontSize:13, marginTop:4, whiteSpace:"pre-wrap" }}>{p.respuesta}</div>{(p.soporte_nombre||p.soporte_data)&&<button style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669", marginTop:8 }} onClick={()=>abrirArchivoRemoto('pqrs', p.id, 'soporte_data', 'soporte_nombre', `soporte-${p.id}`, showToast)}>Ver Soporte</button>}</div> : <span style={{ color:"#9ca3af", fontSize:13 }}>Sin gestion</span>}</td>
+            <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>{esCliente&&p.estado==="abierta"&&<button style={{ ...buttonBase, padding:"7px 12px", fontSize:13 }} onClick={()=>abrirEditarCliente(p)}>Editar</button>}{esOperador&&p.estado!=="cerrada"&&p.estado!=="rechazada"&&!tieneGestion&&<button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>{setModGestion(p);setGestion(p.respuesta||"");setGestionSoporte({ data:null, nombre:"" });}}>Gestionar</button>}{esOperador&&p.estado==="en_gestion"&&<><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>cerrar(p.id,"cerrada")}>Cerrar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>cerrar(p.id,"rechazada")}>Rechazar</button></>}</div></td>
+           </tr>
+          );
+         })}
+        </tbody>
+       </table>
+      </div>
      )}
-     <Fila>
-      <Texto label="N factura" obligatorio mono valor={form.factura} onChange={f("factura")} placeholder="FAC-2200" />
-      <Texto label="N pedido de referencia" obligatorio mono valor={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001" />
-     </Fila>
-     <Selector label="Motivo" obligatorio valor={form.motivo} onChange={f("motivo")}
-      placeholder="Seleccione el motivo"
-      opciones={MOTIVOS.map(m=>({ value:m, label:m }))} />
-     <AreaTexto label="Descripcion detallada" obligatorio filas={4} valor={form.descripcion} onChange={f("descripcion")}
-      placeholder="Describe la situacion, la fecha del evento y las personas involucradas..." />
-    </ModalForm>
+     <PaginationControls total={filt.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+    </section>
+   </main>
+   {(modNueva||modEditar)&&(
+    <Modal title={modEditar ? "Editar PQRS" : "Nueva PQRS"} onClose={cerrarFormulario}>
+     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {!modEditar&&<div style={{background:"#fffbeb",borderRadius:10,padding:10,fontSize:12,color:"#92400e",fontWeight:600}}>
+       Se generar automaticamente un numero de caso PQRS-{new Date().getFullYear()}-XXXX.
+      </div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+       <Field label="No. Factura *"   value={form.factura}  onChange={f("factura")}  placeholder="FAC-2200"/>
+       <Field label="No. Pedido Ref. *" value={form.pedido_ref} onChange={f("pedido_ref")} placeholder="PED-001"/>
+      </div>
+      <Field label="Motivo *" value={form.motivo} onChange={f("motivo")} as="select"
+       options={[{value:"",label:" Seleccione el motivo "},...MOTIVOS.map(m=>({value:m,label:m}))]}/>
+      <Field label="Descripcion detallada *" value={form.descripcion} onChange={f("descripcion")} as="textarea"
+       placeholder="Describe con detalle la situacin, fecha del evento, personas involucradias..."/>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+       <Btn variant="secondary" onClick={cerrarFormulario}>Cancelar</Btn>
+       <Btn onClick={crear}>{modEditar ? " Guardar Cambios" : " Radicar PQRS"}</Btn>
+      </div>
+     </div>
+    </Modal>
    )}
    {modGestion&&(
-   <ModalGestion
-    titulo="PQRS"
-    id={modGestion.id}
-    estado={
-     <span style={{
-      display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-      borderRadius:T.radio.pastilla,
-      background: modGestion.estado==="abierta" ? T.color.malSuave : T.color.ojoSuave,
-      color: modGestion.estado==="abierta" ? T.color.mal : T.color.ojo,
-      fontSize:12, fontWeight:600,
-     }}>
-      <span style={{ width:6, height:6, borderRadius:3,
-       background: modGestion.estado==="abierta" ? T.color.malPunto : T.color.ojoPunto }}/>
-      {modGestion.estado==="abierta" ? "Abierta" : "En gestion"}
-     </span>
-    }
-    descripcion="Registra la respuesta al cliente"
-    ancho="S"
-    onClose={()=>setModGestion(null)}
-    onGuardar={guardarGestion}
-    textoGuardar="Registrar gestion"
-    textoCierre="Cerrar PQRS"
-    onCierre={()=>cerrar(modGestion.id, "cerrada")}
-    cierreDeshabilitado={!gestion.trim() && !modGestion.respuesta}
-   >
-    <Resumen titulo={modGestion.descripcion} datos={[
-     { label:"Tipo", valor:modGestion.motivo },
-     { label:"Factura", valor:modGestion.factura || "-", mono:true },
-     { label:"Pedido", valor:modGestion.pedido_ref || "-", mono:true },
-     { label:"Reportado por", valor:modGestion.solicitado_por || "-" },
-     { label:"Fecha", valor:modGestion.fecha_creacion || "-" },
-     { label:"Estado", valor:modGestion.estado==="abierta" ? "Abierta" : "En gestion" },
-    ]}/>
-
-    <AreaTexto label="Respuesta / gestion realizada" obligatorio filas={4}
-     valor={gestion} onChange={setGestion}
-     placeholder="Describe la gestion realizada..." />
-
-    <Adjunto label="Soporte de gestion" nombre={gestionSoporte.nombre}
-     acepta="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-     onArchivo={(file)=>cargarSoporteGestion([file])} />
-   </ModalGestion>
+   <Modal title={`Gestionar PQRS ${modGestion.id}`} onClose={()=>setModGestion(null)}>
+     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{background:"#f8fafc",borderRadius:10,padding:14}}>
+       <div style={{fontWeight:700,color:P[800],marginBottom:6}}>Motivo: {modGestion.motivo}</div>
+       <div style={{fontSize:13,color:"#334155"}}>{modGestion.descripcion}</div>
+       <div style={{fontSize:12,color:"#94a3b8",marginTop:6}}>Factura: {modGestion.factura} Pedido: {modGestion.pedido_ref} Por: {modGestion.solicitado_por}</div>
+      </div>
+      <Field label="Respuesta / Gestion realizada *" value={gestion} onChange={setGestion} as="textarea"
+       placeholder="Describe las acciones tomadias, compensaciones, compromisos..."/>
+      <label style={{ border:`1px dashed ${P[300]}`, borderRadius:12, padding:"14px", textAlign:"center", cursor:"pointer", color:gestionSoporte.nombre?"#059669":P[600], fontWeight:700 }}>
+       <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>cargarSoporteGestion(e.target.files)}/>
+       {gestionSoporte.nombre ? "Cambiar soporte" : "Adjuntar soporte de gestion (opcional)"}
+      </label>
+      {gestionSoporte.data&&(
+       <div style={{ display:"flex", alignItems:"center", gap:8, border:`1px solid ${border}`, borderRadius:12, padding:"10px 12px", background:"#f8fafc" }}>
+        <span style={{ flex:1, minWidth:0, color:"#059669", fontWeight:800, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{gestionSoporte.nombre || `soporte-${modGestion.id}`}</span>
+        <button type="button" style={{ ...buttonBase, padding:"6px 10px", fontSize:12, color:"#059669" }} onClick={()=>abrirArchivoGuardado(gestionSoporte.data, gestionSoporte.nombre || `soporte-${modGestion.id}`)}>
+         Ver
+        </button>
+        <button type="button" title="Quitar soporte" style={{ width:32, height:32, border:`1px solid #fecaca`, background:"#fff", color:"#dc2626", borderRadius:10, cursor:"pointer", fontWeight:900, fontSize:18, lineHeight:1 }} onClick={()=>setGestionSoporte({ data:null, nombre:"" })}>
+         x
+        </button>
+       </div>
+      )}
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+       <Btn variant="secondary" onClick={()=>setModGestion(null)}>Cancelar</Btn>
+       <Btn onClick={guardarGestion}> Registrar Gestion</Btn>
+      </div>
+     </div>
+    </Modal>
    )}
-  </Pagina>
+  </div>
  );
 }
 
 
 // SidebarApp 
 
-// Disenio 17: el mapa manda. Ocupa toda la pantalla y el estado del GPS va en
-// una tarjeta flotante abajo. Apagado, una sola accion en purpura de marca
-// (verde es estado, no accion). Activo, el punto verde, hace cuanto y con que
-// precision, y la parada que sigue. La distancia no se muestra: los destinos
-// no tienen coordenadas y no se inventa.
-function MiUbicacion({ user, pedidos = [], promesas = [] }) {
- const esMovil = useEsMovil();
- const rutaGps = useRutaConductor(user?.conductor_db_id || user?.id);
+function MiUbicacion({ user }) {
  const [lat, setLat] = useState(window._gpsLat || null);
  const [lng, setLng] = useState(window._gpsLng || null);
  const [on, setOn] = useState(window._gpsOn || false);
- const [precision, setPrecision] = useState(window._gpsAcc || null);
- const [ultima, setUltima] = useState(window._gpsTs || null);
- const [tick, setTick] = useState(0);
  const [err, setErr] = useState("");
- const [claveMapa, setClaveMapa] = useState(0);
- // Donde esta centrado el mapa, aparte de donde esta el conductor. Si el src
- // del iframe siguiera a cada lectura del GPS, el mapa se recargaria entero
- // cada segundo y parpadearia. El centro se mueve solo al primer fix, al
- // pulsar Centrar, o cuando el conductor se alejo mas de ~80 m de el.
- const [centro, setCentro] = useState(window._gpsLat && window._gpsLng ? { lat: window._gpsLat, lng: window._gpsLng } : null);
  const watchRef = useRef(window._gpsWatch || null);
 
- const metrosEntre = (a, b) => {
-  const r = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
-  return 6371000 * 2 * Math.asin(Math.sqrt(h));
- };
-
- // "hace 8 s" se recalcula solo mientras el GPS esta activo.
- useEffect(() => {
-  if (!on) return undefined;
-  const t = setInterval(() => setTick(n => n + 1), 1000);
-  return () => clearInterval(t);
- }, [on]);
-
  // Sync state to window globals so GPS persists when switching tabs
- const updateGps = (lat, lng, acc) => {
-  window._gpsLat = lat; window._gpsLng = lng; window._gpsAcc = acc; window._gpsTs = Date.now();
+ const updateGps = (lat, lng) => {
+  window._gpsLat = lat; window._gpsLng = lng;
   // Also store by conductor ID for multi-conductor tracking
   if (!window._gpsData) window._gpsData = {};
   const condId = user?.conductor_db_id || user?.id;
   if (condId) window._gpsData[String(condId)] = { lat, lng, ts: Date.now() };
-  setLat(lat); setLng(lng); setPrecision(acc); setUltima(Date.now());
-  setCentro(c => (!c || metrosEntre(c, { lat, lng }) > 80) ? { lat, lng } : c);
+  setLat(lat); setLng(lng);
  };
 
  const iniciar = () => {
   if (!navigator.geolocation) { setErr("GPS no disponible en este dispositivo."); return; }
   setErr("");
   watchRef.current = navigator.geolocation.watchPosition(
-   pos => { updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
-   e => setErr(e.code === 1 ? "El navegador no dio permiso de ubicacion. Activalo en los ajustes del sitio." : "Error GPS: " + e.message),
+   pos => { updateGps(pos.coords.latitude, pos.coords.longitude); },
+   e => setErr("Error GPS: "+e.message),
    { enableHighAccuracy:true, timeout:10000 }
   );
   window._gpsOn = true; window._gpsWatch = watchRef.current;
@@ -5770,192 +4131,64 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   setOn(false);
  };
 
- const condId = user?.conductor_db_id || user?.id;
- // La misma ruta que Mis entregas: la parada 1 de alla es la siguiente aqui.
- const siguiente = ordenarRuta(
-  pedidos.filter(p => String(p.conductor_id) === String(condId) && ["en_transito", "pendiente", "sin_asignar"].includes(p.estado)),
-  rutaGps.ruta, promesas)[0] || null;
-
- const segundos = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
- const haceTexto = segundos == null ? "" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
- const precisionTexto = precision ? ` · ±${Math.round(precision)} m` : "";
-
- // Cuatro decimales (~11 m): asi una lectura que apenas tiembla no cambia la
- // URL y no recarga el mapa.
- const mapUrl = centro
-  ? `https://maps.google.com/maps?q=${centro.lat.toFixed(4)},${centro.lng.toFixed(4)}&output=embed&z=16`
-  : `https://maps.google.com/maps?q=4.711,-74.072&output=embed&z=11`;
- const centrar = () => { if (lat && lng) { setCentro({ lat, lng }); setClaveMapa(k => k + 1); } };
-
- const tarjetaFlotante = (
-  <section style={{
-   background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: 16, padding: 16,
-   display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 12px 32px -12px rgba(23,20,31,.25)",
-  }}>
-   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-    <span style={{
-     width: 10, height: 10, borderRadius: 5, flexShrink: 0,
-     background: on ? T.color.bienPunto : T.color.tenue,
-     boxShadow: on ? `0 0 0 4px ${T.color.bienSuave}` : "none",
-    }}/>
-    <span style={{ fontSize: 16, fontWeight: 700 }}>{on ? "GPS activo" : "GPS apagado"}</span>
-    {on && ultima && (
-     <span style={{ marginLeft: "auto", fontSize: 12, color: T.color.tinta3 }}>{haceTexto}{precisionTexto}</span>
-    )}
-   </div>
-
-   {!on && (
-    <span style={{ fontSize: 13, color: T.color.tinta2, lineHeight: 1.5 }}>
-     {lat && lng ? "Ultima posicion guardada. Activa el GPS para volver a compartirla." : "Todavia no hay posicion. Activa el GPS y dale permiso de ubicacion al navegador."}
-    </span>
-   )}
-
-   {on && siguiente && (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: T.color.superficie2, borderRadius: 10 }}>
-     <span style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, background: T.color.tinta, color: "#fff", flexShrink: 0 }}>1</span>
-     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-      <span style={{ ...T.texto.seccion, color: T.color.placeholder }}>Siguiente parada</span>
-      <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{siguiente.cliente || siguiente.guia_interna || siguiente.id}</span>
-      <span style={{ fontSize: 12, color: T.color.tinta3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[siguiente.direccion, siguiente.ciudad_nombre].filter(Boolean).join(" · ")}</span>
-     </div>
-    </div>
-   )}
-
-   {err && (
-    <div style={{ background: T.color.malSuave, border: `1px solid ${T.color.malBorde}`, color: T.color.mal, borderRadius: T.radio.control, padding: "10px 12px", fontSize: 13 }}>{err}</div>
-   )}
-
-   {on ? (
-    <div style={{ display: "flex", gap: 8 }}>
-     <button onClick={detener} style={{
-      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12,
-      background: T.color.superficie, border: `1px solid ${T.color.borde2}`, color: T.color.tinta2,
-      fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
-     }}>Pausar</button>
-     {siguiente?.direccion && (
-      <button onClick={() => abrirEnMapa(siguiente.direccion, siguiente.ciudad_nombre)} style={{
-       flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12,
-       background: T.color.marcaSuave, border: "none", color: T.color.marca,
-       fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
-      }}>Ir a la parada</button>
-     )}
-    </div>
-   ) : (
-    <button onClick={iniciar} style={{
-     display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 12,
-     background: T.color.marca, border: "none", color: "#fff",
-     fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
-    }}>Activar GPS</button>
-   )}
-  </section>
- );
-
- if (esMovil) return (
-  <div style={{
-   position: "relative", overflow: "hidden", background: T.color.fondo, color: T.color.tinta,
-   margin: `-16px -16px -${ALTO_BARRA + 16}px`, height: `calc(100vh - ${ALTO_BARRA}px)`,
-  }}>
-   <iframe key={claveMapa} title="Mi ubicacion" src={mapUrl} loading="lazy" allowFullScreen
-    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none", display: "block" }}/>
-   <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 130, pointerEvents: "none", background: `linear-gradient(${T.color.fondo} 40%, rgba(247,246,250,0))` }} />
-   <header style={{ position: "absolute", left: 16, right: 16, top: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-     <span style={{ fontSize: 12, color: T.color.tinta3 }}>{on ? "Compartiendo con la central" : "Para que la central te ubique"}</span>
-     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Mi ubicacion</h1>
-    </div>
-    <span style={{ width: 38, height: 38, borderRadius: 19, background: T.color.marcaAvatar, color: T.color.marca, display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
-     {iniciales(user?.nombre)}
-    </span>
-   </header>
-   {lat && lng && (
-    <button onClick={centrar} title="Centrar en mi posicion" style={{
-     position: "absolute", right: 16, bottom: on ? 226 : 176, width: 44, height: 44, display: "grid", placeItems: "center",
-     background: T.color.superficie, border: `1px solid ${T.color.borde2}`, borderRadius: 12, color: T.color.tinta2,
-     boxShadow: "0 4px 12px -4px rgba(23,20,31,.2)", cursor: "pointer",
-    }}><MapPin size={19} /></button>
-   )}
-   <div style={{ position: "absolute", left: 16, right: 16, bottom: 16 }}>{tarjetaFlotante}</div>
-  </div>
- );
-
+ const mapUrl = lat&&lng ? `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16` : `https://maps.google.com/maps?q=4.711,-74.072&output=embed&z=11`;
  return (
-  <Pagina>
-   <Encabezado titulo="Mi ubicacion GPS"
-    descripcion={on ? "Compartiendo tu posicion con la central" : "Activa el GPS para que la central te ubique"} />
-   {tarjetaFlotante}
-   <section style={{ ...tarjeta, padding: 0, overflow: "hidden" }}>
-    <iframe key={claveMapa} title="Mi ubicacion" src={mapUrl} loading="lazy" allowFullScreen
-     style={{ width: "100%", height: 380, border: "none", display: "block" }}/>
-   </section>
-  </Pagina>
+  <div>
+   <h2 style={{margin:"0 0 22px",color:P[800],fontWeight:900}}> Mi Ubicacion GPS</h2>
+   <Card style={{marginBottom:16}}>
+    <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+     <div style={{flex:1,fontSize:14}}>
+      {lat&&lng?<><strong>Lat:</strong> {lat.toFixed(6)} <strong>Lng:</strong> {lng.toFixed(6)}</>:<span style={{color:"#94a3b8"}}>Presiona el botn para activar tu GPS</span>}
+      {on&&<span style={{marginLeft:12,color:"#059669",fontWeight:700,fontSize:12}}> Compartiendo</span>}
+     </div>
+     <Btn variant={on?"danger":"success"} onClick={on?detener:iniciar}>{on?" Detener GPS":" Activar GPS"}</Btn>
+    </div>
+    {err&&<p style={{color:"#dc2626",fontSize:13,margin:"10px 0 0"}}> {err}</p>}
+   </Card>
+   <div style={{borderRadius:14,overflow:"hidden",border:`2px solid ${P[200]}`}}>
+    <iframe title="mi-ubicacion" src={mapUrl} width="100%" height="360" style={{border:"none",display:"block"}} allowFullScreen loading="lazy"/>
+   </div>
+  </div>
  );
 }
 
 // Consultas (cliente interno) 
 
-// Estado de pedidos para el rol cliente. Lo que ve el cliente es lo suyo: sus
-// pedidos, en que van y con quien. Los indicadores de arriba son tambien el
-// filtro por estado; el rastreo abre el mapa debajo de la fila, en vivo si el
-// conductor tiene el GPS encendido y sobre el destino si no.
-export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast, onNuevaPQRS, user }) {
- const esMovil = useEsMovil();
+function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast }) {
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
  const [busq, setBusq] = useState("");
- const [rango, setRango] = useState("30");
- const [ciudadF, setCiudadF] = useState("");
- const [filtro, setFiltro] = useState("todos");
  const [modMapa, setModMapa] = useState(null);
- const [modGuia, setModGuia] = useState(null);
  const [page, setPage] = useState(1);
- const pageSize = 8;
+ const [pageSize, setPageSize] = useState(10);
 
- const desde = (() => { const r = RANGOS_PEDIDOS.find(x => x.id === rango); return r && r.dias ? hoyMas(-r.dias) : null; })();
- const enRango = pedidos.filter(p => !desde || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde);
- const ciudadesDe = [...new Set(enRango.map(p => p.ciudad_nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
-
- const esActivo = (p) => ["sin_asignar", "pendiente", "en_transito", "paqueteria"].includes(p.estado);
- const conteo = {
-  todos: enRango.length,
-  activos: enRango.filter(esActivo).length,
-  entregados: enRango.filter(p => p.estado === "entregado").length,
-  novedades: enRango.filter(p => p.estado === "novedad" || p.novedad).length,
- };
-
- const filtP = enRango.filter(p => {
-  if (ciudadF && p.ciudad_nombre !== ciudadF) return false;
-  if (filtro === "activos" && !esActivo(p)) return false;
-  if (filtro === "entregados" && p.estado !== "entregado") return false;
-  if (filtro === "novedades" && !(p.estado === "novedad" || p.novedad)) return false;
-  const q = busq.trim().toLowerCase();
-  return !q || [p.id, p.guia_interna, p.factura, p.cliente, p.ciudad_nombre, p.direccion, p.guia_paqueteria]
-   .some(v => String(v || "").toLowerCase().includes(q));
+ const filtP = pedidos.filter(p => {
+  const q = busq.toLowerCase();
+  return !busq ||
+   (p.id || "").toLowerCase().includes(q) ||
+   (p.cliente || "").toLowerCase().includes(q) ||
+   (p.factura || "").toLowerCase().includes(q) ||
+   (p.ciudad_nombre || "").toLowerCase().includes(q) ||
+   (p.guia_interna || "").toLowerCase().includes(q) ||
+   (p.guia_paqueteria || "").toLowerCase().includes(q);
  });
  const pageItems = filtP.slice((page - 1) * pageSize, page * pageSize);
- const pageStart = filtP.length === 0 ? 0 : (page - 1) * pageSize + 1;
- const pageEnd = Math.min(filtP.length, page * pageSize);
- const totalCajas = filtP.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
- useEffect(() => { setPage(1); }, [busq, rango, ciudadF, filtro]);
+ useEffect(() => { setPage(1); }, [busq, pageSize]);
 
- const exportar = () => {
-  const cab = "pedido,guia,factura,destinatario,direccion,ciudad,cajas,estado,transporte,fecha_creacion,fecha_estimada,fecha_real";
-  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const filas = filtP.map(p => {
-   const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-   const tr = transportePedido(p, cond);
-   return [p.id, p.guia_interna, p.factura, p.cliente, p.direccion, p.ciudad_nombre, p.cajas || 0,
-    ESTADOS_PEDIDO[p.estado]?.label || p.estado, tr.noAplica ? "No aplica" : (tr.principal || "Sin asignar"),
-    p.fecha_creacion, p.fecha_estimada, p.fecha_real].map(esc).join(",");
-  });
-  descargarCSV(`estado_pedidos_${hoyLocal()}.csv`, cab, filas.join("\n"));
- };
+ const border = "#e5e7eb";
+ const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
+ const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"8px 12px", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" };
+ const activos = filtP.filter(p => ["sin_asignar", "pendiente", "en_transito", "paqueteria"].includes(p.estado)).length;
+ const entregados = filtP.filter(p => p.estado === "entregado").length;
+ const novedades = filtP.filter(p => p.estado === "novedad" || p.novedad).length;
+ const totalCajas = filtP.reduce((a,p)=>a+(parseInt(p.cajas)||0),0);
 
  const renderMapa = (p, cond, ciudad) => {
   const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
   const gpsReciente = gps && (Date.now()-gps.ts) < 300000;
   const entregado = ["entregado","novedad"].includes(p.estado);
   if (entregado) return (
-   <div style={{ background:T.color.bienSuave, border:`1px solid ${T.color.bienSuave}`, borderRadius:12, padding:"12px 16px", color:T.color.bien, fontWeight:600, fontSize:13 }}>
+   <div style={{ background:"#ecfdf5", border:`1px solid #a7f3d0`, borderRadius:12, padding:"12px 16px", color:"#059669", fontWeight:750, fontSize:13 }}>
     Pedido entregado. Rastreo GPS no disponible.
    </div>
   );
@@ -5963,146 +4196,77 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
    ? `https://maps.google.com/maps?q=${gps.lat},${gps.lng}&output=embed&z=15`
    : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"") + ", " + (ciudad?.name||p.ciudad_nombre||"") + ", Colombia")}&output=embed&z=15`;
   return (
-   <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? T.color.marca : T.color.borde}`, background:T.color.superficie }}>
-    {gpsReciente && <div style={{ background:T.color.marca, color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:700 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
+   <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? "#6d42d8" : border}`, background:"#fff" }}>
+    {gpsReciente && <div style={{ background:"#6d42d8", color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:800 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
     <iframe title={"mapa-"+p.id} width="100%" height="280" style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
-    <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2 }}>
+    <div style={{ background:"#f8fafc", padding:"9px 14px", fontSize:12, color:"#4b5563" }}>
      {gpsReciente ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : `${p.direccion || ""}, ${ciudad?.name || p.ciudad_nombre || ""}`}
      {cond && <span style={{ marginLeft:12 }}>{cond.nombre} · {p.placa}</span>}
-     {!gpsReciente && <span style={{ marginLeft:8, color:T.color.tinta4 }}>(GPS no activo, mostrando destino)</span>}
+     {!gpsReciente && <span style={{ marginLeft:8, color:"#9ca3af" }}>(GPS no activo, mostrando destino)</span>}
     </div>
    </div>
   );
  };
 
- const kpi = (clave, label, color, destacado) => ({
-  label, valor: conteo[clave], color, activo: filtro === clave,
-  onClick: () => setFiltro(filtro === clave && clave !== "todos" ? "todos" : clave),
- });
-
- // Disenio 23: los mismos filtros y conteos, dibujados en tarjetas.
- if (esMovil) return (
-  <Pagina>
-   <EstadoPedidosMovil sobre={user?.nombre || user?.user || "Mis pedidos"}
-    conteo={conteo} filtro={filtro} setFiltro={setFiltro} busq={busq} setBusq={setBusq}
-    rango={rango} setRango={setRango} rangos={RANGOS_PEDIDOS}
-    filtrados={filtP} totalCajas={totalCajas} conductores={conductores}
-    onNuevaPQRS={onNuevaPQRS} onGuia={setModGuia} onSoportes={(p)=>verPDFSoportes(p, showToast)}
-    renderMapa={(p, cond)=>renderMapa(p, cond, (ciudades||[]).find(c => c.code === p.ciudad_codigo))} />
-   {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
-  </Pagina>
- );
-
  return (
-  <Pagina>
-   <Encabezado
-    titulo="Estado de pedidos"
-    descripcion="Consulta y seguimiento de tus pedidos registrados"
-    acciones={<>
-     <button onClick={exportar} style={botonBarra} disabled={filtP.length === 0}><Download size={15}/> Exportar</button>
-     {onNuevaPQRS && <button onClick={onNuevaPQRS} style={botonPrincipal}><HelpCircle size={16}/> Nueva PQRS</button>}
-    </>}
-   />
+  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
+   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px" }}>
+    <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Estado de Pedidos</h1>
+    <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Consulta y seguimiento de pedidos registrados</p>
+   </header>
 
-   <Indicadores items={[
-    kpi("todos", "Total pedidos", T.color.tinta),
-    kpi("activos", "Activos", T.color.marca),
-    kpi("entregados", "Entregados", T.color.bienPunto),
-    kpi("novedades", "Novedades", T.color.malPunto),
-   ]}/>
+   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Total pedidos</div><div style={{ fontSize:28, fontWeight:900, marginTop:8 }}>{filtP.length}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Activos</div><div style={{ fontSize:28, fontWeight:900, color:"#6d42d8", marginTop:8 }}>{activos}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Entregados</div><div style={{ fontSize:28, fontWeight:900, color:"#059669", marginTop:8 }}>{entregados}</div></div>
+     <div style={{ ...cardStyle, padding:18 }}><div style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase", fontWeight:800 }}>Novedades</div><div style={{ fontSize:28, fontWeight:900, color:"#dc2626", marginTop:8 }}>{novedades}</div></div>
+    </section>
 
-   <section style={{ ...tarjeta, overflow:"hidden" }}>
-    <BarraFiltros derecha={`${pageItems.length} en esta pagina`}>
-     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar por N° pedido, guia, factura o destino" ancho={420} />
-     <SelectFiltro valor={rango} onChange={setRango} ancho={170}>
-      {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-     </SelectFiltro>
-     <SelectFiltro valor={ciudadF} onChange={setCiudadF} ancho={170}>
-      <option value="">Ciudad</option>
-      {ciudadesDe.map(c => <option key={c} value={c}>{c}</option>)}
-     </SelectFiltro>
-    </BarraFiltros>
+    <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
+     <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"center", borderBottom:`1px solid ${border}` }}>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por pedido, guia, factura, cliente o ciudad..." style={{ ...iSt, borderRadius:12, background:"#fff" }}/>
+      <span style={{ color:"#6b7280", fontSize:13, whiteSpace:"nowrap" }}>{filtP.length} pedidos · {totalCajas} cajas</span>
+     </div>
 
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse" }}>
-      <thead>
-       <tr>
-        <th style={th}>N° pedido</th>
-        <th style={th}>Factura</th>
-        <th style={th}>Destinatario</th>
-        <th style={th}>Destino</th>
-        <th style={{ ...th, textAlign:"right" }}>Cajas</th>
-        <th style={th}>Estado</th>
-        <th style={th}>Transporte</th>
-        <th style={{ ...th, textAlign:"right" }}>Acciones</th>
-       </tr>
-      </thead>
-      <tbody>
-       {filtP.length === 0 && (
-        <tr><td colSpan={8} style={{ ...td, padding:42, textAlign:"center", color:T.color.tinta3 }}>
-         {enRango.length === 0 ? "No hay pedidos en este periodo." : "Ningun pedido coincide con los filtros."}
-        </td></tr>
-       )}
-       {pageItems.map(p => {
-        const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
-        const ciudad = (ciudades||[]).find(c => c.code === p.ciudad_codigo);
-        const tr = transportePedido(p, cond);
-        const rastreable = ["en_transito", "paqueteria"].includes(p.estado);
-        const soportes = p.soportes || p.soportes_data || [];
-        const abierto = modMapa?.id === p.id;
-        return (
-         <React.Fragment key={p.id}>
-          <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
-           <td style={td}>
-            <div style={{ color:T.color.marca, fontWeight:700, fontSize:13.5 }}>{p.guia_interna || p.id}</div>
-            {p.guia_interna && p.guia_interna !== p.id && <div style={{ ...mono, color:T.color.tinta3, fontSize:12 }}>{p.id}</div>}
-           </td>
-           <td style={td}>{p.factura ? <span style={mono}>{p.factura}</span> : <span style={{ color:T.color.tinta3 }}>—</span>}</td>
-           <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.cliente}</td>
-           <td style={{ ...td, maxWidth:240 }}>
-            <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.direccion || "—"}</div>
-            <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{p.ciudad_nombre || ciudad?.name || ""}</div>
-           </td>
-           <td style={{ ...td, textAlign:"right", fontWeight:700, color: p.cajas ? T.color.tinta : T.color.tinta4 }}>{p.cajas || 0}</td>
-           <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
-           <td style={td}>
-            {tr.noAplica ? <span style={{ color:T.color.tinta3 }}>No aplica</span>
-             : !tr.principal ? <span style={{ color:T.color.tinta3 }}>Sin asignar</span>
-             : <><div style={{ color:T.color.tinta }}>{cond ? nombreCorto(tr.principal) : tr.principal}</div>
-                {tr.detalle && <div style={{ ...mono, color:T.color.tinta3, fontSize:12 }}>{tr.detalle}</div>}</>}
-           </td>
-           <td style={{ ...td, textAlign:"right" }}>
-            <div style={{ display:"inline-flex", gap:6, whiteSpace:"nowrap" }}>
-             {soportes.length > 0 && (
-              <button style={botonFila} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>
-             )}
-             <button onClick={()=>setModMapa(abierto ? null : p)} disabled={!rastreable && !abierto} title={rastreable ? "Ver en el mapa" : "Solo los pedidos en transito se rastrean"} style={{
-              ...botonFila, display:"inline-flex", alignItems:"center", gap:5,
-              color: rastreable ? T.color.marca : T.color.tinta4,
-              borderColor: rastreable ? T.color.marcaBorde : T.color.borde2,
-              background: abierto ? T.color.marcaSuave : T.color.superficie,
-              cursor: rastreable ? "pointer" : "not-allowed",
-             }}><MapPin size={13}/> {abierto ? "Ocultar" : "Rastrear"}</button>
-             <button onClick={()=>setModGuia(p)} style={{ ...botonFila, display:"inline-flex", alignItems:"center", gap:5 }}><FileText size={13}/> Guia</button>
-            </div>
-           </td>
-          </tr>
-          {abierto && <tr><td colSpan={8} style={{ padding:16, background:T.color.superficie2, borderBottom:`1px solid ${T.color.borde}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
-         </React.Fragment>
-        );
-       })}
-      </tbody>
-     </table>
-    </div>
-
-    <PieTabla
-     izquierda={`Mostrando ${pageStart}–${pageEnd} de ${filtP.length} pedidos · ${totalCajas} cajas`}
-     derecha={<Paginador total={filtP.length} page={page} setPage={setPage} pageSize={pageSize}/>}
-    />
-   </section>
-
-   {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
-  </Pagina>
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+       <thead>
+        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
+         {["Pedido", "Factura", "Cliente", "Destino", "Cajas", "Estado", "Transporte", "Acciones"].map(h => (
+          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap", width:h==="Acciones" ? 220 : undefined, minWidth:h==="Acciones" ? 220 : undefined }}>{h}</th>
+         ))}
+        </tr>
+       </thead>
+       <tbody>
+        {filtP.length===0 && <tr><td colSpan={8} style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin resultados.</td></tr>}
+        {pageItems.map(p=>{
+         const cond = conductores.find(c=>String(c.id)===String(p.conductor_id));
+         const ciudad = (ciudades||[]).find(c=>c.code===p.ciudad_codigo);
+         const soportes = p.soportes || p.soportes_data || [];
+         return (
+          <React.Fragment key={p.id}>
+           <tr style={{ borderBottom:`1px solid ${border}` }}>
+            <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850 }}><div>{p.guia_interna || p.id}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace", marginTop:3 }}>{p.id}</div></td>
+            <td style={{ padding:"16px", color:"#4b5563", fontFamily:"monospace" }}>{p.factura}</td>
+            <td style={{ padding:"16px", fontWeight:750 }}>{p.cliente}</td>
+            <td style={{ padding:"16px" }}><div>{p.ciudad_nombre}</div><div style={{ color:"#6b7280", fontSize:12 }}>{p.direccion}</div></td>
+            <td style={{ padding:"16px", fontWeight:850 }}>{p.cajas}</td>
+            <td style={{ padding:"16px" }}><Badge estado={p.estado}/></td>
+            <td style={{ padding:"16px" }}>{(() => { const tr = transportePedido(p, cond); if (tr.noAplica) return <span style={{ color:"#9ca3af" }}>No aplica</span>; if (!tr.principal) return <span style={{ color:"#9ca3af" }}>Sin conductor</span>; return <><div>{tr.principal}</div><div style={{ color:"#6b7280", fontSize:12, fontFamily:"monospace" }}>{tr.detalle}</div></>; })()}</td>
+            <td style={{ padding:"16px", textAlign:"right", minWidth:220, width:220 }}><div style={{ display:"inline-flex", gap:8, flexWrap:"nowrap", justifyContent:"flex-end", alignItems:"center", whiteSpace:"nowrap" }}>{soportes.length>0&&<button style={{ ...buttonBase, color:"#059669", whiteSpace:"nowrap" }} onClick={()=>verPDFSoportes(p, showToast)}>Soportes ({soportes.length})</button>}<button style={{ ...buttonBase, whiteSpace:"nowrap" }} onClick={()=>setModMapa(modMapa?.id===p.id?null:p)}>{modMapa?.id===p.id?"Ocultar":"Rastreo"}</button></div></td>
+           </tr>
+           {modMapa?.id===p.id && <tr><td colSpan={8} style={{ padding:16, background:"#fafafa", borderBottom:`1px solid ${border}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
+          </React.Fragment>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+     <PaginationControls total={filtP.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+    </section>
+   </main>
+  </div>
  );
 }
 
@@ -6123,34 +4287,7 @@ export default function SomosProTracking() {
  const [promesas,    setPromesas]    = useState([]);
  const [facturas,    setFacturas]    = useState([]);
  const [collapsed,   setCollapsed]   = useState(false);
- const esMovil = useEsMovil();
  const [modCompartir,  setModCompartir]  = useState(false);
- // Lo que se elige en el buscador del dashboard: Pedidos se abre con esa consulta
- // ya aplicada, en vez de dejar al usuario buscando otra vez.
- const [busquedaPedidos, setBusquedaPedidos] = useState("");
- // Navegar por el menu o por las tarjetas del dashboard limpia esa consulta. Sin
- // esto, cada regreso a Pedidos volvia a aplicar la ultima busqueda, y cualquier
- // enlace terminaba mostrando siempre el mismo pedido.
- const [estadoPedidos, setEstadoPedidos] = useState("");
- const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
- // "Nueva PQRS" desde Estado de pedidos: se va a PQRS con el formulario abierto.
- const [pqrsNueva, setPqrsNueva] = useState(false);
- // "Ver" en un conductor del transportista abre Pedidos filtrado por el.
- const [conductorTransp, setConductorTransp] = useState("");
-
- // El QR de la guia apunta a ?pedido=<id>. Al entrar con esa direccion se abre
- // ese pedido y se limpia el parametro, para que recargar despues no lo repita.
- useEffect(() => {
-  if (!user) return;
-  let buscado = "";
-  try { buscado = new URLSearchParams(window.location.search).get("pedido") || ""; } catch { buscado = ""; }
-  if (!buscado) return;
-  setBusquedaPedidos(buscado);
-  setTab(user.rol === "conductor" ? "mis_pedidos" : user.rol === "cliente" ? "consultas" : "pedidos");
-  try {
-   window.history.replaceState({}, "", window.location.pathname);
-  } catch { /* sin permiso para cambiar la direccion */ }
- }, [user]);
  const [toast,     setToast]     = useState(null);
 
  const showToast = (msg, type = "info") => setToast({ msg, type });
@@ -6159,10 +4296,6 @@ export default function SomosProTracking() {
   if (!silencioso) setCargando(true);
   try {
    const rolActual = perfil?.rol;
-   // Los roles del modulo de cartera no usan ninguna de estas tablas. Cargarlas
-   // gastaria egress para nada y, ademas, la verificacion de usuarios de mas abajo
-   // los sacaria de la aplicacion: sus politicas RLS no les dejan ver la tabla.
-   if (ROLES_CARTERA.includes(rolActual)) { setCargando(false); return; }
    const puedeVerFacturas = ["admin", "operador"].includes(rolActual);
    const pedidosSelect = columnasPedidos(rolActual);
    const devolucionesSelect = COLUMNAS_DEVOLUCIONES;
@@ -6321,7 +4454,7 @@ export default function SomosProTracking() {
    }
   }
   setUser(userWithConductorId);
-  const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas", cartera: "cartera_cargar" };
+  const def = { admin: "dashboard", operador: "dashboard", transportista: "mi_empresa", conductor: "mis_pedidos", cliente: "consultas" };
   setTab(def[u.rol] || "dashboard");
   await cargarTodo(userWithConductorId);
  };
@@ -6413,67 +4546,41 @@ export default function SomosProTracking() {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
-   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} transportistas={transportistas} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
-    onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setEstadoPedidos(""); setTab("pedidos"); }}
-    onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
-   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
+   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={setTab}/>;
+   case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
-   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores} puedeEditar={user.rol==="admin"}
-    onVerPedidos={(c)=>{ setEstadoPedidos(""); setBusquedaPedidos(c.placa || c.nombre || ""); setTab("pedidos"); }}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar}/>;
+   case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores}/>;
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
     ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
-    : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}/>;
+    : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
-   case "ciudades":    return <Ciudades ciudades={ciudades} pedidos={pedidos} showToast={showToast} recargar={recargarCiudades}/>;
-   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} recargar={recargarPaqueterias}/>;
+   case "ciudades":    return <Ciudades ciudades={ciudades} showToast={showToast} recargar={recargarCiudades}/>;
+   case "paqueterias":  return <GestionPaqueterias paqueterias={paqueterias} showToast={showToast} recargar={recargarPaqueterias}/>;
    case "usuarios":    return <Usuarios usuarios={usuarios} transportistas={transportistas} showToast={showToast} recargar={recargarUsuarios}/>;
-   case "mi_empresa":
-   case "mis_conductores_transp":
-   case "mis_pedidos_transp":
-    return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}
-     vista={tab === "mis_conductores_transp" ? "conductores" : tab === "mis_pedidos_transp" ? "pedidos" : "empresa"}
-     conductorInicial={tab === "mis_pedidos_transp" ? conductorTransp : ""}
-     onIr={(destino, condId) => { setConductorTransp(condId || ""); navegar(destino); }}/>;
-   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} promesas={promesas} showToast={showToast} recargar={recargarPedidos}/>;
+   case "mi_empresa":   return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarTransportistas}/>;
+   case "mis_pedidos":  return <MisPedidosConductor pedidos={pedidos} user={user} conductores={conductores} ciudades={ciudades} showToast={showToast} recargar={recargarPedidos}/>;
    case "mis_devoluciones": return <MisDevolucionesConductor devoluciones={devoluciones} user={user}/>;
    case "mis_recogidas": return <MisRecogidasConductor recogidas={recogidas} user={user}/>;
-   case "mi_ubicacion":  return <MiUbicacion user={user} pedidos={pedidos} promesas={promesas}/>;
-   case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}
-    onNuevaPQRS={() => { navegar("pqrs"); setPqrsNueva(true); }}/>;
-   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
-    nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}/>;
-   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
+   case "mi_ubicacion":  return <MiUbicacion user={user}/>;
+   case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast}/>;
+   case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}/>;
+   case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
    case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
-   // Modulo de cartera: todas sus vistas entran por el mismo despachador.
-   case "cartera_sedes":
-   case "cartera_asesores":
-   case "cartera_cargar":
-   case "cartera_pedidos":
-   case "cartera_logistica":
-   case "cartera_consultas":
-    return <ModuloCartera tab={tab} user={user} showToast={showToast} setTab={setTab} onPedidosCambiaron={recargarPedidos}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
  };
 
  return (
   <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#fafafa" }}>
-   {!esMovil && (
-    <SidebarApp user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
-   )}
-   <main style={{
-    flex: 1, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
-    padding: esMovil ? "16px 16px " + (ALTO_BARRA + 16) + "px" : "28px 24px",
-   }}>
+   <SidebarApp user={user} activeTab={tab} setActiveTab={setTab} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
+   <main style={{ flex: 1, overflowY: "auto", padding: "28px 24px", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa" }}>
     {renderContent()}
    </main>
-   {esMovil && (
-    <NavegacionMovil user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} />
-   )}
    {modCompartir && <LinkCompartir onClose={()=>setModCompartir(false)} />}
    {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
   </div>
  );
 }
+
