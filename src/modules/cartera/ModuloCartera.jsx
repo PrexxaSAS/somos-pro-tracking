@@ -1987,14 +1987,14 @@ export function ModuloLogistica({showToast}) {
             }}>
              <span style={{ width:6, height:6, borderRadius:3,
               background: imp.completo ? T.color.bienPunto : T.color.ojoPunto }}/>
-             {imp.completo ? "Impreso" : `Por imprimir ${imp.total - imp.impresos}`}
+             {imp.completo ? "Impreso" : "Sin imprimir"}
             </span>
            </td>
            <td style={{ ...td, textAlign:"right" }}>
             {imp.total > 0 && (
              <button style={imp.completo ? botonFila : { ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
               onClick={()=>imprimirCorte(c)} disabled={imprimiendo === c.id}>
-              <Printer size={14}/> {imprimiendo === c.id ? "Preparando..." : imp.completo ? "Reimprimir" : "Imprimir"}
+              <Printer size={14}/> {imprimiendo === c.id ? "Preparando..." : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
              </button>
             )}
            </td>
@@ -2079,11 +2079,11 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
   {modoFecha==='fecha'&&<div style={{display:'flex',gap:7}}><input aria-label="Fecha del corte" type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)} style={{flex:1,minWidth:0,padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:9}}/><select aria-label="Estado de impresión" value={filtroImp} onChange={e=>setFiltroImp(e.target.value)} style={{flex:1,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9}}><option value="no_impreso">Por imprimir</option><option value="impreso">Impresos</option><option value="todos">Todos</option></select></div>}
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>Cortes programados</h2>
    {cortes.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay cortes para mostrar.</div>:<div style={{display:'flex',gap:7,overflowX:'auto',margin:'0 -16px',padding:'0 16px 3px',scrollbarWidth:'none'}}>{cortes.map(c=>{const imp=impresionDe(c);return <article key={c.id} style={{...tarjeta,minWidth:188,padding:10,flexShrink:0}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:7}}><strong style={{fontSize:17}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{fontSize:10.5,color:imp.completo?T.color.bien:T.color.ojo,background:imp.completo?T.color.bienSuave:T.color.ojoSuave,padding:'3px 6px',borderRadius:20}}>{imp.completo?'● Impreso':`● Por imprimir ${imp.total-imp.impresos}`}</span></div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:7}}><strong style={{fontSize:17}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{fontSize:10.5,color:imp.completo?T.color.bien:T.color.ojo,background:imp.completo?T.color.bienSuave:T.color.ojoSuave,padding:'3px 6px',borderRadius:20}}>{imp.completo?'● Impreso':'● Sin imprimir'}</span></div>
     <div style={{fontSize:11,color:T.color.tinta3,marginTop:5}}>{fFechaDia(c.fecha)} · {c.sedes?.nombre||'Sin sede'}</div>
     <div style={{height:4,background:T.color.superficie3,borderRadius:4,marginTop:10}}><div style={{height:'100%',width:`${Math.min(100,Math.round(100*Number(c.pedidos_asignados||0)/Math.max(1,Number(c.capacidad_max||1))))}%`,background:T.color.marca,borderRadius:4}}/></div>
     <div style={{fontSize:11,color:T.color.tinta3,textAlign:'right',margin:'3px 0 7px'}}>{c.pedidos_asignados}/{c.capacidad_max}</div>
-    {imp.total>0?<button onClick={()=>imprimirCorte(c)} disabled={imprimiendo===c.id} style={imp.completo?{...botonBarra,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}:{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}><Printer size={13}/> {imprimiendo===c.id?'Preparando...':imp.completo?'Reimprimir':'Imprimir'}</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Sin pedidos</div>}
+    {imp.total>0?<button onClick={()=>imprimirCorte(c)} disabled={imprimiendo===c.id} style={imp.completo?{...botonBarra,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}:{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}><Printer size={13}/> {imprimiendo===c.id?'Preparando...':`${imp.completo?'Reimprimir':'Imprimir'} (${imp.total})`}</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Sin pedidos</div>}
    </article>;})}</div>}
   </section>
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>{modoFecha==='pendientes'?'Pedidos sin imprimir':'Pedidos del corte'}</h2>
