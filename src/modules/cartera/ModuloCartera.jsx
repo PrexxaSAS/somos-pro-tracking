@@ -68,90 +68,31 @@ const dane5 = (v) => {
 };
 
 // ── Asignar corte ──────────────────────────────────────────────────────────────
+// La regla, en un solo sitio (crearAsignadorCortes): la sede sale del DANE de
+// origen; el pedido toma el primer corte que no haya pasado, este abierto y
+// TENGA CUPO, buscando hoy, luego manana, y asi dia por dia. Antes, si los
+// cortes de hoy estaban llenos, el pedido caia en el primer corte de manana sin
+// mirar su cupo, y un corte de 23 terminaba con 125 pedidos.
+//
+// asignarCorte es el caso de un solo pedido (aprobar en Gestion).
 export const asignarCorte = async (daneOrigen) => {
-  if (!daneOrigen) return null;
-  const hoy = hoyLocal();
-  const ahora = new Date();
-
-  const {data:sedesAll} = await supabase
-    .from('sedes').select('*, cortes_sede(*)').eq('activa',true);
-
-  if (!sedesAll || sedesAll.length === 0) return null;
-  const daneNorm = daneOrigen.trim().padStart(5,'0'); // "5380" -> "05380"
-  const sede = sedesAll.find(s=>{
-    const cNorm = String(s.dane_code||'').trim().padStart(5,'0');
-    return cNorm === daneNorm;
-  });
-  if (!sede) return null;
-  // Por hora y no por la columna "orden": esa la digitaba una persona y no
-  // tenia por que coincidir con el reloj. Si alguien registraba el corte de las
-  // 16:00 antes que el de las 08:00, este recorrido tomaba el de las 16:00
-  // primero y el pedido salia mas tarde de lo que debia; y como orden venia con
-  // 1 por defecto, varios cortes empatados quedaban en un orden cualquiera.
-  const cortesOrdenados = (sede.cortes_sede||[])
-    .slice()
-    .sort((a,b)=>String(a.hora_corte||'').localeCompare(String(b.hora_corte||'')));
-  if (cortesOrdenados.length === 0) return null;
-
-  // Intentar en los cortes de hoy
-  for (const cs of cortesOrdenados) {
-    const corteTime = new Date(hoy+'T'+cs.hora_corte);
-    if (corteTime <= ahora) continue;
-
-    let {data:cp} = await supabase.from('cortes_programados')
-      .select('*').eq('sede_id',sede.id).eq('corte_sede_id',cs.id).eq('fecha',hoy).maybeSingle();
-
-    if (!cp) {
-      const {data:nuevo} = await supabase.from('cortes_programados').insert({
-        sede_id:sede.id, corte_sede_id:cs.id, fecha:hoy,
-        hora_corte:cs.hora_corte, capacidad_max:cs.capacidad_corte,
-        pedidos_asignados:0, estado:'abierto'
-      }).select().single();
-      cp = nuevo;
-    }
-
-    if (cp && cp.pedidos_asignados < cp.capacidad_max && cp.estado==='abierto') {
-      await supabase.from('cortes_programados')
-        .update({pedidos_asignados:cp.pedidos_asignados+1}).eq('id',cp.id);
-      return {corteId:cp.id, fechaCorte:new Date(hoy+'T'+cs.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:cs.hora_corte};
-    }
-  }
-
-  // Si todos los cortes de hoy están llenos → mañana primer corte
-  const manStr = hoyMas(1);
-  const primerCorte = cortesOrdenados[0];
-
-  let {data:cp} = await supabase.from('cortes_programados')
-    .select('*').eq('sede_id',sede.id).eq('corte_sede_id',primerCorte.id).eq('fecha',manStr).maybeSingle();
-
-  if (!cp) {
-    const {data:nuevo} = await supabase.from('cortes_programados').insert({
-      sede_id:sede.id, corte_sede_id:primerCorte.id, fecha:manStr,
-      hora_corte:primerCorte.hora_corte, capacidad_max:primerCorte.capacidad_corte,
-      pedidos_asignados:0, estado:'abierto'
-    }).select().single();
-    cp = nuevo;
-  }
-
-  if (cp) {
-    await supabase.from('cortes_programados')
-      .update({pedidos_asignados:cp.pedidos_asignados+1}).eq('id',cp.id);
-    return {corteId:cp.id, fechaCorte:new Date(manStr+'T'+primerCorte.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:primerCorte.hora_corte};
-  }
-  return null;
+  const asignador = await crearAsignadorCortes();
+  const corte = await asignador.asignar(daneOrigen);
+  await asignador.guardar();
+  return corte;
 };
 
+// Cuantos dias hacia adelante se busca cupo antes de rendirse. Un mes de
+// cortes llenos no deberia pasar; si pasa, el pedido queda sin corte y el
+// resultado del cargue lo cuenta como "sin sede", para que alguien lo mire.
+const DIAS_BUSQUEDA_CORTE = 30;
+
 // ── Asignar cortes a muchos pedidos (el cargue) ──────────────────────────────
-// Misma regla que asignarCorte: la sede sale del DANE de origen; el pedido
-// toma el primer corte de hoy que no haya pasado, este abierto y tenga cupo; si
-// ninguno, el primer corte de manana. La diferencia es de cuantas veces se va
-// a la base: las sedes se leen una vez, cada corte programado se busca (o se
-// crea) una vez, y los cupos usados se cuentan en memoria y se guardan al
-// final con guardar(), sumandolos a lo que el corte tenga en ese momento.
+// Las sedes se leen una vez, cada corte programado se busca (o se crea) una
+// vez, y los cupos usados se cuentan en memoria y se guardan al final con
+// guardar(), sumandolos a lo que el corte tenga en ese momento.
 export const crearAsignadorCortes = async () => {
-  const hoy = hoyLocal();
   const ahora = new Date();
-  const manStr = hoyMas(1);
   const {data:sedesAll} = await supabase.from('sedes').select('*, cortes_sede(*)').eq('activa',true);
   const sedes = sedesAll || [];
   const programados = {}; // "sede|corte|fecha" -> {cp, usados} o null
@@ -178,23 +119,21 @@ export const crearAsignadorCortes = async () => {
     const daneNorm = daneOrigen.trim().padStart(5,'0');
     const sede = sedes.find(s => String(s.dane_code||'').trim().padStart(5,'0') === daneNorm);
     if (!sede) return null;
+    // Por hora y no por la columna "orden", que digitaba una persona.
     const cortesOrdenados = (sede.cortes_sede||[]).slice()
       .sort((a,b)=>String(a.hora_corte||'').localeCompare(String(b.hora_corte||'')));
     if (cortesOrdenados.length === 0) return null;
 
-    for (const cs of cortesOrdenados) {
-      if (new Date(hoy+'T'+cs.hora_corte) <= ahora) continue;
-      const e = await programado(sede, cs, hoy);
-      if (e && e.cp.pedidos_asignados + e.usados < e.cp.capacidad_max && e.cp.estado==='abierto') {
-        e.usados++;
-        return {corteId:e.cp.id, fechaCorte:new Date(hoy+'T'+cs.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:cs.hora_corte};
+    for (let d = 0; d < DIAS_BUSQUEDA_CORTE; d++) {
+      const fecha = hoyMas(d);
+      for (const cs of cortesOrdenados) {
+        if (new Date(fecha+'T'+cs.hora_corte) <= ahora) continue;
+        const e = await programado(sede, cs, fecha);
+        if (e && e.cp.estado==='abierto' && e.cp.pedidos_asignados + e.usados < e.cp.capacidad_max) {
+          e.usados++;
+          return {corteId:e.cp.id, fechaCorte:new Date(fecha+'T'+cs.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:cs.hora_corte};
+        }
       }
-    }
-    const primerCorte = cortesOrdenados[0];
-    const e = await programado(sede, primerCorte, manStr);
-    if (e) {
-      e.usados++;
-      return {corteId:e.cp.id, fechaCorte:new Date(manStr+'T'+primerCorte.hora_corte).toISOString(), sedeNombre:sede.nombre, horaCorte:primerCorte.hora_corte};
     }
     return null;
   };
