@@ -84,7 +84,7 @@ export function CargadorFotos({ pedido, onGuardar, onClose, showToast }) {
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
           {fotos.length > 0 && (
             <Btn variant="secondary" onClick={() => generarPDFSoportes(pedido, fotos)}>
-              Preview PDF
+              Descargar PDF
             </Btn>
           )}
           <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>

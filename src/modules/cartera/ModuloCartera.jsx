@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { leerTextoCsv, filasCsv, descargarCSV } from '../../utils/files';
+import { imprimirHTML } from '../../utils/imprimir';
 import { P } from '../../Constants';
 import { T, tarjeta } from '../../design/tokens';
 import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download } from 'lucide-react';
@@ -1818,24 +1819,20 @@ export function ModuloLogistica({showToast}) {
   };
 
   // Imprime todos los pedidos aprobados del corte, impresos o no. Si ya
-  // estaban todos impresos es una reimpresion. La ventana se abre antes de
-  // consultar porque el navegador bloquea las que se abren despues de esperar.
+  // estaban todos impresos es una reimpresion.
   const imprimirCorte = async (c) => {
-    const win=window.open('','_blank');
     setImprimiendo(c.id);
     const {data,error}=await supabase.from('pedidos_cartera').select('*, pedidos_cartera_detalle(*)')
       .eq('estado_cartera','aprobado').eq('corte_id',c.id).order('numero_pedido');
     setImprimiendo(null);
-    if(error){ if(win) win.close(); showToast("No se pudieron leer los pedidos del corte","error"); return; }
-    await imprimir(data||[], win);
+    if(error){ showToast("No se pudieron leer los pedidos del corte","error"); return; }
+    await imprimir(data||[]);
   };
 
-  const imprimir = async (pedidosImprimir, win=null) => {
-    if(!pedidosImprimir.length){ if(win) win.close(); showToast("No hay pedidos para imprimir","error"); return; }
-    if(!win) win=window.open('','_blank');
-    if(!win){ showToast("El navegador bloqueo la ventana de impresion","error"); return; }
+  const imprimir = async (pedidosImprimir) => {
+    if(!pedidosImprimir.length){ showToast("No hay pedidos para imprimir","error"); return; }
     const html=pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
-    win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
+    imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
       .pagina{padding:16px;width:210mm;min-height:148mm;}
       .titulo{font-size:16px;font-weight:bold;margin-bottom:4px;}
@@ -1848,7 +1845,6 @@ export function ModuloLogistica({showToast}) {
       .page-break{page-break-after:always;}
       @media print{body{-webkit-print-color-adjust:exact;}}
     </style></head><body>${html}</body></html>`);
-    win.document.close();
     // Se marcan impresos solo los que no lo estaban: al reimprimir se conserva
     // la fecha de la primera impresion.
     const ids=pedidosImprimir.filter(x=>x.estado_impresion!=='impreso').map(x=>x.id);
@@ -1858,7 +1854,6 @@ export function ModuloLogistica({showToast}) {
           .update({estado_impresion:'impreso',fecha_impresion:new Date().toISOString()}).in('id',ids.slice(i,i+100));
       }
     })();
-    win.print();
     await marcar;
     cargar();
   };
