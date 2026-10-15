@@ -34,13 +34,13 @@ const fFechaDia = d => { if(!d) return '—'; const f = new Date(String(d).slice
 const fFechaHora = d => { if(!d) return '—'; const f = new Date(d); return isNaN(f)?'—':f.toLocaleString('es-CO'); };
 
 // Por donde va un pedido ya aprobado. El camino es siempre el mismo: se le
-// asigna un corte, el corte se transmite a logistica y alli se imprime. Vive
+// asigna un corte y en logistica se imprime. (Ya no se transmite al TMS: el
+// pedido pasa a Pedidos de logistica en cuanto se aprueba.) Vive
 // aqui porque lo dicen dos pantallas, la de cartera y la de consultas, y antes
 // cada una contaba una version distinta: consultas decia "En espera de corte"
 // para todo lo aprobado, aunque el corte ya estuviera asignado.
 const etapaCartera = (p) => {
   if(p.estado_impresion==='impreso') return {corto:'Impreso', label:'Impreso — En picking', color:T.color.marca};
-  if(p.transmitido_tms)              return {corto:'Transmitido', label:'Transmitido a logistica', color:T.color.info};
   if(p.fecha_corte)                  return {corto:'En corte', label:'Aprobado — En corte', color:T.color.bien};
   return {corto:'Sin corte', label:'Aprobado — En espera de corte', color:T.color.ojo};
 };
@@ -1734,12 +1734,16 @@ export function ModuloLogistica({showToast}) {
   const [filtroFecha,setFiltroFecha]= useState(hoyLocal());
   // La pantalla arranca en "pendientes" y no en el dia de hoy porque su trabajo
   // es imprimir lo que falte, no mirar una fecha. Cuando los cortes de hoy se
-  // llenan o ya pasaron, el pedido cae en el primer corte de manana: mirando un
+  // llenan o ya pasaron, el pedido cae en un corte de otro dia: mirando un
   // solo dia esos quedaban invisibles y nadie los imprimia.
   const [modoFecha,  setModoFecha]  = useState('pendientes');
   const [filtroImp,  setFiltroImp]  = useState('no_impreso');
   const [pedidos,    setPedidos]    = useState([]);
-  const [transmitiendo,setTransmitiendo]=useState(false);
+  const [imprimiendo,setImprimiendo]=useState(null); // id del corte que se esta imprimiendo
+  // Cuantos pedidos tiene cada corte y cuantos ya se imprimieron. Se cuenta
+  // aparte de "pedidos" porque esa lista va filtrada (pendientes, por imprimir)
+  // y el boton del corte tiene que saber si imprime o reimprime todo el corte.
+  const [impresionCortes,setImpresionCortes]=useState({});
 
   useEffect(()=>{
     supabase.from('sedes').select('*').order('nombre').then(({data})=>setSedes(data||[]));
@@ -1793,24 +1797,43 @@ export function ModuloLogistica({showToast}) {
   };
   useEffect(()=>{cargar();},[filtroSede,filtroFecha,filtroImp,modoFecha]);
 
-  const transmitirCorte = async (corteId) => {
-    setTransmitiendo(true);
-    const ahora=new Date().toISOString();
-    // Update pedidos in this corte
-    await supabase.from('pedidos_cartera')
-      .update({transmitido_tms:true,fecha_transmision:ahora})
-      .eq('corte_id',corteId).eq('estado_cartera','aprobado');
-    // Update corte status
-    await supabase.from('cortes_programados')
-      .update({estado:'transmitido',fecha_transmision:ahora}).eq('id',corteId);
-    showToast("✓ Corte transmitido a logística","success");
-    setTransmitiendo(false);
-    cargar();
+  useEffect(()=>{
+    const ids=cortes.map(c=>c.id);
+    if(!ids.length){ setImpresionCortes({}); return; }
+    supabase.from('pedidos_cartera').select('corte_id,estado_impresion')
+      .eq('estado_cartera','aprobado').in('corte_id',ids)
+      .then(({data})=>{
+        const cuenta={};
+        (data||[]).forEach(x=>{
+          const c=cuenta[x.corte_id]||(cuenta[x.corte_id]={total:0,impresos:0});
+          c.total++; if(x.estado_impresion==='impreso') c.impresos++;
+        });
+        setImpresionCortes(cuenta);
+      });
+  },[cortes]);
+
+  const impresionDe = (c) => {
+    const i=impresionCortes[c.id]||{total:0,impresos:0};
+    return {...i, completo:i.total>0&&i.impresos===i.total};
   };
 
-  const imprimir = (pedidosImprimir) => {
-    if(!pedidosImprimir.length){showToast("No hay pedidos para imprimir","error");return;}
+  // Imprime todos los pedidos aprobados del corte, impresos o no. Si ya
+  // estaban todos impresos es una reimpresion. La ventana se abre antes de
+  // consultar porque el navegador bloquea las que se abren despues de esperar.
+  const imprimirCorte = async (c) => {
     const win=window.open('','_blank');
+    setImprimiendo(c.id);
+    const {data,error}=await supabase.from('pedidos_cartera').select('*, pedidos_cartera_detalle(*)')
+      .eq('estado_cartera','aprobado').eq('corte_id',c.id).order('numero_pedido');
+    setImprimiendo(null);
+    if(error){ if(win) win.close(); showToast("No se pudieron leer los pedidos del corte","error"); return; }
+    await imprimir(data||[], win);
+  };
+
+  const imprimir = async (pedidosImprimir, win=null) => {
+    if(!pedidosImprimir.length){ if(win) win.close(); showToast("No hay pedidos para imprimir","error"); return; }
+    if(!win) win=window.open('','_blank');
+    if(!win){ showToast("El navegador bloqueo la ventana de impresion","error"); return; }
     const html=pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
     win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
@@ -1826,12 +1849,17 @@ export function ModuloLogistica({showToast}) {
       @media print{body{-webkit-print-color-adjust:exact;}}
     </style></head><body>${html}</body></html>`);
     win.document.close();
-    // Mark as printed
-    pedidosImprimir.forEach(async p=>{
-      await supabase.from('pedidos_cartera')
-        .update({estado_impresion:'impreso',fecha_impresion:new Date().toISOString()}).eq('id',p.id);
-    });
+    // Se marcan impresos solo los que no lo estaban: al reimprimir se conserva
+    // la fecha de la primera impresion.
+    const ids=pedidosImprimir.filter(x=>x.estado_impresion!=='impreso').map(x=>x.id);
+    const marcar=(async()=>{
+      for(let i=0;i<ids.length;i+=100){
+        await supabase.from('pedidos_cartera')
+          .update({estado_impresion:'impreso',fecha_impresion:new Date().toISOString()}).in('id',ids.slice(i,i+100));
+      }
+    })();
     win.print();
+    await marcar;
     cargar();
   };
 
@@ -1866,23 +1894,20 @@ export function ModuloLogistica({showToast}) {
     </div>`;
   };
 
-  // Pedidos transmitidos y no impresos
-  const pedidosTransmitidos = pedidos.filter(p=>p.transmitido_tms);
-
   const porImprimir = pedidos.filter(x => x.estado_impresion !== "impreso");
 
   if(esMovil) return <LogisticaMovil
    sedes={sedes} cortes={cortes} pedidos={pedidos} porImprimir={porImprimir}
    filtroSede={filtroSede} setFiltroSede={setFiltroSede} filtroFecha={filtroFecha} setFiltroFecha={setFiltroFecha}
    modoFecha={modoFecha} setModoFecha={setModoFecha} filtroImp={filtroImp} setFiltroImp={setFiltroImp}
-   transmitiendo={transmitiendo} transmitirCorte={transmitirCorte} imprimir={imprimir}
+   imprimiendo={imprimiendo} imprimirCorte={imprimirCorte} impresionDe={impresionDe} imprimir={imprimir}
   />;
 
   return (
    <Pagina anchoCompleto>
     <Encabezado
      titulo="Logistica de cartera"
-     descripcion="Pedidos aprobados listos para imprimir y transmitir al TMS"
+     descripcion="Pedidos aprobados listos para imprimir, por corte"
      acciones={
       <button onClick={()=>imprimir(pedidos)} disabled={pedidos.length === 0}
        style={{ ...botonBarra, opacity: pedidos.length ? 1 : 0.5, cursor: pedidos.length ? "pointer" : "not-allowed" }}>
@@ -1897,7 +1922,7 @@ export function ModuloLogistica({showToast}) {
      { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojoPunto },
      { label: modoFecha==='pendientes' ? "Cortes con pendientes" : "Cortes del dia",
        valor:cortes.length, color:T.color.infoPunto },
-     { label:"Transmitidos", valor:cortes.filter(c=>c.estado === "transmitido").length, color:T.color.bienPunto },
+     { label:"Cortes impresos", valor:cortes.filter(c=>impresionDe(c).completo).length, color:T.color.bienPunto },
     ]}/>
 
     <section style={{ ...tarjeta, padding:14, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
@@ -1941,12 +1966,12 @@ export function ModuloLogistica({showToast}) {
           <th style={th}>Hora</th>
           <th style={{...th, textAlign:"right"}}>Pedidos</th>
           <th style={{...th, textAlign:"right"}}>Capacidad</th>
-          <th style={th}>Estado</th>
+          <th style={th}>Impresion</th>
           <th style={{...th, textAlign:"right"}}>Acciones</th>
          </tr>
         </thead>
         <tbody>
-         {cortes.map(c => (
+         {cortes.map(c => { const imp = impresionDe(c); return (
           <tr key={c.id}>
            <td style={td}>{fFechaDia(c.fecha)}</td>
            <td style={td}>{c.sedes?.nombre || <span style={{ color:T.color.tinta3 }}>—</span>}</td>
@@ -1957,24 +1982,24 @@ export function ModuloLogistica({showToast}) {
             <span style={{
              display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
              borderRadius:T.radio.pastilla, fontSize:12, fontWeight:600,
-             background: c.estado === "transmitido" ? T.color.bienSuave : T.color.ojoSuave,
-             color: c.estado === "transmitido" ? T.color.bien : T.color.ojo,
+             background: imp.completo ? T.color.bienSuave : T.color.ojoSuave,
+             color: imp.completo ? T.color.bien : T.color.ojo,
             }}>
              <span style={{ width:6, height:6, borderRadius:3,
-              background: c.estado === "transmitido" ? T.color.bienPunto : T.color.ojoPunto }}/>
-             {c.estado === "transmitido" ? "Transmitido" : "Abierto"}
+              background: imp.completo ? T.color.bienPunto : T.color.ojoPunto }}/>
+             {imp.completo ? "Impreso" : `Por imprimir ${imp.total - imp.impresos}`}
             </span>
            </td>
            <td style={{ ...td, textAlign:"right" }}>
-            {c.estado !== "transmitido" && (
-             <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
-              onClick={()=>transmitirCorte(c.id)} disabled={transmitiendo}>
-              {transmitiendo ? "Transmitiendo..." : "Transmitir al TMS"}
+            {imp.total > 0 && (
+             <button style={imp.completo ? botonFila : { ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
+              onClick={()=>imprimirCorte(c)} disabled={imprimiendo === c.id}>
+              <Printer size={14}/> {imprimiendo === c.id ? "Preparando..." : imp.completo ? "Reimprimir" : "Imprimir"}
              </button>
             )}
            </td>
           </tr>
-         ))}
+         ); })}
         </tbody>
        </table>
       </div>
@@ -2042,9 +2067,9 @@ export function ModuloLogistica({showToast}) {
 }
 
 function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSede,filtroFecha,setFiltroFecha,
- modoFecha,setModoFecha,filtroImp,setFiltroImp,transmitiendo,transmitirCorte,imprimir}) {
+ modoFecha,setModoFecha,filtroImp,setFiltroImp,imprimiendo,imprimirCorte,impresionDe,imprimir}) {
  return <Pagina anchoCompleto>
-  <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>c.estado!=='transmitido').length} cortes abiertos</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Logística de cartera</h1></header>
+  <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>!impresionDe(c).completo).length} cortes por imprimir</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Logística de cartera</h1></header>
   <div style={{display:'flex',gap:7}}>
    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,background:T.color.superficie,border:`1px solid ${T.color.borde2}`,borderRadius:9,padding:3,flex:1}}>
     {[["pendientes","Pendientes"],["fecha","Por fecha"]].map(([valor,label])=><button key={valor} onClick={()=>setModoFecha(valor)} style={{border:'none',borderRadius:7,padding:'8px 5px',background:modoFecha===valor?T.color.marca:'transparent',color:modoFecha===valor?'#fff':T.color.tinta2,fontFamily:'inherit',fontWeight:600,fontSize:12}}>{label}</button>)}
@@ -2053,13 +2078,13 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
   </div>
   {modoFecha==='fecha'&&<div style={{display:'flex',gap:7}}><input aria-label="Fecha del corte" type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)} style={{flex:1,minWidth:0,padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:9}}/><select aria-label="Estado de impresión" value={filtroImp} onChange={e=>setFiltroImp(e.target.value)} style={{flex:1,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9}}><option value="no_impreso">Por imprimir</option><option value="impreso">Impresos</option><option value="todos">Todos</option></select></div>}
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>Cortes programados</h2>
-   {cortes.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay cortes para mostrar.</div>:<div style={{display:'flex',gap:7,overflowX:'auto',margin:'0 -16px',padding:'0 16px 3px',scrollbarWidth:'none'}}>{cortes.map(c=><article key={c.id} style={{...tarjeta,minWidth:188,padding:10,flexShrink:0}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:7}}><strong style={{fontSize:17}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{fontSize:10.5,color:c.estado==='transmitido'?T.color.bien:T.color.ojo,background:c.estado==='transmitido'?T.color.bienSuave:T.color.ojoSuave,padding:'3px 6px',borderRadius:20}}>{c.estado==='transmitido'?'● Transmitido':'● Abierto'}</span></div>
+   {cortes.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay cortes para mostrar.</div>:<div style={{display:'flex',gap:7,overflowX:'auto',margin:'0 -16px',padding:'0 16px 3px',scrollbarWidth:'none'}}>{cortes.map(c=>{const imp=impresionDe(c);return <article key={c.id} style={{...tarjeta,minWidth:188,padding:10,flexShrink:0}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:7}}><strong style={{fontSize:17}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{fontSize:10.5,color:imp.completo?T.color.bien:T.color.ojo,background:imp.completo?T.color.bienSuave:T.color.ojoSuave,padding:'3px 6px',borderRadius:20}}>{imp.completo?'● Impreso':`● Por imprimir ${imp.total-imp.impresos}`}</span></div>
     <div style={{fontSize:11,color:T.color.tinta3,marginTop:5}}>{fFechaDia(c.fecha)} · {c.sedes?.nombre||'Sin sede'}</div>
     <div style={{height:4,background:T.color.superficie3,borderRadius:4,marginTop:10}}><div style={{height:'100%',width:`${Math.min(100,Math.round(100*Number(c.pedidos_asignados||0)/Math.max(1,Number(c.capacidad_max||1))))}%`,background:T.color.marca,borderRadius:4}}/></div>
     <div style={{fontSize:11,color:T.color.tinta3,textAlign:'right',margin:'3px 0 7px'}}>{c.pedidos_asignados}/{c.capacidad_max}</div>
-    {c.estado!=='transmitido'?<button onClick={()=>transmitirCorte(c.id)} disabled={transmitiendo} style={{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}>➤ Transmitir al TMS</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Ya transmitido</div>}
-   </article>)}</div>}
+    {imp.total>0?<button onClick={()=>imprimirCorte(c)} disabled={imprimiendo===c.id} style={imp.completo?{...botonBarra,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}:{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}><Printer size={13}/> {imprimiendo===c.id?'Preparando...':imp.completo?'Reimprimir':'Imprimir'}</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Sin pedidos</div>}
+   </article>;})}</div>}
   </section>
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>{modoFecha==='pendientes'?'Pedidos sin imprimir':'Pedidos del corte'}</h2>
    {pedidos.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay pedidos para mostrar.</div>:<div style={{display:'grid',gap:7}}>{pedidos.map(p=><article key={p.id} style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:9}}>
@@ -2086,10 +2111,9 @@ export function ModuloConsultas({showToast}) {
 
   const filtrados=pedidos.filter(p=>{
     if(filtroEst!=='todos'){
-      if(filtroEst==='en_corte'&&!(p.estado_cartera==='aprobado'&&p.fecha_corte&&!p.transmitido_tms&&p.estado_impresion!=='impreso'))return false;
-      else if(filtroEst==='logistica'&&!(p.estado_cartera==='aprobado'&&p.transmitido_tms&&p.estado_impresion!=='impreso'))return false;
+      if(filtroEst==='en_corte'&&!(p.estado_cartera==='aprobado'&&p.fecha_corte&&p.estado_impresion!=='impreso'))return false;
       else if(filtroEst==='impreso'&&!(p.estado_cartera==='aprobado'&&p.estado_impresion==='impreso'))return false;
-      else if(!['en_corte','logistica','impreso'].includes(filtroEst)&&p.estado_cartera!==filtroEst)return false;
+      else if(!['en_corte','impreso'].includes(filtroEst)&&p.estado_cartera!==filtroEst)return false;
     }
     if(busq){const q=busq.toLowerCase();return p.numero_pedido?.toLowerCase().includes(q)||p.cliente?.toLowerCase().includes(q)||p.nit?.toLowerCase().includes(q);}
     return true;
@@ -2107,14 +2131,13 @@ export function ModuloConsultas({showToast}) {
    <div style={{display:'flex',gap:6,overflowX:'auto',margin:'0 -16px',padding:'0 16px 2px',scrollbarWidth:'none'}}>{[
     ['todos','Todos',pedidos.length],['pendiente','Pendiente',pedidos.filter(p=>p.estado_cartera==='pendiente').length],
     ['aprobado','Aprobado',pedidos.filter(p=>p.estado_cartera==='aprobado').length],
-    ['en_corte','En corte',pedidos.filter(p=>p.estado_cartera==='aprobado'&&p.fecha_corte&&!p.transmitido_tms&&p.estado_impresion!=='impreso').length],
-    ['logistica','En logística',pedidos.filter(p=>p.transmitido_tms&&p.estado_impresion!=='impreso').length],
+    ['en_corte','En corte',pedidos.filter(p=>p.estado_cartera==='aprobado'&&p.fecha_corte&&p.estado_impresion!=='impreso').length],
     ['impreso','Impreso',pedidos.filter(p=>p.estado_impresion==='impreso').length],
     ['rechazado','Rechazado',pedidos.filter(p=>p.estado_cartera==='rechazado').length],
    ].map(([clave,label,conteo])=><button key={clave} onClick={()=>setFiltroEst(clave)} style={{whiteSpace:'nowrap',borderRadius:99,border:`1px solid ${filtroEst===clave?T.color.marca:T.color.borde2}`,background:filtroEst===clave?T.color.marca:T.color.superficie,color:filtroEst===clave?'#fff':T.color.tinta2,padding:'8px 11px',fontFamily:'inherit',fontSize:12,fontWeight:600}}>{label} <span style={{opacity:.75}}>{conteo}</span></button>)}</div>
    {filtrados.length===0?<div style={{...tarjeta,padding:24,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Ningún pedido coincide con el filtro.</div>:<div style={{display:'grid',gap:8}}>{filtrados.map(p=>{
     const info=getEstadoTexto(p);
-    const bg=p.estado_cartera==='rechazado'?T.color.neutroSuave:p.estado_cartera==='aprobado'?p.estado_impresion==='impreso'||p.transmitido_tms?T.color.bienSuave:T.color.infoSuave:T.color.ojoSuave;
+    const bg=p.estado_cartera==='rechazado'?T.color.neutroSuave:p.estado_cartera==='aprobado'?p.estado_impresion==='impreso'?T.color.bienSuave:T.color.infoSuave:T.color.ojoSuave;
     return <article key={p.id} style={{...tarjeta,padding:'12px 13px'}}>
      <div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:13}}><strong>{p.numero_pedido}</strong><strong>{fCOP(p.valor_total)}</strong></div>
      <div style={{fontSize:12.5,fontWeight:600,marginTop:7,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div>
