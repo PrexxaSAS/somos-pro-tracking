@@ -1906,7 +1906,7 @@ export function ModuloLogistica({showToast}) {
   return (
    <Pagina anchoCompleto>
     <Encabezado
-     titulo="Logistica de cartera"
+     titulo="Impresión cortes"
      descripcion="Pedidos aprobados listos para imprimir, por corte"
      acciones={
       <button onClick={()=>imprimir(pedidos)} disabled={pedidos.length === 0}
@@ -2069,7 +2069,7 @@ export function ModuloLogistica({showToast}) {
 function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSede,filtroFecha,setFiltroFecha,
  modoFecha,setModoFecha,filtroImp,setFiltroImp,imprimiendo,imprimirCorte,impresionDe,imprimir}) {
  return <Pagina anchoCompleto>
-  <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>!impresionDe(c).completo).length} cortes por imprimir</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Logística de cartera</h1></header>
+  <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>!impresionDe(c).completo).length} cortes por imprimir</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Impresión cortes</h1></header>
   <div style={{display:'flex',gap:7}}>
    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,background:T.color.superficie,border:`1px solid ${T.color.borde2}`,borderRadius:9,padding:3,flex:1}}>
     {[["pendientes","Pendientes"],["fecha","Por fecha"]].map(([valor,label])=><button key={valor} onClick={()=>setModoFecha(valor)} style={{border:'none',borderRadius:7,padding:'8px 5px',background:modoFecha===valor?T.color.marca:'transparent',color:modoFecha===valor?'#fff':T.color.tinta2,fontFamily:'inherit',fontWeight:600,fontSize:12}}>{label}</button>)}

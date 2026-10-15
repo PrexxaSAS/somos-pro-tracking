@@ -36,7 +36,7 @@ const CORTO = {
  cartera_pedidos: "Pedidos",
  cartera_cargar: "Cargar",
  cartera_consultas: "Cartera",
- cartera_logistica: "Logistica",
+ cartera_logistica: "Impresión",
  transportistas: "Transporte",
  resumen: "Resumen",
  facturas: "Facturas",
