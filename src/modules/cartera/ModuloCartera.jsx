@@ -1898,7 +1898,9 @@ export function ModuloLogistica({showToast}) {
       : pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
     imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
-      .pagina{padding:16px;width:210mm;min-height:148mm;}
+      @page{size:A4;margin:14mm 12mm;}
+      .pagina{width:100%;max-width:186mm;margin:0 auto;}
+      thead{display:table-header-group;} tr{page-break-inside:avoid;}
       .titulo{font-size:16px;font-weight:bold;margin-bottom:4px;}
       .subtitulo{font-size:12px;font-weight:bold;margin-bottom:12px;}
       table{width:100%;border-collapse:collapse;margin-bottom:8px;}
