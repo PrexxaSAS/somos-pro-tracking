@@ -1973,7 +1973,7 @@ export function ModuloLogistica({showToast}) {
     </section>
 
     <div style={{ display:"flex", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
-     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 620px", minWidth:0 }}>
+     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 860px", minWidth:0 }}>
       <div style={{ padding:"16px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", alignItems:"baseline", gap:10 }}>
        <span style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Cortes</span>
        <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
@@ -1986,7 +1986,7 @@ export function ModuloLogistica({showToast}) {
        </div>
       ) : (
        <div style={{ overflowX:"auto" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:680 }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:760 }}>
          <thead>
           <tr>
            <th style={th}>Hora</th>
@@ -2007,7 +2007,7 @@ export function ModuloLogistica({showToast}) {
            const colorBarra = pct > 1 ? T.color.malPunto : pct >= 0.9 ? T.color.ojoPunto : T.color.marca;
            return (
             <tr key={c.id} onClick={()=>setCorteSel(c.id)} style={{
-             cursor:"pointer", background: sel ? T.color.marcaSuave : "transparent",
+             cursor:"pointer", whiteSpace:"nowrap", background: sel ? T.color.marcaSuave : "transparent",
              boxShadow: sel ? `inset 3px 0 0 ${T.color.marca}` : "none",
             }}>
              <td style={{ ...td, fontSize:17, fontWeight:700, color: sel ? T.color.marca : T.color.tinta }}>{String(c.hora_corte).slice(0,5)}</td>
@@ -2022,7 +2022,7 @@ export function ModuloLogistica({showToast}) {
              <td style={td}>{fFechaDia(c.fecha)}</td>
              <td style={td}>
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-               <div style={{ width:100, height:6, borderRadius:3, background:T.color.superficie3, overflow:"hidden", flexShrink:0 }}>
+               <div style={{ width:80, height:6, borderRadius:3, background:T.color.superficie3, overflow:"hidden", flexShrink:0 }}>
                 <div style={{ width:`${Math.min(100, Math.round(pct*100))}%`, height:"100%", background:colorBarra, borderRadius:3 }}/>
                </div>
                <span style={{ fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
@@ -2048,7 +2048,7 @@ export function ModuloLogistica({showToast}) {
       )}
      </section>
 
-     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 340px", minWidth:0 }}>
+     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 360px", minWidth:0 }}>
       {!corteVisto ? (
        <div style={{ padding:32, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
         Elige un corte para ver sus pedidos.
