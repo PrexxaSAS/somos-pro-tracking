@@ -2001,21 +2001,10 @@ export function ModuloLogistica({showToast}) {
       ) : (
        <div style={{ overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-         <thead>
-          <tr>
-           <th style={th}>Hora</th>
-           <th style={th}>Sede</th>
-           {!compacto && <th style={th}>Fecha</th>}
-           <th style={th}>{mini ? "Cupo" : "Pedidos / Capacidad"}</th>
-           {!compacto && <th style={th}>Impresión</th>}
-           <th style={{ ...th, textAlign:"right" }}>Acción</th>
-          </tr>
-         </thead>
          <tbody>
           {cortes.map(c => {
            const imp = impresionDe(c);
            const sel = corteVisto && corteVisto.id === c.id;
-           const faltan = imp.total - imp.impresos;
            const usados = Number(c.pedidos_asignados || 0), cap = Number(c.capacidad_max || 0);
            const pct = cap > 0 ? usados / cap : 0;
            const colorBarra = pct > 1 ? T.color.malPunto : pct >= 0.9 ? T.color.ojoPunto : T.color.marca;
@@ -2028,11 +2017,8 @@ export function ModuloLogistica({showToast}) {
              <td style={td}>
               <div style={{ fontWeight:600, color:T.color.tinta }}>{c.sedes?.nombre || "—"}</div>
               {compacto && <div style={{ fontSize:11.5, marginTop:2, color:T.color.tinta3 }}>{fFechaDia(c.fecha)}</div>}
-              <div style={{ fontSize:11.5, marginTop:2, color: imp.total === 0 ? T.color.tinta3 : faltan ? T.color.ojo : T.color.bien }}>
-               {imp.total === 0 ? "Sin pedidos" : faltan ? `${faltan} por imprimir` : "Todo impreso"}
-              </div>
              </td>
-             {!compacto && <td style={td}>{fFechaDia(c.fecha)}</td>}
+             {!compacto && <td style={{ ...td, color:T.color.tinta3, textAlign:"right" }}>{fFechaDia(c.fecha)}</td>}
              <td style={td}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                <div style={{ width: mini ? 44 : 80, height:6, borderRadius:3, background:T.color.superficie3, overflow:"hidden", flexShrink:0 }}>
@@ -2047,9 +2033,13 @@ export function ModuloLogistica({showToast}) {
              <td style={{ ...td, textAlign:"right" }}>
               {imp.total > 0 && (
                <button onClick={e=>{ e.stopPropagation(); imprimirCorte(c); }} disabled={imprimiendo === c.id}
-                title={`${imp.completo ? "Reimprimir" : "Imprimir"} los ${imp.total} pedidos del corte`}
-                style={{ ...botonFila, width: mini ? 64 : 156, boxSizing:"border-box", justifyContent:"center", ...(imp.completo ? {} : { background:T.color.marca, border:`1px solid ${T.color.marca}`, color:"#fff", fontWeight:600 }) }}>
-                <Printer size={14}/> {imprimiendo === c.id ? "..." : mini ? imp.total : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
+                title={`${imp.completo ? "Reimprimir" : "Imprimir"} los pedidos del corte`}
+                style={{
+                 display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:6, width: mini ? 36 : 112,
+                 border:"none", background:"transparent", padding:"6px 0", cursor:"pointer", fontFamily:"inherit",
+                 fontSize:13, fontWeight:600, color:T.color.marca,
+                }}>
+                <Printer size={15}/> {mini ? null : imprimiendo === c.id ? "Preparando..." : imp.completo ? "Reimprimir" : "Imprimir"}
                </button>
               )}
              </td>
@@ -2070,12 +2060,15 @@ export function ModuloLogistica({showToast}) {
       ) : (
        <>
         <div style={{ padding:"14px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
-         <span style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>
-          Corte {String(corteVisto.hora_corte).slice(0,5)} · {corteVisto.sedes?.nombre || "—"}
-         </span>
+         <div style={{ minWidth:0 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>
+           Corte {String(corteVisto.hora_corte).slice(0,5)} · {corteVisto.sedes?.nombre || "—"}
+          </div>
+          <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>{fFechaDia(corteVisto.fecha)}</div>
+         </div>
          {impVisto.total > 0 && (
           <button style={botonFila} onClick={()=>imprimirCorte(corteVisto)} disabled={imprimiendo === corteVisto.id}>
-           <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} corte (${impVisto.total})`}
+           <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} corte`}
           </button>
          )}
         </div>
