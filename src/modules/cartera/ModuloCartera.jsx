@@ -2048,7 +2048,7 @@ export function ModuloLogistica({showToast}) {
               {imp.total > 0 && (
                <button onClick={e=>{ e.stopPropagation(); imprimirCorte(c); }} disabled={imprimiendo === c.id}
                 title={`${imp.completo ? "Reimprimir" : "Imprimir"} los ${imp.total} pedidos del corte`}
-                style={imp.completo ? botonFila : { ...botonFila, background:T.color.marca, border:"none", color:"#fff", fontWeight:600 }}>
+                style={{ ...botonFila, width: mini ? 64 : 156, boxSizing:"border-box", justifyContent:"center", ...(imp.completo ? {} : { background:T.color.marca, border:`1px solid ${T.color.marca}`, color:"#fff", fontWeight:600 }) }}>
                 <Printer size={14}/> {imprimiendo === c.id ? "..." : mini ? imp.total : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
                </button>
               )}
