@@ -1756,7 +1756,7 @@ export function ModuloLogistica({showToast}) {
     // pertenecen, vengan del dia que vengan.
     if(modoFecha==='pendientes'){
       const {data:pend} = await supabase.from('pedidos_cartera')
-        .select('*, pedidos_cartera_detalle(*)')
+        .select('*')
         .eq('estado_cartera','aprobado')
         .not('corte_id','is',null)
         .or('estado_impresion.eq.no_impreso,estado_impresion.is.null')
@@ -1776,8 +1776,11 @@ export function ModuloLogistica({showToast}) {
       return;
     }
 
+    // Sin fecha (el campo limpio) salen los cortes de todas las fechas, los
+    // mas recientes primero.
     let q = supabase.from('cortes_programados').select('*, sedes(nombre,municipio)')
-      .eq('fecha',filtroFecha).order('hora_corte');
+      .order('fecha',{ascending:false}).order('hora_corte');
+    if(filtroFecha) q=q.eq('fecha',filtroFecha);
     if(filtroSede) q=q.eq('sede_id',filtroSede);
     const {data:cortesData} = await q;
     setCortes(cortesData||[]);
@@ -1785,14 +1788,16 @@ export function ModuloLogistica({showToast}) {
     // Load pedidos — se filtra por los IDs de los cortes ya cargados (evita bug de huso horario
     // al comparar fecha_corte, que se guarda en UTC, contra un rango de fecha local)
     const corteIds = (cortesData||[]).map(c=>c.id);
+    // La lista no trae las lineas de cada pedido: se piden solo al imprimir
+    // (conDetalle), para que ver todas las fechas no descargue todo el detalle.
     let peds = [];
-    if(corteIds.length){
-      let qp = supabase.from('pedidos_cartera').select('*, pedidos_cartera_detalle(*)')
-        .eq('estado_cartera','aprobado').in('corte_id',corteIds).order('fecha_corte');
+    for(let i=0;i<corteIds.length;i+=100){
+      let qp = supabase.from('pedidos_cartera').select('*')
+        .eq('estado_cartera','aprobado').in('corte_id',corteIds.slice(i,i+100)).order('fecha_corte');
       if(filtroImp==='no_impreso') qp=qp.or('estado_impresion.eq.no_impreso,estado_impresion.is.null');
       else if(filtroImp!=='todos') qp=qp.eq('estado_impresion',filtroImp);
       const res = await qp;
-      peds = res.data||[];
+      peds = peds.concat(res.data||[]);
     }
     setPedidos(peds);
   };
@@ -1801,16 +1806,18 @@ export function ModuloLogistica({showToast}) {
   useEffect(()=>{
     const ids=cortes.map(c=>c.id);
     if(!ids.length){ setImpresionCortes({}); return; }
-    supabase.from('pedidos_cartera').select('corte_id,estado_impresion')
-      .eq('estado_cartera','aprobado').in('corte_id',ids)
-      .then(({data})=>{
-        const cuenta={};
+    (async()=>{
+      const cuenta={};
+      for(let i=0;i<ids.length;i+=100){
+        const {data}=await supabase.from('pedidos_cartera').select('corte_id,estado_impresion')
+          .eq('estado_cartera','aprobado').in('corte_id',ids.slice(i,i+100));
         (data||[]).forEach(x=>{
           const c=cuenta[x.corte_id]||(cuenta[x.corte_id]={total:0,impresos:0});
           c.total++; if(x.estado_impresion==='impreso') c.impresos++;
         });
-        setImpresionCortes(cuenta);
-      });
+      }
+      setImpresionCortes(cuenta);
+    })();
   },[cortes]);
 
   const impresionDe = (c) => {
@@ -1829,8 +1836,24 @@ export function ModuloLogistica({showToast}) {
     await imprimir(data||[]);
   };
 
-  const imprimir = async (pedidosImprimir) => {
-    if(!pedidosImprimir.length){ showToast("No hay pedidos para imprimir","error"); return; }
+  // Trae las lineas de los pedidos que no las tengan cargadas.
+  const conDetalle = async (lista) => {
+    const faltan=lista.filter(x=>!x.pedidos_cartera_detalle).map(x=>x.id);
+    if(!faltan.length) return lista;
+    const porPedido={};
+    for(let i=0;i<faltan.length;i+=100){
+      const {data,error}=await supabase.from('pedidos_cartera_detalle').select('*').in('pedido_id',faltan.slice(i,i+100));
+      if(error) throw error;
+      (data||[]).forEach(l=>(porPedido[l.pedido_id]=porPedido[l.pedido_id]||[]).push(l));
+    }
+    return lista.map(x=>x.pedidos_cartera_detalle?x:{...x,pedidos_cartera_detalle:porPedido[x.id]||[]});
+  };
+
+  const imprimir = async (lista) => {
+    if(!lista.length){ showToast("No hay pedidos para imprimir","error"); return; }
+    let pedidosImprimir;
+    try { pedidosImprimir = await conDetalle(lista); }
+    catch { showToast("No se pudieron leer las lineas de los pedidos","error"); return; }
     const html=pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
     imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
@@ -1915,7 +1938,7 @@ export function ModuloLogistica({showToast}) {
      { label: modoFecha==='pendientes' ? "Pedidos sin imprimir" : "Pedidos del corte",
        valor:pedidos.length, color:T.color.marca, destacado:true },
      { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojoPunto },
-     { label: modoFecha==='pendientes' ? "Cortes con pendientes" : "Cortes del dia",
+     { label: modoFecha==='pendientes' ? "Cortes con pendientes" : filtroFecha ? "Cortes del dia" : "Cortes",
        valor:cortes.length, color:T.color.infoPunto },
      { label:"Cortes impresos", valor:cortes.filter(c=>impresionDe(c).completo).length, color:T.color.bienPunto },
     ]}/>
@@ -1929,10 +1952,16 @@ export function ModuloLogistica({showToast}) {
       opciones={[["pendientes","Pendientes"], ["fecha","Por fecha"]]}/>
      {modoFecha==='fecha' && (
       <input type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)}
+       title="Borra la fecha para ver los cortes de todas las fechas"
        style={{
         height:38, padding:"0 12px", border:`1px solid ${T.color.borde2}`,
         borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", outline:"none",
        }}/>
+     )}
+     {modoFecha==='fecha' && (
+      <Segmentado valor={filtroFecha ? "dia" : "todas"}
+       onChange={v => setFiltroFecha(v === "todas" ? "" : hoyLocal())}
+       opciones={[["dia","Un dia"], ["todas","Todas las fechas"]]}/>
      )}
      {/* En pendientes el filtro de impresion no aplica: pendiente ya quiere
          decir sin imprimir, y dejarlo puesto invitaria a pedir "impresos
@@ -2071,7 +2100,7 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
    </div>
    <select aria-label="Filtrar sede" value={filtroSede} onChange={e=>setFiltroSede(e.target.value)} style={{maxWidth:105,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9,background:T.color.superficie,fontSize:12,color:T.color.tinta2}}><option value="">Todas</option>{sedes.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}</select>
   </div>
-  {modoFecha==='fecha'&&<div style={{display:'flex',gap:7}}><input aria-label="Fecha del corte" type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)} style={{flex:1,minWidth:0,padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:9}}/><select aria-label="Estado de impresión" value={filtroImp} onChange={e=>setFiltroImp(e.target.value)} style={{flex:1,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9}}><option value="no_impreso">Por imprimir</option><option value="impreso">Impresos</option><option value="todos">Todos</option></select></div>}
+  {modoFecha==='fecha'&&<div style={{display:'flex',gap:7}}>{filtroFecha?<input aria-label="Fecha del corte" type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)} style={{flex:1,minWidth:0,padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:9}}/>:<button onClick={()=>setFiltroFecha(hoyLocal())} style={{flex:1,minWidth:0,padding:8,border:`1px solid ${T.color.borde2}`,borderRadius:9,background:T.color.superficie,fontFamily:'inherit',fontSize:12,color:T.color.tinta2,textAlign:'left'}}>Todas las fechas</button>}<button aria-label={filtroFecha?'Ver todas las fechas':'Elegir una fecha'} onClick={()=>setFiltroFecha(filtroFecha?'':hoyLocal())} style={{border:`1px solid ${T.color.borde2}`,borderRadius:9,background:filtroFecha?T.color.superficie:T.color.marca,color:filtroFecha?T.color.tinta2:'#fff',fontFamily:'inherit',fontSize:11.5,fontWeight:600,padding:'0 9px',whiteSpace:'nowrap'}}>Todas</button><select aria-label="Estado de impresión" value={filtroImp} onChange={e=>setFiltroImp(e.target.value)} style={{flex:1,minWidth:0,border:`1px solid ${T.color.borde2}`,borderRadius:9}}><option value="no_impreso">Por imprimir</option><option value="impreso">Impresos</option><option value="todos">Todos</option></select></div>}
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>Cortes programados</h2>
    {cortes.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay cortes para mostrar.</div>:<div style={{display:'flex',gap:7,overflowX:'auto',margin:'0 -16px',padding:'0 16px 3px',scrollbarWidth:'none'}}>{cortes.map(c=>{const imp=impresionDe(c);return <article key={c.id} style={{...tarjeta,minWidth:188,padding:10,flexShrink:0}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:7}}><strong style={{fontSize:17}}>{String(c.hora_corte).slice(0,5)}</strong><span style={{fontSize:10.5,color:imp.completo?T.color.bien:T.color.ojo,background:imp.completo?T.color.bienSuave:T.color.ojoSuave,padding:'3px 6px',borderRadius:20}}>{imp.completo?'● Impreso':'● Sin imprimir'}</span></div>
