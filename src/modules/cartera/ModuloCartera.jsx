@@ -4,7 +4,7 @@ import { leerTextoCsv, filasCsv, descargarCSV } from '../../utils/files';
 import { imprimirHTML } from '../../utils/imprimir';
 import { P } from '../../Constants';
 import { T, tarjeta } from '../../design/tokens';
-import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download } from 'lucide-react';
+import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download, Building2, Calendar } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
  Segmentado, Paginador,
@@ -1741,6 +1741,7 @@ export function ModuloLogistica({showToast}) {
   const [filtroImp,  setFiltroImp]  = useState('no_impreso');
   const [pedidos,    setPedidos]    = useState([]);
   const [imprimiendo,setImprimiendo]=useState(null); // id del corte que se esta imprimiendo
+  const [corteSel,setCorteSel]=useState(null); // el corte cuyos pedidos se ven a la derecha
   // Cuantos pedidos tiene cada corte y cuantos ya se imprimieron. Se cuenta
   // aparte de "pedidos" porque esa lista va filtrada (pendientes, por imprimir)
   // y el boton del corte tiene que saber si imprime o reimprime todo el corte.
@@ -1921,173 +1922,244 @@ export function ModuloLogistica({showToast}) {
    imprimiendo={imprimiendo} imprimirCorte={imprimirCorte} impresionDe={impresionDe} imprimir={imprimir}
   />;
 
+  // El corte que se ve a la derecha. Si el elegido ya no esta en la lista
+  // (cambio el filtro o se imprimio), se muestra el primero.
+  const corteVisto = cortes.find(c => c.id === corteSel) || cortes[0] || null;
+  const pedidosVistos = corteVisto ? pedidos.filter(x => x.corte_id === corteVisto.id) : [];
+  const enPendientes = modoFecha === 'pendientes';
+  const todasFechas = !enPendientes && !filtroFecha;
+  const impVisto = corteVisto ? impresionDe(corteVisto) : null;
+
   return (
    <Pagina anchoCompleto>
-    <Encabezado
-     titulo="Impresión cortes"
-     descripcion="Pedidos aprobados listos para imprimir, por corte"
-     acciones={
-      <button onClick={()=>imprimir(pedidos)} disabled={pedidos.length === 0}
-       style={{ ...botonBarra, opacity: pedidos.length ? 1 : 0.5, cursor: pedidos.length ? "pointer" : "not-allowed" }}>
-       <Printer size={15}/> Imprimir {pedidos.length > 0 ? `(${pedidos.length})` : ""}
-      </button>
-     }
-    />
+    <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+     <div>
+      <h1 style={{ margin:0, ...T.texto.titulo }}>Impresión cortes</h1>
+      <p style={{ margin:"4px 0 0", color:T.color.tinta3, ...T.texto.subtitulo }}>Pedidos aprobados listos para imprimir, por corte</p>
+     </div>
+     <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+      <label style={cajaFiltro}>
+       <Building2 size={15} color={T.color.tinta3}/>
+       <select aria-label="Sede" value={filtroSede} onChange={e=>setFiltroSede(e.target.value)}
+        style={{ border:"none", background:"transparent", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.tinta, outline:"none", cursor:"pointer", maxWidth:200 }}>
+        <option value="">Todas las sedes</option>
+        {sedes.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}
+       </select>
+      </label>
+      <SegmentoMarca valor={modoFecha} onChange={setModoFecha}
+       opciones={[["pendientes","Pendientes"], ["fecha","Por fecha"]]}/>
+      {!enPendientes && <SelectorFechaCorte valor={filtroFecha} onChange={setFiltroFecha}/>}
+      {/* En pendientes el filtro de impresion no aplica: pendiente ya quiere
+          decir sin imprimir. */}
+      {!enPendientes && (
+       <SegmentoMarca valor={filtroImp} onChange={setFiltroImp}
+        opciones={[["no_impreso","Por imprimir"], ["impreso","Impresos"], ["todos","Todos"]]}/>
+      )}
+     </div>
+    </header>
 
-    <Indicadores items={[
-     { label: modoFecha==='pendientes' ? "Pedidos sin imprimir" : "Pedidos del corte",
-       valor:pedidos.length, color:T.color.marca, destacado:true },
-     { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojoPunto },
-     { label: modoFecha==='pendientes' ? "Cortes con pendientes" : filtroFecha ? "Cortes del dia" : "Cortes",
-       valor:cortes.length, color:T.color.infoPunto },
-     { label:"Cortes impresos", valor:cortes.filter(c=>impresionDe(c).completo).length, color:T.color.bienPunto },
-    ]}/>
-
-    <section style={{ ...tarjeta, padding:14, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
-     <SelectFiltro valor={filtroSede} onChange={setFiltroSede} ancho={240}>
-      <option value="">Todas las sedes</option>
-      {sedes.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}
-     </SelectFiltro>
-     <Segmentado valor={modoFecha} onChange={setModoFecha}
-      opciones={[["pendientes","Pendientes"], ["fecha","Por fecha"]]}/>
-     {modoFecha==='fecha' && (
-      <input type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)}
-       title="Borra la fecha para ver los cortes de todas las fechas"
-       style={{
-        height:38, padding:"0 12px", border:`1px solid ${T.color.borde2}`,
-        borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", outline:"none",
-       }}/>
-     )}
-     {modoFecha==='fecha' && (
-      <Segmentado valor={filtroFecha ? "dia" : "todas"}
-       onChange={v => setFiltroFecha(v === "todas" ? "" : hoyLocal())}
-       opciones={[["dia","Un dia"], ["todas","Todas las fechas"]]}/>
-     )}
-     {/* En pendientes el filtro de impresion no aplica: pendiente ya quiere
-         decir sin imprimir, y dejarlo puesto invitaria a pedir "impresos
-         pendientes", que no existe. */}
-     {modoFecha==='fecha' ? (
-      <Segmentado valor={filtroImp} onChange={setFiltroImp}
-       opciones={[["no_impreso","Por imprimir"], ["impreso","Impresos"], ["todos","Todos"]]}/>
-     ) : (
-      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
-       Todo lo aprobado que falta por imprimir, de cualquier fecha
-      </span>
-     )}
+    <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
+     {[
+      { label: enPendientes ? "Pedidos sin imprimir" : todasFechas ? "Pedidos" : "Pedidos del día", valor:pedidos.length, color:T.color.tinta },
+      { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojo },
+      { label: enPendientes ? "Cortes con pendientes" : todasFechas ? "Cortes" : "Cortes del día", valor:cortes.length, color:T.color.tinta },
+      { label:"Cortes impresos", valor:cortes.filter(c=>impresionDe(c).completo).length, color:T.color.bien },
+     ].map(i => (
+      <div key={i.label} style={{ ...tarjeta, padding:"16px 18px" }}>
+       <div style={{ fontSize:11.5, fontWeight:600, letterSpacing:".04em", textTransform:"uppercase", color:T.color.tinta3 }}>{i.label}</div>
+       <div style={{ fontSize:24, fontWeight:700, color:i.color, marginTop:6 }}>{Number(i.valor).toLocaleString("es-CO")}</div>
+      </div>
+     ))}
     </section>
 
-    {cortes.length > 0 && (
-     <section style={{ ...tarjeta, overflow:"hidden" }}>
-      <div style={{ padding:"13px 18px", borderBottom:`1px solid ${T.color.borde}`, ...T.texto.tarjeta }}>
-       Cortes programados
+    <div style={{ display:"flex", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
+     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 620px", minWidth:0 }}>
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", alignItems:"baseline", gap:10 }}>
+       <span style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Cortes</span>
+       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
+        {enPendientes ? "Abiertos o con pedidos sin imprimir" : todasFechas ? "Todas las fechas" : fFechaDia(filtroFecha)}
+       </span>
       </div>
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
-        <thead>
-         <tr>
-          <th style={th}>Fecha</th>
-          <th style={th}>Sede</th>
-          <th style={th}>Hora</th>
-          <th style={{...th, textAlign:"right"}}>Pedidos</th>
-          <th style={{...th, textAlign:"right"}}>Capacidad</th>
-          <th style={th}>Impresion</th>
-          <th style={{...th, textAlign:"right"}}>Acciones</th>
-         </tr>
-        </thead>
-        <tbody>
-         {cortes.map(c => { const imp = impresionDe(c); return (
-          <tr key={c.id}>
-           <td style={td}>{fFechaDia(c.fecha)}</td>
-           <td style={td}>{c.sedes?.nombre || <span style={{ color:T.color.tinta3 }}>—</span>}</td>
-           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.hora_corte}</td>
-           <td style={tdCifra}>{c.pedidos_asignados}</td>
-           <td style={tdCifra}>{c.capacidad_max}</td>
-           <td style={td}>
-            <span style={{
-             display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-             borderRadius:T.radio.pastilla, fontSize:12, fontWeight:600,
-             background: imp.completo ? T.color.bienSuave : T.color.ojoSuave,
-             color: imp.completo ? T.color.bien : T.color.ojo,
-            }}>
-             <span style={{ width:6, height:6, borderRadius:3,
-              background: imp.completo ? T.color.bienPunto : T.color.ojoPunto }}/>
-             {imp.completo ? "Impreso" : "Sin imprimir"}
-            </span>
-           </td>
-           <td style={{ ...td, textAlign:"right" }}>
-            {imp.total > 0 && (
-             <button style={imp.completo ? botonFila : { ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
-              onClick={()=>imprimirCorte(c)} disabled={imprimiendo === c.id}>
-              <Printer size={14}/> {imprimiendo === c.id ? "Preparando..." : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
-             </button>
-            )}
-           </td>
+      {cortes.length === 0 ? (
+       <div style={{ padding:40, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+        {enPendientes ? "No hay pedidos aprobados por imprimir." : "No hay cortes para esa fecha y esa sede."}
+       </div>
+      ) : (
+       <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:680 }}>
+         <thead>
+          <tr>
+           <th style={th}>Hora</th>
+           <th style={th}>Sede</th>
+           <th style={th}>Fecha</th>
+           <th style={th}>Pedidos / Capacidad</th>
+           <th style={th}>Impresión</th>
+           <th style={{ ...th, textAlign:"right" }}>Acción</th>
           </tr>
-         ); })}
-        </tbody>
-       </table>
-      </div>
-     </section>
-    )}
-
-    <section style={{ ...tarjeta, overflow:"hidden" }}>
-     <div style={{ padding:"13px 18px", borderBottom:`1px solid ${T.color.borde}`, ...T.texto.tarjeta }}>
-      Pedidos del corte
-     </div>
-     {pedidos.length === 0 ? (
-      <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-       No hay pedidos aprobados para esa sede y esa fecha.
-      </div>
-     ) : (
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
-        <thead>
-         <tr>
-          <th style={th}>Pedido</th>
-          <th style={th}>Cliente</th>
-          <th style={th}>Destino</th>
-          <th style={{...th, textAlign:"right"}}>Valor</th>
-          <th style={th}>Impresion</th>
-          <th style={{...th, textAlign:"right"}}>Acciones</th>
-         </tr>
-        </thead>
-        <tbody>
-         {pedidos.map(x => (
-          <tr key={x.id}>
-           <td style={td}><span style={chipMono}>{x.numero_pedido}</span></td>
-           <td style={{ ...td, fontWeight:600, color:T.color.tinta, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-            {x.cliente}
-           </td>
-           <td style={td}>
-            <div>{x.direccion || "-"}</div>
-            <div style={mono}>{x.sector_dane}</div>
-           </td>
-           <td style={tdCifra}>{fCOP(x.valor_total)}</td>
-           <td style={td}>
-            <span style={{
-             display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5,
-             color: x.estado_impresion === "impreso" ? T.color.bien : T.color.tinta3,
+         </thead>
+         <tbody>
+          {cortes.map(c => {
+           const imp = impresionDe(c);
+           const sel = corteVisto && corteVisto.id === c.id;
+           const faltan = imp.total - imp.impresos;
+           const usados = Number(c.pedidos_asignados || 0), cap = Number(c.capacidad_max || 0);
+           const pct = cap > 0 ? usados / cap : 0;
+           const colorBarra = pct > 1 ? T.color.malPunto : pct >= 0.9 ? T.color.ojoPunto : T.color.marca;
+           return (
+            <tr key={c.id} onClick={()=>setCorteSel(c.id)} style={{
+             cursor:"pointer", background: sel ? T.color.marcaSuave : "transparent",
+             boxShadow: sel ? `inset 3px 0 0 ${T.color.marca}` : "none",
             }}>
-             <span style={{ width:6, height:6, borderRadius:3,
-              background: x.estado_impresion === "impreso" ? T.color.bienPunto : T.color.neutroPunto }}/>
+             <td style={{ ...td, fontSize:17, fontWeight:700, color: sel ? T.color.marca : T.color.tinta }}>{String(c.hora_corte).slice(0,5)}</td>
+             <td style={td}>
+              <div style={{ fontWeight:600, color:T.color.tinta }}>{c.sedes?.nombre || "—"}</div>
+              {imp.total > 0 && (
+               <div style={{ fontSize:11.5, marginTop:2, color: faltan ? T.color.ojo : T.color.bien }}>
+                {faltan ? `${faltan} por imprimir` : "Todo impreso"}
+               </div>
+              )}
+             </td>
+             <td style={td}>{fFechaDia(c.fecha)}</td>
+             <td style={td}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+               <div style={{ width:100, height:6, borderRadius:3, background:T.color.superficie3, overflow:"hidden", flexShrink:0 }}>
+                <div style={{ width:`${Math.min(100, Math.round(pct*100))}%`, height:"100%", background:colorBarra, borderRadius:3 }}/>
+               </div>
+               <span style={{ fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
+                <strong style={{ color:T.color.tinta }}>{usados}</strong> / {cap}
+               </span>
+              </div>
+             </td>
+             <td style={td}><PastillaImpresion imp={imp}/></td>
+             <td style={{ ...td, textAlign:"right" }}>
+              {imp.total > 0 && (
+               <button onClick={e=>{ e.stopPropagation(); imprimirCorte(c); }} disabled={imprimiendo === c.id}
+                style={imp.completo ? botonFila : { ...botonFila, background:T.color.marca, border:"none", color:"#fff", fontWeight:600 }}>
+                <Printer size={14}/> {imprimiendo === c.id ? "Preparando..." : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
+               </button>
+              )}
+             </td>
+            </tr>
+           );
+          })}
+         </tbody>
+        </table>
+       </div>
+      )}
+     </section>
+
+     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 340px", minWidth:0 }}>
+      {!corteVisto ? (
+       <div style={{ padding:32, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
+        Elige un corte para ver sus pedidos.
+       </div>
+      ) : (
+       <>
+        <div style={{ padding:"14px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+         <span style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>
+          Corte {String(corteVisto.hora_corte).slice(0,5)} · {corteVisto.sedes?.nombre || "—"}
+         </span>
+         {impVisto.total > 0 && (
+          <button style={botonFila} onClick={()=>imprimirCorte(corteVisto)} disabled={imprimiendo === corteVisto.id}>
+           <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} corte (${impVisto.total})`}
+          </button>
+         )}
+        </div>
+        {pedidosVistos.length === 0 ? (
+         <div style={{ padding:28, textAlign:"center", color:T.color.tinta3, fontSize:13 }}>
+          {filtroImp === 'impreso' && !enPendientes ? "Ningún pedido de este corte está impreso."
+           : filtroImp === 'no_impreso' || enPendientes ? "Este corte no tiene pedidos por imprimir."
+           : "Este corte no tiene pedidos."}
+         </div>
+        ) : pedidosVistos.map((x, n) => (
+         <div key={x.id} style={{ padding:"12px 18px", borderTop: n ? `1px solid ${T.color.divisor}` : "none", display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ flex:1, minWidth:0 }}>
+           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:12, fontWeight:700, color:T.color.tinta }}>{x.numero_pedido}</span>
+            <span style={{
+             display:"inline-flex", alignItems:"center", gap:4, fontSize:11, padding:"1px 7px", borderRadius:T.radio.pastilla,
+             background: x.estado_impresion === "impreso" ? T.color.bienSuave : T.color.superficie3,
+             color: x.estado_impresion === "impreso" ? T.color.bien : T.color.tinta2,
+            }}>
+             {x.estado_impresion === "impreso" ? <Check size={11}/> : <Clock size={11}/>}
              {x.estado_impresion === "impreso" ? "Impreso" : "Sin imprimir"}
             </span>
-           </td>
-           <td style={{ ...td, textAlign:"right" }}>
-            <button style={botonFila} onClick={()=>imprimir([x])}>
-             <Printer size={14}/> Imprimir
-            </button>
-           </td>
-          </tr>
-         ))}
-        </tbody>
-       </table>
-      </div>
-     )}
-     <PieTabla izquierda={`${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}/>
-    </section>
+           </div>
+           <div style={{ fontSize:13, fontWeight:700, color:T.color.tinta, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{x.cliente}</div>
+           <div style={{ fontSize:11.5, color:T.color.tinta3, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {x.direccion || "—"}{x.sector_dane ? ` · ${x.sector_dane}` : ""}
+           </div>
+          </div>
+          <span style={{ fontSize:13, fontWeight:700, color:T.color.tinta, whiteSpace:"nowrap" }}>{fCOP(x.valor_total)}</span>
+          <button aria-label={`Imprimir pedido ${x.numero_pedido}`} title="Imprimir pedido" onClick={()=>imprimir([x])}
+           style={{ ...botonFila, width:32, height:32, padding:0, justifyContent:"center", flexShrink:0 }}>
+           <Printer size={15}/>
+          </button>
+         </div>
+        ))}
+       </>
+      )}
+     </section>
+    </div>
    </Pagina>
   );
+}
+
+// Caja de los filtros de la cabecera de Impresion cortes.
+const cajaFiltro = {
+ display:"inline-flex", alignItems:"center", gap:8, height:38, padding:"0 12px",
+ border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control, background:T.color.superficie,
+ fontSize:13, fontWeight:600, color:T.color.tinta, boxSizing:"border-box",
+};
+
+// Segmento con la opcion activa rellena del color de la marca.
+function SegmentoMarca({ valor, onChange, opciones }) {
+ return (
+  <div style={{ ...cajaFiltro, padding:3, gap:2 }}>
+   {opciones.map(([id, label]) => (
+    <button key={id} onClick={()=>onChange(id)} style={{
+     border:"none", cursor:"pointer", fontFamily:"inherit", height:"100%", padding:"0 12px",
+     borderRadius:8, fontSize:13, fontWeight:600,
+     background: valor === id ? T.color.marca : "transparent",
+     color: valor === id ? "#fff" : T.color.tinta2,
+    }}>{label}</button>
+   ))}
+  </div>
+ );
+}
+
+// Fecha del corte. Vacia = todas las fechas; la X la limpia. Al pulsar la caja
+// se abre el calendario del navegador.
+function SelectorFechaCorte({ valor, onChange }) {
+ const ref = useRef(null);
+ const abrir = () => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); } };
+ return (
+  <div style={{ ...cajaFiltro, position:"relative", cursor:"pointer" }} onClick={abrir}>
+   <Calendar size={15} color={T.color.tinta3}/>
+   <span>{valor ? fFechaDia(valor) : "Todas las fechas"}</span>
+   {valor && (
+    <button aria-label="Ver todas las fechas" title="Ver todas las fechas" onClick={e=>{ e.stopPropagation(); onChange(""); }}
+     style={{ border:"none", background:"transparent", cursor:"pointer", padding:0, display:"grid", placeItems:"center", color:T.color.tinta3 }}>
+     <X size={14}/>
+    </button>
+   )}
+   <input ref={ref} type="date" aria-label="Fecha del corte" value={valor} onChange={e=>onChange(e.target.value)}
+    style={{ position:"absolute", left:0, bottom:0, width:"100%", height:0, opacity:0, border:"none", padding:0, pointerEvents:"none" }}/>
+  </div>
+ );
+}
+
+function PastillaImpresion({ imp }) {
+ const [fondo, color, punto, texto] = imp.total === 0
+  ? [T.color.superficie3, T.color.tinta3, T.color.neutroPunto, "Sin pedidos"]
+  : imp.completo
+   ? [T.color.bienSuave, T.color.bien, T.color.bienPunto, "Impreso"]
+   : [T.color.ojoSuave, T.color.ojo, T.color.ojoPunto, "Sin imprimir"];
+ return (
+  <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:T.radio.pastilla, fontSize:12, fontWeight:600, background:fondo, color, whiteSpace:"nowrap" }}>
+   <span style={{ width:6, height:6, borderRadius:3, background:punto }}/>{texto}
+  </span>
+ );
 }
 
 function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSede,filtroFecha,setFiltroFecha,
