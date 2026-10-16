@@ -1742,6 +1742,18 @@ export function ModuloLogistica({showToast}) {
   const [pedidos,    setPedidos]    = useState([]);
   const [imprimiendo,setImprimiendo]=useState(null); // id del corte que se esta imprimiendo
   const [corteSel,setCorteSel]=useState(null); // el corte cuyos pedidos se ven a la derecha
+  // Ancho de la tarjeta de cortes. Los cortes y sus pedidos van siempre lado a
+  // lado; cuando la tarjeta es angosta la tabla se compacta en vez de bajar el
+  // panel: la fecha y lo que falta por imprimir pasan debajo de la sede.
+  const refCortes = useRef(null);
+  const [anchoCortes, setAnchoCortes] = useState(1000);
+  useEffect(() => {
+    const el = refCortes.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setAnchoCortes(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [esMovil]);
   // Cuantos pedidos tiene cada corte y cuantos ya se imprimieron. Se cuenta
   // aparte de "pedidos" porque esa lista va filtrada (pendientes, por imprimir)
   // y el boton del corte tiene que saber si imprime o reimprime todo el corte.
@@ -1929,6 +1941,8 @@ export function ModuloLogistica({showToast}) {
   const enPendientes = modoFecha === 'pendientes';
   const todasFechas = !enPendientes && !filtroFecha;
   const impVisto = corteVisto ? impresionDe(corteVisto) : null;
+  const compacto = anchoCortes < 800; // sin columnas Fecha e Impresion
+  const mini = anchoCortes < 560;     // el boton de imprimir queda en icono y cantidad
 
   return (
    <Pagina anchoCompleto>
@@ -1972,8 +1986,8 @@ export function ModuloLogistica({showToast}) {
      ))}
     </section>
 
-    <div style={{ display:"flex", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
-     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 860px", minWidth:0 }}>
+    <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.7fr) minmax(300px,1fr)", gap:16, alignItems:"start" }}>
+     <section ref={refCortes} style={{ ...tarjeta, overflow:"hidden", minWidth:0 }}>
       <div style={{ padding:"16px 18px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", alignItems:"baseline", gap:10 }}>
        <span style={{ fontSize:15, fontWeight:700, color:T.color.tinta }}>Cortes</span>
        <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
@@ -1986,14 +2000,14 @@ export function ModuloLogistica({showToast}) {
        </div>
       ) : (
        <div style={{ overflowX:"auto" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:760 }}>
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
          <thead>
           <tr>
            <th style={th}>Hora</th>
            <th style={th}>Sede</th>
-           <th style={th}>Fecha</th>
-           <th style={th}>Pedidos / Capacidad</th>
-           <th style={th}>Impresión</th>
+           {!compacto && <th style={th}>Fecha</th>}
+           <th style={th}>{mini ? "Cupo" : "Pedidos / Capacidad"}</th>
+           {!compacto && <th style={th}>Impresión</th>}
            <th style={{ ...th, textAlign:"right" }}>Acción</th>
           </tr>
          </thead>
@@ -2013,16 +2027,15 @@ export function ModuloLogistica({showToast}) {
              <td style={{ ...td, fontSize:17, fontWeight:700, color: sel ? T.color.marca : T.color.tinta }}>{String(c.hora_corte).slice(0,5)}</td>
              <td style={td}>
               <div style={{ fontWeight:600, color:T.color.tinta }}>{c.sedes?.nombre || "—"}</div>
-              {imp.total > 0 && (
-               <div style={{ fontSize:11.5, marginTop:2, color: faltan ? T.color.ojo : T.color.bien }}>
-                {faltan ? `${faltan} por imprimir` : "Todo impreso"}
-               </div>
-              )}
+              {compacto && <div style={{ fontSize:11.5, marginTop:2, color:T.color.tinta3 }}>{fFechaDia(c.fecha)}</div>}
+              <div style={{ fontSize:11.5, marginTop:2, color: imp.total === 0 ? T.color.tinta3 : faltan ? T.color.ojo : T.color.bien }}>
+               {imp.total === 0 ? "Sin pedidos" : faltan ? `${faltan} por imprimir` : "Todo impreso"}
+              </div>
              </td>
-             <td style={td}>{fFechaDia(c.fecha)}</td>
+             {!compacto && <td style={td}>{fFechaDia(c.fecha)}</td>}
              <td style={td}>
-              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-               <div style={{ width:80, height:6, borderRadius:3, background:T.color.superficie3, overflow:"hidden", flexShrink:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+               <div style={{ width: mini ? 44 : 80, height:6, borderRadius:3, background:T.color.superficie3, overflow:"hidden", flexShrink:0 }}>
                 <div style={{ width:`${Math.min(100, Math.round(pct*100))}%`, height:"100%", background:colorBarra, borderRadius:3 }}/>
                </div>
                <span style={{ fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
@@ -2030,12 +2043,13 @@ export function ModuloLogistica({showToast}) {
                </span>
               </div>
              </td>
-             <td style={td}><PastillaImpresion imp={imp}/></td>
+             {!compacto && <td style={td}><PastillaImpresion imp={imp}/></td>}
              <td style={{ ...td, textAlign:"right" }}>
               {imp.total > 0 && (
                <button onClick={e=>{ e.stopPropagation(); imprimirCorte(c); }} disabled={imprimiendo === c.id}
+                title={`${imp.completo ? "Reimprimir" : "Imprimir"} los ${imp.total} pedidos del corte`}
                 style={imp.completo ? botonFila : { ...botonFila, background:T.color.marca, border:"none", color:"#fff", fontWeight:600 }}>
-                <Printer size={14}/> {imprimiendo === c.id ? "Preparando..." : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
+                <Printer size={14}/> {imprimiendo === c.id ? "..." : mini ? imp.total : `${imp.completo ? "Reimprimir" : "Imprimir"} (${imp.total})`}
                </button>
               )}
              </td>
@@ -2048,7 +2062,7 @@ export function ModuloLogistica({showToast}) {
       )}
      </section>
 
-     <section style={{ ...tarjeta, overflow:"hidden", flex:"1 1 360px", minWidth:0 }}>
+     <section style={{ ...tarjeta, overflow:"hidden", minWidth:0 }}>
       {!corteVisto ? (
        <div style={{ padding:32, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
         Elige un corte para ver sus pedidos.
