@@ -68,6 +68,30 @@ const dane5 = (v) => {
   return d.length < 5 ? d.padStart(5,'0') : d.slice(0,5);
 };
 
+// ── Consolidado de un corte ─────────────────────────────────────────────────────
+// Lo que se imprime de un corte: las lineas de todos sus pedidos agrupadas por
+// bodega y, dentro de cada bodega, por referencia, con las unidades sumadas.
+// Es la hoja de alistamiento: cuanto sacar de cada referencia en cada bodega.
+export const consolidarCorte = (pedidos) => {
+  const bodegas = {};
+  for (const p of pedidos || []) {
+    for (const l of p.pedidos_cartera_detalle || []) {
+      const bod = String(l.bodega || '').trim() || 'Sin bodega';
+      const ref = String(l.referencia || '').trim() || 'Sin referencia';
+      const b = bodegas[bod] || (bodegas[bod] = {});
+      const r = b[ref] || (b[ref] = { referencia: ref, descripcion: String(l.descripcion || '').trim(), unidades: 0 });
+      r.unidades += Number(l.cantidad_pedida) || 0;
+    }
+  }
+  const orden = (a, b) => a.localeCompare(b, 'es', { numeric: true });
+  return Object.keys(bodegas).sort(orden).map(bodega => {
+    const refs = Object.values(bodegas[bodega]).sort((a, b) => orden(a.referencia, b.referencia));
+    return { bodega, refs, unidades: refs.reduce((s, r) => s + r.unidades, 0) };
+  });
+};
+
+const escHTML = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 // ── Asignar corte ──────────────────────────────────────────────────────────────
 // La regla, en un solo sitio (crearAsignadorCortes): la sede sale del DANE de
 // origen; el pedido toma el primer corte que no haya pasado, este abierto y
@@ -1846,7 +1870,7 @@ export function ModuloLogistica({showToast}) {
       .eq('estado_cartera','aprobado').eq('corte_id',c.id).order('numero_pedido');
     setImprimiendo(null);
     if(error){ showToast("No se pudieron leer los pedidos del corte","error"); return; }
-    await imprimir(data||[]);
+    await imprimir(data||[], c);
   };
 
   // Trae las lineas de los pedidos que no las tengan cargadas.
@@ -1862,12 +1886,16 @@ export function ModuloLogistica({showToast}) {
     return lista.map(x=>x.pedidos_cartera_detalle?x:{...x,pedidos_cartera_detalle:porPedido[x.id]||[]});
   };
 
-  const imprimir = async (lista) => {
+  // Con corte se imprime el consolidado del corte; sin corte (un pedido suelto)
+  // la orden de cada pedido.
+  const imprimir = async (lista, corte=null) => {
     if(!lista.length){ showToast("No hay pedidos para imprimir","error"); return; }
     let pedidosImprimir;
     try { pedidosImprimir = await conDetalle(lista); }
     catch { showToast("No se pudieron leer las lineas de los pedidos","error"); return; }
-    const html=pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
+    const html = corte
+      ? generarHTMLConsolidado(pedidosImprimir, corte)
+      : pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
     imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
       .pagina{padding:16px;width:210mm;min-height:148mm;}
@@ -1892,6 +1920,29 @@ export function ModuloLogistica({showToast}) {
     })();
     await marcar;
     cargar();
+  };
+
+  const generarHTMLConsolidado = (lista, corte) => {
+    const grupos = consolidarCorte(lista);
+    const total = grupos.reduce((s,g)=>s+g.unidades,0);
+    const n = v => Number(v).toLocaleString('es-CO');
+    return `
+    <div class="pagina">
+      <div class="titulo">SOMOS PRO</div>
+      <div class="subtitulo">CONSOLIDADO DE CORTE</div>
+      <table class="enc-tabla" style="margin-bottom:12px">
+        <tr><td>Corte</td><td><strong>${escHTML(String(corte.hora_corte||'').slice(0,5))}</strong></td><td>Fecha</td><td><strong>${fFechaDia(corte.fecha)}</strong></td></tr>
+        <tr><td>Sede</td><td>${escHTML(corte.sedes?.nombre||'')}</td><td>Pedidos</td><td>${lista.length}</td></tr>
+      </table>
+      <table>
+        <thead><tr><th style="width:110px">Bodega</th><th style="width:140px">Referencia</th><th>Descripción</th><th style="width:90px;text-align:right">Unidades</th></tr></thead>
+        <tbody>
+          ${grupos.map(g => g.refs.map((r,i) => `<tr>${i===0?`<td rowspan="${g.refs.length+1}" style="vertical-align:top;font-weight:bold">${escHTML(g.bodega)}</td>`:''}<td>${escHTML(r.referencia)}</td><td>${escHTML(r.descripcion)}</td><td style="text-align:right">${n(r.unidades)}</td></tr>`).join('')
+            + `<tr style="background:#f3f4f6;font-weight:bold"><td colspan="2">Total bodega ${escHTML(g.bodega)}</td><td style="text-align:right">${n(g.unidades)}</td></tr>`).join('')}
+          <tr style="font-weight:bold;background:#e5e7eb"><td colspan="3">TOTAL UNIDADES</td><td style="text-align:right">${n(total)}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
   };
 
   const generarHTMLPedido = (p, conSalto) => {
