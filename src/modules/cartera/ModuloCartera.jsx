@@ -1766,6 +1766,10 @@ export function ModuloLogistica({showToast}) {
   const [pedidos,    setPedidos]    = useState([]);
   const [imprimiendo,setImprimiendo]=useState(null); // id del corte que se esta imprimiendo
   const [corteSel,setCorteSel]=useState(null); // el corte cuyos pedidos se ven a la derecha
+  // Pedidos recien enviados a imprimir que esperan la confirmacion de que si
+  // salieron: {ids, que}. Solo al confirmar se marcan impresos.
+  const [porConfirmar,setPorConfirmar]=useState(null);
+  const [marcando,setMarcando]=useState(false);
   // Ancho de la tarjeta de cortes. Los cortes y sus pedidos van siempre lado a
   // lado; cuando la tarjeta es angosta la tabla se compacta en vez de bajar el
   // panel: la fecha y lo que falta por imprimir pasan debajo de la sede.
@@ -1896,10 +1900,19 @@ export function ModuloLogistica({showToast}) {
     const html = corte
       ? generarHTMLConsolidado(pedidosImprimir, corte)
       : pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
-    imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
+    const cerrado = imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
-      @page{size:A4;margin:14mm 12mm;}
-      .pagina{width:100%;max-width:186mm;margin:0 auto;}
+      /* Los margenes no se dejan al dialogo de impresion: si esta en "Ninguno"
+         o "Minimo", el navegador ignora los de @page y la hoja sale pegada
+         arriba. Por eso la pagina va sin margen y el contenido va dentro de
+         una tabla cuyo encabezado y pie vacios se repiten en cada hoja. */
+      @page{size:A4;margin:0;}
+      .marco{width:100%;border-collapse:collapse;margin:0;}
+      .marco>thead>tr>td,.marco>tfoot>tr>td,.marco>tbody>tr>td{border:none;padding:0;}
+      .marco>tbody>tr{page-break-inside:auto;}
+      .marco .esp{height:15mm;}
+      .marco .cuerpo{padding:0 14mm;}
+      .pagina{width:100%;margin:0 auto;}
       thead{display:table-header-group;} tr{page-break-inside:avoid;}
       .titulo{font-size:16px;font-weight:bold;margin-bottom:4px;}
       .subtitulo{font-size:12px;font-weight:bold;margin-bottom:12px;}
@@ -1910,19 +1923,41 @@ export function ModuloLogistica({showToast}) {
       .enc-tabla td:first-child{font-weight:bold;width:140px;}
       .page-break{page-break-after:always;}
       @media print{body{-webkit-print-color-adjust:exact;}}
-    </style></head><body>${html}</body></html>`);
-    // Se marcan impresos solo los que no lo estaban: al reimprimir se conserva
-    // la fecha de la primera impresion.
+    </style></head><body><table class="marco"><thead><tr><td class="esp"></td></tr></thead><tfoot><tr><td class="esp"></td></tr></tfoot><tbody><tr><td class="cuerpo">${html}</td></tr></tbody></table></body></html>`);
+    // No se marca nada hasta que la persona confirma que si se imprimio: si
+    // cancelaba el dialogo, el corte quedaba como impreso y salia de Pendientes.
+    // Se marcan solo los que no lo estaban: al reimprimir se conserva la fecha
+    // de la primera impresion.
     const ids=pedidosImprimir.filter(x=>x.estado_impresion!=='impreso').map(x=>x.id);
-    const marcar=(async()=>{
-      for(let i=0;i<ids.length;i+=100){
-        await supabase.from('pedidos_cartera')
-          .update({estado_impresion:'impreso',fecha_impresion:new Date().toISOString()}).in('id',ids.slice(i,i+100));
-      }
-    })();
-    await marcar;
+    await cerrado;
+    if(ids.length) setPorConfirmar({ ids, que: corte ? `el corte de las ${String(corte.hora_corte||'').slice(0,5)}` : ids.length===1 ? 'el pedido' : 'los pedidos' });
+  };
+
+  const confirmarImpreso = async () => {
+    if(!porConfirmar) return;
+    setMarcando(true);
+    const {ids}=porConfirmar;
+    let fallo=false;
+    for(let i=0;i<ids.length;i+=100){
+      const {error}=await supabase.from('pedidos_cartera')
+        .update({estado_impresion:'impreso',fecha_impresion:new Date().toISOString()}).in('id',ids.slice(i,i+100));
+      if(error) fallo=true;
+    }
+    setMarcando(false);
+    setPorConfirmar(null);
+    if(fallo) showToast("No se pudieron marcar todos como impresos","error");
     cargar();
   };
+
+  const modalConfirmar = porConfirmar && (
+    <ModalForm titulo="¿Se imprimió bien?" onClose={()=>setPorConfirmar(null)}
+     textoPrimario="Sí, marcar como impreso" onPrimario={confirmarImpreso} guardando={marcando}
+     textoCancelar="No, sigue pendiente">
+     <p style={{ margin:0, fontSize:13.5, color:T.color.tinta2, lineHeight:1.5 }}>
+      Confirma que {porConfirmar.que} salió impreso. Si cancelaste o la impresión salió mal, queda pendiente y lo puedes volver a imprimir.
+     </p>
+    </ModalForm>
+  );
 
   const generarHTMLConsolidado = (lista, corte) => {
     const grupos = consolidarCorte(lista);
@@ -1980,12 +2015,12 @@ export function ModuloLogistica({showToast}) {
 
   const porImprimir = pedidos.filter(x => x.estado_impresion !== "impreso");
 
-  if(esMovil) return <LogisticaMovil
+  if(esMovil) return <>{modalConfirmar}<LogisticaMovil
    sedes={sedes} cortes={cortes} pedidos={pedidos} porImprimir={porImprimir}
    filtroSede={filtroSede} setFiltroSede={setFiltroSede} filtroFecha={filtroFecha} setFiltroFecha={setFiltroFecha}
    modoFecha={modoFecha} setModoFecha={setModoFecha} filtroImp={filtroImp} setFiltroImp={setFiltroImp}
    imprimiendo={imprimiendo} imprimirCorte={imprimirCorte} impresionDe={impresionDe} imprimir={imprimir}
-  />;
+  /></>;
 
   // El corte que se ve a la derecha. Si el elegido ya no esta en la lista
   // (cambio el filtro o se imprimio), se muestra el primero.
@@ -1999,6 +2034,7 @@ export function ModuloLogistica({showToast}) {
 
   return (
    <Pagina anchoCompleto>
+    {modalConfirmar}
     <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
      <div>
       <h1 style={{ margin:0, ...T.texto.titulo }}>Impresión cortes</h1>
