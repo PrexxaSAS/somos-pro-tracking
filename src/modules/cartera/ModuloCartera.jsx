@@ -1900,7 +1900,13 @@ export function ModuloLogistica({showToast}) {
     const html = corte
       ? generarHTMLConsolidado(pedidosImprimir, corte)
       : pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
-    const cerrado = imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos QTracking</title><style>
+    // Nombre del PDF. Corte: sede, fecha y hora. Pedido: su numero. Varios
+    // pedidos sueltos (el boton de pendientes del celular): cuantos son.
+    const nombrePdf = corte
+      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}`
+      : pedidosImprimir.length === 1 ? String(pedidosImprimir[0].numero_pedido || 'Pedido')
+      : `Pedidos ${pedidosImprimir.length}`;
+    const cerrado = imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escHTML(nombrePdf)}</title><style>
       *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#000;}
       /* Los margenes no se dejan al dialogo de impresion: si esta en "Ninguno"
          o "Minimo", el navegador ignora los de @page y la hoja sale pegada
@@ -1923,7 +1929,7 @@ export function ModuloLogistica({showToast}) {
       .enc-tabla td:first-child{font-weight:bold;width:140px;}
       .page-break{page-break-after:always;}
       @media print{body{-webkit-print-color-adjust:exact;}}
-    </style></head><body><table class="marco"><thead><tr><td class="esp"></td></tr></thead><tfoot><tr><td class="esp"></td></tr></tfoot><tbody><tr><td class="cuerpo">${html}</td></tr></tbody></table></body></html>`);
+    </style></head><body><table class="marco"><thead><tr><td class="esp"></td></tr></thead><tfoot><tr><td class="esp"></td></tr></tfoot><tbody><tr><td class="cuerpo">${html}</td></tr></tbody></table></body></html>`, nombrePdf);
     // No se marca nada hasta que la persona confirma que si se imprimio: si
     // cancelaba el dialogo, el corte quedaba como impreso y salia de Pendientes.
     // Se marcan solo los que no lo estaban: al reimprimir se conserva la fecha

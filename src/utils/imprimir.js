@@ -4,9 +4,23 @@
 // misma pagina, se abre el dialogo de impresion y el iframe se quita al cerrar.
 // Devuelve una promesa que se cumple cuando el dialogo se cierra. El navegador
 // no dice si se imprimio o se cancelo: quien necesite saberlo debe preguntar.
-export function imprimirHTML(html) {
-  let avisar;
-  const cerrado = new Promise(res => { avisar = res; });
+//
+// nombre: el nombre que propone "Guardar como PDF". El navegador lo toma del
+// titulo de la pagina, asi que mientras el dialogo esta abierto la pestana
+// lleva ese titulo y despues vuelve al suyo.
+export function imprimirHTML(html, nombre) {
+  let avisarCierre;
+  const cerrado = new Promise(res => { avisarCierre = res; });
+  const tituloAntes = document.title;
+  const limpio = nombre ? String(nombre).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() : "";
+  if (limpio) document.title = limpio;
+  let avisado = false;
+  const avisar = () => {
+    if (avisado) return;
+    avisado = true;
+    if (limpio) document.title = tituloAntes;
+    avisarCierre();
+  };
   const marco = document.createElement("iframe");
   marco.setAttribute("aria-hidden", "true");
   marco.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
@@ -19,6 +33,7 @@ export function imprimirHTML(html) {
   doc.open();
   doc.write(html);
   doc.close();
+  if (limpio) doc.title = limpio;
 
   const ventana = marco.contentWindow;
   // Se espera a que carguen las imagenes del documento (logos, firmas).
@@ -35,6 +50,7 @@ export function imprimirHTML(html) {
     // Por si el navegador no avisa afterprint: el iframe no estorba, pero no
     // se deja colgado para siempre.
     setTimeout(quitar, 60000);
+    setTimeout(() => { if (limpio && !avisado) document.title = tituloAntes; }, 60000);
   };
   if (doc.readyState === "complete") setTimeout(lanzar, 50);
   else {
