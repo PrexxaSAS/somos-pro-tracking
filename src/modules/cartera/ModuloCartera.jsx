@@ -2020,9 +2020,15 @@ export function ModuloLogistica({showToast}) {
   };
 
   const porImprimir = pedidos.filter(x => x.estado_impresion !== "impreso");
+  // En "Por fecha" el filtro de impresion aplica tambien a los cortes: con
+  // "Impresos" solo los que ya salieron completos, con "Por imprimir" los que
+  // tienen algun pedido pendiente. Antes solo filtraba los pedidos y la lista
+  // de cortes mostraba todos.
+  const cortesVistos = modoFecha === 'pendientes' || filtroImp === 'todos' ? cortes
+    : cortes.filter(c => { const i = impresionDe(c); return filtroImp === 'impreso' ? i.completo : i.total > i.impresos; });
 
   if(esMovil) return <>{modalConfirmar}<LogisticaMovil
-   sedes={sedes} cortes={cortes} pedidos={pedidos} porImprimir={porImprimir}
+   sedes={sedes} cortes={cortesVistos} pedidos={pedidos} porImprimir={porImprimir}
    filtroSede={filtroSede} setFiltroSede={setFiltroSede} filtroFecha={filtroFecha} setFiltroFecha={setFiltroFecha}
    modoFecha={modoFecha} setModoFecha={setModoFecha} filtroImp={filtroImp} setFiltroImp={setFiltroImp}
    imprimiendo={imprimiendo} imprimirCorte={imprimirCorte} impresionDe={impresionDe} imprimir={imprimir}
@@ -2030,7 +2036,7 @@ export function ModuloLogistica({showToast}) {
 
   // El corte que se ve a la derecha. Si el elegido ya no esta en la lista
   // (cambio el filtro o se imprimio), se muestra el primero.
-  const corteVisto = cortes.find(c => c.id === corteSel) || cortes[0] || null;
+  const corteVisto = cortesVistos.find(c => c.id === corteSel) || cortesVistos[0] || null;
   const pedidosVistos = corteVisto ? pedidos.filter(x => x.corte_id === corteVisto.id) : [];
   const enPendientes = modoFecha === 'pendientes';
   const todasFechas = !enPendientes && !filtroFecha;
@@ -2071,8 +2077,8 @@ export function ModuloLogistica({showToast}) {
      {[
       { label: enPendientes ? "Pedidos sin imprimir" : todasFechas ? "Pedidos" : "Pedidos del día", valor:pedidos.length, color:T.color.tinta },
       { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojo },
-      { label: enPendientes ? "Cortes con pendientes" : todasFechas ? "Cortes" : "Cortes del día", valor:cortes.length, color:T.color.tinta },
-      { label:"Cortes impresos", valor:cortes.filter(c=>impresionDe(c).completo).length, color:T.color.bien },
+      { label: enPendientes ? "Cortes con pendientes" : todasFechas ? "Cortes" : "Cortes del día", valor:cortesVistos.length, color:T.color.tinta },
+      { label:"Cortes impresos", valor:cortesVistos.filter(c=>impresionDe(c).completo).length, color:T.color.bien },
      ].map(i => (
       <div key={i.label} style={{ ...tarjeta, padding:"16px 18px" }}>
        <div style={{ fontSize:11.5, fontWeight:600, letterSpacing:".04em", textTransform:"uppercase", color:T.color.tinta3 }}>{i.label}</div>
@@ -2089,15 +2095,15 @@ export function ModuloLogistica({showToast}) {
         {enPendientes ? "Abiertos o con pedidos sin imprimir" : todasFechas ? "Todas las fechas" : fFechaDia(filtroFecha)}
        </span>
       </div>
-      {cortes.length === 0 ? (
+      {cortesVistos.length === 0 ? (
        <div style={{ padding:40, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-        {enPendientes ? "No hay pedidos aprobados por imprimir." : "No hay cortes para esa fecha y esa sede."}
+        {enPendientes ? "No hay pedidos aprobados por imprimir." : filtroImp === "todos" ? "No hay cortes para esa fecha y esa sede." : filtroImp === "impreso" ? "No hay cortes impresos con esos filtros." : "No hay cortes por imprimir con esos filtros."}
        </div>
       ) : (
        <div style={{ overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
          <tbody>
-          {cortes.map(c => {
+          {cortesVistos.map(c => {
            const imp = impresionDe(c);
            const sel = corteVisto && corteVisto.id === c.id;
            const usados = Number(c.pedidos_asignados || 0), cap = Number(c.capacidad_max || 0);
