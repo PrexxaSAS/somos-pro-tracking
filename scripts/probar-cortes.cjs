@@ -115,6 +115,28 @@ const exigir = (cond, queja) => { if (!cond) { console.log('FALLA  ' + queja); f
   console.log(`contadores: ${JSON.stringify(cuentaNuevo)}`);
   console.log(`llamadas a la base: uno a uno ${llamadasViejo}, por lotes ${llamadasNuevo}`);
 
+  // Ningun corte puede pasar de su capacidad: cuando los de hoy se llenan, el
+  // pedido pasa al siguiente corte con cupo, de manana o de los dias que sigan.
+  // Un corte cerrado no recibe pedidos aunque tenga cupo.
+  {
+    const chico = JSON.parse(JSON.stringify(base));
+    chico.cortes_sede = chico.cortes_sede.map(c => ({ ...c, capacidad_corte: 1 }));
+    m.reiniciar(chico);
+    const fechaManana = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); })();
+    m.tabla('cortes_programados').push({ id: 'cerrado', sede_id: 's1', corte_sede_id: 'c0', fecha: fechaManana,
+      hora_corte: '00:00:00', capacidad_max: 1, pedidos_asignados: 0, estado: 'cerrado' });
+    const lote = await m.crearAsignadorCortes();
+    const asignados = [];
+    for (let i = 0; i < 9; i++) asignados.push(await lote.asignar('05380'));
+    await lote.guardar();
+    const llenos = m.tabla('cortes_programados').filter(c => c.pedidos_asignados > c.capacidad_max);
+    exigir(llenos.length === 0, 'hay cortes por encima de su capacidad: ' + JSON.stringify(llenos.map(c => `${c.hora_corte}/${c.fecha}=${c.pedidos_asignados}/${c.capacidad_max}`)));
+    exigir(asignados.every(Boolean), 'quedaron pedidos sin corte habiendo cupo en los dias siguientes');
+    exigir(m.tabla('cortes_programados').find(c => c.id === 'cerrado').pedidos_asignados === 0, 'un corte cerrado recibio pedidos');
+    const dias = new Set(asignados.filter(Boolean).map(c => c.fechaCorte.slice(0, 10)));
+    console.log(`cupo 1 por corte, 9 pedidos: repartidos en ${dias.size} dias`);
+  }
+
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(fallos ? `\n${fallos} diferencia(s).` : '\nLas dos asignaciones coinciden.');
   process.exit(fallos ? 1 : 0);

@@ -1,3 +1,5 @@
+import { descargarBlob } from "./imprimir";
+
 const A4 = { width: 595.28, height: 841.89 };
 const encoder = new TextEncoder();
 
@@ -141,11 +143,10 @@ const makePdf = (pedido, supports) => {
   return new Blob(parts, { type: "application/pdf" });
 };
 
+// Descarga el PDF de soportes en lugar de abrirlo en otra pestana. Si falla,
+// el error sube para que quien llama muestre el aviso.
 export async function generarPDFSoportes(pedido, extras) {
-  const win = window.open("", "_blank");
-  if (!win) return;
-
-  try {
+  {
     const rawSupports = [...(pedido.soportes_data || []), ...(extras || [])]
       .map(normalizeSupport)
       .filter(support => support.data);
@@ -154,12 +155,6 @@ export async function generarPDFSoportes(pedido, extras) {
       ...(await imageToJpeg(support.data)),
     })));
     const blob = makePdf(pedido, supports);
-    const url = URL.createObjectURL(blob);
-    win.location.href = url;
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (error) {
-    win.document.write("<p>No se pudo generar el PDF de soportes.</p>");
-    win.document.close();
-    console.error("PDF soportes:", error);
+    descargarBlob(blob, `soportes-${pedido.id || "pedido"}.pdf`);
   }
 }

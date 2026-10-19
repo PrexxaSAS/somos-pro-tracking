@@ -50,7 +50,7 @@ export const MENUS = {
       ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
       // El admin tiene todas las funciones, tambien las del operador.
-      ["cartera_logistica", "Logistica cartera", Printer],
+      ["cartera_logistica", "Impresión cortes", Printer],
       ["cartera_consultas", "Consultas cartera", Search],
       ["cartera_sedes", "Sedes y cortes", Warehouse],
       ["cartera_asesores", "Asesores", Users],
@@ -77,7 +77,7 @@ export const MENUS = {
     ]],
     ...(CARTERA_ACTIVA ? [["Cartera", [
       ["cartera_cargar", "Cargar pedidos", Box],
-      ["cartera_logistica", "Logistica cartera", Printer],
+      ["cartera_logistica", "Impresión cortes", Printer],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
     ]]] : []),
     ["Configuracion", [
