@@ -1999,14 +1999,19 @@ export function ModuloLogistica({showToast}) {
         <thead><tr><th style="width:70px">Bodega</th><th style="width:120px">Línea</th><th style="width:110px">Referencia</th><th>Descripción</th><th style="width:80px;text-align:right">Unidades</th></tr></thead>
         <tbody>
           ${grupos.map(g => {
-            // La bodega abarca sus lineas con sus subtotales; cada linea, sus
-            // referencias y su subtotal.
-            const filasBodega = g.lineas.reduce((s,li)=>s+li.refs.length+1,0);
+            // Sin rowspan: una celda que abarca muchas filas no se puede partir
+            // entre hojas, y el navegador mandaba la bodega entera a la hoja
+            // siguiente dejando la primera medio vacia. La bodega y la linea se
+            // escriben en su primera fila y las de abajo quedan en blanco sin
+            // borde superior, para que se vean como una sola celda.
+            const tdGrupo = (texto, primera) => primera
+              ? `<td style="vertical-align:top;font-weight:bold">${escHTML(texto)}</td>`
+              : '<td style="border-top:hidden"></td>';
             return g.lineas.map((li,j) => li.refs.map((r,i) => `<tr>`
-                + (j===0&&i===0 ? `<td rowspan="${filasBodega}" style="vertical-align:top;font-weight:bold">${escHTML(g.bodega)}</td>` : '')
-                + (i===0 ? `<td rowspan="${li.refs.length+1}" style="vertical-align:top;font-weight:bold">${escHTML(li.linea)}</td>` : '')
+                + tdGrupo(g.bodega, j===0&&i===0)
+                + tdGrupo(li.linea, i===0)
                 + `<td>${escHTML(r.referencia)}</td><td>${escHTML(r.descripcion)}</td><td style="text-align:right">${n(r.unidades)}</td></tr>`).join('')
-              + `<tr style="background:#f9fafb;font-weight:bold"><td colspan="2">Total línea ${escHTML(li.linea)}</td><td style="text-align:right">${n(li.unidades)}</td></tr>`).join('')
+              + `<tr style="font-weight:bold">${tdGrupo('', false)}<td style="border-top:hidden;background:#fff"></td><td colspan="2" style="background:#f9fafb">Total línea ${escHTML(li.linea)}</td><td style="text-align:right;background:#f9fafb">${n(li.unidades)}</td></tr>`).join('')
               + `<tr style="background:#f3f4f6;font-weight:bold"><td colspan="4">Total bodega ${escHTML(g.bodega)}</td><td style="text-align:right">${n(g.unidades)}</td></tr>`;
           }).join('')}
           <tr style="font-weight:bold;background:#e5e7eb"><td colspan="4">TOTAL UNIDADES</td><td style="text-align:right">${n(total)}</td></tr>
