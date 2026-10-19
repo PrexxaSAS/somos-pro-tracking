@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verificar": "node scripts/auditar-identificadores.cjs && node scripts/probar-render.cjs && node scripts/probar-cortes.cjs"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.3.3",
     "@supabase/supabase-js": "^2.39.0",
     "lucide-react": "^0.263.1",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

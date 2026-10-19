@@ -1,6 +1,22 @@
 ﻿import React, { useState } from 'react';
 import { P } from '../../Constants';
 import { Btn, Card, Field, Modal } from '../../Subcomponentes';
+import {
+ ModalForm, Fila, Texto, Selector, AreaTexto,
+} from '../../components/ui/formularios';
+import { Download, Plus } from 'lucide-react';
+import { useEsMovil } from '../../design/responsive';
+import { FacturasMovil } from '../configuracion/ConfiguracionMovil';
+import { T, tarjeta } from '../../design/tokens';
+import {
+ Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Paginador, PieTabla,
+ th, td, tdCifra, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion, BotonEliminar,
+} from '../../components/ui/listas';
+
+const campoFecha = {
+ height: 32, padding: "0 10px", border: "1px solid #e6e4ec",
+ borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none",
+};
 import { supabase } from '../../supabase';
 import { mensajeError } from '../../utils/errors';
 import { exportarCSVFacturaProveedor } from '../../utils/facturasCsv';
@@ -21,6 +37,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const [fechaHasta, setFechaHasta] = useState("");
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
+ const esMovil = useEsMovil();
 
  const vacio = { numero_factura:"", transportista_id:"", fecha_factura:"", valor_total:"", observaciones:"" };
  const [form, setForm] = useState(vacio);
@@ -97,154 +114,86 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  React.useEffect(() => { setPage(1); }, [busq, fechaDesde, fechaHasta, pageSize]);
 
- return (
-  <div style={{ minHeight:"100%", background:"#fafafa", margin:"-28px -24px", color:"#111827" }}>
-   <header style={{ background:"#fff", borderBottom:`1px solid ${border}`, padding:"16px 32px", display:"flex", justifyContent:"space-between", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-    <div>
-     <h1 style={{ margin:0, fontSize:22, lineHeight:1.2, fontWeight:850 }}>Facturas Proveedor</h1>
-     <p style={{ margin:"5px 0 0", color:"#6b7280", fontSize:14 }}>Gestion de facturas, guias relacionadas e informes de fletes</p>
-    </div>
-    <button style={primaryButton} onClick={()=>setModNueva(true)}>+ Nueva Factura</button>
-   </header>
+ // Informe consolidado de fletes: una linea por guia de todas las facturas filtradas.
+ const descargarInforme = () => {
+  const lineasTodias = [];
+  filtradas.forEach(fac=>{
+   const t = transportistas.find(tr=>tr.id===fac.transportista_id);
+   const guias = fac.factura_guias||[];
+   const totalCaj = guias.reduce((a,g)=>a+(g.pedidos?.cajas||0),0);
+   const vCaja = totalCaj>0?fac.valor_total/totalCaj:0;
+   guias.forEach(g=>{
+    lineasTodias.push({
+     fac, trans:t,
+     cajas:g.pedidos?.cajas||0,
+     valorGuia:totalCaj>0?Math.round(vCaja*(g.pedidos?.cajas||0)):0,
+     pedidos:g.pedidos,
+     id:g.id,
+    });
+   });
+  });
+  if(lineasTodias.length===0){showToast("Sin guias en el perodo seleccionado","error");return;}
+  const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho","Codigo DANE","Ciudad Destino","No. Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
+  const rows=lineasTodias.map(l=>[
+   l.fac.fecha_factura,
+   l.pedidos?.guia_interna||"",
+   l.trans?.nombre||"",
+   l.pedidos?.fecha_creacion||"",
+   l.pedidos?.fecha_despacho||"",
+   l.pedidos?.ciudad_codigo||"",
+   l.pedidos?.ciudad_nombre||"",
+   l.fac.numero_factura,
+   l.cajas,
+   l.valorGuia,
+   l.pedidos?.factura||"",
+   l.pedidos?.id||"",
+  ]);
+  const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  const rango=fechaDesde&&fechaHasta?`${fechaDesde}_${fechaHasta}`:fechaDesde||fechaHasta||"todos";
+  a.download=`Informe_Fletes_${rango}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(` CSV descargado ${lineasTodias.length} lneas ${filtradas.length} factura(s)`,"success");
+ };
 
-   <main style={{ maxWidth:1216, margin:"0 auto", padding:"24px 24px 42px", display:"flex", flexDirection:"column", gap:18 }}>
-   <section style={{ ...cardStyle, padding:0, overflow:"hidden" }}>
-    <div style={{ padding:16, display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"end", borderBottom:`1px solid ${border}` }}>
-     <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"flex-end"}}>
-     <input value={busq} onChange={e=>setBusq(e.target.value)}
-      placeholder=" Buscar por numero de factura o transportista..."
-      style={{...iSt,flex:1,minWidth:240,borderRadius:12,background:"#fff"}}/>
-     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-      <div style={{display:"flex",flexDirection:"column",gap:3}}>
-       <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase"}}>Desde</label>
-       <input type="date" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}
-        style={{...iSt,width:150,borderRadius:12,background:"#fff"}}/>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:3}}>
-       <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase"}}>Hasta</label>
-       <input type="date" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}
-        style={{...iSt,width:150,borderRadius:12,background:"#fff"}}/>
-      </div>
-      {(fechaDesde||fechaHasta)&&(
-       <button style={{ ...buttonBase, padding:"8px 12px", fontSize:13 }} onClick={()=>{setFechaDesde("");setFechaHasta("");}}>Limpiar</button>
-      )}
-     </div>
-    </div>
-     <span style={{ color:"#6b7280", fontSize:13, whiteSpace:"nowrap" }}>{filtradas.length} de {(facturas||[]).length}</span>
-    </div>
-    {filtradas.length>0&&(
-     <div style={{ padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", borderBottom:`1px solid ${border}` }}>
-      <span style={{fontSize:13,color:"#64748b"}}>
-       {fechaDesde||fechaHasta
-        ? fechaDesde&&fechaHasta?` ${fechaDesde} al ${fechaHasta}`
-         :fechaDesde?` desde ${fechaDesde}`
-         :` hasta ${fechaHasta}`
-        : "Todas las fechas"} · {totalGuias} guia(s) · {formatCOP(totalValor)}
-      </span>
-      <button style={{ ...buttonBase, padding:"8px 12px", fontSize:13, color:"#059669" }} onClick={()=>{
-       // Export all filtered facturas as one CSV
-       const lineasTodias = [];
-       filtradas.forEach(fac=>{
-        const t = transportistas.find(tr=>tr.id===fac.transportista_id);
-        const guias = fac.factura_guias||[];
-        const totalCaj = guias.reduce((a,g)=>a+(g.pedidos?.cajas||0),0);
-        const vCaja = totalCaj>0?fac.valor_total/totalCaj:0;
-        guias.forEach(g=>{
-         lineasTodias.push({
-          fac, trans:t,
-          cajas:g.pedidos?.cajas||0,
-          valorGuia:totalCaj>0?Math.round(vCaja*(g.pedidos?.cajas||0)):0,
-          pedidos:g.pedidos,
-          id:g.id,
-         });
-        });
-       });
-       if(lineasTodias.length===0){showToast("Sin guias en el perodo seleccionado","error");return;}
-       const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho","Codigo DANE","Ciudad Destino","No. Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
-       const rows=lineasTodias.map(l=>[
-        l.fac.fecha_factura,
-        l.pedidos?.guia_interna||"",
-        l.trans?.nombre||"",
-        l.pedidos?.fecha_creacion||"",
-        l.pedidos?.fecha_despacho||"",
-        l.pedidos?.ciudad_codigo||"",
-        l.pedidos?.ciudad_nombre||"",
-        l.fac.numero_factura,
-        l.cajas,
-        l.valorGuia,
-        l.pedidos?.factura||"",
-        l.pedidos?.id||"",
-       ]);
-       const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-       const url=URL.createObjectURL(blob);
-       const a=document.createElement("a");
-       a.href=url;
-       const rango=fechaDesde&&fechaHasta?`${fechaDesde}_${fechaHasta}`:fechaDesde||fechaHasta||"todos";
-       a.download=`Informe_Fletes_${rango}.csv`;
-       a.click();
-       URL.revokeObjectURL(url);
-       showToast(` CSV descargado ${lineasTodias.length} lneas ${filtradas.length} factura(s)`,"success");
-      }}>
-        Descargar Informe Consolidado
-      </button>
-     </div>
-    )}
-    {filtradas.length===0 ? (
-     <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>Sin facturas registradas.</div>
-    ) : (
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-       <thead>
-        <tr style={{ color:"#6b7280", fontSize:12, textTransform:"uppercase" }}>
-         {["Factura", "Transportista", "Fecha", "Valor", "Guias", "Cajas", "Acciones"].map(h => (
-          <th key={h} style={{ padding:"14px 16px", textAlign:h==="Acciones" ? "right" : "left", borderBottom:`1px solid ${border}`, whiteSpace:"nowrap" }}>{h}</th>
-         ))}
-        </tr>
-       </thead>
-       <tbody>
-    {pageItems.map(fac => {
-     const trans = transportistas.find(t => t.id === fac.transportista_id);
-     const guias = fac.factura_guias || [];
-     const totalCajas = guias.reduce((a,g) => a+(g.pedidos?.cajas||0), 0);
-     return (
-      <tr key={fac.id} style={{ borderBottom:`1px solid ${border}` }}>
-       <td style={{ padding:"16px", color:"#5b33d6", fontWeight:850, fontFamily:"monospace" }}>{fac.numero_factura}</td>
-       <td style={{ padding:"16px" }}><div style={{ fontWeight:750 }}>{trans?.nombre||""}</div>{fac.observaciones&&<div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{fac.observaciones}</div>}</td>
-       <td style={{ padding:"16px", color:"#4b5563" }}>{fac.fecha_factura}</td>
-       <td style={{ padding:"16px", fontWeight:850 }}>{formatCOP(fac.valor_total)}</td>
-       <td style={{ padding:"16px" }}><span style={{ background:"#f0eef9", color:"#5b33d6", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:800 }}>{guias.length}</span></td>
-       <td style={{ padding:"16px", fontWeight:850 }}>{totalCajas}</td>
-       <td style={{ padding:"16px", textAlign:"right" }}><div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}><button style={{ ...primaryButton, padding:"7px 12px", fontSize:13 }} onClick={()=>setModDet(fac)}>Gestionar</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#059669" }} onClick={()=>exportarCSVFacturaProveedor(fac, calcularLineas(fac), trans, formatCOP)}>CSV</button><button style={{ ...buttonBase, padding:"7px 12px", fontSize:13, color:"#dc2626" }} onClick={()=>eliminar(fac.id, fac.numero_factura)}>Eliminar</button></div></td>
-      </tr>
-     );
-    })}
-       </tbody>
-      </table>
-     </div>
-    )}
-    <PaginationControls total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
-   </section>
-   </main>
+ // CSV de una sola factura, con el valor repartido por cajas como en Gestionar.
+ const descargarFactura = (fac) => {
+  const trans = transportistas.find(t => t.id === fac.transportista_id);
+  exportarCSVFacturaProveedor(fac, calcularLineas(fac), trans, formatCOP);
+ };
 
+ const totalFiltrado = filtradas.reduce((a, f) => a + Number(f.valor_total || 0), 0);
+ const guiasFiltradas = filtradas.reduce((a, f) => a + (f.factura_guias || []).length, 0);
+ const fmtCOP = (n) => "$ " + Number(n || 0).toLocaleString("es-CO");
+
+ const modales = (<>
    {/* Modal nueva factura */}
    {modNueva&&(
-    <Modal title="Nueva Factura de Proveedor" onClose={()=>{setModNueva(false);setForm(vacio);}}>
-     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <Field label="No. Factura del Proveedor *" value={form.numero_factura} onChange={f("numero_factura")} placeholder="FAC-PRO-001"/>
-      <Field label="Transportista *" value={form.transportista_id} onChange={f("transportista_id")} as="select"
-       options={[{value:"",label:" Seleccione transportista "},...(transportistas||[]).map(t=>({value:t.id,label:`${t.nombre} NIT: ${t.nit}`}))]}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-       <Field label="Fecha Factura *" value={form.fecha_factura} onChange={f("fecha_factura")} type="date"/>
-       <Field label="Valor Total (COP) *" value={form.valor_total} onChange={f("valor_total")} type="number" placeholder="1500000"/>
-      </div>
-      <Field label="Observaciones" value={form.observaciones} onChange={f("observaciones")} as="textarea" placeholder="Notas adicionales..."/>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-       <Btn variant="secondary" onClick={()=>{setModNueva(false);setForm(vacio);}}>Cancelar</Btn>
-       <Btn disabled={guard} onClick={crear}>{guard?"Guardando...":" Crear Factura"}</Btn>
-      </div>
-     </div>
-    </Modal>
+    <ModalForm
+     titulo="Nueva factura de proveedor"
+     descripcion="Registro para conciliacion con transportista"
+     onClose={()=>{setModNueva(false);setForm(vacio);}}
+     onPrimario={crear}
+     guardando={guard}
+     textoPrimario="Crear factura"
+    >
+     <Texto label="N factura del proveedor" obligatorio mono valor={form.numero_factura}
+      onChange={f("numero_factura")} placeholder="FAC-PRO-001" />
+     <Selector label="Transportista" obligatorio valor={form.transportista_id} onChange={f("transportista_id")}
+      placeholder="Seleccione transportista"
+      opciones={(transportistas||[]).map(x=>({ value:x.id, label:`${x.nombre} - NIT ${x.nit}` }))} />
+     <Fila>
+      <Texto label="Fecha de factura" obligatorio tipo="date" valor={form.fecha_factura} onChange={f("fecha_factura")} />
+      <Texto label="Valor total" obligatorio tipo="number" prefijo="COP" valor={form.valor_total}
+       onChange={f("valor_total")} placeholder="1500000" />
+     </Fila>
+     <AreaTexto label="Observaciones" opcional valor={form.observaciones} onChange={f("observaciones")}
+      placeholder="Notas adicionales..." />
+    </ModalForm>
    )}
 
    {/* Modal gestionar guias */}
@@ -259,7 +208,133 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
      formatCOP={formatCOP}
     />
    )}
-  </div>
+ </>);
+
+ // Disenio 26a: tarjetas con valor, transportista, ciudades de sus guias y
+ // Gestionar. Todo llama a las mismas funciones del escritorio.
+ if (esMovil) return (
+  <Pagina>
+   <FacturasMovil facturas={facturas||[]} filtradas={filtradas} transportistas={transportistas||[]}
+    busq={busq} setBusq={setBusq} fechaDesde={fechaDesde} setFechaDesde={setFechaDesde}
+    fechaHasta={fechaHasta} setFechaHasta={setFechaHasta}
+    onInforme={descargarInforme} onGestionar={setModDet} onCSV={descargarFactura}
+    onEliminar={(fac)=>eliminar(fac.id, fac.numero_factura)} onNueva={()=>setModNueva(true)} />
+   {modales}
+  </Pagina>
+ );
+
+ return (
+  <Pagina>
+   <Encabezado
+    titulo="Facturas de proveedor"
+    descripcion="Facturas de transportistas, guias relacionadas e informes de fletes"
+    acciones={
+     <button onClick={()=>setModNueva(true)} style={botonPrincipal}>
+      <Plus size={16}/> Nueva factura
+     </button>
+    }
+   />
+
+   <Indicadores items={[
+    { label:"Facturas", valor:filtradas.length, color:T.color.marca, destacado:true },
+    { label:"Guias relacionadas", valor:guiasFiltradas, color:T.color.infoPunto },
+    { label:"Sin guias", valor:filtradas.filter(f=>(f.factura_guias||[]).length===0).length, color:T.color.ojoPunto },
+   ]}/>
+
+   <section style={{ ...tarjeta, overflow:"hidden" }}>
+    <BarraFiltros derecha={`${filtradas.length} de ${(facturas||[]).length}`}>
+     <Buscador valor={busq} onChange={setBusq} placeholder="Buscar factura o transportista" ancho={260}/>
+     <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>Desde</span>
+      <input type="date" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)} style={campoFecha}/>
+      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>Hasta</span>
+      <input type="date" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)} style={campoFecha}/>
+      {(fechaDesde || fechaHasta) && (
+       <button style={{ ...botonBarra, height:32 }} onClick={()=>{setFechaDesde("");setFechaHasta("");}}>Limpiar</button>
+      )}
+     </div>
+    </BarraFiltros>
+
+    {filtradas.length > 0 && (
+     <div style={{
+      display:"flex", alignItems:"center", gap:12, flexWrap:"wrap",
+      padding:"11px 18px", borderBottom:`1px solid ${T.color.borde}`, background:T.color.superficie2,
+     }}>
+      <span style={{ fontSize:13, color:T.color.tinta2 }}>
+       Informe consolidado de fletes: una linea por guia, para conciliar con el transportista.
+      </span>
+      <button style={{ ...botonBarra, marginLeft:"auto" }} onClick={descargarInforme}>
+       <Download size={15}/> Descargar informe
+      </button>
+     </div>
+    )}
+
+    {filtradas.length === 0 ? (
+     <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
+      {(facturas||[]).length === 0 ? "Sin facturas registradas." : "Ninguna factura coincide con los filtros."}
+     </div>
+    ) : (
+     <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:900 }}>
+       <thead>
+        <tr>
+         <th style={th}>Factura</th>
+         <th style={th}>Transportista</th>
+         <th style={th}>Fecha</th>
+         <th style={{...th, textAlign:"right"}}>Valor</th>
+         <th style={{...th, textAlign:"right"}}>Guias</th>
+         <th style={{...th, textAlign:"right"}}>Cajas</th>
+         <th style={{...th, textAlign:"right"}}>Acciones</th>
+        </tr>
+       </thead>
+       <tbody>
+        {pageItems.map(fac => {
+         const trans = transportistas.find(x => x.id === fac.transportista_id);
+         const guias = fac.factura_guias || [];
+         const totalCajas = guias.reduce((a,g) => a + (g.pedidos?.cajas || 0), 0);
+         return (
+          <tr key={fac.id}>
+           <td style={td}><span style={chipMono}>{fac.numero_factura}</span></td>
+           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>
+            {trans?.nombre || <span style={{ color:T.color.tinta3, fontWeight:400 }}>Sin transportista</span>}
+           </td>
+           <td style={td}>{fac.fecha_factura || "-"}</td>
+           <td style={tdCifra}>{fmtCOP(fac.valor_total)}</td>
+           <td style={tdCifra}>
+            <span style={{
+             display:"inline-flex", minWidth:26, justifyContent:"center", padding:"3px 9px",
+             borderRadius:6, fontSize:12, fontWeight:700,
+             background: guias.length ? T.color.marcaSuave : T.color.ojoSuave,
+             color: guias.length ? T.color.marca : T.color.ojo,
+            }}>{guias.length}</span>
+           </td>
+           <td style={tdCifra}>{totalCajas}</td>
+           <td style={{ ...td, textAlign:"right" }}>
+            <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
+             <button style={botonFila} onClick={()=>setModDet(fac)}>Gestionar</button>
+             {guias.length > 0 && (
+              <button title="Descargar CSV" onClick={()=>descargarFactura(fac)} style={iconoAccion}><Download size={15}/></button>
+             )}
+             <BotonEliminar title="Eliminar factura" onClick={()=>eliminar(fac.id, fac.numero_factura)} />
+            </div>
+           </td>
+          </tr>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+    )}
+
+    <PieTabla
+     izquierda={`${filtradas.length} ${filtradas.length === 1 ? "factura" : "facturas"} · ${fmtCOP(totalFiltrado)}`}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+    />
+   </section>
+
+
+   {modales}
+  </Pagina>
  );
 }
 

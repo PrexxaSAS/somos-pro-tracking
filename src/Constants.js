@@ -39,12 +39,12 @@ export const ESTADOS_PEDIDO = {
  pendiente:  { label: "Pendiente",  color: "#d97706", bg: "#fffbeb" },
  en_transito: { label: "En Transito", color: "#7c3aed", bg: "#f5f3ff" },
  paqueteria: { label: "Paqueteria", color: "#0891b2", bg: "#ecfeff" },
- entregado:  { label: "Entregado",  color: "#059669", bg: "#ecfdf5" },
+ entregado:  { label: "Entregado",  color: "#15803d", bg: "#ecfdf5" },
  novedad:   { label: "Con Novedad", color: "#dc2626", bg: "#fef2f2" },
  // Pedidos que solo se facturan (la mercancia ya se entrego). No son despachos
  // pendientes: no cuentan como activos, vencidos ni en riesgo.
- solo_facturar: { label: "Solo Facturar", color: "#0f766e", bg: "#f0fdfa" },
- cliente_recoge: { label: "Cliente Recoge", color: "#0369a1", bg: "#f0f9ff" },
+ solo_facturar: { label: "Solo Facturar", color: "#0d9488", bg: "#f0fdfa" },
+ cliente_recoge: { label: "Cliente Recoge", color: "#a21caf", bg: "#fdf4ff" },
 };
 
 // Estados que no son despachos pendientes: el pedido no sale con conductor ni
@@ -57,7 +57,22 @@ export const ROLES = {
  transportista: "Empresa Transportista",
  conductor:   "Conductor",
  cliente:    "Cliente Interno",
+ // Unico rol nuevo del modulo de cartera: logistica y consultas resultaron ser
+ // el operador y el cliente interno que ya existian.
+ cartera:    "Cartera",
 };
+
+// Roles que solo usan el modulo de cartera. No consultan pedidos, devoluciones ni
+// ninguna de las tablas de tracking, asi que su sesion no carga nada de eso.
+// El operador y el cliente si las usan, aunque tambien vean vistas del modulo.
+export const ROLES_CARTERA = ["cartera"];
+
+// El modulo de cartera vive en staging mientras su esquema no este creado en
+// produccion: sin las tablas, entrar a cualquiera de sus vistas da error. Con
+// esto apagado sus menus no se dibujan y el modulo queda inalcanzable, aunque
+// el codigo viaje. Para encenderlo basta ponerlo en true: nada mas depende de
+// esta bandera, y las dos ramas llevan el mismo codigo.
+export const CARTERA_ACTIVA = true;
 
 // Sedes a donde se lleva la mercancia de una devolucion. Se guarda el texto
 // completo en devoluciones.dir_entrega. Para agregar una sede basta con sumarla aqui.
