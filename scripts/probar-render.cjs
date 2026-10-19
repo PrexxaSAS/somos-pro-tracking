@@ -750,19 +750,21 @@ if (window.matchMedia("").matches) {
  exigir(!entregado.includes("Cambiar conductor"), "se ofrece cambiar el conductor de un pedido cerrado");
 }
 
-// El consolidado de un corte agrupa por bodega y referencia y suma unidades
-// de todos los pedidos, incluidas las lineas repetidas de un mismo pedido.
+// El consolidado de un corte agrupa por bodega, linea y referencia y suma
+// unidades de todos los pedidos, incluidas las lineas repetidas de un pedido.
 {
  const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  consolidado: " + queja); fallos++; } };
- const linea = (bodega, referencia, cantidad_pedida) => ({ bodega, referencia, descripcion:"Ref " + referencia, cantidad_pedida });
+ const linea = (bodega, lin, referencia, cantidad_pedida) => ({ bodega, linea:lin, referencia, descripcion:"Ref " + referencia, cantidad_pedida });
  const g = consolidarCorte([
-  { pedidos_cartera_detalle:[linea("04","105",1000), linea("04","105",1000), linea("04","106",15)] },
-  { pedidos_cartera_detalle:[linea("01","105",5), linea("04","105",3)] },
+  { pedidos_cartera_detalle:[linea("04","Vasos","105",1000), linea("04","Vasos","105",1000), linea("04","Cajas","106",15)] },
+  { pedidos_cartera_detalle:[linea("01","Vasos","105",5), linea("04","Vasos","105",3), linea("04",undefined,"107",2)] },
  ]);
  exigir(JSON.stringify(g.map(x=>x.bodega)) === '["01","04"]', "las bodegas no van ordenadas: " + JSON.stringify(g.map(x=>x.bodega)));
  const b04 = g.find(x=>x.bodega==="04");
- exigir(b04 && b04.refs.length === 2 && b04.refs[0].unidades === 2003 && b04.refs[1].unidades === 15, "las unidades por referencia no suman bien: " + JSON.stringify(b04));
- exigir(b04 && b04.unidades === 2018 && g[0].unidades === 5, "el total por bodega no cuadra");
+ exigir(b04 && JSON.stringify(b04.lineas.map(x=>x.linea)) === '["Cajas","Sin línea","Vasos"]', "las lineas no van agrupadas y ordenadas: " + JSON.stringify(b04 && b04.lineas.map(x=>x.linea)));
+ const vasos = b04 && b04.lineas.find(x=>x.linea==="Vasos");
+ exigir(vasos && vasos.refs.length === 1 && vasos.refs[0].unidades === 2003 && vasos.unidades === 2003, "las unidades por referencia no suman bien: " + JSON.stringify(vasos));
+ exigir(b04 && b04.unidades === 2020 && g[0].unidades === 5, "el total por bodega no cuadra");
 }
 
 globalThis.__fallos = fallos;

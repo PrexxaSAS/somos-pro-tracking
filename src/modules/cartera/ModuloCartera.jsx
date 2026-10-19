@@ -70,23 +70,30 @@ const dane5 = (v) => {
 
 // ── Consolidado de un corte ─────────────────────────────────────────────────────
 // Lo que se imprime de un corte: las lineas de todos sus pedidos agrupadas por
-// bodega y, dentro de cada bodega, por referencia, con las unidades sumadas.
-// Es la hoja de alistamiento: cuanto sacar de cada referencia en cada bodega.
+// bodega, dentro de cada bodega por linea de negocio (L_Neg_Med) y dentro de
+// cada linea por referencia, con las unidades sumadas. Es la hoja de
+// alistamiento: cuanto sacar de cada producto en cada bodega.
 export const consolidarCorte = (pedidos) => {
   const bodegas = {};
   for (const p of pedidos || []) {
     for (const l of p.pedidos_cartera_detalle || []) {
       const bod = String(l.bodega || '').trim() || 'Sin bodega';
+      const lin = String(l.linea || '').trim() || 'Sin línea';
       const ref = String(l.referencia || '').trim() || 'Sin referencia';
       const b = bodegas[bod] || (bodegas[bod] = {});
-      const r = b[ref] || (b[ref] = { referencia: ref, descripcion: String(l.descripcion || '').trim(), unidades: 0 });
+      const li = b[lin] || (b[lin] = {});
+      const r = li[ref] || (li[ref] = { referencia: ref, descripcion: String(l.descripcion || '').trim(), unidades: 0 });
       r.unidades += Number(l.cantidad_pedida) || 0;
     }
   }
   const orden = (a, b) => a.localeCompare(b, 'es', { numeric: true });
+  const suma = (xs) => xs.reduce((s, x) => s + x.unidades, 0);
   return Object.keys(bodegas).sort(orden).map(bodega => {
-    const refs = Object.values(bodegas[bodega]).sort((a, b) => orden(a.referencia, b.referencia));
-    return { bodega, refs, unidades: refs.reduce((s, r) => s + r.unidades, 0) };
+    const lineas = Object.keys(bodegas[bodega]).sort(orden).map(linea => {
+      const refs = Object.values(bodegas[bodega][linea]).sort((a, b) => orden(a.referencia, b.referencia));
+      return { linea, refs, unidades: suma(refs) };
+    });
+    return { bodega, lineas, unidades: suma(lineas) };
   });
 };
 
@@ -800,6 +807,9 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         const iCant  = col('cantidad_pedida','cantidad');
         const iLios  = col('lios','líos');
         const iVTotal= col('valor_total');
+        // Linea de negocio del producto (L_Neg_Med). Agrupa el consolidado del
+        // corte entre la bodega y la referencia. Planos viejos no la traen.
+        const iLinea = col('l_neg_med','linea_negocio');
 
         if(iPed===-1) {fallo("Falta la columna Pedido.", 'Revisa que el encabezado del plano tenga la columna "Pedido" escrita igual.');return;}
         // La fecha y la condicion de pago van siempre en el plano. Si faltan se
@@ -851,6 +861,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
             cantidad_pedida:parseInt(row[iCant]||0)||0,
             lios:       parseInt(row[iLios]||0)||0,
             valor_total:parseFloat(String(row[iVTotal]||'0').replace(/[^0-9.-]/g,''))||0,
+            ...(iLinea !== -1 ? { linea: String(row[iLinea]||'').trim() } : {}),
           };
           grupos[numPed].lineas.push(linea);
           grupos[numPed].valor_total += linea.valor_total;
@@ -957,7 +968,14 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         const lineas = filas.flatMap(f => idDe[f.pedData.numero_pedido]
           ? f.lineas.map(l=>({...l, pedido_id:idDe[f.pedData.numero_pedido]})) : []);
         for(const tramo of trozos(lineas, 500)){
-          await supabase.from('pedidos_cartera_detalle').insert(tramo);
+          const {error:eDet} = await supabase.from('pedidos_cartera_detalle').insert(tramo);
+          // Si la base todavia no tiene la columna "linea" (falta correr
+          // docs/cartera_linea_negocio.sql), se guardan las lineas sin ella en
+          // vez de dejar los pedidos sin productos.
+          if(eDet && /linea/i.test(eDet.message||'')){
+            await supabase.from('pedidos_cartera_detalle').insert(tramo.map(({linea, ...resto})=>resto));
+            showToast('La base no tiene la columna de línea de negocio: se cargó sin ella','error');
+          }
         }
         const historial = insertados.filter(x=>x.estado_cartera==='aprobado').map(x=>({
           pedido_id:x.id, decision:'aprobado', usuario_id:user?.id||null,
@@ -1978,11 +1996,20 @@ export function ModuloLogistica({showToast}) {
         <tr><td>Sede</td><td>${escHTML(corte.sedes?.nombre||'')}</td><td>Pedidos</td><td>${lista.length}</td></tr>
       </table>
       <table>
-        <thead><tr><th style="width:110px">Bodega</th><th style="width:140px">Referencia</th><th>Descripción</th><th style="width:90px;text-align:right">Unidades</th></tr></thead>
+        <thead><tr><th style="width:70px">Bodega</th><th style="width:120px">Línea</th><th style="width:110px">Referencia</th><th>Descripción</th><th style="width:80px;text-align:right">Unidades</th></tr></thead>
         <tbody>
-          ${grupos.map(g => g.refs.map((r,i) => `<tr>${i===0?`<td rowspan="${g.refs.length+1}" style="vertical-align:top;font-weight:bold">${escHTML(g.bodega)}</td>`:''}<td>${escHTML(r.referencia)}</td><td>${escHTML(r.descripcion)}</td><td style="text-align:right">${n(r.unidades)}</td></tr>`).join('')
-            + `<tr style="background:#f3f4f6;font-weight:bold"><td colspan="2">Total bodega ${escHTML(g.bodega)}</td><td style="text-align:right">${n(g.unidades)}</td></tr>`).join('')}
-          <tr style="font-weight:bold;background:#e5e7eb"><td colspan="3">TOTAL UNIDADES</td><td style="text-align:right">${n(total)}</td></tr>
+          ${grupos.map(g => {
+            // La bodega abarca sus lineas con sus subtotales; cada linea, sus
+            // referencias y su subtotal.
+            const filasBodega = g.lineas.reduce((s,li)=>s+li.refs.length+1,0);
+            return g.lineas.map((li,j) => li.refs.map((r,i) => `<tr>`
+                + (j===0&&i===0 ? `<td rowspan="${filasBodega}" style="vertical-align:top;font-weight:bold">${escHTML(g.bodega)}</td>` : '')
+                + (i===0 ? `<td rowspan="${li.refs.length+1}" style="vertical-align:top;font-weight:bold">${escHTML(li.linea)}</td>` : '')
+                + `<td>${escHTML(r.referencia)}</td><td>${escHTML(r.descripcion)}</td><td style="text-align:right">${n(r.unidades)}</td></tr>`).join('')
+              + `<tr style="background:#f9fafb;font-weight:bold"><td colspan="2">Total línea ${escHTML(li.linea)}</td><td style="text-align:right">${n(li.unidades)}</td></tr>`).join('')
+              + `<tr style="background:#f3f4f6;font-weight:bold"><td colspan="4">Total bodega ${escHTML(g.bodega)}</td><td style="text-align:right">${n(g.unidades)}</td></tr>`;
+          }).join('')}
+          <tr style="font-weight:bold;background:#e5e7eb"><td colspan="4">TOTAL UNIDADES</td><td style="text-align:right">${n(total)}</td></tr>
         </tbody>
       </table>
     </div>`;
