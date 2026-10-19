@@ -167,7 +167,7 @@ begin
         with check (public.current_user_role() in ('admin','cartera'));
     $p$, t, t);
   end loop;
-end $;
+end $$;
 
 -- El cliente puede crear asesores, pero no editarlos ni borrarlos. La tabla no
 -- guarda a quien pertenece cada asesor, asi que quien pueda escribir escribe
