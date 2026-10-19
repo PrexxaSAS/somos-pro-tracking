@@ -1935,6 +1935,10 @@ export function ModuloLogistica({showToast}) {
       .marco>thead>tr>td,.marco>tfoot>tr>td,.marco>tbody>tr>td{border:none;padding:0;}
       .marco>tbody>tr{page-break-inside:auto;}
       .marco .esp{height:15mm;}
+      /* Fila vacia al pie de la tabla: se repite al final de cada hoja y cierra
+         con una raya las columnas Bodega y Linea cuando la tabla sigue en la
+         hoja siguiente. */
+      .cierre td{padding:0;height:0;border:none;border-top:1px solid #000;}
       .marco .cuerpo{padding:0 14mm;}
       .pagina{width:100%;margin:0 auto;}
       thead{display:table-header-group;} tr{page-break-inside:avoid;}
@@ -1996,7 +2000,7 @@ export function ModuloLogistica({showToast}) {
         <tr><td>Sede</td><td>${escHTML(corte.sedes?.nombre||'')}</td><td>Pedidos</td><td>${lista.length}</td></tr>
       </table>
       <table>
-        <thead><tr><th style="width:70px">Bodega</th><th style="width:120px">Línea</th><th style="width:110px">Referencia</th><th>Descripción</th><th style="width:80px;text-align:right">Unidades</th></tr></thead>
+        <thead><tr><th style="width:70px">Bodega</th><th style="width:120px">Línea</th><th style="width:110px">Referencia</th><th>Descripción</th><th style="width:80px;text-align:right">Unidades</th></tr></thead><tfoot class="cierre"><tr><td colspan="5"></td></tr></tfoot>
         <tbody>
           ${grupos.map(g => {
             // Sin rowspan: una celda que abarca muchas filas no se puede partir
