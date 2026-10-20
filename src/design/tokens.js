@@ -97,6 +97,16 @@ export const T = {
 };
 
 // Tarjeta base: sin sombra, definida por su borde.
+// Color de la pestana activa del filtro de Pedidos: el de su estado. Todos va
+// en el color de la marca; fuera de promesa en rojo y en riesgo en ambar.
+// fuerte = texto, linea o relleno; suave = fondo del contador.
+export const tonoFiltroPedido = (clave) => {
+  if (clave === "fuera_promesa") return { fuerte: T.color.mal, suave: T.color.malSuave };
+  if (clave === "en_riesgo") return { fuerte: T.color.ojo, suave: T.color.ojoSuave };
+  const tono = T.estadoTono[clave];
+  return tono ? { fuerte: tono.color, suave: tono.bg } : { fuerte: T.color.marca, suave: T.color.marcaSuave };
+};
+
 export const tarjeta = {
  background: T.color.superficie,
  border: `1px solid ${T.color.borde}`,

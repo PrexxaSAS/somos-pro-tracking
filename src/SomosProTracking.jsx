@@ -26,7 +26,7 @@ import { ConteosTransp, BloqueTransp, TarjetaConductorTransp, TarjetaPedidoTrans
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
 import { PaginationControls } from './components/ui/PaginationControls';
-import { T, tarjeta } from './design/tokens';
+import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
  Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
@@ -1884,38 +1884,27 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      </div>
     </header>
 
-    {FILTROS_PROMESA[filtro] && (
-     <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:"10px 14px",
-      background: filtro === "fuera_promesa" ? T.color.malSuave : T.color.ojoSuave,
-      border:`1px solid ${filtro === "fuera_promesa" ? T.color.malBorde : T.color.borde}`, borderRadius:T.radio.control }}>
-      <span style={{ fontSize:13.5, fontWeight:700, color: filtro === "fuera_promesa" ? T.color.mal : T.color.ojo }}>
-       {`${FILTROS_PROMESA[filtro]} · ${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
-      </span>
-      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>Sin entregar y con la promesa de servicio vencida{filtro === "en_riesgo" ? " hoy o mañana" : ""}.</span>
-      <button onClick={() => { setFiltro("todos"); setPage(1); }} style={{ ...botonFila, marginLeft:"auto" }}>Quitar filtro</button>
-     </div>
-    )}
-
     {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
         para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
     <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:`1px solid ${T.color.borde}` }}>
      {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k]), ...Object.entries(FILTROS_PROMESA)].map(([clave,label]) => {
       const activo = filtro === clave;
       const n = conteoPorEstado(clave);
+      const tono = tonoFiltroPedido(clave);
       return (
        <button key={clave} onClick={() => { setFiltro(clave); setPage(1); }} style={{
         display:"inline-flex", alignItems:"center", gap:8, padding:"10px 12px",
         border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
         fontSize:13.5, fontWeight: activo ? 700 : 500,
-        color: activo ? T.color.marca : T.color.tinta2,
-        borderBottom: `2px solid ${activo ? T.color.marca : "transparent"}`,
+        color: activo ? tono.fuerte : T.color.tinta2,
+        borderBottom: `2px solid ${activo ? tono.fuerte : "transparent"}`,
         marginBottom:-1,
        }}>
         {label}
         <span style={{
          fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
-         background: activo ? T.color.marcaSuave : T.color.superficie2,
-         color: activo ? T.color.marca : T.color.tinta3,
+         background: activo ? tono.suave : T.color.superficie2,
+         color: activo ? tono.fuerte : T.color.tinta3,
         }}>{n}</span>
        </button>
       );
