@@ -43,6 +43,23 @@ create trigger trg_cartera_marcar_ya_en_produccion
   before insert or update of estado_cartera on public.pedidos_cartera
   for each row execute function public.cartera_marcar_ya_en_produccion();
 
+-- La vista previa del cargue pregunta, antes de cargar, cuales numeros del
+-- plano ya existen en Pedidos. El rol cartera no puede leer public.pedidos, asi
+-- que se pregunta con esta funcion: devuelve solo los numeros dados que existen,
+-- nada mas del pedido.
+create or replace function public.pedidos_existentes(numeros text[])
+returns setof text
+language sql
+stable
+security definer
+set search_path = public
+as $fn$
+  select id from public.pedidos where id = any(numeros);
+$fn$;
+
+revoke all on function public.pedidos_existentes(text[]) from public, anon;
+grant execute on function public.pedidos_existentes(text[]) to authenticated;
+
 -- Los aprobados de antes: si el pedido de produccion es mas viejo que el de
 -- cartera, ya existia cuando cartera lo cargo.
 update public.pedidos_cartera pc

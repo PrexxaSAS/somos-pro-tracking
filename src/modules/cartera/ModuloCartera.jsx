@@ -771,6 +771,31 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
   const [carg,      setCarg]     = useState(false);
   const [resultado, setResultado]= useState(null);
   const fileRef = useRef(null);
+  // Numeros del plano que ya existen, para mostrarlos antes de cargar: en
+  // cartera (no se vuelven a cargar) y en Pedidos (al aprobarse no se crea uno
+  // nuevo). Pedidos se pregunta con pedidos_existentes porque el rol cartera no
+  // lo puede leer; sin esa funcion en la base, esa parte queda vacia.
+  const [existentes, setExistentes] = useState({ cartera: new Set(), pedidos: new Set() });
+  useEffect(() => {
+    const numeros = pedidos.map(p => p.numero_pedido);
+    if (!numeros.length) { setExistentes({ cartera: new Set(), pedidos: new Set() }); return; }
+    let vigente = true;
+    (async () => {
+      const cartera = new Set(), enPedidos = new Set();
+      for (let i = 0; i < numeros.length; i += 150) {
+        const tramo = numeros.slice(i, i + 150);
+        const { data } = await supabase.from('pedidos_cartera').select('numero_pedido').in('numero_pedido', tramo);
+        (data || []).forEach(x => cartera.add(x.numero_pedido));
+        const { data: prod, error } = await supabase.rpc('pedidos_existentes', { numeros: tramo });
+        if (!error) (prod || []).forEach(x => enPedidos.add(typeof x === 'string' ? x : Object.values(x)[0]));
+      }
+      if (vigente) setExistentes({ cartera, pedidos: enPedidos });
+    })();
+    return () => { vigente = false; };
+  }, [pedidos]);
+  const yaEnCartera = pedidos.filter(p => existentes.cartera.has(p.numero_pedido)).map(p => p.numero_pedido);
+  const yaEnPedidosPrevia = pedidos.filter(p => !existentes.cartera.has(p.numero_pedido) && existentes.pedidos.has(p.numero_pedido)).map(p => p.numero_pedido);
+  const aCargar = pedidos.length - yaEnCartera.length;
 
   // El pedido con plazo entra aprobado: el plazo es justamente la autorizacion
   // de credito, asi que no tiene a quien esperarle.
@@ -1043,10 +1068,13 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     leerArchivo={leerArchivo} confirmar={confirmar}
     cancelar={empezarDeNuevo} onIrGestion={onCargado} textoCargando={textoCargando}
     rechazados={rechazados.pedidos} onDescargarRechazados={descargarRechazados}
+    yaEnCartera={yaEnCartera} yaEnPedidos={yaEnPedidosPrevia} aCargar={aCargar}
   />;
 
   // Clasificacion con su razon, para que se lea por que entro asi.
-  const etiquetaClase = (x) => x.estado_cartera === 'aprobado'
+  const etiquetaClase = (x) => existentes.cartera.has(x.numero_pedido)
+    ? { texto: 'Ya cargado · se omite', bg: T.color.superficie3, color: T.color.tinta3 }
+    : x.estado_cartera === 'aprobado'
     ? { texto: 'Aprobado · con plazo', bg: T.color.infoSuave, color: T.color.info }
     : { texto: 'Pendiente · contado', bg: T.color.ojoSuave, color: T.color.ojo };
 
@@ -1084,9 +1112,11 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         <ArchivoFila nombre={archivo} detalle={`${filasLeidas} ${filasLeidas === 1 ? "fila" : "filas"} · ${pedidos.length + rechazados.pedidos.length} ${pedidos.length + rechazados.pedidos.length === 1 ? "pedido" : "pedidos"}`}
          accion="Cambiar archivo" onAccion={()=>fileRef.current?.click()} />
        </div>
-       <div style={{ display:"grid", gridTemplateColumns:`repeat(${rechazados.pedidos.length ? 4 : 3},minmax(0,1fr))`, borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
+       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
         {[["Pedidos leídos", resumen.total + rechazados.pedidos.length, T.color.tinta], ["Aprobados", resumen.aprobado, T.color.infoPunto || T.color.info], ["Pendientes", resumen.pendiente, T.color.ojoPunto],
-          ...(rechazados.pedidos.length ? [["Con error · no se cargan", rechazados.pedidos.length, T.color.malPunto]] : [])].map(([label, valor, color], i) => (
+          ...(rechazados.pedidos.length ? [["Con error · no se cargan", rechazados.pedidos.length, T.color.malPunto]] : []),
+          ...(yaEnCartera.length ? [["Ya en cartera · se omiten", yaEnCartera.length, T.color.neutroPunto]] : []),
+          ...(yaEnPedidosPrevia.length ? [["Ya están en Pedidos", yaEnPedidosPrevia.length, T.color.ojoPunto]] : [])].map(([label, valor, color], i) => (
          <div key={label} style={{ padding:"14px 20px", borderLeft: i ? `1px solid ${T.color.borde}` : "none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta2 }}>
            <span style={{ width:6, height:6, borderRadius:3, background:color }}/>{label}
@@ -1098,6 +1128,12 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
        {rechazados.pedidos.length > 0 && (
         <div style={{ padding:"14px 20px", borderBottom:`1px solid ${T.color.borde}` }}>
          <PedidosConError pedidos={rechazados.pedidos} onDescargar={descargarRechazados} />
+        </div>
+       )}
+       {(yaEnCartera.length > 0 || yaEnPedidosPrevia.length > 0) && (
+        <div style={{ padding:"14px 20px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", flexDirection:"column", gap:12 }}>
+         <ListaNumeros titulo="Ya existen en cartera: no se vuelven a cargar" numeros={yaEnCartera}/>
+         <ListaNumeros titulo="Ya están en Pedidos: se cargan en cartera, pero al aprobarse no se crea uno nuevo en Pedidos" numeros={yaEnPedidosPrevia}/>
         </div>
        )}
        {pedidos.length > 0 && <div style={{ maxHeight:420, overflowY:"auto" }}>
@@ -1128,6 +1164,11 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
               }}>
                <span style={{ width:5, height:5, borderRadius:3, background:c.color, flexShrink:0 }}/>{c.texto}
               </span>
+              {!existentes.cartera.has(x.numero_pedido) && existentes.pedidos.has(x.numero_pedido) && (
+               <span style={{ display:"inline-block", marginLeft:6, padding:"4px 10px", borderRadius:T.radio.pastilla, background:T.color.ojoSuave, color:T.color.ojo, fontSize:12, fontWeight:600 }}>
+                Ya está en Pedidos
+               </span>
+              )}
              </td>
             </tr>
            );
@@ -1146,8 +1187,8 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
        }}>
         <span style={{ fontSize:12.5, color:T.color.tinta3, flex:1 }}>Se carga tal como viene; la vista previa no se puede editar.</span>
         <button onClick={empezarDeNuevo} disabled={carg} style={botonBarra}>Cancelar</button>
-        <button onClick={confirmar} disabled={carg || pedidos.length === 0} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: (carg || pedidos.length === 0) ? 0.6 : 1, cursor: pedidos.length === 0 ? "not-allowed" : "pointer" }}>
-         <Upload size={16}/> {carg ? textoCargando : pedidos.length === 0 ? "No hay pedidos para cargar" : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+        <button onClick={confirmar} disabled={carg || aCargar === 0} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: (carg || aCargar === 0) ? 0.6 : 1, cursor: aCargar === 0 ? "not-allowed" : "pointer" }}>
+         <Upload size={16}/> {carg ? textoCargando : aCargar === 0 ? "No hay pedidos nuevos para cargar" : `Cargar ${aCargar} ${aCargar === 1 ? "pedido" : "pedidos"}`}
         </button>
        </div>
       </>
@@ -1304,7 +1345,7 @@ function ListaNumeros({ titulo, numeros }) {
  );
 }
 
-function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados }) {
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados, yaEnCartera = [], yaEnPedidos = [], aCargar = pedidos.length }) {
   const hayAlgo = pedidos.length > 0 || rechazados.length > 0;
   return (
    <Pagina anchoCompleto>
@@ -1352,6 +1393,10 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
       ))}
      </section>
      {rechazados.length > 0 && <PedidosConError pedidos={rechazados} onDescargar={onDescargarRechazados} />}
+     {(yaEnCartera.length > 0 || yaEnPedidos.length > 0) && <section style={{ ...tarjeta, padding:'12px 14px', display:'flex', flexDirection:'column', gap:12 }}>
+      <ListaNumeros titulo={`Ya existen en cartera (${yaEnCartera.length}): no se vuelven a cargar`} numeros={yaEnCartera}/>
+      <ListaNumeros titulo={`Ya están en Pedidos (${yaEnPedidos.length}): al aprobarse no se crea uno nuevo`} numeros={yaEnPedidos}/>
+     </section>}
      {pedidos.length > 0 && <section style={{ ...tarjeta, padding:'2px 14px' }}>
       {pedidos.slice(0,100).map(p=>{
        const est=ESTADOS_CARTERA[p.estado_cartera]||ESTADOS_CARTERA.pendiente;
@@ -1372,7 +1417,7 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
     {hayAlgo && !resultado && <div style={{height:65}}/>}
     {hayAlgo && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
      <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
-     <button onClick={confirmar} disabled={carg||pedidos.length===0} style={{...botonPrincipal,justifyContent:'center',opacity:pedidos.length===0?0.6:1}}><Upload size={16}/> {carg?textoCargando:pedidos.length===0?'Nada para cargar':`Cargar ${pedidos.length} pedidos`}</button>
+     <button onClick={confirmar} disabled={carg||aCargar===0} style={{...botonPrincipal,justifyContent:'center',opacity:aCargar===0?0.6:1}}><Upload size={16}/> {carg?textoCargando:aCargar===0?'Nada nuevo para cargar':`Cargar ${aCargar} pedidos`}</button>
     </div>}
    </Pagina>
   );
