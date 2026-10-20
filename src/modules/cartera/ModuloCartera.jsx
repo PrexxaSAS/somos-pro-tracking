@@ -99,6 +99,20 @@ export const consolidarCorte = (pedidos) => {
 
 const escHTML = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Numeros de pedido, de los ids de cartera dados, que al aprobarse ya existian
+// en Pedidos (marca ya_en_produccion, docs/cartera_ya_en_produccion.sql). Si la
+// base aun no tiene esa columna devuelve [] en vez de fallar: es solo un aviso.
+export const yaEstabanEnPedidos = async (ids) => {
+  const numeros = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase.from('pedidos_cartera').select('numero_pedido')
+      .eq('ya_en_produccion', true).in('id', ids.slice(i, i + 100));
+    if (error) return [];
+    (data || []).forEach(x => numeros.push(x.numero_pedido));
+  }
+  return numeros;
+};
+
 // ── Asignar corte ──────────────────────────────────────────────────────────────
 // La regla, en un solo sitio (crearAsignadorCortes): la sede sale del DANE de
 // origen; el pedido toma el primer corte que no haya pasado, este abierto y
@@ -741,22 +755,59 @@ export function GestionAsesores({showToast, soloCrear = false}) {
 
 // ── GESTIÓN USUARIOS ───────────────────────────────────────────────────────────
 // ── CARGAR PEDIDOS ─────────────────────────────────────────────────────────────
-export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
+// Traspaso entre pantallas de cartera, que se montan y desmontan al cambiar de
+// pestana. pedidoPorBuscar: el numero que Gestion debe abrir ya buscado.
+// previaGuardada: la vista previa del cargue, para no perderla al ir a mirar
+// un pedido repetido y volver.
+let pedidoPorBuscar = null;
+let previaGuardada = null;
+
+export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron,onVerPedido}) {
   const esMovil = useEsMovil();
-  const [archivo,   setArchivo]  = useState('');
-  const [filasLeidas, setFilasLeidas] = useState(0);
+  const previa = previaGuardada;
+  const [archivo,   setArchivo]  = useState(previa ? previa.archivo : '');
+  const [filasLeidas, setFilasLeidas] = useState(previa ? previa.filasLeidas : 0);
   // Pedidos que no se cargan porque les falta un dato obligatorio (hoy, el
   // DANE origen: sin el no hay sede ni corte). Se guardan las filas tal como
   // venian en el plano, con su encabezado, para descargarlas, corregirlas y
   // volver a subirlas.
-  const [rechazados, setRechazados] = useState({ encabezado: [], pedidos: [] });
-  const [pedidos,   setPedidos]  = useState([]);
+  const [rechazados, setRechazados] = useState(previa ? previa.rechazados : { encabezado: [], pedidos: [] });
+  const [pedidos,   setPedidos]  = useState(previa ? previa.pedidos : []);
   // El error va en dos partes: que paso (titulo) y que hacer (detalle).
   const [errMsg,    setErrMsg]   = useState(null);
   const fallo = (titulo, detalle) => setErrMsg({ titulo, detalle });
   const [carg,      setCarg]     = useState(false);
   const [resultado, setResultado]= useState(null);
   const fileRef = useRef(null);
+  useEffect(() => {
+    previaGuardada = !resultado && (pedidos.length || rechazados.pedidos.length)
+      ? { archivo, filasLeidas, rechazados, pedidos } : null;
+  }, [archivo, filasLeidas, rechazados, pedidos, resultado]);
+  // Numeros del plano que ya existen, para mostrarlos antes de cargar: en
+  // cartera (no se vuelven a cargar) y en Pedidos (al aprobarse no se crea uno
+  // nuevo). Pedidos se pregunta con pedidos_existentes porque el rol cartera no
+  // lo puede leer; sin esa funcion en la base, esa parte queda vacia.
+  const [existentes, setExistentes] = useState({ cartera: new Set(), pedidos: new Set() });
+  useEffect(() => {
+    const numeros = pedidos.map(p => p.numero_pedido);
+    if (!numeros.length) { setExistentes({ cartera: new Set(), pedidos: new Set() }); return; }
+    let vigente = true;
+    (async () => {
+      const cartera = new Set(), enPedidos = new Set();
+      for (let i = 0; i < numeros.length; i += 150) {
+        const tramo = numeros.slice(i, i + 150);
+        const { data } = await supabase.from('pedidos_cartera').select('numero_pedido').in('numero_pedido', tramo);
+        (data || []).forEach(x => cartera.add(x.numero_pedido));
+        const { data: prod, error } = await supabase.rpc('pedidos_existentes', { numeros: tramo });
+        if (!error) (prod || []).forEach(x => enPedidos.add(typeof x === 'string' ? x : Object.values(x)[0]));
+      }
+      if (vigente) setExistentes({ cartera, pedidos: enPedidos });
+    })();
+    return () => { vigente = false; };
+  }, [pedidos]);
+  const yaEnCartera = pedidos.filter(p => existentes.cartera.has(p.numero_pedido)).map(p => p.numero_pedido);
+  const yaEnPedidosPrevia = pedidos.filter(p => !existentes.cartera.has(p.numero_pedido) && existentes.pedidos.has(p.numero_pedido)).map(p => p.numero_pedido);
+  const aCargar = pedidos.length - yaEnCartera.length;
 
   // El pedido con plazo entra aprobado: el plazo es justamente la autorizacion
   // de credito, asi que no tiene a quien esperarle.
@@ -925,6 +976,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     const nuevos = pedidos.filter(p=>!yaExisten.has(p.numero_pedido));
 
     let ok=0, errores=0, sinCorte=0, aprobados=0, pendientes=0, hechos=duplicados.length;
+    const idsAprobados=[];
     setProgreso({hechos,total:pedidos.length});
     const asignador = await crearAsignadorCortes();
     try {
@@ -984,7 +1036,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         if(historial.length) await supabase.from('historial_cartera').insert(historial);
 
         ok += insertados.length;
-        insertados.forEach(x=>{ if(x.estado_cartera==='aprobado') aprobados++; else pendientes++; });
+        insertados.forEach(x=>{ if(x.estado_cartera==='aprobado'){ aprobados++; idsAprobados.push(x.id); } else pendientes++; });
         hechos += lote.length;
         setProgreso({hechos,total:pedidos.length});
       }
@@ -996,7 +1048,8 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     }
     // El resultado se queda en pantalla con sus numeros; antes la pantalla
     // saltaba sola a Gestion y el aviso duraba lo que dura un toast.
-    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte,conError:rechazados.pedidos.length});
+    const yaEnPedidos = await yaEstabanEnPedidos(idsAprobados);
+    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte,conError:rechazados.pedidos.length,yaEnPedidos});
     if(aprobados>0) onPedidosCambiaron?.();
   };
   const textoCargando = progreso ? `Cargando ${progreso.hechos} de ${progreso.total}...` : "Cargando...";
@@ -1027,10 +1080,13 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     leerArchivo={leerArchivo} confirmar={confirmar}
     cancelar={empezarDeNuevo} onIrGestion={onCargado} textoCargando={textoCargando}
     rechazados={rechazados.pedidos} onDescargarRechazados={descargarRechazados}
+    yaEnCartera={yaEnCartera} yaEnPedidos={yaEnPedidosPrevia} aCargar={aCargar} onVerPedido={onVerPedido}
   />;
 
   // Clasificacion con su razon, para que se lea por que entro asi.
-  const etiquetaClase = (x) => x.estado_cartera === 'aprobado'
+  const etiquetaClase = (x) => existentes.cartera.has(x.numero_pedido)
+    ? { texto: 'Ya cargado · se omite', bg: T.color.superficie3, color: T.color.tinta3 }
+    : x.estado_cartera === 'aprobado'
     ? { texto: 'Aprobado · con plazo', bg: T.color.infoSuave, color: T.color.info }
     : { texto: 'Pendiente · contado', bg: T.color.ojoSuave, color: T.color.ojo };
 
@@ -1045,7 +1101,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
 
     <section style={{ ...tarjeta, width:"100%", boxSizing:"border-box", overflow:"hidden" }}>
      {resultado ? (
-      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} onDescargarErrores={rechazados.pedidos.length ? descargarRechazados : null} />
+      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} onDescargarErrores={rechazados.pedidos.length ? descargarRechazados : null} onVerPedido={onVerPedido} />
      ) : errMsg ? (
       // 1. Error: el archivo que se eligio y por que no se pudo leer.
       <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14 }}>
@@ -1068,9 +1124,11 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         <ArchivoFila nombre={archivo} detalle={`${filasLeidas} ${filasLeidas === 1 ? "fila" : "filas"} · ${pedidos.length + rechazados.pedidos.length} ${pedidos.length + rechazados.pedidos.length === 1 ? "pedido" : "pedidos"}`}
          accion="Cambiar archivo" onAccion={()=>fileRef.current?.click()} />
        </div>
-       <div style={{ display:"grid", gridTemplateColumns:`repeat(${rechazados.pedidos.length ? 4 : 3},minmax(0,1fr))`, borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
+       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", borderTop:`1px solid ${T.color.borde}`, borderBottom:`1px solid ${T.color.borde}` }}>
         {[["Pedidos leídos", resumen.total + rechazados.pedidos.length, T.color.tinta], ["Aprobados", resumen.aprobado, T.color.infoPunto || T.color.info], ["Pendientes", resumen.pendiente, T.color.ojoPunto],
-          ...(rechazados.pedidos.length ? [["Con error · no se cargan", rechazados.pedidos.length, T.color.malPunto]] : [])].map(([label, valor, color], i) => (
+          ...(rechazados.pedidos.length ? [["Con error · no se cargan", rechazados.pedidos.length, T.color.malPunto]] : []),
+          ...(yaEnCartera.length ? [["Ya en cartera · se omiten", yaEnCartera.length, T.color.neutroPunto]] : []),
+          ...(yaEnPedidosPrevia.length ? [["Ya están en Pedidos", yaEnPedidosPrevia.length, T.color.ojoPunto]] : [])].map(([label, valor, color], i) => (
          <div key={label} style={{ padding:"14px 20px", borderLeft: i ? `1px solid ${T.color.borde}` : "none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta2 }}>
            <span style={{ width:6, height:6, borderRadius:3, background:color }}/>{label}
@@ -1082,6 +1140,12 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
        {rechazados.pedidos.length > 0 && (
         <div style={{ padding:"14px 20px", borderBottom:`1px solid ${T.color.borde}` }}>
          <PedidosConError pedidos={rechazados.pedidos} onDescargar={descargarRechazados} />
+        </div>
+       )}
+       {(yaEnCartera.length > 0 || yaEnPedidosPrevia.length > 0) && (
+        <div style={{ padding:"14px 20px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", flexDirection:"column", gap:12 }}>
+         <ListaNumeros titulo="Ya existen en cartera: no se vuelven a cargar" numeros={yaEnCartera} onVer={onVerPedido}/>
+         <ListaNumeros titulo="Ya están en Pedidos: se cargan en cartera, pero al aprobarse no se crea uno nuevo en Pedidos" numeros={yaEnPedidosPrevia}/>
         </div>
        )}
        {pedidos.length > 0 && <div style={{ maxHeight:420, overflowY:"auto" }}>
@@ -1099,7 +1163,12 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
            const c = etiquetaClase(x);
            return (
             <tr key={i} style={{ borderTop:`1px solid ${T.color.divisor}` }}>
-             <td style={{ ...td, paddingLeft:20, fontWeight:700, color:T.color.tinta, fontVariantNumeric:"tabular-nums" }}>{x.numero_pedido}</td>
+             <td style={{ ...td, paddingLeft:20, fontWeight:700, color:T.color.tinta, fontVariantNumeric:"tabular-nums" }}>
+              {existentes.cartera.has(x.numero_pedido) && onVerPedido
+               ? <button onClick={()=>onVerPedido(x.numero_pedido)} title="Ver en Pedidos en cartera"
+                  style={{ border:"none", background:"transparent", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:"inherit", fontWeight:700, color:T.color.marca, textDecoration:"underline" }}>{x.numero_pedido}</button>
+               : x.numero_pedido}
+             </td>
              <td style={{ ...td, maxWidth:360 }}>
               <div style={{ color:T.color.tinta, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{x.cliente || "Sin nombre"}</div>
               <div style={{ ...mono, color:T.color.tinta3 }}>{x.nit ? `NIT ${x.nit}` : "Sin NIT"}</div>
@@ -1112,6 +1181,11 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
               }}>
                <span style={{ width:5, height:5, borderRadius:3, background:c.color, flexShrink:0 }}/>{c.texto}
               </span>
+              {!existentes.cartera.has(x.numero_pedido) && existentes.pedidos.has(x.numero_pedido) && (
+               <span style={{ display:"inline-block", marginLeft:6, padding:"4px 10px", borderRadius:T.radio.pastilla, background:T.color.ojoSuave, color:T.color.ojo, fontSize:12, fontWeight:600 }}>
+                Ya está en Pedidos
+               </span>
+              )}
              </td>
             </tr>
            );
@@ -1130,8 +1204,8 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
        }}>
         <span style={{ fontSize:12.5, color:T.color.tinta3, flex:1 }}>Se carga tal como viene; la vista previa no se puede editar.</span>
         <button onClick={empezarDeNuevo} disabled={carg} style={botonBarra}>Cancelar</button>
-        <button onClick={confirmar} disabled={carg || pedidos.length === 0} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: (carg || pedidos.length === 0) ? 0.6 : 1, cursor: pedidos.length === 0 ? "not-allowed" : "pointer" }}>
-         <Upload size={16}/> {carg ? textoCargando : pedidos.length === 0 ? "No hay pedidos para cargar" : `Cargar ${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"}`}
+        <button onClick={confirmar} disabled={carg || aCargar === 0} style={{ ...botonPrincipal, display:"inline-flex", alignItems:"center", gap:7, opacity: (carg || aCargar === 0) ? 0.6 : 1, cursor: aCargar === 0 ? "not-allowed" : "pointer" }}>
+         <Upload size={16}/> {carg ? textoCargando : aCargar === 0 ? "No hay pedidos nuevos para cargar" : `Cargar ${aCargar} ${aCargar === 1 ? "pedido" : "pedidos"}`}
         </button>
        </div>
       </>
@@ -1216,8 +1290,9 @@ export function ArchivoFila({ nombre, detalle, error = false, accion, onAccion }
 }
 
 // 3. Resultado del cargue. Queda en pantalla hasta que se elige que sigue.
-export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErrores, compacto = false }) {
-  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0, conError = 0 } = resultado;
+export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErrores, compacto = false, onVerPedido }) {
+  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0, conError = 0, yaEnPedidos = [] } = resultado;
+  const columnas = 3 + (conError ? 1 : 0) + (yaEnPedidos.length ? 1 : 0);
   const completo = ok === total && ok > 0 && !conError;
   const conCorte = Math.max(0, aprobados - sinCorte);
   const partes = [
@@ -1241,14 +1316,17 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErr
      {partes.length > 0 && <div style={{ fontSize:13, color:T.color.tinta3, marginTop:3 }}>{partes.join(" · ")}</div>}
     </div>
     <div style={{
-     display:"grid", gridTemplateColumns:`repeat(${conError ? 4 : 3},minmax(0,1fr))`, width:"100%", maxWidth: conError ? 680 : 520, textAlign:"left",
+     display:"grid", gridTemplateColumns:`repeat(${columnas},minmax(0,1fr))`, width:"100%", maxWidth: 170 * columnas + 10, textAlign:"left",
      border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control,
     }}>
      {cifra("Ya existían (omitidos)", duplicados.length, T.color.ojo)}
      <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Fallaron", errores, T.color.mal)}</div>
      <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Aprobados sin sede", sinCorte, T.color.ojo)}</div>
      {conError > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Sin DANE origen (no se subieron)", conError, T.color.mal)}</div>}
+     {yaEnPedidos.length > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Ya estaban en Pedidos", yaEnPedidos.length, T.color.ojo)}</div>}
     </div>
+    <ListaNumeros titulo="Ya existían en cartera (no se volvieron a cargar)" numeros={duplicados} onVer={onVerPedido}/>
+    <ListaNumeros titulo="Aprobados que ya estaban en Pedidos (no se creó uno nuevo; revisa que el de Pedidos sea el correcto)" numeros={yaEnPedidos}/>
     {sinCorte > 0 && (
      <div style={{ fontSize:12.5, color:T.color.ojo, maxWidth:520 }}>
       Los aprobados sin sede no tienen corte: revisa que su DANE origen tenga una sede activa en Sedes y cortes.
@@ -1271,7 +1349,24 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErr
   );
 }
 
-function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados }) {
+// Los numeros de pedido detras de una cifra del resultado del cargue.
+// Con onVer, cada numero es un enlace que lleva al pedido en Pedidos en cartera.
+function ListaNumeros({ titulo, numeros, onVer }) {
+ if (!numeros || !numeros.length) return null;
+ return (
+  <div style={{ width:"100%", maxWidth:680, textAlign:"left" }}>
+   <div style={{ fontSize:12.5, fontWeight:600, color:T.color.tinta2, marginBottom:6 }}>{titulo}</div>
+   <div style={{ display:"flex", flexWrap:"wrap", gap:6, maxHeight:120, overflowY:"auto" }}>
+    {numeros.map(n => onVer
+     ? <button key={n} onClick={()=>onVer(n)} title="Ver en Pedidos en cartera"
+        style={{ ...chipMono, cursor:"pointer", color:T.color.marca, textDecoration:"underline", border:"none", fontFamily:"inherit" }}>{n}</button>
+     : <span key={n} style={chipMono}>{n}</span>)}
+   </div>
+  </div>
+ );
+}
+
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados, yaEnCartera = [], yaEnPedidos = [], aCargar = pedidos.length, onVerPedido }) {
   const hayAlgo = pedidos.length > 0 || rechazados.length > 0;
   return (
    <Pagina anchoCompleto>
@@ -1319,6 +1414,10 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
       ))}
      </section>
      {rechazados.length > 0 && <PedidosConError pedidos={rechazados} onDescargar={onDescargarRechazados} />}
+     {(yaEnCartera.length > 0 || yaEnPedidos.length > 0) && <section style={{ ...tarjeta, padding:'12px 14px', display:'flex', flexDirection:'column', gap:12 }}>
+      <ListaNumeros titulo={`Ya existen en cartera (${yaEnCartera.length}): no se vuelven a cargar`} numeros={yaEnCartera} onVer={onVerPedido}/>
+      <ListaNumeros titulo={`Ya están en Pedidos (${yaEnPedidos.length}): al aprobarse no se crea uno nuevo`} numeros={yaEnPedidos}/>
+     </section>}
      {pedidos.length > 0 && <section style={{ ...tarjeta, padding:'2px 14px' }}>
       {pedidos.slice(0,100).map(p=>{
        const est=ESTADOS_CARTERA[p.estado_cartera]||ESTADOS_CARTERA.pendiente;
@@ -1335,11 +1434,11 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
      <p style={{textAlign:'center',fontSize:12,color:T.color.tinta3,margin:0}}>Se carga tal como viene; no se puede editar aquí.</p>
     </>}
     {errMsg && <div role="alert" style={{background:T.color.malSuave,color:T.color.mal,padding:12,borderRadius:10,fontSize:13}}><strong>{errMsg.titulo}</strong> {errMsg.detalle}</div>}
-    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} onDescargarErrores={rechazados.length ? onDescargarRechazados : null} compacto />}
+    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} onDescargarErrores={rechazados.length ? onDescargarRechazados : null} compacto onVerPedido={onVerPedido} />}
     {hayAlgo && !resultado && <div style={{height:65}}/>}
     {hayAlgo && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
      <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
-     <button onClick={confirmar} disabled={carg||pedidos.length===0} style={{...botonPrincipal,justifyContent:'center',opacity:pedidos.length===0?0.6:1}}><Upload size={16}/> {carg?textoCargando:pedidos.length===0?'Nada para cargar':`Cargar ${pedidos.length} pedidos`}</button>
+     <button onClick={confirmar} disabled={carg||aCargar===0} style={{...botonPrincipal,justifyContent:'center',opacity:aCargar===0?0.6:1}}><Upload size={16}/> {carg?textoCargando:aCargar===0?'Nada nuevo para cargar':`Cargar ${aCargar} pedidos`}</button>
     </div>}
    </Pagina>
   );
@@ -1352,7 +1451,9 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const esMovil = useEsMovil();
   const [pedidos,    setPedidos]    = useState([]);
   const [filtroEst,  setFiltroEst]  = useState('todos');
-  const [busq,       setBusq]       = useState('');
+  // Si se llega desde un pedido repetido del cargue, abre ya buscado.
+  const [busq,       setBusq]       = useState(() => pedidoPorBuscar || '');
+  useEffect(() => { pedidoPorBuscar = null; }, []);
   const [seleccion,  setSeleccion]  = useState(new Set());
   const [modRechazar,setModRechazar]= useState(null);
   const [carg,       setCarg]       = useState(false);
@@ -1402,14 +1503,16 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
     if(corte){upd.corte_id=corte.corteId;upd.fecha_corte=corte.fechaCorte;}
     await supabase.from('pedidos_cartera').update(upd).eq('id',id);
     await supabase.from('historial_cartera').insert({pedido_id:id,decision:'aprobado',usuario_id:user.id,motivo:'Aprobado por cartera'});
-    return {ok:true, sinCorte:!corte};
+    const yaEnPedidos = (await yaEstabanEnPedidos([id])).length > 0;
+    return {ok:true, sinCorte:!corte, yaEnPedidos, numero:pedido.numero_pedido};
   };
 
   const aprobarUno = async (id) => {
     setAprobando(true);
-    const {sinCorte} = await aprobarPedido(id);
+    const {sinCorte, yaEnPedidos, numero} = await aprobarPedido(id);
     setAprobando(false);
-    showToast("✓ Pedido aprobado"+(sinCorte?" · Sin sede configurada (verificar DANE Origen)":""),"success");
+    if(yaEnPedidos) showToast(`Pedido aprobado, pero ${numero} ya estaba en Pedidos: no se creó uno nuevo`,"error");
+    else showToast("✓ Pedido aprobado"+(sinCorte?" · Sin sede configurada (verificar DANE Origen)":""),"success");
     cargar();
     onPedidosCambiaron?.();
   };
@@ -1417,17 +1520,18 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const aprobarSeleccionados = async () => {
     if(!seleccion.size){showToast("Selecciona al menos un pedido","error");return;}
     setAprobando(true);
-    let ok=0; let sinCorte=0; let omitidos=0;
+    let ok=0; let sinCorte=0; let omitidos=0; const yaEnPedidos=[];
     for(const id of seleccion){
       const res = await aprobarPedido(id);
-      if(res.ok){ ok++; if(res.sinCorte) sinCorte++; }
+      if(res.ok){ ok++; if(res.sinCorte) sinCorte++; if(res.yaEnPedidos) yaEnPedidos.push(res.numero); }
       else if(res.yaDecidido) omitidos++;
     }
     setAprobando(false);
     let msg=`✓ ${ok} pedido(s) aprobado(s)`;
     if(sinCorte>0) msg+=` · ${sinCorte} sin sede configurada (verificar DANE Origen)`;
     if(omitidos>0) msg+=` · ${omitidos} ya estaban aprobados o rechazados`;
-    showToast(msg,"success");
+    if(yaEnPedidos.length) msg+=` · ya estaban en Pedidos (no se crearon de nuevo): ${yaEnPedidos.join(', ')}`;
+    showToast(msg, yaEnPedidos.length ? "error" : "success");
     cargar();
     if(ok>0) onPedidosCambiaron?.();
   };
@@ -1885,14 +1989,16 @@ export function ModuloLogistica({showToast}) {
   };
 
   // Imprime todos los pedidos aprobados del corte, impresos o no. Si ya
-  // estaban todos impresos es una reimpresion.
-  const imprimirCorte = async (c) => {
+  // estaban todos impresos es una reimpresion. porPedido: en vez del
+  // consolidado, la orden de cada pedido en su propia hoja, en un solo archivo
+  // (el boton del panel de pedidos del corte).
+  const imprimirCorte = async (c, porPedido=false) => {
     setImprimiendo(c.id);
     const {data,error}=await supabase.from('pedidos_cartera').select('*, pedidos_cartera_detalle(*)')
       .eq('estado_cartera','aprobado').eq('corte_id',c.id).order('numero_pedido');
     setImprimiendo(null);
     if(error){ showToast("No se pudieron leer los pedidos del corte","error"); return; }
-    await imprimir(data||[], c);
+    await imprimir(data||[], c, porPedido);
   };
 
   // Trae las lineas de los pedidos que no las tengan cargadas.
@@ -1908,20 +2014,20 @@ export function ModuloLogistica({showToast}) {
     return lista.map(x=>x.pedidos_cartera_detalle?x:{...x,pedidos_cartera_detalle:porPedido[x.id]||[]});
   };
 
-  // Con corte se imprime el consolidado del corte; sin corte (un pedido suelto)
-  // la orden de cada pedido.
-  const imprimir = async (lista, corte=null) => {
+  // Con corte se imprime el consolidado del corte, salvo porPedido; sin corte
+  // (un pedido suelto) o con porPedido, la orden de cada pedido en su hoja.
+  const imprimir = async (lista, corte=null, porPedido=false) => {
     if(!lista.length){ showToast("No hay pedidos para imprimir","error"); return; }
     let pedidosImprimir;
     try { pedidosImprimir = await conDetalle(lista); }
     catch { showToast("No se pudieron leer las lineas de los pedidos","error"); return; }
-    const html = corte
+    const html = corte && !porPedido
       ? generarHTMLConsolidado(pedidosImprimir, corte)
       : pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
     // Nombre del PDF. Corte: sede, fecha y hora. Pedido: su numero. Varios
     // pedidos sueltos (el boton de pendientes del celular): cuantos son.
     const nombrePdf = corte
-      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}`
+      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}${porPedido ? ' pedidos' : ''}`
       : pedidosImprimir.length === 1 ? String(pedidosImprimir[0].numero_pedido || 'Pedido')
       : `Pedidos ${pedidosImprimir.length}`;
     const cerrado = imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escHTML(nombrePdf)}</title><style>
@@ -2204,8 +2310,9 @@ export function ModuloLogistica({showToast}) {
           <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>{fFechaDia(corteVisto.fecha)}</div>
          </div>
          {impVisto.total > 0 && (
-          <button style={botonFila} onClick={()=>imprimirCorte(corteVisto)} disabled={imprimiendo === corteVisto.id}>
-           <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} corte`}
+          <button style={botonFila} onClick={()=>imprimirCorte(corteVisto, true)} disabled={imprimiendo === corteVisto.id}
+           title="Imprime la orden de cada pedido del corte, una por hoja">
+           <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} pedidos`}
           </button>
          )}
         </div>
@@ -2472,7 +2579,8 @@ export function ModuloCartera({ tab, user, showToast, setTab, onPedidosCambiaron
  switch (tab) {
   case "cartera_sedes":     return <GestionSedes showToast={showToast}/>;
   case "cartera_asesores":  return <GestionAsesores showToast={showToast} soloCrear={user?.rol === "cliente"}/>;
-  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")} onPedidosCambiaron={onPedidosCambiaron}/>;
+  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")} onPedidosCambiaron={onPedidosCambiaron}
+                              onVerPedido={(n)=>{ pedidoPorBuscar = n; setTab("cartera_pedidos"); }}/>;
   case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast} onPedidosCambiaron={onPedidosCambiaron}/>;
   case "cartera_logistica": return <ModuloLogistica showToast={showToast}/>;
   case "cartera_consultas": return <ModuloConsultas showToast={showToast}/>;
