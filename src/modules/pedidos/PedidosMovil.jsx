@@ -3,7 +3,7 @@ import {
  Bell, Boxes, ChevronDown, MapPin, MoreHorizontal, Package, Plus,
  Search, SlidersHorizontal, User, UserPlus,
 } from 'lucide-react';
-import { T } from '../../design/tokens';
+import { T, tonoFiltroPedido } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO, FILTROS_PROMESA } from '../../Constants';
 import { transportePedido, faltantesPedido } from '../../utils/transporte';
@@ -413,12 +413,13 @@ export function PedidosMovil({
     {[["todos", "Todos"], ...estadosOrden.map(k => [k, ESTADOS_PEDIDO[k]?.label || FILTROS_PROMESA[k] || k])].map(([clave, label]) => {
      const activo = filtro === clave;
      const n = conteoPorEstado(clave);
+     const tono = tonoFiltroPedido(clave);
      return (
       <button key={clave} onClick={() => setFiltro(clave)} style={{
        display: "flex", alignItems: "center", gap: 6, height: 34, padding: "0 12px",
        borderRadius: T.radio.pastilla, cursor: "pointer", fontFamily: "inherit",
        fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0,
-       background: activo ? T.color.marca : T.color.superficie,
+       background: activo ? tono.fuerte : T.color.superficie,
        color: activo ? "#fff" : T.color.tinta2,
        border: activo ? "1px solid transparent" : `1px solid ${T.color.borde2}`,
       }}>
