@@ -16,7 +16,6 @@ import { limitePromesa } from '../../utils/promesa';
 
 const TONO_ESTADO = {
  sin_asignar: T.estadoTono.sin_asignar,
- pendiente: T.estadoTono.pendiente,
  en_transito: T.estadoTono.en_transito,
  paqueteria: T.estadoTono.paqueteria,
  entregado: T.estadoTono.entregado,

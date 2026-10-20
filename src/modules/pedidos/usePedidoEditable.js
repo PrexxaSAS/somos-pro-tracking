@@ -85,7 +85,7 @@ export function usePedidoEditable({
   }
   const c = conductores.find(c=>String(c.id)===String(condId));
   let nuevoEstado = pedido.estado;
-  if(c && (pedido.estado==="sin_asignar"||pedido.estado==="pendiente")) nuevoEstado="en_transito";
+  if(c && pedido.estado==="sin_asignar") nuevoEstado="en_transito";
   if(!c && pedido.estado==="en_transito" && tipoModal==="propio") nuevoEstado="sin_asignar";
   if(tipoModal==="empresa_transporte" && empTrans.trim()) nuevoEstado="en_transito";
   if(tipoModal==="paqueteria") nuevoEstado="paqueteria";

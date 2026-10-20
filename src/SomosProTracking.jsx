@@ -198,7 +198,7 @@ const RANGOS_PEDIDOS = [
 
 // Orden de las pestanas por estado.
 const ORDEN_ESTADOS_PEDIDO = [
- "sin_asignar", "pendiente", "en_transito", "paqueteria",
+ "sin_asignar", "en_transito", "paqueteria",
  "novedad", "entregado", "solo_facturar", "cliente_recoge",
 ];
 
@@ -3666,7 +3666,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
  const misPeds = pedidos.filter(p => String(p.conductor_id) === String(condId));
  // Por urgencia de la promesa, salvo lo que el conductor ordeno a mano.
  const activos = ordenarRuta(
-  misPeds.filter(p => ["pendiente","en_transito","sin_asignar"].includes(p.estado)),
+  misPeds.filter(p => ["en_transito","sin_asignar"].includes(p.estado)),
   rutaCond.ruta, promesas || []);
  const completados = misPeds.filter(p => ["entregado","novedad"].includes(p.estado));
  const border = "#e5e7eb";
@@ -5768,7 +5768,7 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
  const condId = user?.conductor_db_id || user?.id;
  // La misma ruta que Mis entregas: la parada 1 de alla es la siguiente aqui.
  const siguiente = ordenarRuta(
-  pedidos.filter(p => String(p.conductor_id) === String(condId) && ["en_transito", "pendiente", "sin_asignar"].includes(p.estado)),
+  pedidos.filter(p => String(p.conductor_id) === String(condId) && ["en_transito", "sin_asignar"].includes(p.estado)),
   rutaGps.ruta, promesas)[0] || null;
 
  const segundos = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
@@ -5909,7 +5909,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const enRango = pedidos.filter(p => !desde || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde);
  const ciudadesDe = [...new Set(enRango.map(p => p.ciudad_nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
 
- const esActivo = (p) => ["sin_asignar", "pendiente", "en_transito", "paqueteria"].includes(p.estado);
+ const esActivo = (p) => ["sin_asignar", "en_transito", "paqueteria"].includes(p.estado);
  const conteo = {
   todos: enRango.length,
   activos: enRango.filter(esActivo).length,
