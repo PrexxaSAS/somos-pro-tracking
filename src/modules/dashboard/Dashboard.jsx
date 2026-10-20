@@ -17,7 +17,7 @@ const RANGOS = [
 // Orden de los estados en la barra apilada y en la leyenda. Cada estado tiene su
 // propio color (T.estado), asi que el orden no cambia como se distinguen.
 const ORDEN_ESTADOS = [
- "sin_asignar", "pendiente", "en_transito", "paqueteria",
+ "sin_asignar", "en_transito", "paqueteria",
  "entregado", "novedad", "solo_facturar", "cliente_recoge",
 ];
 
@@ -540,7 +540,7 @@ export function Dashboard({
    limitePromesa(p, tienePromesa(p) ? { dias_plazo: promMap[p.ciudad_codigo] } : null);
 
   const entregados = enRango.filter(p => p.estado === "entregado" || p.estado === "novedad");
-  const activos = enRango.filter(p => ["en_transito", "pendiente", "sin_asignar"].includes(p.estado));
+  const activos = enRango.filter(p => ["en_transito", "sin_asignar"].includes(p.estado));
 
   const vencidos = activos
    .filter(p => { const l = fechaLimite(p); return l && l < hoy; })

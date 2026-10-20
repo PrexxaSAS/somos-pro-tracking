@@ -36,7 +36,6 @@ export const PAQUETERIAS = [
 
 export const ESTADOS_PEDIDO = {
  sin_asignar: { label: "Sin Asignar", color: "#4a4657", bg: "#f1f0f5" },
- pendiente:  { label: "Pendiente",  color: "#7a5230", bg: "#f6eee6" },
  en_transito: { label: "En Transito", color: "#9a5a00", bg: "#fef3dc" },
  paqueteria: { label: "Paqueteria", color: "#24568f", bg: "#e8f0fa" },
  entregado:  { label: "Entregado",  color: "#177a56", bg: "#e5f5ee" },
