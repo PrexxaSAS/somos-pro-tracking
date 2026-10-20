@@ -4,7 +4,7 @@ import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
 import { hoyLocal, hoyMas } from '../../utils/fechas';
-import { limitePromesa } from '../../utils/promesa';
+import { mapaPromesas, limiteConMapa, fueraDePromesa, enRiesgoDePromesa } from '../../utils/promesa';
 
 // Rangos del filtro de fecha. Se compara contra fecha_creacion del pedido.
 const RANGOS = [
@@ -317,7 +317,7 @@ function Campana({ avisos, onIr }) {
       <div style={{ padding: "10px", fontSize: 13, color: T.color.tinta3 }}>Nada pendiente por ahora.</div>
      ) : avisos.filter(a => a.cantidad > 0).map(a => (
       <div key={a.id} style={{ marginBottom: 4 }}>
-       <button onClick={() => { setAbierto(false); onIr(a.tab); }} style={{
+       <button onClick={() => { setAbierto(false); a.onTitulo ? a.onTitulo() : onIr(a.tab); }} style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10,
         border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
         padding: "9px 10px", borderRadius: T.radio.chico, textAlign: "left",
@@ -524,6 +524,8 @@ export function Dashboard({
   if (onBuscarPedido) onBuscarPedido(texto);
   else irA("pedidos");
  };
+ // Lleva a Pedidos con el filtro puesto (fuera_promesa, en_riesgo o un estado).
+ const verFiltro = (filtro) => (onVerEstado ? onVerEstado(filtro) : irA("pedidos"));
 
  const m = useMemo(() => {
   const dias = (RANGOS.find(r => r.id === rango) || RANGOS[3]).dias;
@@ -534,24 +536,20 @@ export function Dashboard({
    : suyos;
 
   const hoy = hoyISO();
-  const promMap = Object.fromEntries((promesas || []).map(p => [p.ciudad_codigo, Number(p.dias_plazo || 0)]));
+  const promMap = mapaPromesas(promesas);
   const tienePromesa = (p) => promMap[p.ciudad_codigo] !== undefined;
-  const fechaLimite = (p) =>
-   limitePromesa(p, tienePromesa(p) ? { dias_plazo: promMap[p.ciudad_codigo] } : null);
+  const fechaLimite = (p) => limiteConMapa(p, promMap);
 
   const entregados = enRango.filter(p => p.estado === "entregado" || p.estado === "novedad");
   const activos = enRango.filter(p => ["en_transito", "sin_asignar"].includes(p.estado));
 
   const vencidos = activos
-   .filter(p => { const l = fechaLimite(p); return l && l < hoy; })
+   .filter(p => fueraDePromesa(p, promMap, hoy))
    .map(p => ({ ...p, limite: fechaLimite(p) }))
    .sort((a, b) => a.limite.localeCompare(b.limite));
 
   const manana = restarDias(-1);
-  const enRiesgo = activos.filter(p => {
-   const l = fechaLimite(p);
-   return l && (l === hoy || l === manana);
-  });
+  const enRiesgo = activos.filter(p => enRiesgoDePromesa(p, promMap, hoy, manana));
 
   const tiempos = entregados
    .filter(p => p.fecha_real && p.fecha_creacion)
@@ -595,12 +593,12 @@ export function Dashboard({
  const avisos = [
   {
    id: "venc", texto: "Pedidos fuera de promesa", cantidad: m.vencidos.length,
-   color: T.color.mal, tab: "pedidos", onItem: abrirPedido,
+   color: T.color.mal, tab: "pedidos", onTitulo: () => verFiltro("fuera_promesa"), onItem: abrirPedido,
    items: m.vencidos.slice(0, 4).map(p => ({ id: p.id, detalle: `vencio ${p.limite}` })),
   },
   {
    id: "riesgo", texto: "En riesgo de vencer", cantidad: m.enRiesgo.length,
-   color: T.color.ojo, tab: "pedidos", onItem: abrirPedido,
+   color: T.color.ojo, tab: "pedidos", onTitulo: () => verFiltro("en_riesgo"), onItem: abrirPedido,
    items: m.enRiesgo.slice(0, 4).map(p => ({ id: p.id, detalle: p.fecha_estimada || "" })),
   },
   { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs" },
@@ -764,7 +762,7 @@ export function Dashboard({
         </div>
         {m.vencidos.length > 5 && (
          <div style={{ marginTop: 14 }}>
-          <Enlace onClick={() => irA("pedidos")}>Ver los {m.vencidos.length} pedidos <ChevronRight size={14} /></Enlace>
+          <Enlace onClick={() => verFiltro("fuera_promesa")}>Ver los {m.vencidos.length} pedidos <ChevronRight size={14} /></Enlace>
          </div>
         )}
        </>

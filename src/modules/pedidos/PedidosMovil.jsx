@@ -322,7 +322,7 @@ export function PedidosMovil({
 
  const etiquetaFiltro = filtro === "todos"
   ? "pedidos"
-  : `pedidos · ${(ESTADOS_PEDIDO[filtro]?.label || filtro).toLowerCase()}`;
+  : `pedidos · ${(ESTADOS_PEDIDO[filtro]?.label || { fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo de vencer" }[filtro] || filtro).toLowerCase()}`;
 
  return (
   <div style={{

@@ -51,6 +51,7 @@ import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
 import { hoyLocal, hoyMas } from './utils/fechas';
+import { mapaPromesas, fueraDePromesa, enRiesgoDePromesa } from './utils/promesa';
 import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
 import { EstadoPedidosMovil } from './modules/cliente/EstadoPedidosMovil';
@@ -1553,8 +1554,14 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   return hoyMas(-r.dias);
  })();
 
+ // Filtros que llegan desde el Dashboard: la misma regla con que alli se cuentan.
+ const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
+ const hoyPromesa = hoyLocal(), mananaPromesa = hoyMas(1);
+ const FILTROS_PROMESA = { fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo de vencer" };
  const filtrados = pedidos.filter(p => {
-  const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria");
+  const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
+   || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
+   || (filtro === "en_riesgo" && enRiesgoDePromesa(p, promMap, hoyPromesa, mananaPromesa));
   const okFecha = !desdeRango || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeRango;
   const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
   const okCond = !conductorF
@@ -1875,6 +1882,18 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       }}><Plus size={16} /> Nuevo pedido</button>
      </div>
     </header>
+
+    {FILTROS_PROMESA[filtro] && (
+     <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:"10px 14px",
+      background: filtro === "fuera_promesa" ? T.color.malSuave : T.color.ojoSuave,
+      border:`1px solid ${filtro === "fuera_promesa" ? T.color.malBorde : T.color.borde}`, borderRadius:T.radio.control }}>
+      <span style={{ fontSize:13.5, fontWeight:700, color: filtro === "fuera_promesa" ? T.color.mal : T.color.ojo }}>
+       {`${FILTROS_PROMESA[filtro]} · ${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
+      </span>
+      <span style={{ fontSize:12.5, color:T.color.tinta3 }}>Sin entregar y con la promesa de servicio vencida{filtro === "en_riesgo" ? " hoy o mañana" : ""}.</span>
+      <button onClick={() => { setFiltro("todos"); setPage(1); }} style={{ ...botonFila, marginLeft:"auto" }}>Quitar filtro</button>
+     </div>
+    )}
 
     {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
         para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
