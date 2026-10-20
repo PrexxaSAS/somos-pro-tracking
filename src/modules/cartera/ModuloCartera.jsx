@@ -755,22 +755,34 @@ export function GestionAsesores({showToast, soloCrear = false}) {
 
 // ── GESTIÓN USUARIOS ───────────────────────────────────────────────────────────
 // ── CARGAR PEDIDOS ─────────────────────────────────────────────────────────────
-export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
+// Traspaso entre pantallas de cartera, que se montan y desmontan al cambiar de
+// pestana. pedidoPorBuscar: el numero que Gestion debe abrir ya buscado.
+// previaGuardada: la vista previa del cargue, para no perderla al ir a mirar
+// un pedido repetido y volver.
+let pedidoPorBuscar = null;
+let previaGuardada = null;
+
+export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron,onVerPedido}) {
   const esMovil = useEsMovil();
-  const [archivo,   setArchivo]  = useState('');
-  const [filasLeidas, setFilasLeidas] = useState(0);
+  const previa = previaGuardada;
+  const [archivo,   setArchivo]  = useState(previa ? previa.archivo : '');
+  const [filasLeidas, setFilasLeidas] = useState(previa ? previa.filasLeidas : 0);
   // Pedidos que no se cargan porque les falta un dato obligatorio (hoy, el
   // DANE origen: sin el no hay sede ni corte). Se guardan las filas tal como
   // venian en el plano, con su encabezado, para descargarlas, corregirlas y
   // volver a subirlas.
-  const [rechazados, setRechazados] = useState({ encabezado: [], pedidos: [] });
-  const [pedidos,   setPedidos]  = useState([]);
+  const [rechazados, setRechazados] = useState(previa ? previa.rechazados : { encabezado: [], pedidos: [] });
+  const [pedidos,   setPedidos]  = useState(previa ? previa.pedidos : []);
   // El error va en dos partes: que paso (titulo) y que hacer (detalle).
   const [errMsg,    setErrMsg]   = useState(null);
   const fallo = (titulo, detalle) => setErrMsg({ titulo, detalle });
   const [carg,      setCarg]     = useState(false);
   const [resultado, setResultado]= useState(null);
   const fileRef = useRef(null);
+  useEffect(() => {
+    previaGuardada = !resultado && (pedidos.length || rechazados.pedidos.length)
+      ? { archivo, filasLeidas, rechazados, pedidos } : null;
+  }, [archivo, filasLeidas, rechazados, pedidos, resultado]);
   // Numeros del plano que ya existen, para mostrarlos antes de cargar: en
   // cartera (no se vuelven a cargar) y en Pedidos (al aprobarse no se crea uno
   // nuevo). Pedidos se pregunta con pedidos_existentes porque el rol cartera no
@@ -1068,7 +1080,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     leerArchivo={leerArchivo} confirmar={confirmar}
     cancelar={empezarDeNuevo} onIrGestion={onCargado} textoCargando={textoCargando}
     rechazados={rechazados.pedidos} onDescargarRechazados={descargarRechazados}
-    yaEnCartera={yaEnCartera} yaEnPedidos={yaEnPedidosPrevia} aCargar={aCargar}
+    yaEnCartera={yaEnCartera} yaEnPedidos={yaEnPedidosPrevia} aCargar={aCargar} onVerPedido={onVerPedido}
   />;
 
   // Clasificacion con su razon, para que se lea por que entro asi.
@@ -1089,7 +1101,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
 
     <section style={{ ...tarjeta, width:"100%", boxSizing:"border-box", overflow:"hidden" }}>
      {resultado ? (
-      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} onDescargarErrores={rechazados.pedidos.length ? descargarRechazados : null} />
+      <ResultadoCargue resultado={resultado} onOtro={empezarDeNuevo} onIrGestion={onCargado} onDescargarErrores={rechazados.pedidos.length ? descargarRechazados : null} onVerPedido={onVerPedido} />
      ) : errMsg ? (
       // 1. Error: el archivo que se eligio y por que no se pudo leer.
       <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14 }}>
@@ -1132,7 +1144,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
        )}
        {(yaEnCartera.length > 0 || yaEnPedidosPrevia.length > 0) && (
         <div style={{ padding:"14px 20px", borderBottom:`1px solid ${T.color.borde}`, display:"flex", flexDirection:"column", gap:12 }}>
-         <ListaNumeros titulo="Ya existen en cartera: no se vuelven a cargar" numeros={yaEnCartera}/>
+         <ListaNumeros titulo="Ya existen en cartera: no se vuelven a cargar" numeros={yaEnCartera} onVer={onVerPedido}/>
          <ListaNumeros titulo="Ya están en Pedidos: se cargan en cartera, pero al aprobarse no se crea uno nuevo en Pedidos" numeros={yaEnPedidosPrevia}/>
         </div>
        )}
@@ -1151,7 +1163,12 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
            const c = etiquetaClase(x);
            return (
             <tr key={i} style={{ borderTop:`1px solid ${T.color.divisor}` }}>
-             <td style={{ ...td, paddingLeft:20, fontWeight:700, color:T.color.tinta, fontVariantNumeric:"tabular-nums" }}>{x.numero_pedido}</td>
+             <td style={{ ...td, paddingLeft:20, fontWeight:700, color:T.color.tinta, fontVariantNumeric:"tabular-nums" }}>
+              {existentes.cartera.has(x.numero_pedido) && onVerPedido
+               ? <button onClick={()=>onVerPedido(x.numero_pedido)} title="Ver en Pedidos en cartera"
+                  style={{ border:"none", background:"transparent", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:"inherit", fontWeight:700, color:T.color.marca, textDecoration:"underline" }}>{x.numero_pedido}</button>
+               : x.numero_pedido}
+             </td>
              <td style={{ ...td, maxWidth:360 }}>
               <div style={{ color:T.color.tinta, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{x.cliente || "Sin nombre"}</div>
               <div style={{ ...mono, color:T.color.tinta3 }}>{x.nit ? `NIT ${x.nit}` : "Sin NIT"}</div>
@@ -1273,7 +1290,7 @@ export function ArchivoFila({ nombre, detalle, error = false, accion, onAccion }
 }
 
 // 3. Resultado del cargue. Queda en pantalla hasta que se elige que sigue.
-export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErrores, compacto = false }) {
+export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErrores, compacto = false, onVerPedido }) {
   const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0, conError = 0, yaEnPedidos = [] } = resultado;
   const columnas = 3 + (conError ? 1 : 0) + (yaEnPedidos.length ? 1 : 0);
   const completo = ok === total && ok > 0 && !conError;
@@ -1308,7 +1325,7 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErr
      {conError > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Sin DANE origen (no se subieron)", conError, T.color.mal)}</div>}
      {yaEnPedidos.length > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Ya estaban en Pedidos", yaEnPedidos.length, T.color.ojo)}</div>}
     </div>
-    <ListaNumeros titulo="Ya existían en cartera (no se volvieron a cargar)" numeros={duplicados}/>
+    <ListaNumeros titulo="Ya existían en cartera (no se volvieron a cargar)" numeros={duplicados} onVer={onVerPedido}/>
     <ListaNumeros titulo="Aprobados que ya estaban en Pedidos (no se creó uno nuevo; revisa que el de Pedidos sea el correcto)" numeros={yaEnPedidos}/>
     {sinCorte > 0 && (
      <div style={{ fontSize:12.5, color:T.color.ojo, maxWidth:520 }}>
@@ -1333,19 +1350,23 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErr
 }
 
 // Los numeros de pedido detras de una cifra del resultado del cargue.
-function ListaNumeros({ titulo, numeros }) {
+// Con onVer, cada numero es un enlace que lleva al pedido en Pedidos en cartera.
+function ListaNumeros({ titulo, numeros, onVer }) {
  if (!numeros || !numeros.length) return null;
  return (
   <div style={{ width:"100%", maxWidth:680, textAlign:"left" }}>
    <div style={{ fontSize:12.5, fontWeight:600, color:T.color.tinta2, marginBottom:6 }}>{titulo}</div>
    <div style={{ display:"flex", flexWrap:"wrap", gap:6, maxHeight:120, overflowY:"auto" }}>
-    {numeros.map(n => <span key={n} style={chipMono}>{n}</span>)}
+    {numeros.map(n => onVer
+     ? <button key={n} onClick={()=>onVer(n)} title="Ver en Pedidos en cartera"
+        style={{ ...chipMono, cursor:"pointer", color:T.color.marca, textDecoration:"underline", border:"none", fontFamily:"inherit" }}>{n}</button>
+     : <span key={n} style={chipMono}>{n}</span>)}
    </div>
   </div>
  );
 }
 
-function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados, yaEnCartera = [], yaEnPedidos = [], aCargar = pedidos.length }) {
+function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados, yaEnCartera = [], yaEnPedidos = [], aCargar = pedidos.length, onVerPedido }) {
   const hayAlgo = pedidos.length > 0 || rechazados.length > 0;
   return (
    <Pagina anchoCompleto>
@@ -1394,7 +1415,7 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
      </section>
      {rechazados.length > 0 && <PedidosConError pedidos={rechazados} onDescargar={onDescargarRechazados} />}
      {(yaEnCartera.length > 0 || yaEnPedidos.length > 0) && <section style={{ ...tarjeta, padding:'12px 14px', display:'flex', flexDirection:'column', gap:12 }}>
-      <ListaNumeros titulo={`Ya existen en cartera (${yaEnCartera.length}): no se vuelven a cargar`} numeros={yaEnCartera}/>
+      <ListaNumeros titulo={`Ya existen en cartera (${yaEnCartera.length}): no se vuelven a cargar`} numeros={yaEnCartera} onVer={onVerPedido}/>
       <ListaNumeros titulo={`Ya están en Pedidos (${yaEnPedidos.length}): al aprobarse no se crea uno nuevo`} numeros={yaEnPedidos}/>
      </section>}
      {pedidos.length > 0 && <section style={{ ...tarjeta, padding:'2px 14px' }}>
@@ -1413,7 +1434,7 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
      <p style={{textAlign:'center',fontSize:12,color:T.color.tinta3,margin:0}}>Se carga tal como viene; no se puede editar aquí.</p>
     </>}
     {errMsg && <div role="alert" style={{background:T.color.malSuave,color:T.color.mal,padding:12,borderRadius:10,fontSize:13}}><strong>{errMsg.titulo}</strong> {errMsg.detalle}</div>}
-    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} onDescargarErrores={rechazados.length ? onDescargarRechazados : null} compacto />}
+    {resultado && <ResultadoCargue resultado={resultado} onOtro={cancelar} onIrGestion={onIrGestion} onDescargarErrores={rechazados.length ? onDescargarRechazados : null} compacto onVerPedido={onVerPedido} />}
     {hayAlgo && !resultado && <div style={{height:65}}/>}
     {hayAlgo && !resultado && <div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:110,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'10px 16px calc(12px + env(safe-area-inset-bottom, 0px))',display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:8}}>
      <button onClick={cancelar} disabled={carg} style={{...botonBarra,justifyContent:'center'}}>Cancelar</button>
@@ -1430,7 +1451,9 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const esMovil = useEsMovil();
   const [pedidos,    setPedidos]    = useState([]);
   const [filtroEst,  setFiltroEst]  = useState('todos');
-  const [busq,       setBusq]       = useState('');
+  // Si se llega desde un pedido repetido del cargue, abre ya buscado.
+  const [busq,       setBusq]       = useState(() => pedidoPorBuscar || '');
+  useEffect(() => { pedidoPorBuscar = null; }, []);
   const [seleccion,  setSeleccion]  = useState(new Set());
   const [modRechazar,setModRechazar]= useState(null);
   const [carg,       setCarg]       = useState(false);
@@ -2556,7 +2579,8 @@ export function ModuloCartera({ tab, user, showToast, setTab, onPedidosCambiaron
  switch (tab) {
   case "cartera_sedes":     return <GestionSedes showToast={showToast}/>;
   case "cartera_asesores":  return <GestionAsesores showToast={showToast} soloCrear={user?.rol === "cliente"}/>;
-  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")} onPedidosCambiaron={onPedidosCambiaron}/>;
+  case "cartera_cargar":    return <CargarPedidos user={user} showToast={showToast} onCargado={()=>setTab("cartera_pedidos")} onPedidosCambiaron={onPedidosCambiaron}
+                              onVerPedido={(n)=>{ pedidoPorBuscar = n; setTab("cartera_pedidos"); }}/>;
   case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast} onPedidosCambiaron={onPedidosCambiaron}/>;
   case "cartera_logistica": return <ModuloLogistica showToast={showToast}/>;
   case "cartera_consultas": return <ModuloConsultas showToast={showToast}/>;

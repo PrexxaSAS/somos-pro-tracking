@@ -670,6 +670,8 @@ if (window.matchMedia("").matches) {
  exigir(repetidos.includes("Ya existían en cartera") && repetidos.includes("4582913"), "no lista los numeros que ya existian en cartera");
  exigir(repetidos.includes("Ya estaban en Pedidos") && repetidos.includes("PX000120436"), "no lista los aprobados que ya estaban en Pedidos");
  exigir(!bien.includes("Ya estaban en Pedidos"), "muestra la cifra de Pedidos sin haber ninguno");
+ const conEnlace = renderToString(React.createElement(ResultadoCargue, { resultado:{ ok:1, total:2, errores:0, duplicados:["4582913"], aprobados:1, pendientes:0, sinCorte:0 }, onOtro(){}, onIrGestion(){}, onVerPedido(){} }));
+ exigir(conEnlace.includes("Ver en Pedidos en cartera") && conEnlace.includes("4582913"), "el pedido repetido no lleva a Pedidos en cartera");
  const fila = renderToString(React.createElement(ArchivoFila, { nombre:"plano_2026-09-28.csv", detalle:"No se pudo leer", error:true, accion:"Elegir otro archivo", onAccion(){} }));
  exigir(fila.includes("plano_2026-09-28.csv") && fila.includes("lucide-file-x"), "el archivo con error no se marca en rojo");
 }
