@@ -14,15 +14,8 @@ import {
  ModalForm, ModalGestion, Seccion, FranjaInfo, Resumen, Fila, Texto, Selector, AreaTexto,
  CasillaNovedad,
 } from '../../components/ui/formularios';
-import emailjs from '@emailjs/browser';
 import { hoyLocal, hoyMas } from '../../utils/fechas';
 import { useEsMovil } from '../../design/responsive';
-
-// ── Configuración ──────────────────────────────────────────────────────────────
-
-const EJS_SERVICE   = 'service_oyce136';
-const EJS_TEMPLATE  = 'template_7mepnqg';
-const EJS_PUBLIC    = 'ZMsvylkrklU4MQ-Bx';
 
 // ── Colores verdes ─────────────────────────────────────────────────────────────
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -199,18 +192,28 @@ export const crearAsignadorCortes = async () => {
 };
 
 // ── Enviar correo de rechazo ───────────────────────────────────────────────────
-const enviarCorreoRechazo = async (pedido, motivo, emailAsesor) => {
-  if (!emailAsesor) return;
+// Sale del servidor por el SMTP de la empresa (supabase/functions/
+// enviar-correo-rechazo). Se manda solo el id: el destinatario y el texto los
+// busca la funcion en la base. Devuelve el mensaje para el aviso en pantalla.
+const enviarCorreoRechazo = async (pedidoId) => {
   try {
-    emailjs.init(EJS_PUBLIC);
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      numero_pedido: pedido.numero_pedido,
-      cliente:       pedido.cliente,
-      nit:           pedido.nit,
-      motivo:        motivo,
-      to_email:      emailAsesor,
-    });
-  } catch(e) { console.error('Error enviando correo:', e); }
+    const { data, error } = await supabase.functions.invoke('enviar-correo-rechazo', { body: { pedido_id: pedidoId } });
+    if (error) {
+      let detalle = error.message;
+      try { const cuerpo = await error.context?.json(); if (cuerpo?.error) detalle = cuerpo.error; } catch { /* sin cuerpo */ }
+      return { ok: false, texto: `no se pudo enviar el correo: ${detalle}` };
+    }
+    if (data?.enviado) return { ok: true, texto: `correo enviado a ${data.para}` };
+    const razones = {
+      sin_vendedor: 'el pedido no trae vendedor: no se envió correo',
+      asesor_no_registrado: 'el vendedor no está en Asesores: no se envió correo',
+      asesor_sin_correo: 'el asesor no tiene correo: no se envió',
+      error_smtp: `no se pudo enviar el correo${data?.detalle ? `: ${data.detalle}` : ''}`,
+    };
+    return { ok: data?.razon !== 'error_smtp', texto: razones[data?.razon] || 'no se envió el correo' };
+  } catch (e) {
+    return { ok: false, texto: `no se pudo enviar el correo: ${e.message}` };
+  }
 };
 
 // ── Componentes base ───────────────────────────────────────────────────────────
@@ -1547,22 +1550,12 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const rechazar = async (pedidoId, motivo) => {
     const pedido = pedidos.find(p=>p.id===pedidoId);
     if(!pedido) return;
-    // Buscar email del asesor
-    let emailAsesor='';
-    if(pedido.vendedor){
-      const codVend = pedido.vendedor.trim();
-      const codNorm = codVend.replace(/^0+/,'')||'0'; // "01" -> "1", ignora ceros a la izquierda
-      const {data:asesoresMatch} = await supabase.from('asesores').select('email,codigo');
-      const asesor = (asesoresMatch||[]).find(a=>{
-        const c = String(a.codigo||'').trim();
-        return c===codVend || (c.replace(/^0+/,'')||'0')===codNorm;
-      });
-      if(asesor) emailAsesor=asesor.email;
-    }
     await supabase.from('pedidos_cartera').update({estado_cartera:'rechazado',motivo_rechazo:motivo}).eq('id',pedidoId);
     await supabase.from('historial_cartera').insert({pedido_id:pedidoId,decision:'rechazado',usuario_id:user.id,motivo});
-    if(emailAsesor) await enviarCorreoRechazo(pedido,motivo,emailAsesor);
-    showToast("Pedido rechazado"+(emailAsesor?` · Correo enviado a ${emailAsesor}`:""),"info");
+    // El aviso dice lo que de verdad paso con el correo: enviado, sin
+    // destinatario o fallo. Antes decia "enviado" aunque fallara.
+    const correo = await enviarCorreoRechazo(pedidoId);
+    showToast(`Pedido rechazado · ${correo.texto}`, correo.ok ? "info" : "error");
     setModRechazar(null);
     cargar();
   };
