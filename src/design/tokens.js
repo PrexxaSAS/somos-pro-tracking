@@ -50,16 +50,28 @@ export const T = {
   neutroSuave: "#f1f0f5",
  },
 
- // Estados del pedido para la barra apilada y los chips.
+ // Estados del pedido: cada uno con un color propio y distinto de los demas
+ // (antes casi todos eran tonos del morado de la marca y no se distinguian).
+ // estado = el punto y la barra apilada; estadoTono = fondo y texto de la pastilla.
  estado: {
-  sin_asignar:   "#a39db8",
-  pendiente:    "#d6d2e2",
-  en_transito:   "#9b7ff5",
-  paqueteria:    "#c3b1fa",
-  entregado:    "#5b35d5",
-  novedad:     "#e04a3f",
-  solo_facturar:  "#1f8a7a",
-  cliente_recoge:  "#2d6fb8",
+  sin_asignar:     "#9a96a8",  // gris
+  pendiente:       "#a8794f",  // cafe
+  en_transito:     "#f59e0b",  // amarillo-naranja
+  paqueteria:      "#2d6fb8",  // azul
+  entregado:       "#1f9a6e",  // verde
+  novedad:         "#e04a3f",  // rojo
+  solo_facturar:   "#0e9aa7",  // turquesa
+  cliente_recoge:  "#d6409f",  // rosado
+ },
+ estadoTono: {
+  sin_asignar:     { bg: "#f1f0f5", color: "#4a4657" },
+  pendiente:       { bg: "#f6eee6", color: "#7a5230" },
+  en_transito:     { bg: "#fef3dc", color: "#9a5a00" },
+  paqueteria:      { bg: "#e8f0fa", color: "#24568f" },
+  entregado:       { bg: "#e5f5ee", color: "#177a56" },
+  novedad:         { bg: "#fdecea", color: "#c33a31" },
+  solo_facturar:   { bg: "#e3f5f6", color: "#0b6e78" },
+  cliente_recoge:  { bg: "#fcebf5", color: "#a3266f" },
  },
 
  fuente: {

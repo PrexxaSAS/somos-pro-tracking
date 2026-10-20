@@ -476,7 +476,7 @@ export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, misPeds
          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
            <span style={{ fontWeight: 700, fontSize: 13.5, ...corta }}>{x.guia_interna || x.guia || x.id}</span>
-           <Chip bg={T.color.marcaSuave} color={T.color.marca} punto={T.estado.en_transito} texto="En transito" />
+           <Chip bg={T.estadoTono.en_transito.bg} color={T.estadoTono.en_transito.color} punto={T.estado.en_transito} texto="En transito" />
           </div>
           {pestana === "pedidos" ? (
            <>

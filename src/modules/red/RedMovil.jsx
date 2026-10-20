@@ -50,7 +50,7 @@ function Avatar({ nombre, tam = 36, bg = T.color.marcaAvatar, color = T.color.ma
 }
 
 const chipRuta = (transito) => transito > 0
- ? { bg: T.color.marcaSuave, color: T.color.marca, punto: T.estado.en_transito, texto: "En ruta" }
+ ? { bg: T.estadoTono.en_transito.bg, color: T.estadoTono.en_transito.color, punto: T.estado.en_transito, texto: "En ruta" }
  : { bg: T.color.bienSuave, color: T.color.bien, punto: T.color.bienPunto, texto: "Disponible" };
 
 // ── 27b: hoja para filtrar por transportista ────────────────────────────────

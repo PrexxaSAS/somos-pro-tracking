@@ -62,10 +62,7 @@ export function DetallePedidoConductor({
 
  const cerrado = ["entregado", "novedad"].includes(pedido.estado);
  const punto = T.estado[pedido.estado] || T.color.neutroPunto;
- const tonoChip = pedido.estado === "novedad"
-  ? { bg: T.color.malSuave, color: T.color.mal }
-  : cerrado ? { bg: T.color.bienSuave, color: T.color.bien }
-  : { bg: T.color.marcaSuave, color: T.color.marca };
+ const tonoChip = T.estadoTono[pedido.estado] || { bg: T.color.superficie3, color: T.color.tinta2 };
 
  const limite = limitePromesa(pedido, promesa);
 

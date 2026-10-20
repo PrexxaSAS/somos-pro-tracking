@@ -16,14 +16,14 @@ import { CabeceraLista, Chip, nombreCorto } from '../gestion/ListasMovil';
 // esta pantalla solo lo dibuja.
 
 const TONO = {
- sin_asignar: { bg: T.color.neutroSuave, color: T.color.neutro },
- pendiente: { bg: T.color.neutroSuave, color: T.color.neutro },
- en_transito: { bg: T.color.marcaSuave, color: T.color.marca },
- paqueteria: { bg: T.color.marcaSuave, color: T.color.marca },
- entregado: { bg: T.color.bienSuave, color: T.color.bien },
- novedad: { bg: T.color.malSuave, color: T.color.mal },
- solo_facturar: { bg: T.color.bienSuave, color: T.color.bien },
- cliente_recoge: { bg: T.color.infoSuave, color: T.color.info },
+ sin_asignar: T.estadoTono.sin_asignar,
+ pendiente: T.estadoTono.pendiente,
+ en_transito: T.estadoTono.en_transito,
+ paqueteria: T.estadoTono.paqueteria,
+ entregado: T.estadoTono.entregado,
+ novedad: T.estadoTono.novedad,
+ solo_facturar: T.estadoTono.solo_facturar,
+ cliente_recoge: T.estadoTono.cliente_recoge,
 };
 
 const botonIcono = (activo) => ({

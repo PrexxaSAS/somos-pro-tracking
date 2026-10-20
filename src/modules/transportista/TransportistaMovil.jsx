@@ -53,7 +53,7 @@ function Chip({ bg, color, punto, texto }) {
 export const chipConductor = (activo, enRuta) => activo === false
  ? { bg: T.color.superficie3, color: T.color.tinta3, punto: T.color.neutroPunto, texto: "Inactivo" }
  : enRuta > 0
-  ? { bg: T.color.marcaSuave, color: T.color.marca, punto: T.estado.en_transito, texto: "En ruta" }
+  ? { bg: T.estadoTono.en_transito.bg, color: T.estadoTono.en_transito.color, punto: T.estado.en_transito, texto: "En ruta" }
   : { bg: T.color.bienSuave, color: T.color.bien, punto: T.color.bienPunto, texto: "Disponible" };
 
 // ── Conteos en rejilla 2x2 ─────────────────────────────────────────────────
@@ -130,10 +130,7 @@ export function TarjetaConductorTransp({ c, activos, completa = false, onVer, on
 export function TarjetaPedidoTransp({ p, conductor, soportes, puedeSoporte, completa = false, onVer, onSoporte }) {
  const estado = p.estado;
  const punto = T.estado[estado] || T.color.neutroPunto;
- const tono = estado === "en_transito" ? { bg: T.color.marcaSuave, color: T.color.marca }
-  : estado === "novedad" ? { bg: T.color.malSuave, color: T.color.mal }
-  : estado === "entregado" ? { bg: T.color.bienSuave, color: T.color.bien }
-  : { bg: T.color.superficie3, color: T.color.tinta2 };
+ const tono = T.estadoTono[estado] || { bg: T.color.superficie3, color: T.color.tinta2 };
  return (
   <article style={tarjeta}>
    <button onClick={() => onVer(p)} style={{ border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: 6, color: T.color.tinta }}>

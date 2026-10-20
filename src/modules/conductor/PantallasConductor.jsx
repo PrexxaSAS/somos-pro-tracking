@@ -164,8 +164,8 @@ function Chip({ estado, actual = false }) {
   <span style={{
    marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
    fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: T.radio.pastilla,
-   background: actual ? T.color.marcaSuave : T.color.superficie3,
-   color: actual ? T.color.marca : T.color.tinta2, whiteSpace: "nowrap", flexShrink: 0,
+   background: T.estadoTono[estado]?.bg || T.color.superficie3,
+   color: T.estadoTono[estado]?.color || T.color.tinta2, whiteSpace: "nowrap", flexShrink: 0,
   }}>
    <span style={{ width: 6, height: 6, borderRadius: 3, background: punto }} />
    {ESTADOS_PEDIDO[estado]?.label || estado}
@@ -216,7 +216,7 @@ export function TarjetaEntrega({ pedido, parada, actual = false, promesa, onAbri
  // estimada que se digita pedido a pedido. Igual que en el detalle.
  const limite = limitePromesa(pedido, promesa);
  return (
-  <button onClick={() => onAbrir(pedido)} style={tarjeta(actual ? T.estado.paqueteria : T.color.borde)}>
+  <button onClick={() => onAbrir(pedido)} style={tarjeta(actual ? T.color.marcaBorde : T.color.borde)}>
    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
     <span style={{
      width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", flexShrink: 0,
