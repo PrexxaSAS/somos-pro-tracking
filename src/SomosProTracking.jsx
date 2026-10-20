@@ -2022,8 +2022,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
            <td style={td2}>
             <span style={{
              display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-             borderRadius:T.radio.pastilla, background:T.color.superficie2,
-             fontSize:12, fontWeight:600, color:T.color.tinta2, whiteSpace:"nowrap",
+             borderRadius:T.radio.pastilla, background:T.estadoTono[p.estado]?.bg || T.color.superficie2,
+             fontSize:12, fontWeight:600, color:T.estadoTono[p.estado]?.color || T.color.tinta2, whiteSpace:"nowrap",
             }}>
              <span style={{ width:7, height:7, borderRadius:4, background:T.estado[p.estado] || T.color.tinta3 }} />
              {ESTADOS_PEDIDO[p.estado]?.label || p.estado}
@@ -2681,7 +2681,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
    const [bg, color, punto, texto] = c.activo === false
     ? [T.color.superficie3, T.color.tinta3, T.color.neutroPunto, "Inactivo"]
     : n > 0
-     ? [T.color.marcaSuave, T.color.marca, T.estado.en_transito, conCuenta ? `En ruta · ${n} ${n === 1 ? "pedido" : "pedidos"}` : "En ruta"]
+     ? [T.estadoTono.en_transito.bg, T.estadoTono.en_transito.color, T.estado.en_transito, conCuenta ? `En ruta · ${n} ${n === 1 ? "pedido" : "pedidos"}` : "En ruta"]
      : [T.color.bienSuave, T.color.bien, T.color.bienPunto, "Disponible"];
    return (
     <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 9px", borderRadius:T.radio.pastilla, background:bg, color, fontSize:12, fontWeight:600, whiteSpace:"nowrap" }}>

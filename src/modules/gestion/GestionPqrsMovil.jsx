@@ -53,7 +53,7 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
  const dias = diasAbierta(item.fecha_creacion);
 
  const chip = item.estado === "abierta" ? { bg: T.color.ojoSuave, color: T.color.ojo, punto: T.color.ojoPunto, label: "Abierta" }
-  : item.estado === "en_gestion" ? { bg: T.color.marcaSuave, color: T.color.marca, punto: T.estado.en_transito, label: "En gestion" }
+  : item.estado === "en_gestion" ? { bg: T.estadoTono.en_transito.bg, color: T.estadoTono.en_transito.color, punto: T.estado.en_transito, label: "En gestion" }
   : item.estado === "rechazada" ? { bg: T.color.superficie3, color: T.color.tinta2, punto: T.color.neutroPunto, label: "Rechazada" }
   : { bg: T.color.bienSuave, color: T.color.bien, punto: T.color.bienPunto, label: "Cerrada" };
 

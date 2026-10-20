@@ -44,14 +44,14 @@ const chipEnvio = (estado, vistaCliente) => ({
  sin_asignar: vistaCliente
   ? { bg: T.color.ojoSuave, color: T.color.ojo, punto: T.color.ojoPunto, texto: "Solicitada" }
   : { bg: T.color.neutroSuave, color: T.color.neutro, punto: T.color.neutroPunto, texto: "Sin asignar" },
- en_transito: { bg: T.color.marcaSuave, color: T.color.marca, punto: T.estado.en_transito, texto: "En transito" },
+ en_transito: { bg: T.estadoTono.en_transito.bg, color: T.estadoTono.en_transito.color, punto: T.estado.en_transito, texto: "En transito" },
  entregado: { bg: T.color.bienSuave, color: T.color.bien, punto: T.color.bienPunto, texto: "Completada" },
  novedad: { bg: T.color.malSuave, color: T.color.mal, punto: T.color.malPunto, texto: "Con novedad" },
 }[estado] || { bg: T.color.neutroSuave, color: T.color.neutro, punto: T.color.neutroPunto, texto: estado || "Sin estado" });
 
 export const chipPqrs = (estado) => ({
  abierta: { bg: T.color.ojoSuave, color: T.color.ojo, punto: T.color.ojoPunto, texto: "Abierta" },
- en_gestion: { bg: T.color.marcaSuave, color: T.color.marca, punto: T.estado.en_transito, texto: "En gestion" },
+ en_gestion: { bg: T.estadoTono.en_transito.bg, color: T.estadoTono.en_transito.color, punto: T.estado.en_transito, texto: "En gestion" },
  cerrada: { bg: T.color.bienSuave, color: T.color.bien, punto: T.color.bienPunto, texto: "Cerrada" },
  rechazada: { bg: T.color.superficie3, color: T.color.tinta2, punto: T.color.neutroPunto, texto: "Rechazada" },
 }[estado] || { bg: T.color.superficie3, color: T.color.tinta2, punto: T.color.neutroPunto, texto: estado || "Sin estado" });

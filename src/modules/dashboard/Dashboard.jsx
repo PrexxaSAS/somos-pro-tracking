@@ -14,8 +14,8 @@ const RANGOS = [
  { id: "todo", label: "Todo el historico", dias: null },
 ];
 
-// Orden de los estados en la barra apilada y en la leyenda. La secuencia de colores
-// esta validada en este orden (ver T.estado): no reordenar sin volver a comprobarla.
+// Orden de los estados en la barra apilada y en la leyenda. Cada estado tiene su
+// propio color (T.estado), asi que el orden no cambia como se distinguen.
 const ORDEN_ESTADOS = [
  "sin_asignar", "pendiente", "en_transito", "paqueteria",
  "entregado", "novedad", "solo_facturar", "cliente_recoge",

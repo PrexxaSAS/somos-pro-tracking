@@ -35,16 +35,16 @@ export const PAQUETERIAS = [
 ];
 
 export const ESTADOS_PEDIDO = {
- sin_asignar: { label: "Sin Asignar", color: "#64748b", bg: "#f1f5f9" },
- pendiente:  { label: "Pendiente",  color: "#d97706", bg: "#fffbeb" },
- en_transito: { label: "En Transito", color: "#7c3aed", bg: "#f5f3ff" },
- paqueteria: { label: "Paqueteria", color: "#0891b2", bg: "#ecfeff" },
- entregado:  { label: "Entregado",  color: "#15803d", bg: "#ecfdf5" },
- novedad:   { label: "Con Novedad", color: "#dc2626", bg: "#fef2f2" },
+ sin_asignar: { label: "Sin Asignar", color: "#4a4657", bg: "#f1f0f5" },
+ pendiente:  { label: "Pendiente",  color: "#7a5230", bg: "#f6eee6" },
+ en_transito: { label: "En Transito", color: "#9a5a00", bg: "#fef3dc" },
+ paqueteria: { label: "Paqueteria", color: "#24568f", bg: "#e8f0fa" },
+ entregado:  { label: "Entregado",  color: "#177a56", bg: "#e5f5ee" },
+ novedad:   { label: "Con Novedad", color: "#c33a31", bg: "#fdecea" },
  // Pedidos que solo se facturan (la mercancia ya se entrego). No son despachos
  // pendientes: no cuentan como activos, vencidos ni en riesgo.
- solo_facturar: { label: "Solo Facturar", color: "#0d9488", bg: "#f0fdfa" },
- cliente_recoge: { label: "Cliente Recoge", color: "#a21caf", bg: "#fdf4ff" },
+ solo_facturar: { label: "Solo Facturar", color: "#0b6e78", bg: "#e3f5f6" },
+ cliente_recoge: { label: "Cliente Recoge", color: "#a3266f", bg: "#fcebf5" },
 };
 
 // Estados que no son despachos pendientes: el pedido no sale con conductor ni

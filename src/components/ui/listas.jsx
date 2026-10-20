@@ -241,8 +241,8 @@ export function ChipEstado({ estado, novedad }) {
   <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
    <span style={{
     display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px",
-    borderRadius: T.radio.pastilla, background: T.color.neutroSuave,
-    fontSize: 12, fontWeight: 600, color: T.color.tinta2, whiteSpace: "nowrap",
+    borderRadius: T.radio.pastilla, background: T.estadoTono[estado]?.bg || T.color.neutroSuave,
+    fontSize: 12, fontWeight: 600, color: T.estadoTono[estado]?.color || T.color.tinta2, whiteSpace: "nowrap",
    }}>
     <span style={{ width: 6, height: 6, borderRadius: 3, background: color }} />
     {label}

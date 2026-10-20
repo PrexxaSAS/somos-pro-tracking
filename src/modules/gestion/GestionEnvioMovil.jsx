@@ -113,11 +113,7 @@ export function GestionEnvioMovil({
  };
 
  const punto = T.estado[item.estado] || T.color.neutroPunto;
- const chip = item.estado === "en_transito"
-  ? { bg: T.color.marcaSuave, color: T.color.marca }
-  : item.estado === "novedad" ? { bg: T.color.malSuave, color: T.color.mal }
-  : item.estado === "entregado" ? { bg: T.color.bienSuave, color: T.color.bien }
-  : { bg: T.color.superficie3, color: T.color.tinta2 };
+ const chip = T.estadoTono[item.estado] || { bg: T.color.superficie3, color: T.color.tinta2 };
 
  const faltaConductor = canEdit && !cerrado && !esPaq && !cond;
  const Icono = esDev ? Undo2 : PackageCheck;
