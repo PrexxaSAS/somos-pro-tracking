@@ -2218,7 +2218,9 @@ export function ModuloLogistica({showToast}) {
     <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
      {[
       { label: enPendientes ? "Pedidos sin imprimir" : todasFechas ? "Pedidos" : "Pedidos del día", valor:pedidos.length, color:T.color.tinta },
-      { label:"Por imprimir", valor:porImprimir.length, color:T.color.ojo },
+      // "Por imprimir" solo dice algo distinto de la primera cifra cuando la lista
+      // trae impresos y no impresos: en Por fecha con el filtro en Todos.
+      ...(!enPendientes && filtroImp === "todos" ? [{ label:"Por imprimir", valor:porImprimir.length, color:T.color.ojo }] : []),
       { label: enPendientes ? "Cortes con pendientes" : todasFechas ? "Cortes" : "Cortes del día", valor:cortesVistos.length, color:T.color.tinta },
       { label:"Cortes impresos", valor:cortesVistos.filter(c=>impresionDe(c).completo).length, color:T.color.bien },
      ].map(i => (
