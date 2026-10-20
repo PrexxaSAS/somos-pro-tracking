@@ -760,7 +760,7 @@ export function Dashboard({
           );
          })}
         </div>
-        {m.vencidos.length > 5 && (
+        {m.vencidos.length > 0 && (
          <div style={{ marginTop: 14 }}>
           <Enlace onClick={() => verFiltro("fuera_promesa")}>Ver los {m.vencidos.length} pedidos <ChevronRight size={14} /></Enlace>
          </div>

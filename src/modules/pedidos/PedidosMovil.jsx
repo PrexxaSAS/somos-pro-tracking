@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
-import { ESTADOS_PEDIDO } from '../../Constants';
+import { ESTADOS_PEDIDO, FILTROS_PROMESA } from '../../Constants';
 import { transportePedido, faltantesPedido } from '../../utils/transporte';
 
 // La tabla de pedidos no cabe en un telefono. Cada fila pasa a ser una tarjeta
@@ -322,7 +322,7 @@ export function PedidosMovil({
 
  const etiquetaFiltro = filtro === "todos"
   ? "pedidos"
-  : `pedidos · ${(ESTADOS_PEDIDO[filtro]?.label || { fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo de vencer" }[filtro] || filtro).toLowerCase()}`;
+  : `pedidos · ${(ESTADOS_PEDIDO[filtro]?.label || FILTROS_PROMESA[filtro] || filtro).toLowerCase()}`;
 
  return (
   <div style={{
@@ -410,7 +410,7 @@ export function PedidosMovil({
     display: "flex", gap: 6, overflowX: "auto",
     margin: "0 -16px", padding: "0 16px 2px", scrollbarWidth: "none",
    }}>
-    {[["todos", "Todos"], ...estadosOrden.map(k => [k, ESTADOS_PEDIDO[k]?.label || k])].map(([clave, label]) => {
+    {[["todos", "Todos"], ...estadosOrden.map(k => [k, ESTADOS_PEDIDO[k]?.label || FILTROS_PROMESA[k] || k])].map(([clave, label]) => {
      const activo = filtro === clave;
      const n = conteoPorEstado(clave);
      return (

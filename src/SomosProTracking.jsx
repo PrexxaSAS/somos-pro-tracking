@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
+import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, FILTROS_PROMESA, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv, filasCsv } from './utils/files';
@@ -1557,7 +1557,6 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  // Filtros que llegan desde el Dashboard: la misma regla con que alli se cuentan.
  const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
  const hoyPromesa = hoyLocal(), mananaPromesa = hoyMas(1);
- const FILTROS_PROMESA = { fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo de vencer" };
  const filtrados = pedidos.filter(p => {
   const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
    || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
@@ -1806,6 +1805,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
 
  const conteoPorEstado = (clave) => clave === "todos"
   ? pedidos.length
+  : clave === "fuera_promesa" ? pedidos.filter(x => fueraDePromesa(x, promMap, hoyPromesa)).length
+  : clave === "en_riesgo" ? pedidos.filter(x => enRiesgoDePromesa(x, promMap, hoyPromesa, mananaPromesa)).length
   : pedidos.filter(x => x.estado === clave).length;
 
  const alternarSeleccion = (id) => setSeleccion(prev => {
@@ -1845,7 +1846,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      busq={busq} setBusq={setBusq}
      filtro={filtro} setFiltro={setFiltro}
      conteoPorEstado={conteoPorEstado}
-     estadosOrden={ORDEN_ESTADOS_PEDIDO}
+     estadosOrden={[...ORDEN_ESTADOS_PEDIDO, ...Object.keys(FILTROS_PROMESA)]}
      rango={rango} setRango={setRango}
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
@@ -1898,7 +1899,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
         para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
     <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:`1px solid ${T.color.borde}` }}>
-     {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k])].map(([clave,label]) => {
+     {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k]), ...Object.entries(FILTROS_PROMESA)].map(([clave,label]) => {
       const activo = filtro === clave;
       const n = conteoPorEstado(clave);
       return (
