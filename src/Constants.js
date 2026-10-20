@@ -46,6 +46,10 @@ export const ESTADOS_PEDIDO = {
  cliente_recoge: { label: "Cliente Recoge", color: "#a3266f", bg: "#fcebf5" },
 };
 
+// Filtros de Pedidos que no son un estado sino la promesa de servicio: se
+// muestran como pestanas junto a los estados y el Dashboard lleva a ellos.
+export const FILTROS_PROMESA = { fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo" };
+
 // Estados que no son despachos pendientes: el pedido no sale con conductor ni
 // transportadora, asi que no cuentan como activos, vencidos ni en riesgo.
 export const ESTADOS_SIN_DESPACHO = ["solo_facturar", "cliente_recoge"];

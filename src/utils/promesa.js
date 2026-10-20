@@ -31,3 +31,30 @@ export function limiteDePromesa(pedido, promesa) {
 export function limitePromesa(pedido, promesa) {
   return limiteDePromesa(pedido, promesa) || pedido?.fecha_estimada || null;
 }
+
+// Fuera de promesa y en riesgo: la regla del Dashboard, en un solo sitio para
+// que la lista de Pedidos filtrada muestre exactamente los mismos pedidos que
+// cuenta el Dashboard. Solo cuentan los pedidos aun sin entregar (sin asignar
+// o en transito). promMap: { ciudad_codigo: dias_plazo }.
+const ESTADOS_EN_CURSO = ["en_transito", "sin_asignar"];
+
+export function mapaPromesas(promesas) {
+  return Object.fromEntries((promesas || []).map(p => [p.ciudad_codigo, Number(p.dias_plazo || 0)]));
+}
+
+export function limiteConMapa(pedido, promMap) {
+  const tiene = promMap[pedido.ciudad_codigo] !== undefined;
+  return limitePromesa(pedido, tiene ? { dias_plazo: promMap[pedido.ciudad_codigo] } : null);
+}
+
+export function fueraDePromesa(pedido, promMap, hoy) {
+  if (!ESTADOS_EN_CURSO.includes(pedido.estado)) return false;
+  const l = limiteConMapa(pedido, promMap);
+  return Boolean(l && l < hoy);
+}
+
+export function enRiesgoDePromesa(pedido, promMap, hoy, manana) {
+  if (!ESTADOS_EN_CURSO.includes(pedido.estado)) return false;
+  const l = limiteConMapa(pedido, promMap);
+  return Boolean(l && (l === hoy || l === manana));
+}
