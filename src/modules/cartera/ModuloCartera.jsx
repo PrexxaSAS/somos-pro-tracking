@@ -99,6 +99,20 @@ export const consolidarCorte = (pedidos) => {
 
 const escHTML = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Numeros de pedido, de los ids de cartera dados, que al aprobarse ya existian
+// en Pedidos (marca ya_en_produccion, docs/cartera_ya_en_produccion.sql). Si la
+// base aun no tiene esa columna devuelve [] en vez de fallar: es solo un aviso.
+export const yaEstabanEnPedidos = async (ids) => {
+  const numeros = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase.from('pedidos_cartera').select('numero_pedido')
+      .eq('ya_en_produccion', true).in('id', ids.slice(i, i + 100));
+    if (error) return [];
+    (data || []).forEach(x => numeros.push(x.numero_pedido));
+  }
+  return numeros;
+};
+
 // ── Asignar corte ──────────────────────────────────────────────────────────────
 // La regla, en un solo sitio (crearAsignadorCortes): la sede sale del DANE de
 // origen; el pedido toma el primer corte que no haya pasado, este abierto y
@@ -925,6 +939,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     const nuevos = pedidos.filter(p=>!yaExisten.has(p.numero_pedido));
 
     let ok=0, errores=0, sinCorte=0, aprobados=0, pendientes=0, hechos=duplicados.length;
+    const idsAprobados=[];
     setProgreso({hechos,total:pedidos.length});
     const asignador = await crearAsignadorCortes();
     try {
@@ -984,7 +999,7 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
         if(historial.length) await supabase.from('historial_cartera').insert(historial);
 
         ok += insertados.length;
-        insertados.forEach(x=>{ if(x.estado_cartera==='aprobado') aprobados++; else pendientes++; });
+        insertados.forEach(x=>{ if(x.estado_cartera==='aprobado'){ aprobados++; idsAprobados.push(x.id); } else pendientes++; });
         hechos += lote.length;
         setProgreso({hechos,total:pedidos.length});
       }
@@ -996,7 +1011,8 @@ export function CargarPedidos({user,showToast,onCargado,onPedidosCambiaron}) {
     }
     // El resultado se queda en pantalla con sus numeros; antes la pantalla
     // saltaba sola a Gestion y el aviso duraba lo que dura un toast.
-    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte,conError:rechazados.pedidos.length});
+    const yaEnPedidos = await yaEstabanEnPedidos(idsAprobados);
+    setResultado({ok,errores,total:pedidos.length,duplicados,aprobados,pendientes,sinCorte,conError:rechazados.pedidos.length,yaEnPedidos});
     if(aprobados>0) onPedidosCambiaron?.();
   };
   const textoCargando = progreso ? `Cargando ${progreso.hechos} de ${progreso.total}...` : "Cargando...";
@@ -1217,7 +1233,8 @@ export function ArchivoFila({ nombre, detalle, error = false, accion, onAccion }
 
 // 3. Resultado del cargue. Queda en pantalla hasta que se elige que sigue.
 export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErrores, compacto = false }) {
-  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0, conError = 0 } = resultado;
+  const { ok, total, errores, duplicados, aprobados = 0, pendientes = 0, sinCorte = 0, conError = 0, yaEnPedidos = [] } = resultado;
+  const columnas = 3 + (conError ? 1 : 0) + (yaEnPedidos.length ? 1 : 0);
   const completo = ok === total && ok > 0 && !conError;
   const conCorte = Math.max(0, aprobados - sinCorte);
   const partes = [
@@ -1241,14 +1258,17 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErr
      {partes.length > 0 && <div style={{ fontSize:13, color:T.color.tinta3, marginTop:3 }}>{partes.join(" · ")}</div>}
     </div>
     <div style={{
-     display:"grid", gridTemplateColumns:`repeat(${conError ? 4 : 3},minmax(0,1fr))`, width:"100%", maxWidth: conError ? 680 : 520, textAlign:"left",
+     display:"grid", gridTemplateColumns:`repeat(${columnas},minmax(0,1fr))`, width:"100%", maxWidth: 170 * columnas + 10, textAlign:"left",
      border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control,
     }}>
      {cifra("Ya existían (omitidos)", duplicados.length, T.color.ojo)}
      <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Fallaron", errores, T.color.mal)}</div>
      <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Aprobados sin sede", sinCorte, T.color.ojo)}</div>
      {conError > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Sin DANE origen (no se subieron)", conError, T.color.mal)}</div>}
+     {yaEnPedidos.length > 0 && <div style={{ borderLeft:`1px solid ${T.color.borde}` }}>{cifra("Ya estaban en Pedidos", yaEnPedidos.length, T.color.ojo)}</div>}
     </div>
+    <ListaNumeros titulo="Ya existían en cartera (no se volvieron a cargar)" numeros={duplicados}/>
+    <ListaNumeros titulo="Aprobados que ya estaban en Pedidos (no se creó uno nuevo; revisa que el de Pedidos sea el correcto)" numeros={yaEnPedidos}/>
     {sinCorte > 0 && (
      <div style={{ fontSize:12.5, color:T.color.ojo, maxWidth:520 }}>
       Los aprobados sin sede no tienen corte: revisa que su DANE origen tenga una sede activa en Sedes y cortes.
@@ -1269,6 +1289,19 @@ export function ResultadoCargue({ resultado, onOtro, onIrGestion, onDescargarErr
     </div>
    </div>
   );
+}
+
+// Los numeros de pedido detras de una cifra del resultado del cargue.
+function ListaNumeros({ titulo, numeros }) {
+ if (!numeros || !numeros.length) return null;
+ return (
+  <div style={{ width:"100%", maxWidth:680, textAlign:"left" }}>
+   <div style={{ fontSize:12.5, fontWeight:600, color:T.color.tinta2, marginBottom:6 }}>{titulo}</div>
+   <div style={{ display:"flex", flexWrap:"wrap", gap:6, maxHeight:120, overflowY:"auto" }}>
+    {numeros.map(n => <span key={n} style={chipMono}>{n}</span>)}
+   </div>
+  </div>
+ );
 }
 
 function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, resumen, carg, fileRef, leerArchivo, confirmar, cancelar, onIrGestion, textoCargando = "Cargando...", rechazados = [], onDescargarRechazados }) {
@@ -1402,14 +1435,16 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
     if(corte){upd.corte_id=corte.corteId;upd.fecha_corte=corte.fechaCorte;}
     await supabase.from('pedidos_cartera').update(upd).eq('id',id);
     await supabase.from('historial_cartera').insert({pedido_id:id,decision:'aprobado',usuario_id:user.id,motivo:'Aprobado por cartera'});
-    return {ok:true, sinCorte:!corte};
+    const yaEnPedidos = (await yaEstabanEnPedidos([id])).length > 0;
+    return {ok:true, sinCorte:!corte, yaEnPedidos, numero:pedido.numero_pedido};
   };
 
   const aprobarUno = async (id) => {
     setAprobando(true);
-    const {sinCorte} = await aprobarPedido(id);
+    const {sinCorte, yaEnPedidos, numero} = await aprobarPedido(id);
     setAprobando(false);
-    showToast("✓ Pedido aprobado"+(sinCorte?" · Sin sede configurada (verificar DANE Origen)":""),"success");
+    if(yaEnPedidos) showToast(`Pedido aprobado, pero ${numero} ya estaba en Pedidos: no se creó uno nuevo`,"error");
+    else showToast("✓ Pedido aprobado"+(sinCorte?" · Sin sede configurada (verificar DANE Origen)":""),"success");
     cargar();
     onPedidosCambiaron?.();
   };
@@ -1417,17 +1452,18 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const aprobarSeleccionados = async () => {
     if(!seleccion.size){showToast("Selecciona al menos un pedido","error");return;}
     setAprobando(true);
-    let ok=0; let sinCorte=0; let omitidos=0;
+    let ok=0; let sinCorte=0; let omitidos=0; const yaEnPedidos=[];
     for(const id of seleccion){
       const res = await aprobarPedido(id);
-      if(res.ok){ ok++; if(res.sinCorte) sinCorte++; }
+      if(res.ok){ ok++; if(res.sinCorte) sinCorte++; if(res.yaEnPedidos) yaEnPedidos.push(res.numero); }
       else if(res.yaDecidido) omitidos++;
     }
     setAprobando(false);
     let msg=`✓ ${ok} pedido(s) aprobado(s)`;
     if(sinCorte>0) msg+=` · ${sinCorte} sin sede configurada (verificar DANE Origen)`;
     if(omitidos>0) msg+=` · ${omitidos} ya estaban aprobados o rechazados`;
-    showToast(msg,"success");
+    if(yaEnPedidos.length) msg+=` · ya estaban en Pedidos (no se crearon de nuevo): ${yaEnPedidos.join(', ')}`;
+    showToast(msg, yaEnPedidos.length ? "error" : "success");
     cargar();
     if(ok>0) onPedidosCambiaron?.();
   };

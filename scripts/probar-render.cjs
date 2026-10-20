@@ -666,6 +666,10 @@ if (window.matchMedia("").matches) {
  exigir(bien.includes("Ir a Gestión de pedidos") && bien.includes("Cargar otro archivo"), "resultado sin sus dos salidas");
  const sinSede = r({ ok:2, total:3, errores:0, duplicados:["4582913"], aprobados:2, pendientes:0, sinCorte:1 });
  exigir(sinSede.includes("2 aprobados, 1 con corte asignado") && sinSede.includes("DANE origen"), "no avisa los aprobados sin sede");
+ const repetidos = r({ ok:2, total:3, errores:0, duplicados:["4582913"], aprobados:2, pendientes:0, sinCorte:0, yaEnPedidos:["PX000120436"] });
+ exigir(repetidos.includes("Ya existían en cartera") && repetidos.includes("4582913"), "no lista los numeros que ya existian en cartera");
+ exigir(repetidos.includes("Ya estaban en Pedidos") && repetidos.includes("PX000120436"), "no lista los aprobados que ya estaban en Pedidos");
+ exigir(!bien.includes("Ya estaban en Pedidos"), "muestra la cifra de Pedidos sin haber ninguno");
  const fila = renderToString(React.createElement(ArchivoFila, { nombre:"plano_2026-09-28.csv", detalle:"No se pudo leer", error:true, accion:"Elegir otro archivo", onAccion(){} }));
  exigir(fila.includes("plano_2026-09-28.csv") && fila.includes("lucide-file-x"), "el archivo con error no se marca en rojo");
 }
