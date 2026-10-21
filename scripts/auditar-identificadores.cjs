@@ -114,6 +114,20 @@ for (const abs of jsx(path.join(base, 'src'))) {
   });
 }
 
+// Tercera pasada, en todo src: listas en rejilla sin gridTemplateColumns. Su
+// columna implicita es "auto" y crece hasta el ancho del texto mas largo que no
+// se parte (un cliente con whiteSpace:nowrap): la lista entera se sale de la
+// pantalla del celular. Con gridTemplateColumns:'minmax(0,1fr)' se encoge.
+for (const abs of jsx(path.join(base, 'src'))) {
+  const rel = path.relative(base, abs).replace(/\\/g, '/');
+  const lineas = fs.readFileSync(abs, 'utf8').replace(/\r\n/g, '\n').split('\n');
+  lineas.forEach((l, i) => {
+    if (!/display: *['"]grid['"], *gap: *[0-9.]+ *\}\}/.test(l)) return;
+    rejillas++;
+    console.log('REJILLA ' + rel + ':' + (i + 1) + ': rejilla sin gridTemplateColumns; usa minmax(0,1fr) o se sale de la pantalla');
+  });
+}
+
 if (problemas || rejillas) {
   const partes = [];
   if (problemas) partes.push(problemas + ' identificador(es) sin definir');
