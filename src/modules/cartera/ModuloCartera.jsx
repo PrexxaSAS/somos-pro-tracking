@@ -345,7 +345,7 @@ export function GestionSedes({showToast}) {
      { label:"Capacidad por dia", valor:sedes.reduce((a,x)=>a+Number(x.capacidad_dia||0),0), color:T.color.infoPunto },
     ]}/>}
 
-    {esMovil ? <div style={{display:'grid',gap:8}}>
+    {esMovil ? <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>
      {sedes.length===0 && <div style={{...tarjeta,padding:24,textAlign:'center',color:T.color.tinta3}}>No hay sedes registradas.</div>}
      {sedes.map(x=><article key={x.id} style={{...tarjeta,padding:'12px 13px',opacity:x.activa?1:.65}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -1770,7 +1770,7 @@ function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, set
   </div>}
 
   {ordenados.length===0 ? <div style={{...tarjeta,padding:30,textAlign:'center',color:T.color.tinta3,fontSize:13}}>Ningún pedido coincide con el filtro.</div> :
-   <div style={{display:'grid',gap:8}}>{ordenados.map(x=>{
+   <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>{ordenados.map(x=>{
     const est=ESTADOS_CARTERA[x.estado_cartera]||ESTADOS_CARTERA.pendiente;
     const decidible=x.estado_cartera!=='aprobado'&&x.estado_cartera!=='rechazado';
     const marcado=seleccion.has(x.id);
@@ -2429,7 +2429,7 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
    </article>;})}</div>}
   </section>
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>{modoFecha==='pendientes'?'Pedidos sin imprimir':'Pedidos del corte'}</h2>
-   {pedidos.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay pedidos para mostrar.</div>:<div style={{display:'grid',gap:7}}>{pedidos.map(p=><article key={p.id} style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:9}}>
+   {pedidos.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay pedidos para mostrar.</div>:<div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:7}}>{pedidos.map(p=><article key={p.id} style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:9}}>
     <div style={{minWidth:0,flex:1}}><div style={{display:'flex',justifyContent:'space-between',gap:6,fontSize:13}}><strong>{p.numero_pedido}</strong><strong>{fCOP(p.valor_total)}</strong></div><div style={{fontSize:12,marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div><div style={{fontSize:11,color:T.color.tinta3,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.direccion||'—'} · {p.sector_dane||'—'} · {p.fecha_corte?fFechaHora(p.fecha_corte):'Sin corte'}</div></div>
     <button aria-label={`Imprimir pedido ${p.numero_pedido}`} onClick={()=>imprimir([p])} style={{...botonBarra,width:40,height:40,padding:0,display:'grid',placeItems:'center',flexShrink:0}}><Printer size={17}/></button>
    </article>)}</div>}
@@ -2477,7 +2477,7 @@ export function ModuloConsultas({showToast}) {
     ['impreso','Impreso',pedidos.filter(p=>p.estado_impresion==='impreso').length],
     ['rechazado','Rechazado',pedidos.filter(p=>p.estado_cartera==='rechazado').length],
    ].map(([clave,label,conteo])=><button key={clave} onClick={()=>setFiltroEst(clave)} style={{whiteSpace:'nowrap',borderRadius:99,border:`1px solid ${filtroEst===clave?T.color.marca:T.color.borde2}`,background:filtroEst===clave?T.color.marca:T.color.superficie,color:filtroEst===clave?'#fff':T.color.tinta2,padding:'8px 11px',fontFamily:'inherit',fontSize:12,fontWeight:600}}>{label} <span style={{opacity:.75}}>{conteo}</span></button>)}</div>
-   {filtrados.length===0?<div style={{...tarjeta,padding:24,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Ningún pedido coincide con el filtro.</div>:<div style={{display:'grid',gap:8}}>{filtrados.map(p=>{
+   {filtrados.length===0?<div style={{...tarjeta,padding:24,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Ningún pedido coincide con el filtro.</div>:<div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>{filtrados.map(p=>{
     const info=getEstadoTexto(p);
     const bg=p.estado_cartera==='rechazado'?T.color.neutroSuave:p.estado_cartera==='aprobado'?p.estado_impresion==='impreso'?T.color.bienSuave:T.color.infoSuave:T.color.ojoSuave;
     return <article key={p.id} style={{...tarjeta,padding:'12px 13px'}}>
