@@ -308,14 +308,14 @@ export function TarjetaPqrs({ item, vistaCliente, onAbrir, onEditar }) {
     {vistaCliente && item.fecha_creacion && <span style={{ fontSize: 12, color: T.color.tinta3 }}>{fechaCorta(item.fecha_creacion)}</span>}
     <Chip {...chip} />
    </span>
-   <span style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3, width: "100%" }}>{item.motivo || "Sin motivo"}</span>
+   <span style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3, width: "100%", whiteSpace: "pre-line" }}>{item.motivo || "Sin motivo"}</span>
    <span style={{ fontSize: 12, color: T.color.tinta3, display: "flex", gap: 12, flexWrap: "wrap" }}>
     <span>Factura <span style={monoChico}>{item.factura || "—"}</span></span>
     <span>Pedido <span style={monoChico}>{item.pedido_ref || "—"}</span></span>
    </span>
    {vistaCliente ? (
     item.respuesta ? (
-     <span style={{ fontSize: 12.5, lineHeight: 1.45, color: T.color.tinta2, background: T.color.superficie2, borderRadius: 10, padding: "8px 10px", width: "100%", boxSizing: "border-box" }}>
+     <span style={{ fontSize: 12.5, lineHeight: 1.45, color: T.color.tinta2, background: T.color.superficie2, borderRadius: 10, padding: "8px 10px", width: "100%", boxSizing: "border-box", whiteSpace: "pre-line" }}>
       <b style={{ color: T.color.tinta }}>Central:</b> {item.respuesta}
      </span>
     ) : abierta ? (
