@@ -5585,7 +5585,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
           <td style={td}><span style={mono}>{x.factura || "-"}</span></td>
           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{x.pedido_ref || "-"}</td>
           <td style={{ ...td, maxWidth:260 }}>
-           <div style={{ color:T.color.tinta, fontWeight:600 }}>{x.motivo}</div>
+           <div style={{ color:T.color.tinta, fontWeight:600, whiteSpace:"pre-line" }}>{x.motivo}</div>
            {x.descripcion && (
             <div style={{ ...T.texto.meta, color:T.color.tinta3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
              {x.descripcion}

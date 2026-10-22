@@ -168,7 +168,7 @@ export function GestionEnvioMovil({
      {nota && (
       <div style={{ display: "flex", gap: 8, padding: "10px 12px", marginTop: 8, borderRadius: 10, background: T.color.ojoSuave, fontSize: 12, color: T.color.ojo, lineHeight: 1.45 }}>
        {esDev ? <AlertTriangle size={14} style={{ color: T.color.ojoPunto, flexShrink: 0 }} /> : <MessageSquare size={14} style={{ color: T.color.ojoPunto, flexShrink: 0 }} />}
-       <span><b style={{ fontWeight: 600 }}>{esDev ? "Motivo:" : "Observaciones:"}</b> {nota}</span>
+       <span style={{ whiteSpace: "pre-line" }}><b style={{ fontWeight: 600 }}>{esDev ? "Motivo:" : "Observaciones:"}</b> {nota}</span>
       </div>
      )}
     </section>

@@ -441,7 +441,7 @@ export function Resumen({ titulo, datos = [], children }) {
    display: "flex", flexDirection: "column", gap: 14,
   }}>
    {titulo && (
-    <div style={{ fontSize: 14, fontWeight: 700, color: T.color.tinta }}>{titulo}</div>
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.color.tinta, whiteSpace: "pre-line" }}>{titulo}</div>
    )}
    {datos.length > 0 && (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px 16px" }}>
@@ -473,7 +473,8 @@ export function FranjaAviso({ etiqueta, children }) {
    fontSize: 13, color: T.color.ojo,
   }}>
    <MessageSquare size={14} style={{ marginTop: 2, flexShrink: 0 }} />
-   <span>{etiqueta && <strong>{etiqueta}: </strong>}{children}</span>
+   {/* pre-line: los motivos y notas se escriben en varias lineas (listas numeradas). */}
+   <span style={{ whiteSpace: "pre-line" }}>{etiqueta && <strong>{etiqueta}: </strong>}{children}</span>
   </div>
  );
 }

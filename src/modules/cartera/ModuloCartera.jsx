@@ -1684,7 +1684,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
               {est.label}
              </span>
              {x.motivo_rechazo && (
-              <div style={{ ...T.texto.meta, color:T.color.mal, marginTop:3 }}>{x.motivo_rechazo}</div>
+              <div style={{ ...T.texto.meta, color:T.color.mal, marginTop:3, whiteSpace:"pre-line" }}>{x.motivo_rechazo}</div>
              )}
             </td>
             <td style={td}>

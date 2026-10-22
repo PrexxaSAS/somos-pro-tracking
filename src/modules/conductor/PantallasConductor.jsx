@@ -317,7 +317,7 @@ export function TarjetaDevolucion({ d, onSoporte }) {
    {d.motivo && (
     <div style={{ display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8, background: T.color.ojoSuave, fontSize: 12, color: T.color.ojo, lineHeight: 1.45 }}>
      <AlertTriangle size={14} style={{ color: T.color.ojoPunto, flexShrink: 0 }} />
-     <span><b style={{ fontWeight: 600 }}>Motivo:</b> {d.motivo}</span>
+     <span style={{ whiteSpace: "pre-line" }}><b style={{ fontWeight: 600 }}>Motivo:</b> {d.motivo}</span>
     </div>
    )}
 
@@ -380,7 +380,7 @@ export function TarjetaRecogida({ r, onDocumento }) {
     {r.observaciones && (
      <span style={{ ...dato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
       <MessageSquare size={14} style={{ color: T.color.placeholder, flexShrink: 0 }} />
-      {r.observaciones}
+      <span style={{ whiteSpace: "pre-line" }}>{r.observaciones}</span>
      </span>
     )}
     <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexShrink: 0 }}>

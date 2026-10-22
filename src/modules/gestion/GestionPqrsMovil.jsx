@@ -117,7 +117,7 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
        <HelpCircle size={16} style={{ color: T.color.marca }} />
        <span style={{ ...T.texto.seccion, color: T.color.placeholder }}>{item.descripcion ? item.motivo : "PQRS"}</span>
       </div>
-      <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.35 }}>{item.descripcion || item.motivo}</span>
+      <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.35, whiteSpace: "pre-line" }}>{item.descripcion || item.motivo}</span>
      </div>
      <Fila etiqueta="Factura" valor={item.factura || "—"} mono />
      <Fila etiqueta="Pedido" valor={item.pedido_ref || "—"} mono />
@@ -139,7 +139,7 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
         <span style={{ width: 10, height: 10, borderRadius: 5, flexShrink: 0, marginTop: 4, background: T.color.marca, border: `2px solid ${T.color.marca}` }} />
        </div>
        <div style={{ display: "flex", flexDirection: "column", gap: 3, paddingBottom: 10 }}>
-        <span style={{ fontSize: 13, lineHeight: 1.45 }}>{item.respuesta || "Gestion registrada"}</span>
+        <span style={{ fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-line" }}>{item.respuesta || "Gestion registrada"}</span>
         <span style={{ fontSize: 12, color: T.color.tinta4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
          {[item.gestionado_por, fechaCorta(item.fecha_gestion)].filter(Boolean).join(" · ")}
          {(item.soporte_nombre || item.soporte_data) && (

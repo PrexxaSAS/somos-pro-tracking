@@ -229,6 +229,7 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
     <div style={{
      minHeight: 44, fontSize: 12, lineHeight: 1.5,
      borderBottom: `1px dotted ${T.color.tenue}`,
+     whiteSpace: "pre-line",
     }}>{pedido.notas || ""}</div>
    </div>
 

@@ -384,7 +384,7 @@ export function EditarPedidoMovil({
       background: T.color.ojoSuave, fontSize: 13, color: T.color.ojo, lineHeight: 1.45,
      }}>
       <Info size={15} style={{ flexShrink: 0, marginTop: 2 }} />
-      <span><b>Notas:</b> {pedido.notas}</span>
+      <span style={{ whiteSpace: "pre-line" }}><b>Notas:</b> {pedido.notas}</span>
      </div>
     )}
 

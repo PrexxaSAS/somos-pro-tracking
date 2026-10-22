@@ -89,7 +89,7 @@ export function Fila({ etiqueta, valor, falta, mono, icono: Icono, onIcono }) {
     {etiqueta}
    </span>
    <span style={{
-    flex: 1, minWidth: 0, lineHeight: 1.4,
+    flex: 1, minWidth: 0, lineHeight: 1.4, whiteSpace: "pre-line",
     color: falta ? T.color.malPunto : T.color.tinta,
     fontWeight: falta ? 600 : 500,
     fontFamily: mono ? T.fuente.mono : "inherit",
