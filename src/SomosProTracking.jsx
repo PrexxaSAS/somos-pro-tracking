@@ -132,9 +132,6 @@ async function obtenerFacturasConGuias() {
  return (facturas || []).map(f => ({ ...f, factura_guias: porFactura[f.id] || [] }));
 }
 
-// La base entrega maximo 1.000 filas por consulta. Antes las tandas se pedian
-// una detras de otra y la pantalla de bienvenida esperaba la suma de todas;
-// ahora la primera trae tambien cuantos pedidos hay y el resto se pide a la vez.
 // Tiempos de la carga inicial, para saber que hace esperar en la pantalla de
 // bienvenida. Se ven en la consola del navegador (F12 > Consola) como una tabla
 // "Tiempos de carga". No cambian nada de lo que hace la app.
@@ -155,27 +152,36 @@ const mostrarTiemposCarga = () => {
  tiemposCarga.pasos = [];
 };
 
+// La base entrega maximo 1.000 filas por consulta. Las tandas se piden todas a
+// la vez desde el principio: cuantas pedir sale de cuantos pedidos habia la
+// ultima vez (guardado en el navegador), mas una de margen. Si la ultima llega
+// llena, hay mas pedidos de los esperados y se pide otro grupo. Antes la
+// primera tanda se esperaba sola para saber el total, y eso sumaba una tanda
+// entera de espera a la pantalla de bienvenida.
+const CLAVE_TANDAS = 'qtracking_tandas_pedidos';
 async function cargarTodosLosPedidos(columnas) {
  const PAGINA = 1000;
- const tanda = (desde, conteo = false) => supabase
+ const tanda = (n) => medir(`pedidos · tanda ${n + 1}`, supabase
   .from('pedidos')
-  .select(columnas, conteo ? { count: 'exact' } : undefined)
+  .select(columnas)
   .order('created_at', { ascending: false })
   .order('id', { ascending: true })
-  .range(desde, desde + PAGINA - 1);
+  .range(n * PAGINA, (n + 1) * PAGINA - 1));
 
- const primera = await medir('pedidos · tanda 1 con conteo', tanda(0, true));
- if (primera.error) return { data: null, error: primera.error };
- const filas = [...(primera.data || [])];
- const total = primera.count ?? filas.length;
+ let porGrupo = 5;
+ try { porGrupo = Math.max(2, Number(localStorage.getItem(CLAVE_TANDAS)) + 1 || 5); } catch { /* sin almacenamiento */ }
 
- const resto = [];
- for (let desde = PAGINA; desde < total; desde += PAGINA) resto.push(medir(`pedidos · tanda ${desde / PAGINA + 1}`, tanda(desde)));
- const respuestas = await Promise.all(resto);
- for (const r of respuestas) {
-  if (r.error) return { data: null, error: r.error };
-  filas.push(...(r.data || []));
+ const filas = [];
+ for (let desde = 0; ; desde += porGrupo) {
+  const respuestas = await Promise.all(Array.from({ length: porGrupo }, (_, i) => tanda(desde + i)));
+  for (const r of respuestas) {
+   if (r.error) return { data: null, error: r.error };
+   filas.push(...(r.data || []));
+  }
+  // Si la ultima tanda del grupo no llego llena, ya no hay mas pedidos.
+  if ((respuestas[respuestas.length - 1].data || []).length < PAGINA) break;
  }
+ try { localStorage.setItem(CLAVE_TANDAS, String(Math.ceil(filas.length / PAGINA))); } catch { /* sin almacenamiento */ }
 
  // Si alguien creo un pedido mientras se cargaba, una fila puede correrse de
  // una tanda a la siguiente y llegar dos veces: se deja una sola.
