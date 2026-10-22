@@ -135,6 +135,26 @@ async function obtenerFacturasConGuias() {
 // La base entrega maximo 1.000 filas por consulta. Antes las tandas se pedian
 // una detras de otra y la pantalla de bienvenida esperaba la suma de todas;
 // ahora la primera trae tambien cuantos pedidos hay y el resto se pide a la vez.
+// Tiempos de la carga inicial, para saber que hace esperar en la pantalla de
+// bienvenida. Se ven en la consola del navegador (F12 > Consola) como una tabla
+// "Tiempos de carga". No cambian nada de lo que hace la app.
+const tiemposCarga = { inicio: 0, pasos: [] };
+const medir = (nombre, promesa) => {
+ const t0 = performance.now();
+ return Promise.resolve(promesa).then(r => {
+  const filas = Array.isArray(r?.data) ? r.data.length : (r?.data ? 1 : 0);
+  tiemposCarga.pasos.push({ paso: nombre, ms: Math.round(performance.now() - t0), filas });
+  return r;
+ });
+};
+const mostrarTiemposCarga = () => {
+ if (!tiemposCarga.pasos.length) return;
+ const total = Math.round(performance.now() - tiemposCarga.inicio);
+ console.info(`Tiempos de carga · total ${total} ms desde que abrio la pagina o se inicio sesion`);
+ console.table(tiemposCarga.pasos);
+ tiemposCarga.pasos = [];
+};
+
 async function cargarTodosLosPedidos(columnas) {
  const PAGINA = 1000;
  const tanda = (desde, conteo = false) => supabase
@@ -144,13 +164,13 @@ async function cargarTodosLosPedidos(columnas) {
   .order('id', { ascending: true })
   .range(desde, desde + PAGINA - 1);
 
- const primera = await tanda(0, true);
+ const primera = await medir('pedidos · tanda 1 con conteo', tanda(0, true));
  if (primera.error) return { data: null, error: primera.error };
  const filas = [...(primera.data || [])];
  const total = primera.count ?? filas.length;
 
  const resto = [];
- for (let desde = PAGINA; desde < total; desde += PAGINA) resto.push(tanda(desde));
+ for (let desde = PAGINA; desde < total; desde += PAGINA) resto.push(medir(`pedidos · tanda ${desde / PAGINA + 1}`, tanda(desde)));
  const respuestas = await Promise.all(resto);
  for (const r of respuestas) {
   if (r.error) return { data: null, error: r.error };
@@ -6191,18 +6211,18 @@ export default function SomosProTracking() {
     pedRes, ciuRes, paqRes,
     devRes, recRes, pqrsRes,
     promRes,
-   ] = await Promise.all([
-    supabase.from('usuarios').select('*').order('created_at'),
-    supabase.from('transportistas').select('*').order('created_at'),
-    supabase.from('conductores').select('*').order('created_at'),
-    cargarTodosLosPedidos(pedidosSelect),
-    supabase.from('ciudades').select('*').order('name'),
-    supabase.from('paqueterias').select('*').order('nombre'),
-    supabase.from('devoluciones').select(devolucionesSelect).order('created_at', { ascending: false }),
-    supabase.from('recogidas').select(recogidasSelect).order('created_at', { ascending: false }),
-    supabase.from('pqrs').select(pqrsSelect).order('created_at', { ascending: false }),
-    supabase.from('promesas_servicio').select('*'),
-   ]);
+   ] = await medir('todas las consultas (en paralelo)', Promise.all([
+    medir('usuarios', supabase.from('usuarios').select('*').order('created_at')),
+    medir('transportistas', supabase.from('transportistas').select('*').order('created_at')),
+    medir('conductores', supabase.from('conductores').select('*').order('created_at')),
+    medir('pedidos · todas las tandas', cargarTodosLosPedidos(pedidosSelect)),
+    medir('ciudades', supabase.from('ciudades').select('*').order('name')),
+    medir('paqueterias', supabase.from('paqueterias').select('*').order('nombre')),
+    medir('devoluciones', supabase.from('devoluciones').select(devolucionesSelect).order('created_at', { ascending: false })),
+    medir('recogidas', supabase.from('recogidas').select(recogidasSelect).order('created_at', { ascending: false })),
+    medir('pqrs', supabase.from('pqrs').select(pqrsSelect).order('created_at', { ascending: false })),
+    medir('promesas', supabase.from('promesas_servicio').select('*')),
+   ]));
    const results = [usuRes, traRes, conRes, pedRes, ciuRes, paqRes, devRes, recRes, pqrsRes, promRes];
    const failed = results.find(r => r.error);
    if (failed) throw failed.error;
@@ -6249,6 +6269,7 @@ export default function SomosProTracking() {
    showToast('No se pudo cargar Supabase: '+(e.message || 'verifica variables y permisos.'), 'error');
   }
   setCargando(false);
+  if (!silencioso) mostrarTiemposCarga();
  };
 
  // Refresco en segundo plano: no muestra la pantalla de bienvenida, para no
@@ -6329,12 +6350,13 @@ export default function SomosProTracking() {
  const handleLogin = async (u) => {
   // For conductors, find their conductor record to get the correct ID
   let userWithConductorId = u;
+  if (!tiemposCarga.pasos.length) tiemposCarga.inicio = performance.now(); // al iniciar sesion
   if (u.rol === 'conductor') {
-   const { data: condData } = await supabase
+   const { data: condData } = await medir('conductor del usuario', supabase
     .from('conductores')
     .select('id')
     .eq('usuario_id', u.id)
-    .single();
+    .single());
    if (condData) {
     userWithConductorId = { ...u, conductor_db_id: condData.id };
    }
@@ -6356,8 +6378,9 @@ export default function SomosProTracking() {
 
   const restaurarSesion = async () => {
    setCargando(true);
+   tiemposCarga.inicio = 0; // desde que se abrio la pagina
    try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const { data: sessionData, error: sessionError } = await medir('sesion guardada', supabase.auth.getSession());
     if (sessionError) throw sessionError;
     const authUser = sessionData?.session?.user;
     if (!authUser) {
@@ -6365,11 +6388,11 @@ export default function SomosProTracking() {
      return;
     }
 
-    const { data: perfil, error: perfilError } = await supabase
+    const { data: perfil, error: perfilError } = await medir('perfil del usuario', supabase
      .from('usuarios')
      .select('*')
      .eq('auth_user_id', authUser.id)
-     .maybeSingle();
+     .maybeSingle());
     if (perfilError) throw perfilError;
     if (!perfil) {
      await supabase.auth.signOut();
