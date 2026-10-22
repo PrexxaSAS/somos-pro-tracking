@@ -132,22 +132,35 @@ async function obtenerFacturasConGuias() {
  return (facturas || []).map(f => ({ ...f, factura_guias: porFactura[f.id] || [] }));
 }
 
+// La base entrega maximo 1.000 filas por consulta. Antes las tandas se pedian
+// una detras de otra y la pantalla de bienvenida esperaba la suma de todas;
+// ahora la primera trae tambien cuantos pedidos hay y el resto se pide a la vez.
 async function cargarTodosLosPedidos(columnas) {
  const PAGINA = 1000;
- const filas = [];
- for (let desde = 0; ; ) {
-  const { data, error } = await supabase
-   .from('pedidos')
-   .select(columnas)
-   .order('created_at', { ascending: false })
-   .order('id', { ascending: true })
-   .range(desde, desde + PAGINA - 1);
-  if (error) return { data: null, error };
-  if (!data || data.length === 0) break;
-  filas.push(...data);
-  desde += data.length;
+ const tanda = (desde, conteo = false) => supabase
+  .from('pedidos')
+  .select(columnas, conteo ? { count: 'exact' } : undefined)
+  .order('created_at', { ascending: false })
+  .order('id', { ascending: true })
+  .range(desde, desde + PAGINA - 1);
+
+ const primera = await tanda(0, true);
+ if (primera.error) return { data: null, error: primera.error };
+ const filas = [...(primera.data || [])];
+ const total = primera.count ?? filas.length;
+
+ const resto = [];
+ for (let desde = PAGINA; desde < total; desde += PAGINA) resto.push(tanda(desde));
+ const respuestas = await Promise.all(resto);
+ for (const r of respuestas) {
+  if (r.error) return { data: null, error: r.error };
+  filas.push(...(r.data || []));
  }
- return { data: filas, error: null };
+
+ // Si alguien creo un pedido mientras se cargaba, una fila puede correrse de
+ // una tanda a la siguiente y llegar dos veces: se deja una sola.
+ const vistos = new Set();
+ return { data: filas.filter(p => !vistos.has(p.id) && vistos.add(p.id)), error: null };
 }
 
 // Busca en la base, por bloques de 100, los pedidos de una lista de ids.
@@ -6222,10 +6235,12 @@ export default function SomosProTracking() {
    setRecogidas(rec || []);
    setPqrs(pqrsd || []);
    setPromesas(prom || []);
-   // Cargar facturas por separado - sin join anidado
+   // Las facturas de proveedor se cargan en segundo plano: la aplicacion abre
+   // sin esperarlas y quedan listas para cuando se entre a Facturas.
    if (puedeVerFacturas) {
-    try { setFacturas(await obtenerFacturasConGuias()); }
-    catch(e) { console.error('facturas load error:', e); setFacturas([]); }
+    obtenerFacturasConGuias()
+     .then(setFacturas)
+     .catch(e => { console.error('facturas load error:', e); setFacturas([]); });
    } else {
     setFacturas([]);
    }
