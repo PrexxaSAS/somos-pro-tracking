@@ -504,7 +504,7 @@ export function ModalCortes({sede,onClose,showToast,onCambiar}) {
     onCambiar?.();
   };
 
-  if(esMovil) return <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:150,background:'rgba(23,20,31,.45)',display:'flex',alignItems:'flex-end'}}>
+  if(esMovil) return <div style={{position:'fixed',inset:0,zIndex:150,background:'rgba(23,20,31,.45)',display:'flex',alignItems:'flex-end'}}>
    <div onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Cortes de ${sede.nombre}`} style={{width:'100%',boxSizing:'border-box',maxHeight:'85vh',overflowY:'auto',background:T.color.superficie,borderRadius:'20px 20px 0 0',padding:'9px 16px calc(16px + env(safe-area-inset-bottom, 0px))'}}>
     <div style={{width:36,height:4,background:T.color.tenue,borderRadius:4,margin:'0 auto 14px'}}/>
     <h2 style={{fontSize:17,margin:'0 0 2px'}}>Cortes · {sede.nombre}</h2>
@@ -1813,7 +1813,7 @@ export function ModalRechazar({pedido, onRechazar, onClose}) {
     await onRechazar(motivo.trim());
     setCarg(false);
   };
-  if(esMovil) return <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:150,background:'rgba(23,20,31,.45)',display:'flex',alignItems:'flex-end'}}>
+  if(esMovil) return <div style={{position:'fixed',inset:0,zIndex:150,background:'rgba(23,20,31,.45)',display:'flex',alignItems:'flex-end'}}>
    <div onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Rechazar pedido ${pedido.numero_pedido}`} style={{width:'100%',boxSizing:'border-box',maxHeight:'90vh',overflowY:'auto',background:T.color.superficie,borderRadius:'20px 20px 0 0',padding:'9px 16px calc(16px + env(safe-area-inset-bottom, 0px))'}}>
     <div style={{width:36,height:4,background:T.color.tenue,borderRadius:4,margin:'0 auto 14px'}}/>
     <h2 style={{fontSize:17,margin:'0 0 3px'}}>Rechazar pedido {pedido.numero_pedido}</h2>

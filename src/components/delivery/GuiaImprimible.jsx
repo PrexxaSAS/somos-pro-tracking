@@ -378,7 +378,7 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
 
  return (
   <>
-   <div onClick={onClose} style={{
+   <div style={{
     position: "fixed", inset: 0, zIndex: 125, background: "rgba(23,20,31,.45)",
     display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
    }}>
