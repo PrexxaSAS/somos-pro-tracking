@@ -17,7 +17,8 @@ export function ModalForm({
 }) {
  return (
   <div
-   onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+   // El fondo no cierra la ventana: un clic sin querer perdia lo escrito.
+   // Se cierra con la X o con Cancelar.
    style={{
     position: "fixed", inset: 0, background: "rgba(23,20,31,.45)", zIndex: 1000,
     display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
@@ -342,7 +343,8 @@ export function ModalGestion({
 }) {
  return (
   <div
-   onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+   // El fondo no cierra la ventana: un clic sin querer perdia lo escrito.
+   // Se cierra con la X o con Cancelar.
    style={{
     position: "fixed", inset: 0, background: "rgba(23,20,31,.45)", zIndex: 1000,
     display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
