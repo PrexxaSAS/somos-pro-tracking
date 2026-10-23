@@ -1982,16 +1982,16 @@ export function ModuloLogistica({showToast}) {
   };
 
   // Imprime todos los pedidos aprobados del corte, impresos o no. Si ya
-  // estaban todos impresos es una reimpresion. porPedido: en vez del
-  // consolidado, la orden de cada pedido en su propia hoja, en un solo archivo
-  // (el boton del panel de pedidos del corte).
-  const imprimirCorte = async (c, porPedido=false) => {
+  // estaban todos impresos es una reimpresion.
+  // modo: 'consolidado' (por defecto), 'pedidos' (la orden de cada pedido en su
+  // hoja) o 'lista' (solo los numeros de pedido del corte).
+  const imprimirCorte = async (c, modo='consolidado') => {
     setImprimiendo(c.id);
-    const {data,error}=await supabase.from('pedidos_cartera').select('*, pedidos_cartera_detalle(*)')
+    const {data,error}=await supabase.from('pedidos_cartera').select(modo==='lista' ? '*' : '*, pedidos_cartera_detalle(*)')
       .eq('estado_cartera','aprobado').eq('corte_id',c.id).order('numero_pedido');
     setImprimiendo(null);
     if(error){ showToast("No se pudieron leer los pedidos del corte","error"); return; }
-    await imprimir(data||[], c, porPedido);
+    await imprimir(data||[], c, modo);
   };
 
   // Trae las lineas de los pedidos que no las tengan cargadas.
@@ -2007,20 +2007,24 @@ export function ModuloLogistica({showToast}) {
     return lista.map(x=>x.pedidos_cartera_detalle?x:{...x,pedidos_cartera_detalle:porPedido[x.id]||[]});
   };
 
-  // Con corte se imprime el consolidado del corte, salvo porPedido; sin corte
-  // (un pedido suelto) o con porPedido, la orden de cada pedido en su hoja.
-  const imprimir = async (lista, corte=null, porPedido=false) => {
+  // Con corte se imprime segun el modo: el consolidado, la orden de cada pedido
+  // en su hoja ('pedidos') o solo la lista de numeros ('lista'). Sin corte (un
+  // pedido suelto), la orden de cada pedido.
+  const imprimir = async (lista, corte=null, modo='consolidado') => {
     if(!lista.length){ showToast("No hay pedidos para imprimir","error"); return; }
-    let pedidosImprimir;
-    try { pedidosImprimir = await conDetalle(lista); }
-    catch { showToast("No se pudieron leer las lineas de los pedidos","error"); return; }
-    const html = corte && !porPedido
-      ? generarHTMLConsolidado(pedidosImprimir, corte)
+    const esLista = corte && modo === 'lista';
+    let pedidosImprimir = lista;
+    if(!esLista){
+      try { pedidosImprimir = await conDetalle(lista); }
+      catch { showToast("No se pudieron leer las lineas de los pedidos","error"); return; }
+    }
+    const html = esLista ? generarHTMLListaCorte(pedidosImprimir, corte)
+      : corte && modo === 'consolidado' ? generarHTMLConsolidado(pedidosImprimir, corte)
       : pedidosImprimir.map((p,i)=>generarHTMLPedido(p,i<pedidosImprimir.length-1)).join('');
     // Nombre del PDF. Corte: sede, fecha y hora. Pedido: su numero. Varios
     // pedidos sueltos (el boton de pendientes del celular): cuantos son.
     const nombrePdf = corte
-      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}${porPedido ? ' pedidos' : ''}`
+      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}${modo === 'pedidos' ? ' pedidos' : esLista ? ' lista' : ''}`
       : pedidosImprimir.length === 1 ? String(pedidosImprimir[0].numero_pedido || 'Pedido')
       : `Pedidos ${pedidosImprimir.length}`;
     const cerrado = imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escHTML(nombrePdf)}</title><style>
@@ -2055,6 +2059,8 @@ export function ModuloLogistica({showToast}) {
     // cancelaba el dialogo, el corte quedaba como impreso y salia de Pendientes.
     // Se marcan solo los que no lo estaban: al reimprimir se conserva la fecha
     // de la primera impresion.
+    // La lista de numeros no es el documento de alistamiento: no marca nada.
+    if(esLista) return;
     const ids=pedidosImprimir.filter(x=>x.estado_impresion!=='impreso').map(x=>x.id);
     await cerrado;
     if(ids.length) setPorConfirmar({ ids, que: corte ? `el corte de las ${String(corte.hora_corte||'').slice(0,5)}` : ids.length===1 ? 'el pedido' : 'los pedidos' });
@@ -2085,6 +2091,27 @@ export function ModuloLogistica({showToast}) {
      </p>
     </ModalForm>
   );
+
+  // Solo los numeros de pedido del corte, con el mismo encabezado del consolidado.
+  const generarHTMLListaCorte = (lista, corte) => {
+    const numeros = lista.map(p => String(p.numero_pedido || '')).filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    return `
+    <div class="pagina">
+      <div class="titulo">SOMOS PRO</div>
+      <div class="subtitulo">LISTADO DE PEDIDOS DEL CORTE</div>
+      <table class="enc-tabla" style="margin-bottom:12px">
+        <tr><td>Corte</td><td><strong>${escHTML(String(corte.hora_corte||'').slice(0,5))}</strong></td><td>Fecha</td><td><strong>${fFechaDia(corte.fecha)}</strong></td></tr>
+        <tr><td>Sede</td><td>${escHTML(corte.sedes?.nombre||'')}</td><td>Pedidos</td><td>${numeros.length}</td></tr>
+      </table>
+      <table style="width:auto;min-width:60%">
+        <thead><tr><th style="width:50px;text-align:right">#</th><th>Pedido</th></tr></thead>
+        <tbody>
+          ${numeros.map((n, i) => `<tr><td style="text-align:right">${i + 1}</td><td>${escHTML(n)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  };
 
   const generarHTMLConsolidado = (lista, corte) => {
     const grupos = consolidarCorte(lista);
@@ -2305,10 +2332,16 @@ export function ModuloLogistica({showToast}) {
           <div style={{ fontSize:12.5, color:T.color.tinta3, marginTop:2 }}>{fFechaDia(corteVisto.fecha)}</div>
          </div>
          {impVisto.total > 0 && (
-          <button style={botonFila} onClick={()=>imprimirCorte(corteVisto, true)} disabled={imprimiendo === corteVisto.id}
-           title="Imprime la orden de cada pedido del corte, una por hoja">
-           <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} pedidos`}
-          </button>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+           <button style={botonFila} onClick={()=>imprimirCorte(corteVisto, 'lista')} disabled={imprimiendo === corteVisto.id}
+            title="Imprime solo la lista de numeros de pedido del corte">
+            <Printer size={14}/> Lista
+           </button>
+           <button style={botonFila} onClick={()=>imprimirCorte(corteVisto, 'pedidos')} disabled={imprimiendo === corteVisto.id}
+            title="Imprime la orden de cada pedido del corte, una por hoja">
+            <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} pedidos`}
+           </button>
+          </div>
          )}
         </div>
         {pedidosVistos.length === 0 ? (
