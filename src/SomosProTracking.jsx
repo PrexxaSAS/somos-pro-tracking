@@ -83,7 +83,7 @@ function esVacio(v) {
 const COLUMNAS_PEDIDOS_CLIENTE = [
  "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
  "factura","conductor_id","placa","estado","estado_despacho","novedad","fecha_creacion",
- "fecha_estimada","fecha_real","fecha_pedido","hora_pedido","tipo","paqueteria","guia_paqueteria","soportes",
+ "fecha_estimada","fecha_real","fecha_despacho","fecha_pedido","hora_pedido","tipo","paqueteria","guia_paqueteria","soportes",
  "ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","created_at",
 ].join(",");
 const COLUMNAS_PEDIDOS = [
@@ -2016,6 +2016,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
          <th style={th2}>Fecha pedido</th>
          <th style={th2}>Hora pedido</th>
          <th style={th2}>Fecha ingreso</th>
+         <th style={th2}>Fecha despacho</th>
          <th style={{ ...th2, textAlign:"right" }}>Cajas</th>
          <th style={th2}>Estado</th>
          <th style={th2}>Conductor</th>
@@ -2024,7 +2025,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        </thead>
        <tbody>
         {filtrados.length === 0 && (
-         <tr><td colSpan={12} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
+         <tr><td colSpan={13} style={{ ...td2, padding:42, textAlign:"center", color:T.color.tinta3 }}>
           Ningun pedido coincide con los filtros.
          </td></tr>
         )}
@@ -2065,6 +2066,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
             {p.hora_pedido ? String(p.hora_pedido).slice(0, 5) : <span style={{ color:T.color.tinta3 }}>-</span>}
            </td>
            <CeldaFechaIngreso p={p} estilo={td2}/>
+           <td style={{ ...td2, whiteSpace:"nowrap" }}>{p.fecha_despacho || <span style={{ color:T.color.tinta3 }}>-</span>}</td>
            <td style={{ ...td2, textAlign:"right", fontWeight:700, color:T.color.tinta }}>{p.cajas || 0}</td>
            <td style={td2}>
             <span style={{
@@ -6073,6 +6075,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
         <th style={th}>Destinatario</th>
         <th style={th}>Destino</th>
         <th style={th}>Fecha ingreso</th>
+        <th style={th}>Fecha despacho</th>
         <th style={{ ...th, textAlign:"right" }}>Cajas</th>
         <th style={th}>Estado</th>
         <th style={th}>Transporte</th>
@@ -6081,7 +6084,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
       </thead>
       <tbody>
        {filtP.length === 0 && (
-        <tr><td colSpan={9} style={{ ...td, padding:42, textAlign:"center", color:T.color.tinta3 }}>
+        <tr><td colSpan={10} style={{ ...td, padding:42, textAlign:"center", color:T.color.tinta3 }}>
          {enRango.length === 0 ? "No hay pedidos en este periodo." : "Ningun pedido coincide con los filtros."}
         </td></tr>
        )}
@@ -6106,6 +6109,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
             <div style={{ ...T.texto.meta, color:T.color.tinta3 }}>{p.ciudad_nombre || ciudad?.name || ""}</div>
            </td>
            <CeldaFechaIngreso p={p} estilo={td}/>
+           <td style={{ ...td, whiteSpace:"nowrap" }}>{p.fecha_despacho || <span style={{ color:T.color.tinta3 }}>—</span>}</td>
            <td style={{ ...td, textAlign:"right", fontWeight:700, color: p.cajas ? T.color.tinta : T.color.tinta4 }}>{p.cajas || 0}</td>
            <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
            <td style={td}>
@@ -6130,7 +6134,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
             </div>
            </td>
           </tr>
-          {abierto && <tr><td colSpan={9} style={{ padding:16, background:T.color.superficie2, borderBottom:`1px solid ${T.color.borde}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
+          {abierto && <tr><td colSpan={10} style={{ padding:16, background:T.color.superficie2, borderBottom:`1px solid ${T.color.borde}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
          </React.Fragment>
         );
        })}
