@@ -5443,21 +5443,20 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
    if (recargar) await recargar();
    return;
   }
-  const year = new Date().getFullYear();
-  const usados = pqrs.map(p=>p.id).filter(id=>id.startsWith(`PQRS-${year}-`)).map(id=>parseInt(id.split("-")[2])||0);
-  const num = String((usados.length?Math.max(...usados):0)+1).padStart(4,"0");
+  // El numero de caso lo asigna la base (docs/pqrs_numero_caso.sql). Calcularlo
+  // aqui usaba la lista de PQRS que el usuario ve: el cliente solo ve las suyas,
+  // proponia un numero ya usado y la PQRS no se radicaba.
   const nueva = {
-   id: `PQRS-${year}-${num}`,
    factura: form.factura.trim(), pedido_ref: form.pedido_ref.trim(),
    motivo: form.motivo, descripcion: form.descripcion.trim(),
    estado: "abierta", solicitado_por: user.nombre||user.user,
    fecha_creacion: hoyLocal(),
    fecha_gestion: null, respuesta: "", gestionado_por: "",
   };
-  const { error } = await supabase.from('pqrs').insert(nueva);
+  const { data: creada, error } = await supabase.from('pqrs').insert(nueva).select('id').single();
   if (error) { showToast(mensajeError(error, "la PQRS"),"error"); return; }
   setModNueva(false); setForm(vacio);
-  showToast(` PQRS creada Caso: ${nueva.id}`,"success");
+  showToast(` PQRS creada Caso: ${creada?.id || ''}`,"success");
   if (recargar) await recargar();
  };
 
