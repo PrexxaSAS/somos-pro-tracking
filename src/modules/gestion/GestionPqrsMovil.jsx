@@ -18,8 +18,9 @@ import { hoyLocal } from '../../utils/fechas';
 // La base guarda UNA gestion por PQRS (respuesta, gestionado_por,
 // fecha_gestion). El disenio dibuja un historial de varias; aqui la gestion
 // registrada se muestra como esa linea de tiempo, con una sola entrada, y
-// despues de registrada ya solo se puede cerrar. Permitir varias es un cambio
-// de datos, no de pantalla.
+// despues de registrada el operador ya solo puede cerrar. El admin puede
+// corregir la respuesta, tambien con el caso cerrado, y reabrirlo. Permitir
+// varias gestiones es un cambio de datos, no de pantalla.
 //
 // Esta pantalla no decide nada: llama a los mismos onRegistrar y onCerrar que
 // el modal de escritorio.
@@ -42,8 +43,9 @@ function Fila({ etiqueta, valor, mono, ambar }) {
  );
 }
 
-export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSoporte, showToast, puedeGestionar = true }) {
- const [texto, setTexto] = useState("");
+export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onReabrir, onSoporte, showToast, puedeGestionar = true, esAdmin = false }) {
+ const yaGestionadaIni = Boolean((item.respuesta || "").trim() || item.fecha_gestion || item.gestionado_por);
+ const [texto, setTexto] = useState(esAdmin && yaGestionadaIni ? (item.respuesta || "") : "");
  const [soporte, setSoporte] = useState({ data: null, nombre: "", tamano: 0 });
  const [guardando, setGuardando] = useState(false);
  const archivoRef = useRef(null);
@@ -69,7 +71,10 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
   setSoporte({ data, nombre: file.name, tamano: file.size });
  };
 
- const puedeRegistrar = puedeGestionar && !cerrada && !yaGestionada && texto.trim().length > 0;
+ // Formulario de respuesta: para registrarla o, si es admin, para corregirla.
+ const editable = puedeGestionar && (esAdmin || (!cerrada && !yaGestionada));
+ const cambiada = texto.trim().length > 0 && texto.trim() !== (item.respuesta || "").trim();
+ const puedeRegistrar = editable && (yaGestionada ? (cambiada || Boolean(soporte.data)) : texto.trim().length > 0);
  // Igual que en escritorio: se puede cerrar con una respuesta registrada o
  // con una escrita. Ojo: cerrar no guarda lo escrito, por eso se avisa.
  const puedeCerrar = puedeGestionar && !cerrada && (yaGestionada || texto.trim().length > 0);
@@ -153,7 +158,7 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
      </section>
     )}
 
-    {puedeGestionar && !cerrada && !yaGestionada && (
+    {editable && (
      <>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
        <span style={{ ...T.texto.seccion, color: T.color.placeholder, whiteSpace: "nowrap" }}>Gestion</span>
@@ -197,7 +202,7 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
      </>
     )}
 
-    {puedeGestionar && !cerrada && yaGestionada && (
+    {puedeGestionar && !esAdmin && !cerrada && yaGestionada && (
      <div style={{ padding: "10px 12px", borderRadius: 10, background: T.color.superficie3, fontSize: 12.5, color: T.color.tinta2, lineHeight: 1.45 }}>
       La respuesta ya fue registrada y no se puede editar. Lo que queda es cerrar la PQRS.
      </div>
@@ -217,7 +222,20 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onSopor
        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 12, border: "none",
        background: T.color.marca, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600,
        cursor: !puedeRegistrar || guardando ? "not-allowed" : "pointer", opacity: !puedeRegistrar || guardando ? 0.5 : 1,
-      }}>{guardando ? "Registrando..." : "Registrar gestion"}</button>
+      }}>{guardando ? "Registrando..." : yaGestionada ? "Guardar cambios" : "Registrar gestion"}</button>
+     </>
+    ) : esAdmin && cerrada ? (
+     <>
+      <button onClick={() => { if (window.confirm("¿Reabrir esta PQRS?")) onReabrir(); }} style={{
+       display: "flex", alignItems: "center", justifyContent: "center", height: 48, padding: "0 14px", borderRadius: 12,
+       background: T.color.superficie, border: `1px solid ${T.color.borde2}`, color: T.color.marca,
+       fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer", flexShrink: 0,
+      }}>Reabrir</button>
+      <button onClick={registrar} disabled={!puedeRegistrar || guardando} style={{
+       flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 12, border: "none",
+       background: T.color.marca, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600,
+       cursor: !puedeRegistrar || guardando ? "not-allowed" : "pointer", opacity: !puedeRegistrar || guardando ? 0.5 : 1,
+      }}>{guardando ? "Guardando..." : "Guardar cambios"}</button>
      </>
     ) : (
      <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 12, border: `1px solid ${T.color.borde2}`, background: T.color.superficie, color: T.color.tinta2, fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
