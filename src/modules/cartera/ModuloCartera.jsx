@@ -1976,13 +1976,18 @@ export function ModuloLogistica({showToast}) {
     })();
   },[cortes]);
 
+  // nuevos: el corte ya se habia impreso y despues, antes de su hora, le
+  // entraron pedidos. Entonces solo esos se imprimen.
   const impresionDe = (c) => {
     const i=impresionCortes[c.id]||{total:0,impresos:0};
-    return {...i, completo:i.total>0&&i.impresos===i.total};
+    return {...i, completo:i.total>0&&i.impresos===i.total, nuevos:i.impresos>0&&i.impresos<i.total};
   };
+  const textoImprimir = (imp) => imp.completo ? "Reimprimir" : imp.nuevos ? "Imprimir nuevos" : "Imprimir";
 
-  // Imprime todos los pedidos aprobados del corte, impresos o no. Si ya
-  // estaban todos impresos es una reimpresion.
+  // Imprime los pedidos aprobados del corte. Si una parte ya estaba impresa,
+  // el consolidado y las ordenes salen solo con los que faltan; si ya estaban
+  // todos impresos es una reimpresion del corte completo. La lista de numeros
+  // siempre trae el corte completo.
   // modo: 'consolidado' (por defecto), 'pedidos' (la orden de cada pedido en su
   // hoja) o 'lista' (solo los numeros de pedido del corte).
   const imprimirCorte = async (c, modo='consolidado') => {
@@ -1991,7 +1996,10 @@ export function ModuloLogistica({showToast}) {
       .eq('estado_cartera','aprobado').eq('corte_id',c.id).order('numero_pedido');
     setImprimiendo(null);
     if(error){ showToast("No se pudieron leer los pedidos del corte","error"); return; }
-    await imprimir(data||[], c, modo);
+    const todos = data||[];
+    const faltan = todos.filter(x=>x.estado_impresion!=='impreso');
+    const soloNuevos = modo!=='lista' && faltan.length>0 && faltan.length<todos.length;
+    await imprimir(soloNuevos ? faltan : todos, soloNuevos ? {...c, soloNuevos:true, totalCorte:todos.length} : c, modo);
   };
 
   // Trae las lineas de los pedidos que no las tengan cargadas.
@@ -2024,7 +2032,7 @@ export function ModuloLogistica({showToast}) {
     // Nombre del PDF. Corte: sede, fecha y hora. Pedido: su numero. Varios
     // pedidos sueltos (el boton de pendientes del celular): cuantos son.
     const nombrePdf = corte
-      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}${modo === 'pedidos' ? ' pedidos' : esLista ? ' lista' : ''}`
+      ? `${corte.sedes?.nombre || 'Corte'} ${fFechaDia(corte.fecha).replace(/\//g,'-')} ${String(corte.hora_corte||'').slice(0,5).replace(':','-')}${corte.soloNuevos ? ' nuevos' : ''}${modo === 'pedidos' ? ' pedidos' : esLista ? ' lista' : ''}`
       : pedidosImprimir.length === 1 ? String(pedidosImprimir[0].numero_pedido || 'Pedido')
       : `Pedidos ${pedidosImprimir.length}`;
     const cerrado = imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escHTML(nombrePdf)}</title><style>
@@ -2120,10 +2128,10 @@ export function ModuloLogistica({showToast}) {
     return `
     <div class="pagina">
       <div class="titulo">SOMOS PRO</div>
-      <div class="subtitulo">CONSOLIDADO DE CORTE</div>
+      <div class="subtitulo">CONSOLIDADO DE CORTE${corte.soloNuevos ? ' — PEDIDOS NUEVOS' : ''}</div>
       <table class="enc-tabla" style="margin-bottom:12px">
         <tr><td>Corte</td><td><strong>${escHTML(String(corte.hora_corte||'').slice(0,5))}</strong></td><td>Fecha</td><td><strong>${fFechaDia(corte.fecha)}</strong></td></tr>
-        <tr><td>Sede</td><td>${escHTML(corte.sedes?.nombre||'')}</td><td>Pedidos</td><td>${lista.length}</td></tr>
+        <tr><td>Sede</td><td>${escHTML(corte.sedes?.nombre||'')}</td><td>Pedidos</td><td>${corte.soloNuevos ? `${lista.length} nuevos de ${corte.totalCorte} del corte` : lista.length}</td></tr>
       </table>
       <table>
         <thead><tr><th style="width:70px">Bodega</th><th style="width:120px">Línea</th><th style="width:110px">Referencia</th><th>Descripción</th><th style="width:80px;text-align:right">Unidades</th></tr></thead><tfoot class="cierre"><tr><td colspan="5"></td></tr></tfoot>
@@ -2298,13 +2306,13 @@ export function ModuloLogistica({showToast}) {
              <td style={{ ...td, textAlign:"right" }}>
               {imp.total > 0 && (
                <button onClick={e=>{ e.stopPropagation(); imprimirCorte(c); }} disabled={imprimiendo === c.id}
-                title={`${imp.completo ? "Reimprimir" : "Imprimir"} los pedidos del corte`}
+                title={imp.nuevos ? "Imprime solo los pedidos que entraron despues de la ultima impresion" : `${textoImprimir(imp)} los pedidos del corte`}
                 style={{
-                 display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:6, width: mini ? 36 : 112,
+                 display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:6, width: mini ? 36 : 136,
                  border:"none", background:"transparent", padding:"6px 0", cursor:"pointer", fontFamily:"inherit",
                  fontSize:13, fontWeight:600, color:T.color.marca,
                 }}>
-                <Printer size={15}/> {mini ? null : imprimiendo === c.id ? "Preparando..." : imp.completo ? "Reimprimir" : "Imprimir"}
+                <Printer size={15}/> {mini ? null : imprimiendo === c.id ? "Preparando..." : textoImprimir(imp)}
                </button>
               )}
              </td>
@@ -2338,8 +2346,8 @@ export function ModuloLogistica({showToast}) {
             <Printer size={14}/> Lista
            </button>
            <button style={botonFila} onClick={()=>imprimirCorte(corteVisto, 'pedidos')} disabled={imprimiendo === corteVisto.id}
-            title="Imprime la orden de cada pedido del corte, una por hoja">
-            <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : `${impVisto.completo ? "Reimprimir" : "Imprimir"} pedidos`}
+            title={impVisto.nuevos ? "Imprime la orden de los pedidos nuevos del corte, una por hoja" : "Imprime la orden de cada pedido del corte, una por hoja"}>
+            <Printer size={14}/> {imprimiendo === corteVisto.id ? "Preparando..." : impVisto.nuevos ? "Imprimir pedidos nuevos" : `${textoImprimir(impVisto)} pedidos`}
            </button>
           </div>
          )}
@@ -2433,7 +2441,7 @@ function PastillaImpresion({ imp }) {
   ? [T.color.superficie3, T.color.tinta3, T.color.neutroPunto, "Sin pedidos"]
   : imp.completo
    ? [T.color.bienSuave, T.color.bien, T.color.bienPunto, "Impreso"]
-   : [T.color.ojoSuave, T.color.ojo, T.color.ojoPunto, "Sin imprimir"];
+   : [T.color.ojoSuave, T.color.ojo, T.color.ojoPunto, imp.nuevos ? `${imp.total - imp.impresos} nuevos` : "Sin imprimir"];
  return (
   <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:T.radio.pastilla, fontSize:12, fontWeight:600, background:fondo, color, whiteSpace:"nowrap" }}>
    <span style={{ width:6, height:6, borderRadius:3, background:punto }}/>{texto}
@@ -2458,7 +2466,7 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
     <div style={{fontSize:11,color:T.color.tinta3,marginTop:5}}>{fFechaDia(c.fecha)} · {c.sedes?.nombre||'Sin sede'}</div>
     <div style={{height:4,background:T.color.superficie3,borderRadius:4,marginTop:10}}><div style={{height:'100%',width:`${Math.min(100,Math.round(100*Number(c.pedidos_asignados||0)/Math.max(1,Number(c.capacidad_max||1))))}%`,background:T.color.marca,borderRadius:4}}/></div>
     <div style={{fontSize:11,color:T.color.tinta3,textAlign:'right',margin:'3px 0 7px'}}>{c.pedidos_asignados}/{c.capacidad_max}</div>
-    {imp.total>0?<button onClick={()=>imprimirCorte(c)} disabled={imprimiendo===c.id} style={imp.completo?{...botonBarra,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}:{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}><Printer size={13}/> {imprimiendo===c.id?'Preparando...':`${imp.completo?'Reimprimir':'Imprimir'} (${imp.total})`}</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Sin pedidos</div>}
+    {imp.total>0?<button onClick={()=>imprimirCorte(c)} disabled={imprimiendo===c.id} style={imp.completo?{...botonBarra,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}:{...botonPrincipal,width:'100%',justifyContent:'center',padding:'7px 5px',fontSize:11.5}}><Printer size={13}/> {imprimiendo===c.id?'Preparando...':`${imp.completo?'Reimprimir':imp.nuevos?'Imprimir nuevos':'Imprimir'} (${imp.nuevos?imp.total-imp.impresos:imp.total})`}</button>:<div style={{height:30,textAlign:'center',fontSize:11,color:T.color.tinta3}}>Sin pedidos</div>}
    </article>;})}</div>}
   </section>
   <section><h2 style={{...T.texto.seccion,color:T.color.placeholder,margin:'0 0 7px'}}>{modoFecha==='pendientes'?'Pedidos sin imprimir':'Pedidos del corte'}</h2>
