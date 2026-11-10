@@ -29,7 +29,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
+ Paginador, PieTabla, ChipEstado, FiltroFechas, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -50,7 +50,7 @@ import { Conductores } from './modules/conductores/Conductores';
 import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
-import { hoyLocal, hoyMas } from './utils/fechas';
+import { hoyLocal, hoyMas, diaLocal, limitesFecha, diaEnLimites } from './utils/fechas';
 import { mapaPromesas, fueraDePromesa, enRiesgoDePromesa } from './utils/promesa';
 import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
@@ -1565,6 +1565,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(100);
  const [rango, setRango] = useState("todo");
+ // Desde y hasta del rango elegido a mano (rango === "rango").
+ const [desdeF, setDesdeF] = useState("");
+ const [hastaF, setHastaF] = useState("");
  const [ciudadF, setCiudadF] = useState("");
  const [conductorF, setConductorF] = useState("");
  // Transporte propio o paqueteria. Es filtro propio y no una pestana mas:
@@ -1591,11 +1594,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const conductoresActivos = conductores.filter(c => c.activo !== false);
 
- const desdeRango = (() => {
-  const r = RANGOS_PEDIDOS.find(x => x.id === rango);
-  if (!r || !r.dias) return null;
-  return hoyMas(-r.dias);
- })();
+ // El rango es sobre la fecha de ingreso: cuando el pedido entro al sistema
+ // (created_at, en hora local), que en los de cartera es cuando entro al corte.
+ const limites = limitesFecha(rango, desdeF, hastaF);
 
  // Filtros que llegan desde el Dashboard: la misma regla con que alli se cuentan.
  const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
@@ -1604,7 +1605,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const okF = filtro === "todos" || estadoVisible(p) === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
    || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
    || (filtro === "en_riesgo" && enRiesgoDePromesa(p, promMap, hoyPromesa, mananaPromesa));
-  const okFecha = !desdeRango || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeRango;
+  const okFecha = diaEnLimites(diaLocal(p.created_at) || p.fecha_creacion || "", limites);
   const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
   const okCond = !conductorF
    || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
@@ -1627,7 +1628,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
  const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
  const pageEnd = Math.min(filtrados.length, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF]);
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF, rango, desdeF, hastaF]);
  const porCompletar = pedidos.filter(p => faltantesPedido(p).length > 0).length;
 
  const guardar = async () => {
@@ -1891,6 +1892,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      conteoPorEstado={conteoPorEstado}
      estadosOrden={[...ORDEN_ESTADOS_PEDIDO, ...Object.keys(FILTROS_PROMESA)]}
      rango={rango} setRango={setRango}
+     desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
      tipoF={tipoF} setTipoF={setTipoF}
@@ -1967,9 +1969,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         }}/>
       </div>
 
-      <select value={rango} onChange={e => { setRango(e.target.value); setPage(1); }} style={selectFiltro}>
-       {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-      </select>
+      <FiltroFechas rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF} ancho={230}/>
 
       <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
        <option value="">Todas las ciudades</option>

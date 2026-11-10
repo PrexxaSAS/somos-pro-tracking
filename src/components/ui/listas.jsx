@@ -3,6 +3,7 @@ import { MoreHorizontal, Search, Trash2, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
+import { RANGOS_FECHA } from '../../utils/fechas';
 
 // Piezas compartidas por las pantallas de listado (Pedidos, Conductores, Usuarios).
 // Viven aqui para que las tres se vean y se comporten igual: si cambia el estilo de
@@ -174,6 +175,31 @@ export function SelectFiltro({ valor, onChange, children, ancho = 210 }) {
    fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
    cursor: "pointer", outline: "none", maxWidth: ancho,
   }}>{children}</select>
+ );
+}
+
+// Filtro por fecha de ingreso: un atajo (hoy, 7, 30, 90 dias) o "Elegir
+// fechas", que muestra Desde y Hasta. Cualquiera de los dos puede quedar vacio.
+// En el celular ocupa todo el ancho.
+export function FiltroFechas({ rango, setRango, desde, setDesde, hasta, setHasta, ancho = 190 }) {
+ const caja = {
+  padding: "8px 10px", border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
+  background: T.color.superficie, fontSize: 13, fontFamily: "inherit", color: T.color.tinta,
+  outline: "none", minWidth: 0,
+ };
+ return (
+  <div title="Fecha de ingreso del pedido" style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", maxWidth: "100%" }}>
+   <SelectFiltro valor={rango} onChange={setRango} ancho={ancho}>
+    {RANGOS_FECHA.map(r => <option key={r.id} value={r.id}>{r.id === "todo" ? "Ingreso: todas las fechas" : `Ingreso: ${r.label.charAt(0).toLowerCase()}${r.label.slice(1)}`}</option>)}
+   </SelectFiltro>
+   {rango === "rango" && (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+     <input type="date" aria-label="Desde" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)} style={caja} />
+     <span style={{ fontSize: 12.5, color: T.color.tinta3 }}>a</span>
+     <input type="date" aria-label="Hasta" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} style={caja} />
+    </span>
+   )}
+  </div>
  );
 }
 
