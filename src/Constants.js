@@ -38,7 +38,7 @@ export const ESTADOS_PEDIDO = {
  sin_asignar: { label: "Sin Asignar", color: "#4a4657", bg: "#f1f0f5" },
  // No es un estado guardado: es un pedido Sin asignar que ya se imprimio en un
  // corte (tiene fecha_preparacion). Ver estadoVisible.
- en_preparacion: { label: "En Preparacion", color: "#4b3aa8", bg: "#ecebfb" },
+ en_preparacion: { label: "En Preparacion", color: "#55701a", bg: "#f1f6df" },
  en_transito: { label: "En Transito", color: "#9a5a00", bg: "#fef3dc" },
  paqueteria: { label: "Paqueteria", color: "#24568f", bg: "#e8f0fa" },
  entregado:  { label: "Entregado",  color: "#177a56", bg: "#e5f5ee" },
