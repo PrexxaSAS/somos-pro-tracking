@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MoreHorizontal, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, MoreHorizontal, Search, Trash2, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
-import { RANGOS_FECHA } from '../../utils/fechas';
+import { RANGOS_FECHA, limitesFecha } from '../../utils/fechas';
 
 // Piezas compartidas por las pantallas de listado (Pedidos, Conductores, Usuarios).
 // Viven aqui para que las tres se vean y se comporten igual: si cambia el estilo de
@@ -199,6 +199,49 @@ export function FiltroFechas({ rango, setRango, desde, setDesde, hasta, setHasta
      <input type="date" aria-label="Hasta" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} style={caja} />
     </span>
    )}
+  </div>
+ );
+}
+
+// La fecha de ingreso en un solo control: "Ingreso" abre los atajos y a la
+// derecha van Desde y Hasta. Con un atajo puesto, las fechas muestran lo que
+// abarca; escribir una fecha pasa a un rango elegido a mano.
+export function FiltroIngreso({ rango, setRango, desde, setDesde, hasta, setHasta }) {
+ const l = limitesFecha(rango, desde, hasta);
+ const atajo = RANGOS_FECHA.find(r => r.id === rango);
+ const editar = (lado, valor) => {
+  setDesde(lado === "desde" ? valor : (l.desde || ""));
+  setHasta(lado === "hasta" ? valor : (l.hasta || ""));
+  setRango("rango");
+ };
+ const fecha = {
+  border: "none", outline: "none", background: "transparent", padding: 0, minWidth: 0, width: 118,
+  fontSize: 12.5, fontFamily: T.fuente.mono, color: T.color.tinta2,
+ };
+ return (
+  <div title="Fecha de ingreso del pedido" style={{
+   display: "inline-flex", alignItems: "stretch", height: 36, maxWidth: "100%",
+   border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
+   background: T.color.superficie, overflow: "hidden",
+  }}>
+   <label style={{
+    position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "0 10px 0 12px",
+    background: T.color.superficie2, borderRight: `1px solid ${T.color.borde2}`,
+    fontSize: 13, fontWeight: 600, color: T.color.tinta2, cursor: "pointer", whiteSpace: "nowrap",
+   }}>
+    Ingreso{atajo && !["todo", "rango"].includes(rango) ? ` · ${atajo.corto}` : ""}
+    <ChevronDown size={14} style={{ color: T.color.tinta3 }} />
+    <select value={rango} aria-label="Fecha de ingreso"
+     onChange={e => { const v = e.target.value; setRango(v); if (v !== "rango") { setDesde(""); setHasta(""); } }}
+     style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", fontSize: 13 }}>
+     {RANGOS_FECHA.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+    </select>
+   </label>
+   <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "0 10px" }}>
+    <input type="date" aria-label="Desde" value={l.desde || ""} max={l.hasta || undefined} onChange={e => editar("desde", e.target.value)} style={fecha} />
+    <span style={{ color: T.color.tinta4, fontSize: 12 }}>→</span>
+    <input type="date" aria-label="Hasta" value={l.hasta || ""} min={l.desde || undefined} onChange={e => editar("hasta", e.target.value)} style={fecha} />
+   </div>
   </div>
  );
 }

@@ -29,7 +29,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, FiltroFechas, th, td, tdCifra, mono, chipMono,
+ Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroIngreso, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -238,6 +238,20 @@ const RANGOS_PEDIDOS = [
  { id: "30",  label: "Ultimos 30 dias",  dias: 30 },
  { id: "90",  label: "Ultimos 90 dias",  dias: 90 },
 ];
+
+// Indicadores de Pedidos en escritorio: Todos aparte y los demas agrupados.
+// Flujo va en el orden en que avanza un pedido (de ahi las flechas).
+const GRUPOS_FILTRO_PEDIDOS = [
+ { titulo: "Flujo", flechas: true, claves: ["sin_asignar", "en_preparacion", "en_transito", "paqueteria", "entregado"] },
+ { titulo: "Excepciones", claves: ["novedad", "fuera_promesa", "en_riesgo"] },
+ { titulo: "Modalidad", claves: ["solo_facturar", "cliente_recoge"] },
+];
+const ETIQUETA_FILTRO_PEDIDO = {
+ sin_asignar: "Sin asignar", en_preparacion: "En preparación", en_transito: "En tránsito",
+ paqueteria: "Paquetería", entregado: "Entregado", novedad: "Con novedad",
+ fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo",
+ solo_facturar: "Solo facturar", cliente_recoge: "Cliente recoge",
+};
 
 // Orden de las pestanas por estado.
 const ORDEN_ESTADOS_PEDIDO = [
@@ -1912,48 +1926,79 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       <h1 style={{ margin:0, ...T.texto.titulo }}>Pedidos</h1>
       <p style={{ margin:"4px 0 0", color:T.color.tinta3, fontSize:13.5 }}>Gestion y seguimiento de todos los pedidos</p>
      </div>
-     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-      <button style={botonBarra} onClick={imprimirPlanilla}>
-       <ClipboardList size={15} style={{ color:T.color.tinta3 }} />
-       Planilla{seleccion.size > 0 ? ` (${seleccion.size})` : ""}
-      </button>
-      <button style={botonBarra} onClick={() => setModCSV(true)}>
-       <Download size={15} style={{ color:T.color.tinta3 }} /> CSV pedidos
-      </button>
-      <button style={botonBarra} onClick={() => setModGuias(true)}>
-       <Upload size={15} style={{ color:T.color.tinta3 }} /> Cargar guias paqueteria
-      </button>
+     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+      {/* Las tres acciones secundarias van unidas en un solo grupo. */}
+      <div style={{ display:"inline-flex", border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control, background:T.color.superficie, overflow:"hidden" }}>
+       {[
+        [<ClipboardList size={15}/>, `Planilla${seleccion.size > 0 ? ` (${seleccion.size})` : ""}`, imprimirPlanilla],
+        [<Download size={15}/>, "CSV pedidos", () => setModCSV(true)],
+        [<Upload size={15}/>, "Cargar guías paquetería", () => setModGuias(true)],
+       ].map(([icono, texto, accion], i) => (
+        <button key={i} onClick={accion} style={{
+         display:"inline-flex", alignItems:"center", gap:8, height:38, padding:"0 16px",
+         border:"none", borderLeft: i ? `1px solid ${T.color.borde2}` : "none", background:"transparent",
+         cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.tinta, whiteSpace:"nowrap",
+        }}><span style={{ color:T.color.tinta3, display:"inline-flex" }}>{icono}</span>{texto}</button>
+       ))}
+      </div>
       <button onClick={() => setModNuevo(true)} style={{
-       ...botonBarra, background:T.color.marca, border:"none", color:"#fff", fontWeight:700,
+       display:"inline-flex", alignItems:"center", gap:8, height:40, padding:"0 18px",
+       borderRadius:T.radio.control, border:"none", background:T.color.marca, color:"#fff",
+       cursor:"pointer", fontFamily:"inherit", fontSize:13.5, fontWeight:700, whiteSpace:"nowrap",
       }}><Plus size={16} /> Nuevo pedido</button>
      </div>
     </header>
 
-    {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
-        para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
-    <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:`1px solid ${T.color.borde}` }}>
-     {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k]), ...Object.entries(FILTROS_PROMESA)].map(([clave,label]) => {
-      const activo = filtro === clave;
-      const n = conteoPorEstado(clave);
-      const tono = tonoFiltroPedido(clave);
+    {/* Indicadores por estado: el conteo es sobre todos los pedidos, no sobre lo
+        filtrado, para que sirvan de panorama y no cambien al escribir en la busqueda.
+        Cada uno es tambien el filtro; el activo toma el color de su estado. */}
+    <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"stretch" }}>
+     {(() => {
+      const activoTodos = filtro === "todos";
       return (
-       <button key={clave} onClick={() => { setFiltro(clave); setPage(1); }} style={{
-        display:"inline-flex", alignItems:"center", gap:8, padding:"10px 12px",
-        border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-        fontSize:13.5, fontWeight: activo ? 700 : 500,
-        color: activo ? tono.fuerte : T.color.tinta2,
-        borderBottom: `2px solid ${activo ? tono.fuerte : "transparent"}`,
-        marginBottom:-1,
+       <button onClick={() => { setFiltro("todos"); setPage(1); }} style={{
+        ...tarjeta, minWidth:100, padding:"12px 16px", cursor:"pointer", fontFamily:"inherit", textAlign:"left",
+        display:"flex", flexDirection:"column", justifyContent:"center", gap:2,
+        background: activoTodos ? T.color.marca : T.color.superficie,
+        border: activoTodos ? `1px solid ${T.color.marca}` : tarjeta.border,
+        color: activoTodos ? "#fff" : T.color.tinta,
        }}>
-        {label}
-        <span style={{
-         fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
-         background: activo ? tono.suave : T.color.superficie2,
-         color: activo ? tono.fuerte : T.color.tinta3,
-        }}>{n}</span>
+        <span style={{ ...T.texto.seccion, color: activoTodos ? "rgba(255,255,255,.85)" : T.color.placeholder }}>Todos</span>
+        <span style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.02em", lineHeight:1.15 }}>{conteoPorEstado("todos").toLocaleString("es-CO")}</span>
        </button>
       );
-     })}
+     })()}
+     {GRUPOS_FILTRO_PEDIDOS.map(g => (
+      <div key={g.titulo} style={{ ...tarjeta, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6, minWidth:0 }}>
+       <span style={{ ...T.texto.seccion, color:T.color.placeholder, paddingLeft:6 }}>{g.titulo}</span>
+       <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>
+        {g.claves.map((clave, i) => {
+         const activo = filtro === clave;
+         const n = conteoPorEstado(clave);
+         const tono = tonoFiltroPedido(clave);
+         return (
+          <React.Fragment key={clave}>
+           {g.flechas && i > 0 && <ChevronRight size={14} style={{ color:T.color.tinta4, flexShrink:0 }}/>}
+           <button onClick={() => { setFiltro(clave); setPage(1); }} style={{
+            display:"inline-flex", alignItems:"center", gap:7, padding:"5px 8px", borderRadius:8,
+            border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, whiteSpace:"nowrap",
+            fontWeight: activo ? 700 : 600,
+            background: activo ? tono.suave : "transparent",
+            color: activo ? tono.fuerte : n ? T.color.tinta : T.color.tinta4,
+           }}>
+            {ETIQUETA_FILTRO_PEDIDO[clave] || ESTADOS_PEDIDO[clave]?.label || clave}
+            <span style={{
+             fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
+             background: activo ? "rgba(255,255,255,.7)" : T.color.superficie2,
+             color: activo ? tono.fuerte : n ? T.color.tinta2 : T.color.tinta4,
+            }}>{n}</span>
+           </button>
+          </React.Fragment>
+         );
+        })}
+       </div>
+      </div>
+     ))}
     </div>
 
     <section style={{ ...tarjeta, overflow:"hidden" }}>
@@ -1969,7 +2014,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         }}/>
       </div>
 
-      <FiltroFechas rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF} ancho={230}/>
+      <FiltroIngreso rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}/>
 
       <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
        <option value="">Todas las ciudades</option>
@@ -1985,6 +2030,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        {conductoresActivos.slice().sort((a,b) => (a.nombre||"").localeCompare(b.nombre||"", "es"))
         .map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
       </select>
+
+      <span style={{ width:1, height:24, background:T.color.borde2, flexShrink:0 }}/>
 
       {/* Encendido deja solo los pedidos a los que les falta cajas, factura o
           tipo de envio; el numero es el total, con o sin los demas filtros. */}
@@ -2003,9 +2050,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        }}>{porCompletar}</span>
       </button>
 
-      <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
-       {seleccion.size > 0 ? `${seleccion.size} seleccionados` : `${pageItems.length} en esta pagina`}
-      </div>
+      {seleccion.size > 0 && (
+       <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>{seleccion.size} seleccionados</div>
+      )}
      </div>
 
      <div style={{ overflowX:"auto" }}>
