@@ -241,10 +241,11 @@ const RANGOS_PEDIDOS = [
 
 // Indicadores de Pedidos en escritorio: Todos aparte y los demas agrupados.
 // Flujo va en el orden en que avanza un pedido (de ahi las flechas).
+// Excepciones se estira hasta el borde de su fila.
 const GRUPOS_FILTRO_PEDIDOS = [
- { titulo: "Flujo", flechas: true, claves: ["sin_asignar", "en_preparacion", "en_transito", "paqueteria", "entregado"] },
- { titulo: "Excepciones", claves: ["novedad", "fuera_promesa", "en_riesgo"] },
- { titulo: "Modalidad", claves: ["solo_facturar", "cliente_recoge"] },
+ { titulo: "Flujo", flechas: true, claves: ["sin_asignar", "en_preparacion", "en_transito", "entregado"] },
+ { titulo: "Excepciones", crece: true, claves: ["novedad", "fuera_promesa", "en_riesgo"] },
+ { titulo: "Modalidad", claves: ["paqueteria", "solo_facturar", "cliente_recoge"] },
 ];
 const ETIQUETA_FILTRO_PEDIDO = {
  sin_asignar: "Sin asignar", en_preparacion: "En preparación", en_transito: "En tránsito",
@@ -1969,7 +1970,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       );
      })()}
      {GRUPOS_FILTRO_PEDIDOS.map(g => (
-      <div key={g.titulo} style={{ ...tarjeta, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6, minWidth:0 }}>
+      <div key={g.titulo} style={{ ...tarjeta, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6, minWidth:0, flex: g.crece ? "1 1 auto" : "0 1 auto" }}>
        <span style={{ ...T.texto.seccion, color:T.color.placeholder, paddingLeft:6 }}>{g.titulo}</span>
        <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>
         {g.claves.map((clave, i) => {
