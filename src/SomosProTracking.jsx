@@ -241,10 +241,11 @@ const RANGOS_PEDIDOS = [
 
 // Indicadores de Pedidos en escritorio: Todos aparte y los demas agrupados.
 // Flujo va en el orden en que avanza un pedido (de ahi las flechas).
-// Excepciones se estira hasta el borde de su fila.
+// Los cuatro bloques van en una fila y crecen hasta llenarla; si la pantalla
+// no alcanza, bajan a la siguiente.
 const GRUPOS_FILTRO_PEDIDOS = [
  { titulo: "Flujo", flechas: true, claves: ["sin_asignar", "en_preparacion", "en_transito", "entregado"] },
- { titulo: "Excepciones", crece: true, claves: ["novedad", "fuera_promesa", "en_riesgo"] },
+ { titulo: "Excepciones", claves: ["novedad", "fuera_promesa", "en_riesgo"] },
  { titulo: "Modalidad", claves: ["paqueteria", "solo_facturar", "cliente_recoge"] },
 ];
 const ETIQUETA_FILTRO_PEDIDO = {
@@ -1958,7 +1959,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       const activoTodos = filtro === "todos";
       return (
        <button onClick={() => { setFiltro("todos"); setPage(1); }} style={{
-        ...tarjeta, minWidth:100, padding:"12px 16px", cursor:"pointer", fontFamily:"inherit", textAlign:"left",
+        ...tarjeta, minWidth:84, padding:"9px 14px", cursor:"pointer", fontFamily:"inherit", textAlign:"left",
         display:"flex", flexDirection:"column", justifyContent:"center", gap:2,
         background: activoTodos ? T.color.marca : T.color.superficie,
         border: activoTodos ? `1px solid ${T.color.marca}` : tarjeta.border,
@@ -1970,26 +1971,26 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       );
      })()}
      {GRUPOS_FILTRO_PEDIDOS.map(g => (
-      <div key={g.titulo} style={{ ...tarjeta, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6, minWidth:0, flex: g.crece ? "1 1 auto" : "0 1 auto" }}>
+      <div key={g.titulo} style={{ ...tarjeta, padding:"8px 8px", display:"flex", flexDirection:"column", gap:4, minWidth:0, flex:"1 1 auto" }}>
        <span style={{ ...T.texto.seccion, color:T.color.placeholder, paddingLeft:6 }}>{g.titulo}</span>
-       <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>
+       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-around", flexWrap:"wrap", gap:0 }}>
         {g.claves.map((clave, i) => {
          const activo = filtro === clave;
          const n = conteoPorEstado(clave);
          const tono = tonoFiltroPedido(clave);
          return (
           <React.Fragment key={clave}>
-           {g.flechas && i > 0 && <ChevronRight size={14} style={{ color:T.color.tinta4, flexShrink:0 }}/>}
+           {g.flechas && i > 0 && <ChevronRight size={12} style={{ color:T.color.tinta4, flexShrink:0, margin:"0 -2px" }}/>}
            <button onClick={() => { setFiltro(clave); setPage(1); }} style={{
-            display:"inline-flex", alignItems:"center", gap:7, padding:"5px 8px", borderRadius:8,
-            border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, whiteSpace:"nowrap",
+            display:"inline-flex", alignItems:"center", gap:5, padding:"5px 5px", borderRadius:8,
+            border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, whiteSpace:"nowrap",
             fontWeight: activo ? 700 : 600,
             background: activo ? tono.suave : "transparent",
             color: activo ? tono.fuerte : n ? T.color.tinta : T.color.tinta4,
            }}>
             {ETIQUETA_FILTRO_PEDIDO[clave] || ESTADOS_PEDIDO[clave]?.label || clave}
             <span style={{
-             fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
+             fontSize:11, fontWeight:700, padding:"1px 6px", borderRadius:T.radio.pastilla,
              background: activo ? "rgba(255,255,255,.7)" : T.color.superficie2,
              color: activo ? tono.fuerte : n ? T.color.tinta2 : T.color.tinta4,
             }}>{n}</span>
