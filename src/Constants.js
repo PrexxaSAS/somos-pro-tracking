@@ -36,6 +36,9 @@ export const PAQUETERIAS = [
 
 export const ESTADOS_PEDIDO = {
  sin_asignar: { label: "Sin Asignar", color: "#4a4657", bg: "#f1f0f5" },
+ // No es un estado guardado: es un pedido Sin asignar que ya se imprimio en un
+ // corte (tiene fecha_preparacion). Ver estadoVisible.
+ en_preparacion: { label: "En Preparacion", color: "#4b3aa8", bg: "#ecebfb" },
  en_transito: { label: "En Transito", color: "#9a5a00", bg: "#fef3dc" },
  paqueteria: { label: "Paqueteria", color: "#24568f", bg: "#e8f0fa" },
  entregado:  { label: "Entregado",  color: "#177a56", bg: "#e5f5ee" },
@@ -45,6 +48,14 @@ export const ESTADOS_PEDIDO = {
  solo_facturar: { label: "Solo Facturar", color: "#0b6e78", bg: "#e3f5f6" },
  cliente_recoge: { label: "Cliente Recoge", color: "#a3266f", bg: "#fcebf5" },
 };
+
+// Estado que se muestra, se filtra y se cuenta. Un pedido Sin asignar que ya se
+// imprimio en su corte (docs/pedidos_fecha_preparacion.sql) se ve "En
+// preparacion": la mercancia se esta alistando en bodega. El campo estado sigue
+// en sin_asignar, asi que asignar conductor, las promesas y las reglas de la
+// base no cambian. Si se le quita el conductor vuelve a verse en preparacion.
+export const estadoVisible = (p) =>
+ p?.estado === "sin_asignar" && p?.fecha_preparacion ? "en_preparacion" : p?.estado;
 
 // Filtros de Pedidos que no son un estado sino la promesa de servicio: se
 // muestran como pestanas junto a los estados y el Dashboard lleva a ellos.

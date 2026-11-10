@@ -55,6 +55,7 @@ export const T = {
  // estado = el punto y la barra apilada; estadoTono = fondo y texto de la pastilla.
  estado: {
   sin_asignar:     "#9a96a8",  // gris
+  en_preparacion:  "#6c5ce7",  // indigo
   en_transito:     "#f59e0b",  // amarillo-naranja
   paqueteria:      "#2d6fb8",  // azul
   entregado:       "#1f9a6e",  // verde
@@ -64,6 +65,7 @@ export const T = {
  },
  estadoTono: {
   sin_asignar:     { bg: "#f1f0f5", color: "#4a4657" },
+  en_preparacion:  { bg: "#ecebfb", color: "#4b3aa8" },
   en_transito:     { bg: "#fef3dc", color: "#9a5a00" },
   paqueteria:      { bg: "#e8f0fa", color: "#24568f" },
   entregado:       { bg: "#e5f5ee", color: "#177a56" },
