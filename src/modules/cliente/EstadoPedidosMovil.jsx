@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Boxes, Calendar, ChevronDown, FileText, HelpCircle, Image as IconoImagen, MapPin, Truck } from 'lucide-react';
 import { T } from '../../design/tokens';
-import { ESTADOS_PEDIDO } from '../../Constants';
+import { ESTADOS_PEDIDO, estadoVisible } from '../../Constants';
 import { transportePedido } from '../../utils/transporte';
 import { BuscadorConductor, LineaResumen, ListaVacia } from '../conductor/PantallasConductor';
 import { CabeceraLista, Chip, nombreCorto } from '../gestion/ListasMovil';
@@ -17,6 +17,7 @@ import { CabeceraLista, Chip, nombreCorto } from '../gestion/ListasMovil';
 
 const TONO = {
  sin_asignar: T.estadoTono.sin_asignar,
+ en_preparacion: T.estadoTono.en_preparacion,
  en_transito: T.estadoTono.en_transito,
  paqueteria: T.estadoTono.paqueteria,
  entregado: T.estadoTono.entregado,
@@ -35,8 +36,9 @@ const botonIcono = (activo) => ({
 function Conteos({ items }) {
  return (
   <section style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 8 }}>
-   {items.map(k => (
+   {items.map((k, i) => (
     <button key={k.clave} onClick={k.onClick} style={{
+     gridColumn: items.length % 2 && i === 0 ? "1 / -1" : undefined,
      background: T.color.superficie, border: `1.5px solid ${k.activo ? T.color.marca : T.color.borde}`, borderRadius: 12,
      padding: "10px 12px", minWidth: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: T.color.tinta,
     }}>
@@ -50,7 +52,8 @@ function Conteos({ items }) {
 
 function TarjetaPedidoCliente({ p, conductor, abierto, onRastrear, onGuia, onSoportes, mapa }) {
  const tr = transportePedido(p, conductor);
- const tono = TONO[p.estado] || TONO.sin_asignar;
+ const ev = estadoVisible(p);
+ const tono = TONO[ev] || TONO.sin_asignar;
  const rastreable = ["en_transito", "paqueteria"].includes(p.estado);
  const soportes = (p.soportes || p.soportes_data || []).length;
  const transporte = tr.noAplica ? "No aplica"
@@ -64,7 +67,7 @@ function TarjetaPedidoCliente({ p, conductor, abierto, onRastrear, onGuia, onSop
    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
     <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: "tabular-nums" }}>{p.guia_interna || p.id}</span>
     <span style={{ fontFamily: T.fuente.mono, fontSize: 11.5, color: p.factura ? T.color.tinta3 : T.color.placeholder }}>{p.factura || "Sin factura"}</span>
-    <Chip bg={tono.bg} color={tono.color} punto={T.estado[p.estado] || T.color.neutroPunto} texto={ESTADOS_PEDIDO[p.estado]?.label || p.estado} />
+    <Chip bg={tono.bg} color={tono.color} punto={T.estado[ev] || T.color.neutroPunto} texto={ESTADOS_PEDIDO[ev]?.label || p.estado} />
    </div>
    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
     <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.cliente}</span>
@@ -117,6 +120,7 @@ export function EstadoPedidosMovil({
    <Conteos items={[
     kpi("todos", "Total", T.color.tinta),
     kpi("activos", "Activos", T.color.marca),
+    kpi("en_preparacion", "En preparacion", T.estado.en_preparacion),
     kpi("entregados", "Entregados", T.color.bien),
     kpi("novedades", "Novedades", T.color.mal),
    ]}/>

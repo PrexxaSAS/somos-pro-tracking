@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { T, tonoFiltroPedido } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
-import { ESTADOS_PEDIDO, FILTROS_PROMESA } from '../../Constants';
+import { ESTADOS_PEDIDO, FILTROS_PROMESA, estadoVisible } from '../../Constants';
 import { transportePedido, faltantesPedido } from '../../utils/transporte';
 
 // La tabla de pedidos no cabe en un telefono. Cada fila pasa a ser una tarjeta
@@ -16,6 +16,7 @@ import { transportePedido, faltantesPedido } from '../../utils/transporte';
 // punto sale de T.estado, los mismos colores de la barra del dashboard.
 const TONO_ESTADO = {
  sin_asignar: T.estadoTono.sin_asignar,
+ en_preparacion: T.estadoTono.en_preparacion,
  en_transito: T.estadoTono.en_transito,
  paqueteria: T.estadoTono.paqueteria,
  entregado: T.estadoTono.entregado,
@@ -228,8 +229,9 @@ const selectInvisible = {
 // ── Tarjeta de un pedido ────────────────────────────────────────────────────
 function TarjetaPedido({ pedido, conductor, onAbrir }) {
  const tr = transportePedido(pedido, conductor);
- const tono = TONO_ESTADO[pedido.estado] || TONO_ESTADO.sin_asignar;
- const punto = T.estado[pedido.estado] || T.color.neutroPunto;
+ const ev = estadoVisible(pedido);
+ const tono = TONO_ESTADO[ev] || TONO_ESTADO.sin_asignar;
+ const punto = T.estado[ev] || T.color.neutroPunto;
  const esPaqueteria = pedido.tipo === "paqueteria";
  const sinConductor = !tr.principal;
 
@@ -256,7 +258,7 @@ function TarjetaPedido({ pedido, conductor, onAbrir }) {
      background: tono.bg, color: tono.color, whiteSpace: "nowrap", flexShrink: 0,
     }}>
      <span style={{ width: 6, height: 6, borderRadius: 3, background: punto }} />
-     {ESTADOS_PEDIDO[pedido.estado]?.label || pedido.estado}
+     {ESTADOS_PEDIDO[ev]?.label || pedido.estado}
     </span>
    </div>
 

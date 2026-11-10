@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AlertTriangle, Bell, CalendarDays, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
-import { ESTADOS_PEDIDO } from '../../Constants';
+import { ESTADOS_PEDIDO, estadoVisible } from '../../Constants';
 import { hoyLocal, hoyMas } from '../../utils/fechas';
 import { mapaPromesas, limiteConMapa, fueraDePromesa, enRiesgoDePromesa } from '../../utils/promesa';
 
@@ -17,7 +17,7 @@ const RANGOS = [
 // Orden de los estados en la barra apilada y en la leyenda. Cada estado tiene su
 // propio color (T.estado), asi que el orden no cambia como se distinguen.
 const ORDEN_ESTADOS = [
- "sin_asignar", "en_transito", "paqueteria",
+ "sin_asignar", "en_preparacion", "en_transito", "paqueteria",
  "entregado", "novedad", "solo_facturar", "cliente_recoge",
 ];
 
@@ -570,7 +570,7 @@ export function Dashboard({
 
   const conteos = {};
   ORDEN_ESTADOS.forEach(k => { conteos[k] = 0; });
-  enRango.forEach(p => { if (conteos[p.estado] !== undefined) conteos[p.estado] += 1; });
+  enRango.forEach(p => { const e = estadoVisible(p); if (conteos[e] !== undefined) conteos[e] += 1; });
 
   return {
    enRango, entregados, activos, vencidos, enRiesgo,

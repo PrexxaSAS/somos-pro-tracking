@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, FILTROS_PROMESA, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
+import { P, CIUDADES as CIUDADES_BASE, ESTADOS_PEDIDO, estadoVisible, FILTROS_PROMESA, ESTADOS_SIN_DESPACHO, ROLES, ROLES_CARTERA, SEDES_DESTINO } from './Constants';
 import { Logo, Badge, Card, Btn, Field, Modal, Toast } from './Subcomponentes';
 import { supabase } from './supabase';
 import { descargarCSV, fileToBase64, abrirArchivoGuardado, leerTextoCsv, filasCsv } from './utils/files';
@@ -84,14 +84,14 @@ const COLUMNAS_PEDIDOS_CLIENTE = [
  "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
  "factura","conductor_id","placa","estado","estado_despacho","novedad","fecha_creacion",
  "fecha_estimada","fecha_real","fecha_despacho","fecha_pedido","hora_pedido","tipo","paqueteria","guia_paqueteria","soportes",
- "ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","created_at",
+ "ciudad_origen_codigo","ciudad_origen_nombre","direccion_origen","created_at","fecha_preparacion",
 ].join(",");
 const COLUMNAS_PEDIDOS = [
  "id","guia_interna","cliente","ciudad_codigo","ciudad_nombre","direccion","cajas",
  "factura","conductor_id","placa","nit_proveedor","estado","estado_despacho","novedad",
  "fecha_creacion","fecha_estimada","fecha_real","fecha_despacho","fecha_pedido","hora_pedido","tipo","empresa_transporte",
  "paqueteria","guia_paqueteria","soportes","notas","ciudad_origen_codigo",
- "ciudad_origen_nombre","direccion_origen","created_at",
+ "ciudad_origen_nombre","direccion_origen","created_at","fecha_preparacion",
 ].join(",");
 const COLUMNAS_DEVOLUCIONES = [
  "id","guia","factura","pedido_ref","unidades","volumen_m3","peso_kg",
@@ -122,6 +122,12 @@ const fechaIngreso = (p) => {
  if (!d || isNaN(d)) return null;
  const dos = n => String(n).padStart(2, "0");
  return { fecha: `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`, hora: `${dos(d.getHours())}:${dos(d.getMinutes())}` };
+};
+const fechaHoraLocal = (iso) => {
+ const d = iso ? new Date(iso) : null;
+ if (!d || isNaN(d)) return "";
+ const dos = n => String(n).padStart(2, "0");
+ return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())} ${dos(d.getHours())}:${dos(d.getMinutes())}`;
 };
 const CeldaFechaIngreso = ({ p, estilo }) => {
  const f = fechaIngreso(p);
@@ -235,7 +241,7 @@ const RANGOS_PEDIDOS = [
 
 // Orden de las pestanas por estado.
 const ORDEN_ESTADOS_PEDIDO = [
- "sin_asignar", "en_transito", "paqueteria",
+ "sin_asignar", "en_preparacion", "en_transito", "paqueteria",
  "novedad", "entregado", "solo_facturar", "cliente_recoge",
 ];
 
@@ -314,7 +320,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
   <ModalGestion
    titulo="Pedido"
    id={pedido.guia_interna || pedido.id}
-   estado={<ChipEstado estado={pedido.estado} novedad={pedido.novedad} />}
+   estado={<ChipEstado estado={estadoVisible(pedido)} novedad={pedido.novedad} />}
    descripcion={`${pedido.id} · estado calculado automaticamente`}
    onClose={onClose}
    onGuardar={(canEdit || canBasicEdit || fotosPendientes.length > 0) && !pedidoBloqueadoEdicion ? guardar : null}
@@ -336,6 +342,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
     { label:"Ciudad destino", valor:ciudad?.name || pedido.ciudad_nombre || "Sin definir", falta:!pedido.ciudad_codigo },
     { label:"Factura", valor:pedido.factura || "Sin registrar", falta:!pedido.factura, mono:!!pedido.factura },
     { label:"Estimado", valor:pedido.fecha_estimada || "Sin fecha", falta:!pedido.fecha_estimada },
+    ...(pedido.fecha_preparacion ? [{ label:"En preparacion desde", valor:fechaHoraLocal(pedido.fecha_preparacion) }] : []),
     {
      // El dia que salio a ruta. En paqueteria no se marca nunca -- el pedido
      // pasa a "paqueteria", no a "en transito" -- asi que ahi no es un hueco.
@@ -1594,7 +1601,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
  const hoyPromesa = hoyLocal(), mananaPromesa = hoyMas(1);
  const filtrados = pedidos.filter(p => {
-  const okF = filtro === "todos" || p.estado === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
+  const okF = filtro === "todos" || estadoVisible(p) === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
    || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
    || (filtro === "en_riesgo" && enRiesgoDePromesa(p, promMap, hoyPromesa, mananaPromesa));
   const okFecha = !desdeRango || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeRango;
@@ -1843,7 +1850,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   ? pedidos.length
   : clave === "fuera_promesa" ? pedidos.filter(x => fueraDePromesa(x, promMap, hoyPromesa)).length
   : clave === "en_riesgo" ? pedidos.filter(x => enRiesgoDePromesa(x, promMap, hoyPromesa, mananaPromesa)).length
-  : pedidos.filter(x => x.estado === clave).length;
+  : pedidos.filter(x => estadoVisible(x) === clave).length;
 
  const alternarSeleccion = (id) => setSeleccion(prev => {
   const s = new Set(prev);
@@ -2071,11 +2078,11 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
            <td style={td2}>
             <span style={{
              display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px",
-             borderRadius:T.radio.pastilla, background:T.estadoTono[p.estado]?.bg || T.color.superficie2,
-             fontSize:12, fontWeight:600, color:T.estadoTono[p.estado]?.color || T.color.tinta2, whiteSpace:"nowrap",
+             borderRadius:T.radio.pastilla, background:T.estadoTono[estadoVisible(p)]?.bg || T.color.superficie2,
+             fontSize:12, fontWeight:600, color:T.estadoTono[estadoVisible(p)]?.color || T.color.tinta2, whiteSpace:"nowrap",
             }}>
-             <span style={{ width:7, height:7, borderRadius:4, background:T.estado[p.estado] || T.color.tinta3 }} />
-             {ESTADOS_PEDIDO[p.estado]?.label || p.estado}
+             <span style={{ width:7, height:7, borderRadius:4, background:T.estado[estadoVisible(p)] || T.color.tinta3 }} />
+             {ESTADOS_PEDIDO[estadoVisible(p)]?.label || p.estado}
             </span>
            </td>
            <td style={td2}>
@@ -2350,7 +2357,7 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
           <span style={{ fontSize:13, fontWeight:700, color: activo ? T.color.marca : T.color.tinta }}>
            {p.guia_interna || p.id}
           </span>
-          <ChipEstado estado={p.estado}/>
+          <ChipEstado estado={estadoVisible(p)}/>
          </div>
          <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:4 }}>
           {p.cliente} · {p.ciudad_nombre || "sin ciudad"}
@@ -2796,7 +2803,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        ? <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>{avatar(cond.nombre)}{cond.nombre}</span>
        : (cond?.nombre || "—")}
      </td>
-     <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
+     <td style={td}><ChipEstado estado={estadoVisible(p)} novedad={p.novedad && p.estado !== "novedad"} /></td>
      <td style={{ ...td, color: n ? T.color.tinta2 : T.color.tinta4, whiteSpace:"nowrap" }}>
       {n ? `${n} ${n === 1 ? "foto" : "fotos"}` : "Sin soporte"}
      </td>
@@ -2945,7 +2952,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     const filas = filtradosT.map(p => {
      const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
      return [p.id, p.guia_interna, p.cliente, p.direccion, p.ciudad_nombre, p.cajas || 0, cond?.nombre,
-      ESTADOS_PEDIDO[p.estado]?.label || p.estado, soportesDe(p), p.fecha_creacion, p.fecha_real].map(esc).join(",");
+      ESTADOS_PEDIDO[estadoVisible(p)]?.label || p.estado, soportesDe(p), p.fecha_creacion, p.fecha_real].map(esc).join(",");
     });
     descargarCSV(`pedidos_${hoyLocal()}.csv`, "pedido,guia,cliente,direccion,ciudad,cajas,conductor,estado,soportes,fecha_creacion,fecha_real", filas.join("\n"));
    };
@@ -6016,6 +6023,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const conteo = {
   todos: enRango.length,
   activos: enRango.filter(esActivo).length,
+  en_preparacion: enRango.filter(p => estadoVisible(p) === "en_preparacion").length,
   entregados: enRango.filter(p => p.estado === "entregado").length,
   novedades: enRango.filter(p => p.estado === "novedad" || p.novedad).length,
  };
@@ -6023,6 +6031,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const filtP = enRango.filter(p => {
   if (ciudadF && p.ciudad_nombre !== ciudadF) return false;
   if (filtro === "activos" && !esActivo(p)) return false;
+  if (filtro === "en_preparacion" && estadoVisible(p) !== "en_preparacion") return false;
   if (filtro === "entregados" && p.estado !== "entregado") return false;
   if (filtro === "novedades" && !(p.estado === "novedad" || p.novedad)) return false;
   const q = busq.trim().toLowerCase();
@@ -6042,7 +6051,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
    const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
    const tr = transportePedido(p, cond);
    return [p.id, p.guia_interna, p.factura, p.cliente, p.direccion, p.ciudad_nombre, p.cajas || 0,
-    ESTADOS_PEDIDO[p.estado]?.label || p.estado, tr.noAplica ? "No aplica" : (tr.principal || "Sin asignar"),
+    ESTADOS_PEDIDO[estadoVisible(p)]?.label || p.estado, tr.noAplica ? "No aplica" : (tr.principal || "Sin asignar"),
     p.fecha_creacion, p.fecha_estimada, p.fecha_real].map(esc).join(",");
   });
   descargarCSV(`estado_pedidos_${hoyLocal()}.csv`, cab, filas.join("\n"));
@@ -6105,6 +6114,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
    <Indicadores items={[
     kpi("todos", "Total pedidos", T.color.tinta),
     kpi("activos", "Activos", T.color.marca),
+    kpi("en_preparacion", "En preparacion", T.estado.en_preparacion),
     kpi("entregados", "Entregados", T.color.bienPunto),
     kpi("novedades", "Novedades", T.color.malPunto),
    ]}/>
@@ -6166,7 +6176,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
            <CeldaFechaIngreso p={p} estilo={td}/>
            <td style={{ ...td, whiteSpace:"nowrap" }}>{p.fecha_despacho || <span style={{ color:T.color.tinta3 }}>—</span>}</td>
            <td style={{ ...td, textAlign:"right", fontWeight:700, color: p.cajas ? T.color.tinta : T.color.tinta4 }}>{p.cajas || 0}</td>
-           <td style={td}><ChipEstado estado={p.estado} novedad={p.novedad && p.estado !== "novedad"} /></td>
+           <td style={td}><ChipEstado estado={estadoVisible(p)} novedad={p.novedad && p.estado !== "novedad"} /></td>
            <td style={td}>
             {tr.noAplica ? <span style={{ color:T.color.tinta3 }}>No aplica</span>
              : !tr.principal ? <span style={{ color:T.color.tinta3 }}>Sin asignar</span>

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, Printer, Share2, X } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { useEsMovil } from '../../design/responsive';
-import { ESTADOS_PEDIDO } from '../../Constants';
+import { ESTADOS_PEDIDO, estadoVisible } from '../../Constants';
 import { dibujarQR } from '../../utils/qr';
 
 // La guia se imprime y se firma a mano en el punto de entrega, asi que el
@@ -105,7 +105,7 @@ export function GuiaImprimible({ pedido, conductores, ciudades, onClose }) {
   { k: "Cajas", v: pedido.cajas ? String(pedido.cajas) : "", grande: true },
   { k: "Factura", v: pedido.factura || "", mono: true },
   { k: "Fecha estimada", v: pedido.fecha_estimada || "" },
-  { k: "Estado", v: ESTADOS_PEDIDO[pedido.estado]?.label || pedido.estado || "" },
+  { k: "Estado", v: ESTADOS_PEDIDO[estadoVisible(pedido)]?.label || pedido.estado || "" },
  ];
 
  const documento = (paraImprimir = false) => (

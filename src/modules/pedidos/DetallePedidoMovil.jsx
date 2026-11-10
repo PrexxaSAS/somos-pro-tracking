@@ -4,7 +4,7 @@ import {
  MapPin, MoreHorizontal, Package, Pencil, Phone, Truck, UserPlus,
 } from 'lucide-react';
 import { T } from '../../design/tokens';
-import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO } from '../../Constants';
+import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, estadoVisible } from '../../Constants';
 import { transportePedido } from '../../utils/transporte';
 import { hoyLocal } from '../../utils/fechas';
 import { limitePromesa } from '../../utils/promesa';
@@ -16,6 +16,7 @@ import { limitePromesa } from '../../utils/promesa';
 
 const TONO_ESTADO = {
  sin_asignar: T.estadoTono.sin_asignar,
+ en_preparacion: T.estadoTono.en_preparacion,
  en_transito: T.estadoTono.en_transito,
  paqueteria: T.estadoTono.paqueteria,
  entregado: T.estadoTono.entregado,
@@ -111,8 +112,9 @@ export function DetallePedidoMovil({
  puedeEntregar = false,
 }) {
  const tr = transportePedido(pedido, conductor);
- const tono = TONO_ESTADO[pedido.estado] || TONO_ESTADO.sin_asignar;
- const punto = T.estado[pedido.estado] || T.color.neutroPunto;
+ const ev = estadoVisible(pedido);
+ const tono = TONO_ESTADO[ev] || TONO_ESTADO.sin_asignar;
+ const punto = T.estado[ev] || T.color.neutroPunto;
  const cerrado = ["entregado", "novedad"].includes(pedido.estado);
  const sinDespacho = ESTADOS_SIN_DESPACHO.includes(pedido.estado);
  const esPaqueteria = pedido.tipo === "paqueteria";
@@ -141,6 +143,7 @@ export function DetallePedidoMovil({
  // de eventos, asi que se muestra lo que consta y nada mas.
  const eventos = [];
  if (creado) eventos.push({ titulo: "Pedido creado", meta: `${fechaCorta(creado)}${hora ? `, ${hora}` : ""}`, hecho: true });
+ if (pedido.fecha_preparacion) eventos.push({ titulo: "En preparacion", meta: fechaCorta(String(pedido.fecha_preparacion).slice(0, 10)), hecho: true });
  if (pedido.fecha_despacho) {
   eventos.push({
    titulo: esPaqueteria ? "Entregado a paqueteria" : "Despachado",
@@ -212,7 +215,7 @@ export function DetallePedidoMovil({
        padding: "4px 9px", borderRadius: T.radio.pastilla, background: tono.bg, color: tono.color,
       }}>
        <span style={{ width: 6, height: 6, borderRadius: 3, background: punto }} />
-       {ESTADOS_PEDIDO[pedido.estado]?.label || pedido.estado}
+       {ESTADOS_PEDIDO[ev]?.label || pedido.estado}
       </span>
       {pedido.novedad && pedido.estado !== "novedad" && (
        <span style={{
