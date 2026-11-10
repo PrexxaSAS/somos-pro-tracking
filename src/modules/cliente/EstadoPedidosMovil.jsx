@@ -36,8 +36,9 @@ const botonIcono = (activo) => ({
 function Conteos({ items }) {
  return (
   <section style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 8 }}>
-   {items.map(k => (
+   {items.map((k, i) => (
     <button key={k.clave} onClick={k.onClick} style={{
+     gridColumn: items.length % 2 && i === 0 ? "1 / -1" : undefined,
      background: T.color.superficie, border: `1.5px solid ${k.activo ? T.color.marca : T.color.borde}`, borderRadius: 12,
      padding: "10px 12px", minWidth: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: T.color.tinta,
     }}>
@@ -119,6 +120,7 @@ export function EstadoPedidosMovil({
    <Conteos items={[
     kpi("todos", "Total", T.color.tinta),
     kpi("activos", "Activos", T.color.marca),
+    kpi("en_preparacion", "En preparacion", T.estado.en_preparacion),
     kpi("entregados", "Entregados", T.color.bien),
     kpi("novedades", "Novedades", T.color.mal),
    ]}/>

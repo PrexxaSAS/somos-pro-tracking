@@ -6023,6 +6023,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const conteo = {
   todos: enRango.length,
   activos: enRango.filter(esActivo).length,
+  en_preparacion: enRango.filter(p => estadoVisible(p) === "en_preparacion").length,
   entregados: enRango.filter(p => p.estado === "entregado").length,
   novedades: enRango.filter(p => p.estado === "novedad" || p.novedad).length,
  };
@@ -6030,6 +6031,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const filtP = enRango.filter(p => {
   if (ciudadF && p.ciudad_nombre !== ciudadF) return false;
   if (filtro === "activos" && !esActivo(p)) return false;
+  if (filtro === "en_preparacion" && estadoVisible(p) !== "en_preparacion") return false;
   if (filtro === "entregados" && p.estado !== "entregado") return false;
   if (filtro === "novedades" && !(p.estado === "novedad" || p.novedad)) return false;
   const q = busq.trim().toLowerCase();
@@ -6112,6 +6114,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
    <Indicadores items={[
     kpi("todos", "Total pedidos", T.color.tinta),
     kpi("activos", "Activos", T.color.marca),
+    kpi("en_preparacion", "En preparacion", T.estado.en_preparacion),
     kpi("entregados", "Entregados", T.color.bienPunto),
     kpi("novedades", "Novedades", T.color.malPunto),
    ]}/>
