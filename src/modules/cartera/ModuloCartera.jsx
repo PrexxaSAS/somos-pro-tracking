@@ -7,14 +7,14 @@ import { T, tarjeta } from '../../design/tokens';
 import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download, Building2, Calendar } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Paginador,
+ Segmentado, Paginador, FiltroFechas,
  PieTabla, th, td, tdCifra, mono, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from '../../components/ui/listas';
 import {
  ModalForm, ModalGestion, Seccion, FranjaInfo, Resumen, Fila, Texto, Selector, AreaTexto,
  CasillaNovedad,
 } from '../../components/ui/formularios';
-import { hoyLocal, hoyMas } from '../../utils/fechas';
+import { hoyLocal, hoyMas, limitesFecha, limitesInstante } from '../../utils/fechas';
 import { useEsMovil } from '../../design/responsive';
 
 // ── Colores verdes ─────────────────────────────────────────────────────────────
@@ -1450,6 +1450,25 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
 // ── GESTIÓN PEDIDOS (CARTERA) ──────────────────────────────────────────────────
 // onPedidosCambiaron: al aprobar, la base crea el pedido en Pedidos; la app
 // vuelve a leer esa lista para que aparezca sin recargar la pagina.
+// Trae los pedidos de cartera cuya fecha de ingreso (created_at) cae en los
+// limites, de a 1000: la base no entrega mas de 1000 filas por consulta, y sin
+// esto los listados se quedaban cortos sin avisar.
+const POR_PAGINA_CARTERA = 25;
+async function traerPedidosCartera(armar, limites) {
+  const { desde, antesDe } = limitesInstante(limites);
+  let todos = [];
+  for (let i = 0; ; i += 1000) {
+    let q = armar();
+    if (desde) q = q.gte('created_at', desde);
+    if (antesDe) q = q.lt('created_at', antesDe);
+    const { data, error } = await q.order('created_at', { ascending:false }).order('id').range(i, i + 999);
+    if (error) throw error;
+    todos = todos.concat(data || []);
+    if (!data || data.length < 1000) break;
+  }
+  return todos;
+}
+
 export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const esMovil = useEsMovil();
   const [pedidos,    setPedidos]    = useState([]);
@@ -1461,17 +1480,26 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const [modRechazar,setModRechazar]= useState(null);
   const [carg,       setCarg]       = useState(false);
   const [aprobando,  setAprobando]  = useState(false);
+  // Fecha de ingreso (cuando se subio el pedido). Por defecto todas, para que
+  // ningun pendiente viejo quede escondido.
+  const [rango,      setRango]      = useState('todo');
+  const [desdeF,     setDesdeF]     = useState('');
+  const [hastaF,     setHastaF]     = useState('');
+  const [pagina,     setPagina]     = useState(1);
+  const limites = limitesFecha(rango, desdeF, hastaF);
 
   const cargar = async () => {
     setCarg(true);
-    const {data} = await supabase.from('pedidos_cartera').select('*')
-      .in('estado_cartera',['pendiente','preaprobado','cartera_vencida','aprobado','rechazado'])
-      .order('created_at',{ascending:false});
-    setPedidos(data||[]);
+    try {
+      const data = await traerPedidosCartera(() => supabase.from('pedidos_cartera').select('*')
+        .in('estado_cartera',['pendiente','preaprobado','cartera_vencida','aprobado','rechazado']), limites);
+      setPedidos(data);
+    } catch { showToast("No se pudieron cargar los pedidos","error"); }
     setSeleccion(new Set());
     setCarg(false);
   };
-  useEffect(()=>{cargar();},[]);
+  useEffect(()=>{cargar();},[rango, limites.desde, limites.hasta]);
+  useEffect(()=>{setPagina(1);},[busq, filtroEst, rango, desdeF, hastaF]);
 
   const filtrados = pedidos.filter(p=>{
     if(filtroEst!=='todos'&&p.estado_cartera!==filtroEst) return false;
@@ -1482,7 +1510,9 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
     return true;
   });
 
-  const pendientesAprobacion = filtrados.filter(p=>['pendiente','preaprobado','cartera_vencida'].includes(p.estado_cartera));
+  const paginaItems = filtrados.slice((pagina - 1) * POR_PAGINA_CARTERA, pagina * POR_PAGINA_CARTERA);
+  // La casilla de arriba marca los pendientes de la pagina que se ve.
+  const pendientesAprobacion = paginaItems.filter(p=>['pendiente','preaprobado','cartera_vencida'].includes(p.estado_cartera));
 
   const toggleSel = (id) => {
     const s=new Set(seleccion);
@@ -1573,7 +1603,9 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
 
   const todosVisiblesMarcados = pendientesAprobacion.length > 0 && pendientesAprobacion.every(x => seleccion.has(x.id));
 
-  if (esMovil) return <GestionPedidosMovil
+  const filtroFechas = <FiltroFechas rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF} ancho={esMovil ? '100%' : 230}/>;
+
+  if (esMovil) return <GestionPedidosMovil filtroFechas={filtroFechas}
     pedidos={pedidos} filtrados={filtrados} tabs={tabs} conteos={conteos}
     filtroEst={filtroEst} setFiltroEst={setFiltroEst} busq={busq} setBusq={setBusq}
     seleccion={seleccion} toggleSel={toggleSel} setSeleccion={setSeleccion}
@@ -1619,12 +1651,13 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
      ) : (
       <BarraFiltros derecha={`${filtrados.length} de ${pedidos.length}`}>
        <Buscador valor={busq} onChange={setBusq} placeholder="Buscar pedido, NIT, cliente o asesor" ancho={300}/>
+       {filtroFechas}
       </BarraFiltros>
      )}
 
      {filtrados.length === 0 ? (
       <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-       {pedidos.length === 0 ? "Sin pedidos cargados. Empieza por Cargar pedidos." : "Ningun pedido coincide con el filtro."}
+       {pedidos.length === 0 ? (rango === 'todo' ? "Sin pedidos cargados. Empieza por Cargar pedidos." : "No hay pedidos cargados en esas fechas.") : "Ningun pedido coincide con el filtro."}
       </div>
      ) : (
       <div style={{ overflowX:"auto" }}>
@@ -1648,7 +1681,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
          </tr>
         </thead>
         <tbody>
-         {filtrados.map(x => {
+         {paginaItems.map(x => {
           const marcado = seleccion.has(x.id);
           const est = ESTADOS_CARTERA[x.estado_cartera] || ESTADOS_CARTERA.pendiente;
           const decidible = x.estado_cartera !== "aprobado" && x.estado_cartera !== "rechazado";
@@ -1723,7 +1756,8 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
       </div>
      )}
 
-     <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}/>
+     <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
+      derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA_CARTERA}/>}/>
     </section>
 
     {modRechazar && (
@@ -1734,7 +1768,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   );
 }
 
-function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, setFiltroEst, busq, setBusq,
+function GestionPedidosMovil({ filtroFechas, pedidos, filtrados, tabs, conteos, filtroEst, setFiltroEst, busq, setBusq,
  seleccion, toggleSel, setSeleccion, cargar, carg, aprobando, aprobarUno, aprobarSeleccionados,
  reactivar, setModRechazar, modRechazar, rechazar }) {
  const espera = useRef(null);
@@ -1745,6 +1779,9 @@ function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, set
   const bPend = ['pendiente','preaprobado','cartera_vencida'].includes(b.estado_cartera);
   return Number(bPend)-Number(aPend);
  });
+ // De a 30 y "Ver mas": en el celular es mas comodo que un paginador.
+ const [tope, setTope] = useState(30);
+ useEffect(()=>{setTope(30);},[busq, filtroEst, pedidos]);
  const detenerPulsacion = () => { if(espera.current){clearTimeout(espera.current);espera.current=null;} };
  useEffect(()=>()=>detenerPulsacion(),[]);
 
@@ -1756,6 +1793,7 @@ function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, set
   </header>
 
   <Buscador valor={busq} onChange={setBusq} placeholder="Pedido, NIT, cliente o asesor" ancho="100%"/>
+  {filtroFechas}
   <div style={{display:'flex',gap:6,overflowX:'auto',margin:'0 -16px',padding:'0 16px 2px',scrollbarWidth:'none'}}>
    {tabs.filter(t=>t.k!=='preaprobado'||conteos.preaprobado).map(t=>{
     const activo=filtroEst===t.k;
@@ -1770,7 +1808,7 @@ function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, set
   </div>}
 
   {ordenados.length===0 ? <div style={{...tarjeta,padding:30,textAlign:'center',color:T.color.tinta3,fontSize:13}}>Ningún pedido coincide con el filtro.</div> :
-   <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>{ordenados.map(x=>{
+   <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>{ordenados.slice(0,tope).map(x=>{
     const est=ESTADOS_CARTERA[x.estado_cartera]||ESTADOS_CARTERA.pendiente;
     const decidible=x.estado_cartera!=='aprobado'&&x.estado_cartera!=='rechazado';
     const marcado=seleccion.has(x.id);
@@ -1799,6 +1837,7 @@ function GestionPedidosMovil({ pedidos, filtrados, tabs, conteos, filtroEst, set
      {decidible&&seleccion.size>0&&<div style={{fontSize:11,color:T.color.marca,marginTop:7}}>{marcado?'✓ Seleccionado':'Toca para seleccionar'}</div>}
     </article>;
    })}</div>}
+  {ordenados.length>tope && <button onClick={()=>setTope(n=>n+30)} style={{...botonBarra,justifyContent:'center'}}>Ver más · {ordenados.length-tope} restantes</button>}
   {modRechazar && <ModalRechazar pedido={modRechazar} onClose={()=>setModRechazar(null)} onRechazar={motivo=>rechazar(modRechazar.id,motivo)}/>}
  </Pagina>;
 }
@@ -2485,12 +2524,21 @@ export function ModuloConsultas({showToast}) {
   const [pedidos, setPedidos] = useState([]);
   const [busq,    setBusq]    = useState('');
   const [filtroEst,setFiltroEst]=useState('todos');
+  // Por fecha de ingreso. Antes traia solo los ultimos 500; ahora los del
+  // periodo elegido, por defecto los ultimos 30 dias.
+  const [rango,  setRango]  = useState('30');
+  const [desdeF, setDesdeF] = useState('');
+  const [hastaF, setHastaF] = useState('');
+  const [pagina, setPagina] = useState(1);
+  const [tope,   setTope]   = useState(30);
+  const limites = limitesFecha(rango, desdeF, hastaF);
 
   const cargar = async () => {
-    const {data}=await supabase.from('pedidos_cartera').select('*').order('created_at',{ascending:false}).limit(500);
-    setPedidos(data||[]);
+    try { setPedidos(await traerPedidosCartera(() => supabase.from('pedidos_cartera').select('*'), limites)); }
+    catch { showToast("No se pudieron cargar los pedidos","error"); }
   };
-  useEffect(()=>{cargar();},[]);
+  useEffect(()=>{cargar();},[rango, limites.desde, limites.hasta]);
+  useEffect(()=>{setPagina(1);setTope(30);},[busq, filtroEst, rango, desdeF, hastaF]);
 
   const filtrados=pedidos.filter(p=>{
     if(filtroEst!=='todos'){
@@ -2502,6 +2550,9 @@ export function ModuloConsultas({showToast}) {
     return true;
   });
 
+  const paginaItems = filtrados.slice((pagina - 1) * POR_PAGINA_CARTERA, pagina * POR_PAGINA_CARTERA);
+  const filtroFechas = <FiltroFechas rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF} ancho={esMovil ? '100%' : 230}/>;
+
   const getEstadoTexto = (p) => {
     if(p.estado_cartera==='rechazado') return {label:'Rechazado',color:T.color.mal};
     if(p.estado_cartera==='aprobado') return etapaCartera(p);
@@ -2509,8 +2560,9 @@ export function ModuloConsultas({showToast}) {
   };
 
   if(esMovil) return <Pagina anchoCompleto>
-   <header><div style={{fontSize:12,color:T.color.tinta3}}>Últimos 500 pedidos · solo lectura</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Consultas de cartera</h1></header>
+   <header><div style={{fontSize:12,color:T.color.tinta3}}>{pedidos.length} pedidos · solo lectura</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Consultas de cartera</h1></header>
    <Buscador valor={busq} onChange={setBusq} placeholder="Pedido, cliente o NIT" ancho="100%"/>
+   {filtroFechas}
    <div style={{display:'flex',gap:6,overflowX:'auto',margin:'0 -16px',padding:'0 16px 2px',scrollbarWidth:'none'}}>{[
     ['todos','Todos',pedidos.length],['pendiente','Pendiente',pedidos.filter(p=>p.estado_cartera==='pendiente').length],
     ['aprobado','Aprobado',pedidos.filter(p=>p.estado_cartera==='aprobado').length],
@@ -2518,7 +2570,7 @@ export function ModuloConsultas({showToast}) {
     ['impreso','Impreso',pedidos.filter(p=>p.estado_impresion==='impreso').length],
     ['rechazado','Rechazado',pedidos.filter(p=>p.estado_cartera==='rechazado').length],
    ].map(([clave,label,conteo])=><button key={clave} onClick={()=>setFiltroEst(clave)} style={{whiteSpace:'nowrap',borderRadius:99,border:`1px solid ${filtroEst===clave?T.color.marca:T.color.borde2}`,background:filtroEst===clave?T.color.marca:T.color.superficie,color:filtroEst===clave?'#fff':T.color.tinta2,padding:'8px 11px',fontFamily:'inherit',fontSize:12,fontWeight:600}}>{label} <span style={{opacity:.75}}>{conteo}</span></button>)}</div>
-   {filtrados.length===0?<div style={{...tarjeta,padding:24,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Ningún pedido coincide con el filtro.</div>:<div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>{filtrados.map(p=>{
+   {filtrados.length===0?<div style={{...tarjeta,padding:24,textAlign:'center',fontSize:13,color:T.color.tinta3}}>Ningún pedido coincide con el filtro.</div>:<div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:8}}>{filtrados.slice(0,tope).map(p=>{
     const info=getEstadoTexto(p);
     const bg=p.estado_cartera==='rechazado'?T.color.neutroSuave:p.estado_cartera==='aprobado'?p.estado_impresion==='impreso'?T.color.bienSuave:T.color.infoSuave:T.color.ojoSuave;
     return <article key={p.id} style={{...tarjeta,padding:'12px 13px'}}>
@@ -2531,6 +2583,7 @@ export function ModuloConsultas({showToast}) {
      </div>
     </article>;
    })}</div>}
+  {filtrados.length>tope && <button onClick={()=>setTope(n=>n+30)} style={{...botonBarra,justifyContent:'center'}}>Ver más · {filtrados.length-tope} restantes</button>}
   </Pagina>;
 
   return (
@@ -2543,6 +2596,7 @@ export function ModuloConsultas({showToast}) {
     <section style={{ ...tarjeta, overflow:"hidden" }}>
      <BarraFiltros derecha={`${filtrados.length} de ${pedidos.length}`}>
       <Buscador valor={busq} onChange={setBusq} placeholder="Buscar pedido, cliente o NIT" ancho={280}/>
+      {filtroFechas}
       <SelectFiltro valor={filtroEst} onChange={setFiltroEst} ancho={200}>
        <option value="todos">Todos los estados</option>
        {Object.entries(ESTADOS_CARTERA).map(([k,v])=>(
@@ -2553,7 +2607,7 @@ export function ModuloConsultas({showToast}) {
 
      {filtrados.length === 0 ? (
       <div style={{ padding:48, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-       {pedidos.length === 0 ? "Sin pedidos cargados." : "Ningun pedido coincide con el filtro."}
+       {pedidos.length === 0 ? (rango === 'todo' ? "Sin pedidos cargados." : "No hay pedidos cargados en esas fechas.") : "Ningun pedido coincide con el filtro."}
       </div>
      ) : (
       <div style={{ overflowX:"auto" }}>
@@ -2569,7 +2623,7 @@ export function ModuloConsultas({showToast}) {
          </tr>
         </thead>
         <tbody>
-         {filtrados.slice(0, 300).map(x => {
+         {paginaItems.map(x => {
           const info = getEstadoTexto(x);
           return (
            <tr key={x.id}>
@@ -2600,7 +2654,8 @@ export function ModuloConsultas({showToast}) {
       </div>
      )}
 
-     <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}/>
+     <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
+      derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA_CARTERA}/>}/>
     </section>
    </Pagina>
   );

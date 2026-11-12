@@ -29,7 +29,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, th, td, tdCifra, mono, chipMono,
+ Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroIngreso, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -50,7 +50,7 @@ import { Conductores } from './modules/conductores/Conductores';
 import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
-import { hoyLocal, hoyMas } from './utils/fechas';
+import { hoyLocal, hoyMas, diaLocal, limitesFecha, diaEnLimites } from './utils/fechas';
 import { mapaPromesas, fueraDePromesa, enRiesgoDePromesa } from './utils/promesa';
 import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
@@ -138,15 +138,31 @@ const CeldaFechaIngreso = ({ p, estilo }) => {
 };
 const columnasPedidos = (rol) => rol === "cliente" ? COLUMNAS_PEDIDOS_CLIENTE : COLUMNAS_PEDIDOS;
 
+// Trae todas las filas de una consulta de a 1.000, que es lo maximo que la base
+// entrega por vez. armar() devuelve la consulta ya ordenada de forma estable.
+async function traerTodas(armar) {
+ const filas = [];
+ for (let i = 0; ; i += 1000) {
+  const { data, error } = await armar().range(i, i + 999);
+  if (error) throw error;
+  filas.push(...(data || []));
+  if (!data || data.length < 1000) return filas;
+ }
+}
+
 // Facturas con sus guias. Se consulta en dos pasos porque el join anidado de
 // PostgREST no funciona con las politicas RLS actuales.
+//
+// Las guias se piden por tandas: en una sola consulta llegaban maximo 1.000 y,
+// pasado ese numero, las relaciones nuevas se guardaban pero no se veian (la
+// factura seguia mostrando los mismos pedidos).
 async function obtenerFacturasConGuias() {
- const { data: facturas, error } = await supabase
-  .from('facturas_proveedor').select('*').order('created_at', { ascending: false });
- if (error) throw error;
- const { data: guias } = await supabase
+ const facturas = await traerTodas(() => supabase
+  .from('facturas_proveedor').select('*').order('created_at', { ascending: false }).order('id'));
+ const guias = await traerTodas(() => supabase
   .from('factura_guias')
-  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)');
+  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)')
+  .order('id'));
  const porFactura = {};
  (guias || []).forEach(g => {
   if (!porFactura[g.factura_id]) porFactura[g.factura_id] = [];
@@ -238,6 +254,22 @@ const RANGOS_PEDIDOS = [
  { id: "30",  label: "Ultimos 30 dias",  dias: 30 },
  { id: "90",  label: "Ultimos 90 dias",  dias: 90 },
 ];
+
+// Indicadores de Pedidos en escritorio: Todos aparte y los demas agrupados.
+// Flujo va en el orden en que avanza un pedido (de ahi las flechas).
+// Los cuatro bloques van en una fila y crecen hasta llenarla; si la pantalla
+// no alcanza, bajan a la siguiente.
+const GRUPOS_FILTRO_PEDIDOS = [
+ { titulo: "Flujo", flechas: true, claves: ["sin_asignar", "en_preparacion", "en_transito", "entregado"] },
+ { titulo: "Excepciones", claves: ["novedad", "fuera_promesa", "en_riesgo"] },
+ { titulo: "Modalidad", claves: ["paqueteria", "solo_facturar", "cliente_recoge"] },
+];
+const ETIQUETA_FILTRO_PEDIDO = {
+ sin_asignar: "Sin asignar", en_preparacion: "En preparación", en_transito: "En tránsito",
+ paqueteria: "Paquetería", entregado: "Entregado", novedad: "Con novedad",
+ fuera_promesa: "Fuera de promesa", en_riesgo: "En riesgo",
+ solo_facturar: "Solo facturar", cliente_recoge: "Cliente recoge",
+};
 
 // Orden de las pestanas por estado.
 const ORDEN_ESTADOS_PEDIDO = [
@@ -1565,6 +1597,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(100);
  const [rango, setRango] = useState("todo");
+ // Desde y hasta del rango elegido a mano (rango === "rango").
+ const [desdeF, setDesdeF] = useState("");
+ const [hastaF, setHastaF] = useState("");
  const [ciudadF, setCiudadF] = useState("");
  const [conductorF, setConductorF] = useState("");
  // Transporte propio o paqueteria. Es filtro propio y no una pestana mas:
@@ -1591,11 +1626,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const conductoresActivos = conductores.filter(c => c.activo !== false);
 
- const desdeRango = (() => {
-  const r = RANGOS_PEDIDOS.find(x => x.id === rango);
-  if (!r || !r.dias) return null;
-  return hoyMas(-r.dias);
- })();
+ // El rango es sobre la fecha de ingreso: cuando el pedido entro al sistema
+ // (created_at, en hora local), que en los de cartera es cuando entro al corte.
+ const limites = limitesFecha(rango, desdeF, hastaF);
 
  // Filtros que llegan desde el Dashboard: la misma regla con que alli se cuentan.
  const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
@@ -1604,7 +1637,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const okF = filtro === "todos" || estadoVisible(p) === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
    || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
    || (filtro === "en_riesgo" && enRiesgoDePromesa(p, promMap, hoyPromesa, mananaPromesa));
-  const okFecha = !desdeRango || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desdeRango;
+  const okFecha = diaEnLimites(diaLocal(p.created_at) || p.fecha_creacion || "", limites);
   const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
   const okCond = !conductorF
    || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
@@ -1627,7 +1660,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
  const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
  const pageEnd = Math.min(filtrados.length, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF]);
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF, rango, desdeF, hastaF]);
  const porCompletar = pedidos.filter(p => faltantesPedido(p).length > 0).length;
 
  const guardar = async () => {
@@ -1891,6 +1924,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      conteoPorEstado={conteoPorEstado}
      estadosOrden={[...ORDEN_ESTADOS_PEDIDO, ...Object.keys(FILTROS_PROMESA)]}
      rango={rango} setRango={setRango}
+     desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
      tipoF={tipoF} setTipoF={setTipoF}
@@ -1910,48 +1944,79 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       <h1 style={{ margin:0, ...T.texto.titulo }}>Pedidos</h1>
       <p style={{ margin:"4px 0 0", color:T.color.tinta3, fontSize:13.5 }}>Gestion y seguimiento de todos los pedidos</p>
      </div>
-     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-      <button style={botonBarra} onClick={imprimirPlanilla}>
-       <ClipboardList size={15} style={{ color:T.color.tinta3 }} />
-       Planilla{seleccion.size > 0 ? ` (${seleccion.size})` : ""}
-      </button>
-      <button style={botonBarra} onClick={() => setModCSV(true)}>
-       <Download size={15} style={{ color:T.color.tinta3 }} /> CSV pedidos
-      </button>
-      <button style={botonBarra} onClick={() => setModGuias(true)}>
-       <Upload size={15} style={{ color:T.color.tinta3 }} /> Cargar guias paqueteria
-      </button>
+     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+      {/* Las tres acciones secundarias van unidas en un solo grupo. */}
+      <div style={{ display:"inline-flex", border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control, background:T.color.superficie, overflow:"hidden" }}>
+       {[
+        [<ClipboardList size={15}/>, `Planilla${seleccion.size > 0 ? ` (${seleccion.size})` : ""}`, imprimirPlanilla],
+        [<Download size={15}/>, "CSV pedidos", () => setModCSV(true)],
+        [<Upload size={15}/>, "Cargar guías paquetería", () => setModGuias(true)],
+       ].map(([icono, texto, accion], i) => (
+        <button key={i} onClick={accion} style={{
+         display:"inline-flex", alignItems:"center", gap:8, height:38, padding:"0 16px",
+         border:"none", borderLeft: i ? `1px solid ${T.color.borde2}` : "none", background:"transparent",
+         cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.tinta, whiteSpace:"nowrap",
+        }}><span style={{ color:T.color.tinta3, display:"inline-flex" }}>{icono}</span>{texto}</button>
+       ))}
+      </div>
       <button onClick={() => setModNuevo(true)} style={{
-       ...botonBarra, background:T.color.marca, border:"none", color:"#fff", fontWeight:700,
+       display:"inline-flex", alignItems:"center", gap:8, height:40, padding:"0 18px",
+       borderRadius:T.radio.control, border:"none", background:T.color.marca, color:"#fff",
+       cursor:"pointer", fontFamily:"inherit", fontSize:13.5, fontWeight:700, whiteSpace:"nowrap",
       }}><Plus size={16} /> Nuevo pedido</button>
      </div>
     </header>
 
-    {/* Pestanas por estado: el conteo es sobre todos los pedidos, no sobre lo filtrado,
-        para que sirvan de panorama y no cambien de numero al escribir en la busqueda. */}
-    <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:`1px solid ${T.color.borde}` }}>
-     {[["todos","Todos"], ...ORDEN_ESTADOS_PEDIDO.map(k => [k, ESTADOS_PEDIDO[k]?.label || k]), ...Object.entries(FILTROS_PROMESA)].map(([clave,label]) => {
-      const activo = filtro === clave;
-      const n = conteoPorEstado(clave);
-      const tono = tonoFiltroPedido(clave);
+    {/* Indicadores por estado: el conteo es sobre todos los pedidos, no sobre lo
+        filtrado, para que sirvan de panorama y no cambien al escribir en la busqueda.
+        Cada uno es tambien el filtro; el activo toma el color de su estado. */}
+    <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"stretch" }}>
+     {(() => {
+      const activoTodos = filtro === "todos";
       return (
-       <button key={clave} onClick={() => { setFiltro(clave); setPage(1); }} style={{
-        display:"inline-flex", alignItems:"center", gap:8, padding:"10px 12px",
-        border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-        fontSize:13.5, fontWeight: activo ? 700 : 500,
-        color: activo ? tono.fuerte : T.color.tinta2,
-        borderBottom: `2px solid ${activo ? tono.fuerte : "transparent"}`,
-        marginBottom:-1,
+       <button onClick={() => { setFiltro("todos"); setPage(1); }} style={{
+        ...tarjeta, minWidth:84, padding:"9px 14px", cursor:"pointer", fontFamily:"inherit", textAlign:"left",
+        display:"flex", flexDirection:"column", justifyContent:"center", gap:2,
+        background: activoTodos ? T.color.marca : T.color.superficie,
+        border: activoTodos ? `1px solid ${T.color.marca}` : tarjeta.border,
+        color: activoTodos ? "#fff" : T.color.tinta,
        }}>
-        {label}
-        <span style={{
-         fontSize:11.5, fontWeight:700, padding:"1px 7px", borderRadius:T.radio.pastilla,
-         background: activo ? tono.suave : T.color.superficie2,
-         color: activo ? tono.fuerte : T.color.tinta3,
-        }}>{n}</span>
+        <span style={{ ...T.texto.seccion, color: activoTodos ? "rgba(255,255,255,.85)" : T.color.placeholder }}>Todos</span>
+        <span style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.02em", lineHeight:1.15 }}>{conteoPorEstado("todos").toLocaleString("es-CO")}</span>
        </button>
       );
-     })}
+     })()}
+     {GRUPOS_FILTRO_PEDIDOS.map(g => (
+      <div key={g.titulo} style={{ ...tarjeta, padding:"8px 8px", display:"flex", flexDirection:"column", gap:4, minWidth:0, flex:"1 1 auto" }}>
+       <span style={{ ...T.texto.seccion, color:T.color.placeholder, paddingLeft:6 }}>{g.titulo}</span>
+       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-around", flexWrap:"wrap", gap:0 }}>
+        {g.claves.map((clave, i) => {
+         const activo = filtro === clave;
+         const n = conteoPorEstado(clave);
+         const tono = tonoFiltroPedido(clave);
+         return (
+          <React.Fragment key={clave}>
+           {g.flechas && i > 0 && <ChevronRight size={12} style={{ color:T.color.tinta4, flexShrink:0, margin:"0 -2px" }}/>}
+           <button onClick={() => { setFiltro(clave); setPage(1); }} style={{
+            display:"inline-flex", alignItems:"center", gap:5, padding:"5px 5px", borderRadius:8,
+            border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, whiteSpace:"nowrap",
+            fontWeight: activo ? 700 : 600,
+            background: activo ? tono.suave : "transparent",
+            color: activo ? tono.fuerte : n ? T.color.tinta : T.color.tinta4,
+           }}>
+            {ETIQUETA_FILTRO_PEDIDO[clave] || ESTADOS_PEDIDO[clave]?.label || clave}
+            <span style={{
+             fontSize:11, fontWeight:700, padding:"1px 6px", borderRadius:T.radio.pastilla,
+             background: activo ? "rgba(255,255,255,.7)" : T.color.superficie2,
+             color: activo ? tono.fuerte : n ? T.color.tinta2 : T.color.tinta4,
+            }}>{n}</span>
+           </button>
+          </React.Fragment>
+         );
+        })}
+       </div>
+      </div>
+     ))}
     </div>
 
     <section style={{ ...tarjeta, overflow:"hidden" }}>
@@ -1967,9 +2032,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         }}/>
       </div>
 
-      <select value={rango} onChange={e => { setRango(e.target.value); setPage(1); }} style={selectFiltro}>
-       {RANGOS_PEDIDOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-      </select>
+      <FiltroIngreso rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}/>
 
       <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
        <option value="">Todas las ciudades</option>
@@ -1985,6 +2048,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        {conductoresActivos.slice().sort((a,b) => (a.nombre||"").localeCompare(b.nombre||"", "es"))
         .map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
       </select>
+
+      <span style={{ width:1, height:24, background:T.color.borde2, flexShrink:0 }}/>
 
       {/* Encendido deja solo los pedidos a los que les falta cajas, factura o
           tipo de envio; el numero es el total, con o sin los demas filtros. */}
@@ -2003,9 +2068,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
        }}>{porCompletar}</span>
       </button>
 
-      <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>
-       {seleccion.size > 0 ? `${seleccion.size} seleccionados` : `${pageItems.length} en esta pagina`}
-      </div>
+      {seleccion.size > 0 && (
+       <div style={{ marginLeft:"auto", fontSize:12.5, color:T.color.tinta3, whiteSpace:"nowrap" }}>{seleccion.size} seleccionados</div>
+      )}
      </div>
 
      <div style={{ overflowX:"auto" }}>
