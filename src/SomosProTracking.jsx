@@ -138,15 +138,31 @@ const CeldaFechaIngreso = ({ p, estilo }) => {
 };
 const columnasPedidos = (rol) => rol === "cliente" ? COLUMNAS_PEDIDOS_CLIENTE : COLUMNAS_PEDIDOS;
 
+// Trae todas las filas de una consulta de a 1.000, que es lo maximo que la base
+// entrega por vez. armar() devuelve la consulta ya ordenada de forma estable.
+async function traerTodas(armar) {
+ const filas = [];
+ for (let i = 0; ; i += 1000) {
+  const { data, error } = await armar().range(i, i + 999);
+  if (error) throw error;
+  filas.push(...(data || []));
+  if (!data || data.length < 1000) return filas;
+ }
+}
+
 // Facturas con sus guias. Se consulta en dos pasos porque el join anidado de
 // PostgREST no funciona con las politicas RLS actuales.
+//
+// Las guias se piden por tandas: en una sola consulta llegaban maximo 1.000 y,
+// pasado ese numero, las relaciones nuevas se guardaban pero no se veian (la
+// factura seguia mostrando los mismos pedidos).
 async function obtenerFacturasConGuias() {
- const { data: facturas, error } = await supabase
-  .from('facturas_proveedor').select('*').order('created_at', { ascending: false });
- if (error) throw error;
- const { data: guias } = await supabase
+ const facturas = await traerTodas(() => supabase
+  .from('facturas_proveedor').select('*').order('created_at', { ascending: false }).order('id'));
+ const guias = await traerTodas(() => supabase
   .from('factura_guias')
-  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)');
+  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)')
+  .order('id'));
  const porFactura = {};
  (guias || []).forEach(g => {
   if (!porFactura[g.factura_id]) porFactura[g.factura_id] = [];
