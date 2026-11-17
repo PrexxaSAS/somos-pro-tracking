@@ -161,7 +161,8 @@ async function obtenerFacturasConGuias() {
   .from('facturas_proveedor').select('*').order('created_at', { ascending: false }).order('id'));
  const guias = await traerTodas(() => supabase
   .from('factura_guias')
-  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho)')
+  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho,'
+   + 'fecha_real,fecha_pedido,guia_paqueteria,ciudad_origen_codigo,ciudad_origen_nombre,notas)')
   .order('id'));
  const porFactura = {};
  (guias || []).forEach(g => {

@@ -145,7 +145,7 @@ export function VerMas({ onClick }) {
 // ── 26a: Facturas proveedor ─────────────────────────────────────────────────
 export function FacturasMovil({
  facturas, filtradas, transportistas = [], busq, setBusq, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
- onInforme, onGestionar, onCSV, onEliminar, onNueva,
+ onInforme, onInformePdf, onGestionar, onCSV, onEliminar, onNueva,
 }) {
  const [hojaFechas, setHojaFechas] = useState(false);
  const [tope, setTope] = useState(30);
@@ -165,7 +165,12 @@ export function FacturasMovil({
     </div>
     <button onClick={onInforme} disabled={filtradas.length === 0} style={{
      ...botonGrande(false), minHeight: 40, padding: "0 12px", flexShrink: 0, opacity: filtradas.length ? 1 : 0.5,
-    }}><FileDown size={16} /> Informe</button>
+    }}><FileDown size={16} /> CSV</button>
+    {onInformePdf && (
+     <button onClick={onInformePdf} disabled={filtradas.length === 0} style={{
+      ...botonGrande(false), minHeight: 40, padding: "0 12px", flexShrink: 0, opacity: filtradas.length ? 1 : 0.5,
+     }}><FileDown size={16} /> PDF</button>
+    )}
    </section>
    <div style={{ display: "flex", gap: 8 }}>
     <div style={{ flex: 1, minWidth: 0 }}><BuscadorConductor valor={busq} onChange={setBusq} placeholder="Factura o transportista" /></div>
