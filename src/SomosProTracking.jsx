@@ -3417,17 +3417,15 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
  const [selCond, setSelCond] = useState("");
- // El resumen no se guarda: se arma con lo que el conductor lleva en ruta. Para
- // reimprimir el ya despachado (aunque ya se haya entregado) se toman los
- // pedidos de su ultimo despacho, el dia mas reciente de fecha_despacho.
- // Devoluciones y recogidas no guardan fecha de despacho: ahi solo van pedidos.
- const [verUltimo, setVerUltimo] = useState(false);
+ // Historial: con una fecha, los pedidos que el conductor despacho ese dia
+ // (fecha_despacho), esten como esten hoy, para reimprimir ese resumen. Sin
+ // fecha, lo que lleva en ruta ahora. Devoluciones y recogidas no guardan fecha
+ // de despacho, asi que el historial es solo de pedidos.
+ const [fechaHist, setFechaHist] = useState("");
  const condIds = [...new Set(pedidos.filter(p => p.conductor_id).map(p => p.conductor_id))];
  const condOpts = condIds.map(id => conductores.find(c => c.id === id)).filter(Boolean);
  const cond = conductores.find(c => String(c.id) === String(selCond));
  const delCond = (x) => String(x.conductor_id) === String(selCond);
- const ultimoDespacho = selCond ? pedidos.filter(delCond).map(p => String(p.fecha_despacho || "").slice(0, 10)).filter(Boolean).sort().pop() || "" : "";
- const fechaHist = verUltimo ? ultimoDespacho : "";
  const misPeds = !selCond ? [] : fechaHist
   ? pedidos.filter(p => delCond(p) && String(p.fecha_despacho || "").slice(0, 10) === fechaHist)
   : pedidos.filter(p => delCond(p) && p.estado === "en_transito");
@@ -3450,7 +3448,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
  // Disenio 26d: mismo calculo, en tarjetas numeradas; imprime con la misma funcion.
  if (esMovil) return (
   <Pagina>
-   <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond} verUltimo={verUltimo} setVerUltimo={setVerUltimo} ultimoDespacho={ultimoDespacho}
+   <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond} fechaHist={fechaHist} setFechaHist={setFechaHist}
     misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} onImprimir={imprimir} />
   </Pagina>
  );
@@ -3473,12 +3471,11 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
      {condOpts.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"))
       .map(c=><option key={c.id} value={c.id}>{c.nombre} - {c.placa || "sin placa"}</option>)}
     </SelectFiltro>
-    <Segmentado valor={verUltimo ? "ultimo" : "ruta"} onChange={v => setVerUltimo(v === "ultimo")}
-     opciones={[["ruta", "En ruta ahora"], ["ultimo", "Ultimo despacho"]]}/>
-    {verUltimo && selCond && (
-     <span style={{ fontSize:13, color:T.color.tinta3 }}>
-      {ultimoDespacho ? `Despachado el ${fechaLarga(ultimoDespacho)}` : "Este conductor no tiene despachos registrados"}
-     </span>
+    <Segmentado valor={fechaHist ? "fecha" : "ruta"} onChange={v => setFechaHist(v === "fecha" ? (fechaHist || hoyLocal()) : "")}
+     opciones={[["ruta", "En ruta ahora"], ["fecha", "Despachados el..."]]}/>
+    {fechaHist && (
+     <input type="date" value={fechaHist} max={hoyLocal()} onChange={e => setFechaHist(e.target.value || hoyLocal())}
+      aria-label="Fecha de despacho" style={{ padding:"8px 10px", border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", color:T.color.tinta }}/>
     )}
    </section>
 
@@ -3491,7 +3488,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
    ) : (
     <>
      <Indicadores items={[
-      { label: verUltimo ? "Pedidos del ultimo despacho" : "Pedidos en transito", valor:misPeds.length, color:T.color.marca, destacado:true },
+      { label: fechaHist ? `Despachados el ${fechaHist}` : "Pedidos en transito", valor:misPeds.length, color:T.color.marca, destacado:true },
       { label:"Cajas", valor:totalCajas, color:T.color.neutroPunto },
       { label:"Devoluciones", valor:misDV.length, color:T.color.infoPunto },
       { label:"Recogidas", valor:misRC.length, color:T.color.bienPunto },
@@ -3524,7 +3521,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
 
      {[
       { titulo: fechaHist ? `Pedidos despachados el ${fechaLarga(fechaHist)}` : "Pedidos en transito", filas:misPeds, tipo:"pedido" },
-      ...(verUltimo ? [] : [
+      ...(fechaHist ? [] : [
        { titulo:"Devoluciones asignadas", filas:misDV, tipo:"devolucion" },
        { titulo:"Recogidas asignadas", filas:misRC, tipo:"recogida" },
       ]),
@@ -3543,7 +3540,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
        </div>
        {bloque.filas.length === 0 ? (
         <div style={{ padding:28, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
-         {verUltimo ? "Este conductor no tiene despachos registrados." : "Nada asignado en este momento."}
+         {fechaHist ? "Este conductor no despacho pedidos ese dia." : "Nada asignado en este momento."}
         </div>
        ) : (
         <div style={{ overflowX:"auto" }}>

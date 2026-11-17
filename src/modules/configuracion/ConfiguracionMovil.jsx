@@ -426,7 +426,7 @@ export function CiudadesMovil({ ciudades = [], usos, onNueva, onImportar }) {
 // ── 26d: Resumen transportador ──────────────────────────────────────────────
 // El conductor es el encabezado y se cambia tocandolo; los tres conteos son
 // pestanias y lo que lleva son tarjetas numeradas con el total al pie.
-export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, verUltimo = false, setVerUltimo, ultimoDespacho = "", misPeds, misDV, misRC, totalCajas, gpsFresco, onImprimir }) {
+export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, fechaHist = "", setFechaHist, misPeds, misDV, misRC, totalCajas, gpsFresco, onImprimir }) {
  const [pestana, setPestana] = useState("pedidos");
  const opciones = condOpts.slice().sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es"));
  const selector = (
@@ -466,14 +466,12 @@ export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, verUlti
        Cambiar <ChevronDown size={14} />{selector}
       </label>
      </section>
-     {setVerUltimo && (
+     {setFechaHist && (
       <section style={{ ...tarjeta, flexDirection: "row", alignItems: "center", gap: 8 }}>
-       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: T.color.tinta3, ...corta }}>
-        {verUltimo ? (ultimoDespacho ? `Ultimo despacho: ${ultimoDespacho}` : "Sin despachos registrados") : "Lo que lleva en ruta ahora"}
-       </span>
-       <button onClick={() => { setVerUltimo(!verUltimo); setPestana("pedidos"); }} style={{ border: "none", background: "transparent", color: T.color.marca, fontWeight: 600, fontSize: 13, fontFamily: "inherit", cursor: "pointer", flexShrink: 0 }}>
-        {verUltimo ? "Ver en ruta" : "Ultimo despacho"}
-       </button>
+       <span style={{ fontSize: 12.5, color: T.color.tinta3, flexShrink: 0 }}>Despachados el</span>
+       <input type="date" value={fechaHist} onChange={e => { setFechaHist(e.target.value); setPestana("pedidos"); }} aria-label="Fecha de despacho"
+        style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control, fontSize: 14, fontFamily: "inherit", color: T.color.tinta, background: T.color.superficie }} />
+       {fechaHist && <button onClick={() => setFechaHist("")} style={{ border: "none", background: "transparent", color: T.color.marca, fontWeight: 600, fontSize: 13, fontFamily: "inherit", cursor: "pointer", flexShrink: 0 }}>En ruta</button>}
       </section>
      )}
      <Pestanas valor={pestana} onChange={setPestana} opciones={[
