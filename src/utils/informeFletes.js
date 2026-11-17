@@ -104,7 +104,11 @@ const filaDe = (l) => [
 ];
 
 export function descargarInformeCSV(lineas, nombre) {
- const esc = (c) => `"${String(c ?? "").replace(/"/g, '""')}"`;
+ // Cada valor en una sola linea: Excel le activa "Ajustar texto" a la celda que
+ // trae un salto de linea y, con la columna angosta, la fila crecia hasta 20
+ // renglones. Los saltos pasan a " · " y los renglones vacios se quitan.
+ const unaLinea = (c) => String(c ?? "").split(/\r\n|\r|\n/).map(s => s.trim()).filter(Boolean).join(" · ");
+ const esc = (c) => `"${unaLinea(c).replace(/"/g, '""')}"`;
  const csv = "﻿" + [COLUMNAS_INFORME_FLETES, ...lineas.map(filaDe)].map(r => r.map(esc).join(",")).join("\n");
  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
  const a = document.createElement("a");
