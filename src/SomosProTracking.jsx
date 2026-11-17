@@ -3417,12 +3417,21 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
  const [gpsTick, setGpsTick] = useState(0);
  useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
  const [selCond, setSelCond] = useState("");
+ // Historial: con una fecha, los pedidos que el conductor despacho ese dia
+ // (fecha_despacho), esten como esten hoy, para reimprimir ese resumen. Sin
+ // fecha, lo que lleva en ruta ahora. Devoluciones y recogidas no guardan fecha
+ // de despacho, asi que el historial es solo de pedidos.
+ const [fechaHist, setFechaHist] = useState("");
  const condIds = [...new Set(pedidos.filter(p => p.conductor_id).map(p => p.conductor_id))];
  const condOpts = condIds.map(id => conductores.find(c => c.id === id)).filter(Boolean);
  const cond = conductores.find(c => String(c.id) === String(selCond));
- const misPeds = selCond ? pedidos.filter(p => String(p.conductor_id) === String(selCond) && p.estado === "en_transito") : [];
- const misDV = selCond ? devoluciones.filter(d => String(d.conductor_id) === String(selCond) && d.estado === "en_transito") : [];
- const misRC = selCond ? recogidas.filter(r => String(r.conductor_id) === String(selCond) && r.estado === "en_transito") : [];
+ const delCond = (x) => String(x.conductor_id) === String(selCond);
+ const misPeds = !selCond ? [] : fechaHist
+  ? pedidos.filter(p => delCond(p) && String(p.fecha_despacho || "").slice(0, 10) === fechaHist)
+  : pedidos.filter(p => delCond(p) && p.estado === "en_transito");
+ const misDV = selCond && !fechaHist ? devoluciones.filter(d => delCond(d) && d.estado === "en_transito") : [];
+ const misRC = selCond && !fechaHist ? recogidas.filter(r => delCond(r) && r.estado === "en_transito") : [];
+ const fechaLarga = (dia) => new Date(`${dia}T12:00:00`).toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" });
  const totalCajas = misPeds.reduce((a, p) => a + (parseInt(p.cajas) || 0), 0);
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
@@ -3430,7 +3439,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
 
  const imprimir = () => {
   if (!cond) return;
-  imprimirHTML(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Resumen ${cond.nombre}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111827}h1{margin:0 0 6px}p{color:#6b7280}table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.total{font-size:16px;font-weight:bold}</style></head><body><h1>Somos PRO Tracking Resumen de Despachos</h1><h2>Conductor: ${cond.nombre} Placa: ${cond.placa}${cond.celular ? " Tel: " + cond.celular : ""}</h2><p>Empresa: ${cond.empresa || ""} NIT: ${cond.nit_proveedor || ""}</p><p>Fecha: ${new Date().toLocaleDateString("es-CO", { day:"2-digit", month:"long", year:"numeric" })}</p><table><thead><tr><th>#</th><th>Guia Interna</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Fecha Est.</th></tr></thead><tbody>${misPeds.map((p,i) => `<tr><td>${i+1}</td><td><strong>${p.guia_interna || ""}</strong></td><td>${p.id}</td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}</td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${p.estado}</td><td>${p.fecha_estimada || ""}</td></tr>`).join("")}</tbody></table><p class="total" style="margin-top:20px">Total pedidos: ${misPeds.length} Total cajas: <strong>${totalCajas}</strong></p></body></html>`);
+  imprimirHTML(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Resumen ${cond.nombre}${fechaHist ? " " + fechaHist : ""}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111827}h1{margin:0 0 6px}p{color:#6b7280}table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.total{font-size:16px;font-weight:bold}</style></head><body><h1>Somos PRO Tracking Resumen de Despachos</h1><h2>Conductor: ${cond.nombre} Placa: ${cond.placa}${cond.celular ? " Tel: " + cond.celular : ""}</h2><p>Empresa: ${cond.empresa || ""} NIT: ${cond.nit_proveedor || ""}</p><p>${fechaHist ? `Despachados el ${fechaLarga(fechaHist)} (reimpresion del ${fechaLarga(hoyLocal())})` : `Fecha: ${fechaLarga(hoyLocal())}`}</p><table><thead><tr><th>#</th><th>Guia Interna</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Fecha Est.</th></tr></thead><tbody>${misPeds.map((p,i) => `<tr><td>${i+1}</td><td><strong>${p.guia_interna || ""}</strong></td><td>${p.id}</td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}</td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${ESTADOS_PEDIDO[estadoVisible(p)]?.label || p.estado}</td><td>${p.fecha_estimada || ""}</td></tr>`).join("")}</tbody></table><p class="total" style="margin-top:20px">Total pedidos: ${misPeds.length} Total cajas: <strong>${totalCajas}</strong></p></body></html>`);
  };
 
  const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
@@ -3439,7 +3448,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
  // Disenio 26d: mismo calculo, en tarjetas numeradas; imprime con la misma funcion.
  if (esMovil) return (
   <Pagina>
-   <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond}
+   <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond} fechaHist={fechaHist} setFechaHist={setFechaHist}
     misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} onImprimir={imprimir} />
   </Pagina>
  );
@@ -3456,12 +3465,18 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
     }
    />
 
-   <section style={{ ...tarjeta, padding:14 }}>
+   <section style={{ ...tarjeta, padding:14, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
     <SelectFiltro valor={selCond} onChange={setSelCond} ancho={420}>
      <option value="">Seleccione un conductor</option>
      {condOpts.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"))
       .map(c=><option key={c.id} value={c.id}>{c.nombre} - {c.placa || "sin placa"}</option>)}
     </SelectFiltro>
+    <Segmentado valor={fechaHist ? "fecha" : "ruta"} onChange={v => setFechaHist(v === "fecha" ? (fechaHist || hoyLocal()) : "")}
+     opciones={[["ruta", "En ruta ahora"], ["fecha", "Despachados el..."]]}/>
+    {fechaHist && (
+     <input type="date" value={fechaHist} max={hoyLocal()} onChange={e => setFechaHist(e.target.value || hoyLocal())}
+      aria-label="Fecha de despacho" style={{ padding:"8px 10px", border:`1px solid ${T.color.borde2}`, borderRadius:T.radio.control, fontSize:13, fontFamily:"inherit", color:T.color.tinta }}/>
+    )}
    </section>
 
    {!cond ? (
@@ -3473,7 +3488,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
    ) : (
     <>
      <Indicadores items={[
-      { label:"Pedidos en transito", valor:misPeds.length, color:T.color.marca, destacado:true },
+      { label: fechaHist ? `Despachados el ${fechaHist}` : "Pedidos en transito", valor:misPeds.length, color:T.color.marca, destacado:true },
       { label:"Cajas", valor:totalCajas, color:T.color.neutroPunto },
       { label:"Devoluciones", valor:misDV.length, color:T.color.infoPunto },
       { label:"Recogidas", valor:misRC.length, color:T.color.bienPunto },
@@ -3505,9 +3520,11 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
      </section>
 
      {[
-      { titulo:"Pedidos en transito", filas:misPeds, tipo:"pedido" },
-      { titulo:"Devoluciones asignadas", filas:misDV, tipo:"devolucion" },
-      { titulo:"Recogidas asignadas", filas:misRC, tipo:"recogida" },
+      { titulo: fechaHist ? `Pedidos despachados el ${fechaLarga(fechaHist)}` : "Pedidos en transito", filas:misPeds, tipo:"pedido" },
+      ...(fechaHist ? [] : [
+       { titulo:"Devoluciones asignadas", filas:misDV, tipo:"devolucion" },
+       { titulo:"Recogidas asignadas", filas:misRC, tipo:"recogida" },
+      ]),
      ].map(bloque => (
       <section key={bloque.titulo} style={{ ...tarjeta, overflow:"hidden" }}>
        <div style={{
@@ -3523,7 +3540,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
        </div>
        {bloque.filas.length === 0 ? (
         <div style={{ padding:28, textAlign:"center", color:T.color.tinta3, fontSize:13.5 }}>
-         Nada asignado en este momento.
+         {fechaHist ? "Este conductor no despacho pedidos ese dia." : "Nada asignado en este momento."}
         </div>
        ) : (
         <div style={{ overflowX:"auto" }}>
