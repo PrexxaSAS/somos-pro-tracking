@@ -20,6 +20,7 @@ const campoFecha = {
 import { supabase } from '../../supabase';
 import { mensajeError } from '../../utils/errors';
 import { exportarCSVFacturaProveedor } from '../../utils/facturasCsv';
+import { hoyLocal } from '../../utils/fechas';
 import { armarLineasInforme, descargarInformeCSV, exportarInformePDF } from '../../utils/informeFletes';
 import { PaginationControls } from '../../components/ui/PaginationControls';
 
@@ -120,7 +121,8 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const [armandoInforme, setArmandoInforme] = useState(false);
  const periodoInforme = fechaDesde || fechaHasta
   ? `Facturas del ${fechaDesde || "inicio"} al ${fechaHasta || "hoy"}` : "Todas las facturas";
- const nombreInforme = `Informe fletes ${fechaDesde && fechaHasta ? `${fechaDesde} a ${fechaHasta}` : fechaDesde || fechaHasta || "todas"}`;
+ // El archivo (CSV o PDF) lleva la fecha del dia en que se descarga.
+ const nombreInforme = `Informe_fletes_${hoyLocal()}`;
  const conLineasInforme = async (hacer) => {
   setArmandoInforme(true);
   try {
