@@ -4,7 +4,7 @@ import { Btn, Card, Field, Modal } from '../../Subcomponentes';
 import {
  ModalForm, Fila, Texto, Selector, AreaTexto,
 } from '../../components/ui/formularios';
-import { Download, Plus } from 'lucide-react';
+import { Download, FileText, Plus } from 'lucide-react';
 import { useEsMovil } from '../../design/responsive';
 import { FacturasMovil } from '../configuracion/ConfiguracionMovil';
 import { T, tarjeta } from '../../design/tokens';
@@ -20,6 +20,7 @@ const campoFecha = {
 import { supabase } from '../../supabase';
 import { mensajeError } from '../../utils/errors';
 import { exportarCSVFacturaProveedor } from '../../utils/facturasCsv';
+import { armarLineasInforme, descargarInformeCSV, exportarInformePDF } from '../../utils/informeFletes';
 import { PaginationControls } from '../../components/ui/PaginationControls';
 
 const iSt = {
@@ -114,51 +115,26 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
  React.useEffect(() => { setPage(1); }, [busq, fechaDesde, fechaHasta, pageSize]);
 
- // Informe consolidado de fletes: una linea por guia de todas las facturas filtradas.
- const descargarInforme = () => {
-  const lineasTodias = [];
-  filtradas.forEach(fac=>{
-   const t = transportistas.find(tr=>tr.id===fac.transportista_id);
-   const guias = fac.factura_guias||[];
-   const totalCaj = guias.reduce((a,g)=>a+(g.pedidos?.cajas||0),0);
-   const vCaja = totalCaj>0?fac.valor_total/totalCaj:0;
-   guias.forEach(g=>{
-    lineasTodias.push({
-     fac, trans:t,
-     cajas:g.pedidos?.cajas||0,
-     valorGuia:totalCaj>0?Math.round(vCaja*(g.pedidos?.cajas||0)):0,
-     pedidos:g.pedidos,
-     id:g.id,
-    });
-   });
-  });
-  if(lineasTodias.length===0){showToast("Sin guias en el perodo seleccionado","error");return;}
-  const headers=["Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho","Codigo DANE","Ciudad Destino","No. Factura Proveedor","Cajas","Valor Guia COP","Factura Interna","Pedido Interno"];
-  const rows=lineasTodias.map(l=>[
-   l.fac.fecha_factura,
-   l.pedidos?.guia_interna||"",
-   l.trans?.nombre||"",
-   l.pedidos?.fecha_creacion||"",
-   l.pedidos?.fecha_despacho||"",
-   l.pedidos?.ciudad_codigo||"",
-   l.pedidos?.ciudad_nombre||"",
-   l.fac.numero_factura,
-   l.cajas,
-   l.valorGuia,
-   l.pedidos?.factura||"",
-   l.pedidos?.id||"",
-  ]);
-  const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  const rango=fechaDesde&&fechaHasta?`${fechaDesde}_${fechaHasta}`:fechaDesde||fechaHasta||"todos";
-  a.download=`Informe_Fletes_${rango}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast(` CSV descargado ${lineasTodias.length} lneas ${filtradas.length} factura(s)`,"success");
+ // Informe de fletes: una linea por guia de todas las facturas filtradas
+ // (src/utils/informeFletes.js). Se descarga en CSV o se exporta a PDF.
+ const [armandoInforme, setArmandoInforme] = useState(false);
+ const periodoInforme = fechaDesde || fechaHasta
+  ? `Facturas del ${fechaDesde || "inicio"} al ${fechaHasta || "hoy"}` : "Todas las facturas";
+ const nombreInforme = `Informe fletes ${fechaDesde && fechaHasta ? `${fechaDesde} a ${fechaHasta}` : fechaDesde || fechaHasta || "todas"}`;
+ const conLineasInforme = async (hacer) => {
+  setArmandoInforme(true);
+  try {
+   const lineas = await armarLineasInforme(filtradas, transportistas);
+   if (lineas.length === 0) { showToast("Sin guias en el periodo seleccionado","error"); return; }
+   await hacer(lineas);
+  } catch { showToast("No se pudo armar el informe","error"); }
+  finally { setArmandoInforme(false); }
  };
+ const descargarInforme = () => conLineasInforme(async lineas => {
+  descargarInformeCSV(lineas, nombreInforme);
+  showToast(` CSV descargado ${lineas.length} lineas ${filtradas.length} factura(s)`,"success");
+ });
+ const informePDF = () => conLineasInforme(lineas => { exportarInformePDF(lineas, { nombre: nombreInforme, periodo: periodoInforme }); });
 
  // CSV de una sola factura, con el valor repartido por cajas como en Gestionar.
  const descargarFactura = (fac) => {
@@ -217,7 +193,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
    <FacturasMovil facturas={facturas||[]} filtradas={filtradas} transportistas={transportistas||[]}
     busq={busq} setBusq={setBusq} fechaDesde={fechaDesde} setFechaDesde={setFechaDesde}
     fechaHasta={fechaHasta} setFechaHasta={setFechaHasta}
-    onInforme={descargarInforme} onGestionar={setModDet} onCSV={descargarFactura}
+    onInforme={descargarInforme} onInformePdf={informePDF} onGestionar={setModDet} onCSV={descargarFactura}
     onEliminar={(fac)=>eliminar(fac.id, fac.numero_factura)} onNueva={()=>setModNueva(true)} />
    {modales}
   </Pagina>
@@ -263,9 +239,14 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
       <span style={{ fontSize:13, color:T.color.tinta2 }}>
        Informe consolidado de fletes: una linea por guia, para conciliar con el transportista.
       </span>
-      <button style={{ ...botonBarra, marginLeft:"auto" }} onClick={descargarInforme}>
-       <Download size={15}/> Descargar informe
-      </button>
+      <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+       <button style={botonBarra} onClick={descargarInforme} disabled={armandoInforme}>
+        <Download size={15}/> {armandoInforme ? "Preparando..." : "Descargar CSV"}
+       </button>
+       <button style={botonBarra} onClick={informePDF} disabled={armandoInforme}>
+        <FileText size={15}/> Exportar PDF
+       </button>
+      </div>
      </div>
     )}
 
