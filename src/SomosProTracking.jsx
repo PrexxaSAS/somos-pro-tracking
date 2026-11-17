@@ -3439,7 +3439,54 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
 
  const imprimir = () => {
   if (!cond) return;
-  imprimirHTML(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Resumen ${cond.nombre}${fechaHist ? " " + fechaHist : ""}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111827}h1{margin:0 0 6px}p{color:#6b7280}table{width:100%;border-collapse:collapse}th{background:#f8fafc;color:#374151;padding:10px 12px;text-align:left;font-size:12px;border-bottom:1px solid #e5e7eb}td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px}.total{font-size:16px;font-weight:bold}</style></head><body><h1>Somos PRO Tracking Resumen de Despachos</h1><h2>Conductor: ${cond.nombre} Placa: ${cond.placa}${cond.celular ? " Tel: " + cond.celular : ""}</h2><p>Empresa: ${cond.empresa || ""} NIT: ${cond.nit_proveedor || ""}</p><p>${fechaHist ? `Despachados el ${fechaLarga(fechaHist)} (reimpresion del ${fechaLarga(hoyLocal())})` : `Fecha: ${fechaLarga(hoyLocal())}`}</p><table><thead><tr><th>#</th><th>Guia Interna</th><th>No. Pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad</th><th>Direccion</th><th>Cajas</th><th>Estado</th><th>Fecha Est.</th></tr></thead><tbody>${misPeds.map((p,i) => `<tr><td>${i+1}</td><td><strong>${p.guia_interna || ""}</strong></td><td>${p.id}</td><td>${p.factura || ""}</td><td>${p.cliente}</td><td>${p.ciudad_nombre}</td><td>${p.direccion}</td><td style="text-align:center"><strong>${p.cajas}</strong></td><td>${ESTADOS_PEDIDO[estadoVisible(p)]?.label || p.estado}</td><td>${p.fecha_estimada || ""}</td></tr>`).join("")}</tbody></table><p class="total" style="margin-top:20px">Total pedidos: ${misPeds.length} Total cajas: <strong>${totalCajas}</strong></p></body></html>`);
+  // Diseno del impreso: encabezado con las fechas a la derecha, datos del
+  // conductor en una fila, la tabla y los totales al pie. Los margenes van dentro
+  // del documento (encabezado y pie vacios que se repiten en cada hoja) para no
+  // depender de lo elegido en el dialogo de impresion.
+  const e = (v) => String(v ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const dato = (etiqueta, valor, fuerte) => `<div class="dato"><div class="etq">${etiqueta}</div><div class="${fuerte ? "val fuerte" : "val"}">${e(valor) || "-"}</div></div>`;
+  const fechas = fechaHist
+   ? `<div>Despachados el <strong>${fechaLarga(fechaHist)}</strong></div><div>Reimpresión del ${fechaLarga(hoyLocal())}</div>`
+   : `<div>En ruta al <strong>${fechaLarga(hoyLocal())}</strong></div>`;
+  const filas = misPeds.map((p, i) => `<tr>
+   <td class="num">${i + 1}</td><td class="fuerte nowrap">${e(p.guia_interna)}</td><td class="nowrap">${e(p.id)}</td><td class="nowrap">${e(p.factura)}</td>
+   <td>${e(p.cliente)}</td><td>${e(p.ciudad_nombre)}</td><td>${e(p.direccion)}</td>
+   <td class="der fuerte">${e(p.cajas || 0)}</td><td>${e(ESTADOS_PEDIDO[estadoVisible(p)]?.label || p.estado)}</td><td class="nowrap">${e(p.fecha_estimada)}</td></tr>`).join("");
+  imprimirHTML(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Resumen ${e(cond.nombre)}${fechaHist ? " " + fechaHist : ""}</title><style>
+   *{box-sizing:border-box;margin:0;padding:0}
+   body{font-family:Arial,Helvetica,sans-serif;color:#1f2430;font-size:12px}
+   @page{size:A4;margin:0}
+   .marco{width:100%;border-collapse:collapse}
+   .marco>thead>tr>td,.marco>tfoot>tr>td,.marco>tbody>tr>td{border:none;padding:0}
+   .marco .esp{height:14mm}
+   .marco .cuerpo{padding:0 14mm}
+   .cab{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding-bottom:14px;border-bottom:1.5px solid #1f2430}
+   .marca{font-size:10px;font-weight:bold;letter-spacing:.14em;color:#3d4b66;margin-bottom:4px}
+   h1{font-size:26px;font-weight:bold;color:#1f2430}
+   .fechas{text-align:right;font-size:11.5px;color:#4b5263;line-height:1.7}
+   .fechas strong{color:#1f2430}
+   .datos{display:flex;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid #d9dde5}
+   .etq{font-size:9.5px;letter-spacing:.1em;color:#6b7280;text-transform:uppercase;margin-bottom:4px}
+   .val{font-size:13px}
+   .fuerte{font-weight:bold}
+   table.ped{width:100%;border-collapse:collapse;margin-top:18px}
+   .ped thead{display:table-header-group}
+   .ped th{background:#edf0f5;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;text-align:left;color:#3d4452;padding:9px 8px}
+   .ped td{padding:11px 8px;border-bottom:1px solid #e3e6ec;vertical-align:top;font-size:11.5px;line-height:1.4}
+   .ped tr{page-break-inside:avoid}
+   .num{color:#9a5a2b}
+   .der{text-align:right}
+   .nowrap{white-space:nowrap}
+   .pie{display:flex;justify-content:flex-end;align-items:baseline;gap:30px;margin-top:14px;padding-top:12px;border-top:1.5px solid #1f2430}
+   .pie span{font-size:9.5px;letter-spacing:.1em;color:#6b7280;text-transform:uppercase}
+   .pie b{font-size:18px;margin-left:10px;color:#1f2430}
+  </style></head><body><table class="marco"><thead><tr><td class="esp"></td></tr></thead><tfoot><tr><td class="esp"></td></tr></tfoot><tbody><tr><td class="cuerpo">
+   <div class="cab"><div><div class="marca">SOMOS PRO TRACKING</div><h1>Resumen de Despachos</h1></div><div class="fechas">${fechas}</div></div>
+   <div class="datos">${dato("Conductor", cond.nombre, true)}${dato("Placa", cond.placa, true)}${dato("Teléfono", cond.celular, true)}${dato("Empresa", cond.empresa)}${dato("NIT", cond.nit_proveedor)}</div>
+   <table class="ped"><thead><tr><th>#</th><th>Guía interna</th><th>No. pedido</th><th>Factura</th><th>Cliente</th><th>Ciudad</th><th>Dirección</th><th class="der">Cajas</th><th>Estado</th><th>Fecha est.</th></tr></thead>
+   <tbody>${filas || '<tr><td colspan="10" style="text-align:center;color:#6b7280">Sin pedidos</td></tr>'}</tbody></table>
+   <div class="pie"><span>Total pedidos<b>${misPeds.length}</b></span><span>Total cajas<b>${totalCajas}</b></span></div>
+  </td></tr></tbody></table></body></html>`, `Resumen ${cond.nombre}${fechaHist ? " " + fechaHist : ""}`);
  };
 
  const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
