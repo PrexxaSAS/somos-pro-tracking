@@ -131,8 +131,9 @@ const fechaHoraLocal = (iso) => {
 };
 const CeldaFechaIngreso = ({ p, estilo }) => {
  const f = fechaIngreso(p);
+ // Fecha y hora en un solo renglon para que la fila no crezca.
  return <td style={{ ...estilo, whiteSpace:"nowrap" }}>
-  {f ? <><div>{f.fecha}</div><div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{f.hora}</div></>
+  {f ? <>{f.fecha} <span style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{f.hora}</span></>
    : <span style={{ color:T.color.tinta3 }}>-</span>}
  </td>;
 };
@@ -1898,8 +1899,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   return s;
  });
 
- const th2 = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5 };
- const td2 = { padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
+ const th2 = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "10px 12px", whiteSpace: "nowrap", fontSize: 10.5 };
+ const td2 = { padding: "7px 12px", fontSize: 13, color: T.color.tinta2, verticalAlign: "middle", lineHeight: 1.35 };
  const botonBarra = {
   display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 14px",
   border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
@@ -2110,17 +2111,24 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
            <td style={td2}>
             <input type="checkbox" checked={marcado} onChange={() => alternarSeleccion(p.id)} style={{ cursor:"pointer" }}/>
            </td>
-           <td style={td2}>
+           <td style={{ ...td2, whiteSpace:"nowrap" }}>
             <button onClick={() => setModDet(p)} style={{
              border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-             padding:0, textAlign:"left", color:T.color.marca, fontWeight:700, fontSize:13.5,
+             padding:0, textAlign:"left", color:T.color.marca, fontWeight:700, fontSize:13,
             }}>{p.guia_interna || p.id}</button>
-            {p.guia_interna && p.guia_interna !== p.id && (
-             <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</div>
-            )}
-            {faltantesPedido(p).length > 0 && (
-             <div style={{ color:T.color.ojo, fontSize:11.5, fontWeight:600, marginTop:2 }}>{`Falta: ${faltantesPedido(p).join(", ")}`}</div>
-            )}
+            {/* Numero del pedido y, si le faltan datos, una etiqueta corta; al pasar
+                el mouse dice cuales. Antes la lista completa alargaba la fila. */}
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+             {p.guia_interna && p.guia_interna !== p.id && (
+              <span style={{ color:T.color.tinta3, fontSize:11.5, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</span>
+             )}
+             {faltantesPedido(p).length > 0 && (
+              <span title={`Falta: ${faltantesPedido(p).join(", ")}`} style={{
+               color:T.color.ojo, background:T.color.ojoSuave, fontSize:10.5, fontWeight:700,
+               padding:"0 6px", borderRadius:T.radio.pastilla, cursor:"help",
+              }}>⚠ {faltantesPedido(p).length === 1 ? `Falta ${faltantesPedido(p)[0]}` : `Faltan ${faltantesPedido(p).length}`}</span>
+             )}
+            </div>
            </td>
            <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>
             {p.factura || <span style={{ color:T.color.tinta3 }}>-</span>}
