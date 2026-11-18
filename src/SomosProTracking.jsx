@@ -2395,6 +2395,17 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
 // el resumen y la vista del cliente. Antes solo existia en el celular.
 const GPS_ENVIO_MS = 20000, GPS_ENVIO_METROS = 50, GPS_FRESCO_MS = 300000;
 let gpsUltimoEnvio = null;
+let gpsEscrituras = Promise.resolve();
+function guardarGps(operacion) {
+ const pendiente = gpsEscrituras.then(operacion);
+ gpsEscrituras = pendiente.catch(() => {});
+ return pendiente;
+}
+function recibirGps(g) {
+ if (!window._gpsData) window._gpsData = {};
+ window._gpsData[String(g.conductor_id)] = { lat: g.lat, lng: g.lng, ts: Date.parse(g.actualizado_en), apagado: g.apagado_por_conductor === true };
+ window.dispatchEvent(new Event('gps-actualizado'));
+}
 function distanciaMetros(a, b) {
  const r = Math.PI / 180;
  const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
@@ -2407,17 +2418,16 @@ async function enviarUbicacion(conductorId, lat, lng, precision) {
  const u = gpsUltimoEnvio;
  if (u && ahora - u.ts < GPS_ENVIO_MS && distanciaMetros(u, { lat, lng }) < GPS_ENVIO_METROS) return;
  gpsUltimoEnvio = { lat, lng, ts: ahora };
- const { error } = await supabase.from('gps_conductores').upsert({
-  conductor_id: conductorId, lat, lng, precision_m: precision ?? null, actualizado_en: new Date(ahora).toISOString(),
- });
+ const { error } = await guardarGps(() => supabase.from('gps_conductores').upsert({
+  conductor_id: conductorId, lat, lng, precision_m: precision ?? null, apagado_por_conductor: false, actualizado_en: new Date(ahora).toISOString(),
+ }));
  if (error) gpsUltimoEnvio = null; // se reintenta con la siguiente lectura
 }
 async function leerUbicaciones() {
- const desde = new Date(Date.now() - 6 * 3600000).toISOString();
- const { data, error } = await supabase.from('gps_conductores').select('conductor_id,lat,lng,actualizado_en').gte('actualizado_en', desde);
+ const { data, error } = await supabase.from('gps_conductores').select('conductor_id,lat,lng,actualizado_en,apagado_por_conductor');
  if (error) return false;
  if (!window._gpsData) window._gpsData = {};
- (data || []).forEach(g => { window._gpsData[String(g.conductor_id)] = { lat: g.lat, lng: g.lng, ts: Date.parse(g.actualizado_en) }; });
+ (data || []).forEach(recibirGps);
  return true;
 }
 
@@ -2430,10 +2440,11 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  // Se redibuja cada 10 s para tomar la ubicacion que se lee de la base.
  const [, setTickGps] = useState(0);
  useEffect(() => { const t = setInterval(() => setTickGps(n => n + 1), 10000); return () => clearInterval(t); }, []);
+ useEffect(() => { const actualizar = () => setTickGps(n => n + 1); window.addEventListener('gps-actualizado', actualizar); return () => window.removeEventListener('gps-actualizado', actualizar); }, []);
  const gps = sel?.conductor_id && window._gpsData ? window._gpsData[String(sel.conductor_id)] : null;
- const enVivo = gps && Date.now() - gps.ts < GPS_FRESCO_MS && ["en_transito"].includes(sel?.estado);
+ const enVivo = gps && !gps.apagado && Date.now() - gps.ts < GPS_FRESCO_MS && ["en_transito"].includes(sel?.estado);
  // Con GPS reciente se ve donde esta el conductor; si no, la direccion de destino.
- const mapUrl = !sel ? null : enVivo
+ const mapUrl = !sel ? null : gps
   ? `https://maps.google.com/maps?q=${gps.lat.toFixed(4)},${gps.lng.toFixed(4)}&output=embed&z=15`
   : `https://maps.google.com/maps?q=${encodeURIComponent((sel.direccion || "") + ", " + (ciudad?.name || "") + ", Colombia")}&output=embed&z=14`;
  const border = "#e5e7eb";
@@ -2514,7 +2525,7 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
        </div>
        <div style={{ padding:"8px 18px", fontSize:12, fontWeight:700, background: enVivo ? T.color.marca : T.color.superficie2, color: enVivo ? "#fff" : T.color.tinta3 }}>
         {enVivo ? `GPS en vivo · última señal hace ${Math.max(1, Math.round((Date.now() - gps.ts) / 60000))} min`
-         : sel.estado === "en_transito" ? "El conductor no está reportando GPS: se muestra la dirección de destino" : "Direccion de destino"}
+         : gps?.apagado ? "GPS apagado por el conductor" : gps ? "Última ubicación conocida" : sel.estado === "en_transito" ? "El conductor no está reportando GPS: se muestra la dirección de destino" : "Direccion de destino"}
        </div>
        <iframe title="Mapa del destino" src={mapUrl} loading="lazy"
         style={{ width:"100%", height: esMovil ? "52vh" : "62vh", border:"none", display:"block" }}/>
@@ -3475,6 +3486,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
 export function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
  const esMovil = useEsMovil();
  const [gpsTick, setGpsTick] = useState(0);
+ useEffect(() => { const actualizar = () => setGpsTick(n => n + 1); window.addEventListener('gps-actualizado', actualizar); return () => window.removeEventListener('gps-actualizado', actualizar); }, []);
  useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
  const [selCond, setSelCond] = useState("");
  // Historial: con una fecha, los pedidos que el conductor despacho ese dia
@@ -3550,13 +3562,13 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
  };
 
  const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
- const gpsFresco = gpsCond && (Date.now() - gpsCond.ts) < 300000;
+ const gpsFresco = gpsCond && !gpsCond.apagado && (Date.now() - gpsCond.ts) < 300000;
 
  // Disenio 26d: mismo calculo, en tarjetas numeradas; imprime con la misma funcion.
  if (esMovil) return (
   <Pagina>
    <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond} fechaHist={fechaHist} setFechaHist={setFechaHist}
-    misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} onImprimir={imprimir} />
+    misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} gpsApagado={gpsCond?.apagado} onImprimir={imprimir} />
   </Pagina>
  );
 
@@ -3622,7 +3634,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
        color: gpsFresco ? T.color.bien : T.color.tinta3, fontSize:12, fontWeight:600,
       }}>
        <span style={{ width:6, height:6, borderRadius:3, background: gpsFresco ? T.color.bienPunto : T.color.neutroPunto }}/>
-       {gpsFresco ? "GPS activo" : "Sin reporte GPS"}
+       {gpsCond?.apagado ? "GPS apagado por el conductor" : gpsFresco ? "GPS activo" : gpsCond ? "Última ubicación conocida" : "Sin reporte GPS"}
       </span>
      </section>
 
@@ -6052,18 +6064,30 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   if (!navigator.geolocation) { setErr("GPS no disponible en este dispositivo."); return; }
   setErr("");
   watchRef.current = navigator.geolocation.watchPosition(
-   pos => { updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+   pos => { if (!window._gpsOn) return; updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
    e => setErr(e.code === 1 ? "El navegador no dio permiso de ubicacion. Activalo en los ajustes del sitio." : "Error GPS: " + e.message),
    { enableHighAccuracy:true, timeout:10000 }
   );
   window._gpsOn = true; window._gpsWatch = watchRef.current;
   setOn(true);
  };
- const detener = () => {
-  if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
+ const detener = async () => {
+  if (watchRef.current != null) navigator.geolocation.clearWatch(watchRef.current);
   watchRef.current = null;
   window._gpsOn = false; window._gpsWatch = null;
   setOn(false);
+  gpsUltimoEnvio = null;
+  const conductorId = user?.conductor_db_id;
+  if (!conductorId) return;
+  try {
+   const { error } = await guardarGps(() => supabase.from('gps_conductores')
+    .update({ apagado_por_conductor: true }).eq('conductor_id', conductorId));
+   if (error) throw error;
+   const anterior = window._gpsData?.[String(conductorId)];
+   if (anterior) window._gpsData[String(conductorId)] = { ...anterior, apagado: true };
+  } catch {
+   setErr("GPS detenido en este celular. No se pudo avisar a la central. Revisa tu conexión.");
+  }
  };
 
  const condId = user?.conductor_db_id || user?.id;
@@ -6198,6 +6222,7 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
 export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast, onNuevaPQRS, user }) {
  const esMovil = useEsMovil();
  const [gpsTick, setGpsTick] = useState(0);
+ useEffect(() => { const actualizar = () => setGpsTick(n => n + 1); window.addEventListener('gps-actualizado', actualizar); return () => window.removeEventListener('gps-actualizado', actualizar); }, []);
  useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
  const [busq, setBusq] = useState("");
  const [rango, setRango] = useState("30");
@@ -6253,7 +6278,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  // alto: la ventana del escritorio usa un mapa mas alto que la tarjeta del celular.
  const renderMapa = (p, cond, ciudad, alto = 280) => {
   const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
-  const gpsReciente = gps && (Date.now()-gps.ts) < 300000;
+  const gpsReciente = gps && !gps.apagado && (Date.now()-gps.ts) < 300000;
   const minutos = gps ? Math.round((Date.now() - gps.ts) / 60000) : 0;
   const entregado = ["entregado","novedad"].includes(p.estado);
   if (entregado) return (
@@ -6261,13 +6286,13 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
     Pedido entregado. Rastreo GPS no disponible.
    </div>
   );
-  const mapSrc = gpsReciente
+  const mapSrc = gps
    ? `https://maps.google.com/maps?q=${gps.lat},${gps.lng}&output=embed&z=15`
    : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"") + ", " + (ciudad?.name||p.ciudad_nombre||"") + ", Colombia")}&output=embed&z=15`;
   return (
    <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? T.color.marca : T.color.borde}`, background:T.color.superficie }}>
     <div style={{ background: gpsReciente ? T.color.marca : T.color.superficie2, color: gpsReciente ? "#fff" : T.color.tinta3, padding:"8px 14px", fontSize:12, fontWeight:700 }}>
-     {gpsReciente ? `GPS en vivo · última señal ${minutos < 1 ? "ahora" : `hace ${minutos} min`}` : "El conductor no está reportando GPS: se muestra la dirección de destino"}
+     {gpsReciente ? `GPS en vivo · última señal ${minutos < 1 ? "ahora" : `hace ${minutos} min`}` : gps?.apagado ? "GPS apagado por el conductor" : gps ? "Última ubicación conocida" : "El conductor no está reportando GPS: se muestra la dirección de destino"}
     </div>
     <iframe title={"mapa-"+p.id} width="100%" height={alto} style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
     <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2, display:"flex", flexWrap:"wrap", gap:"4px 16px" }}>
@@ -6724,8 +6749,12 @@ export default function SomosProTracking() {
    const ok = await leerUbicaciones();
    if (activo && ok) t = setTimeout(ciclo, 20000);
   };
+  const canal = supabase.channel('gps-conductores').on('postgres_changes',
+   { event: '*', schema: 'public', table: 'gps_conductores' },
+   ({ new: fila }) => { if (activo && fila?.conductor_id) recibirGps(fila); }
+  ).subscribe();
   ciclo();
-  return () => { activo = false; clearTimeout(t); };
+  return () => { activo = false; clearTimeout(t); supabase.removeChannel(canal); };
  }, [user?.id, user?.rol]);
 
  if (cargando) return (
