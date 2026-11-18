@@ -2513,8 +2513,8 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
         </div>
        </div>
        <div style={{ padding:"8px 18px", fontSize:12, fontWeight:700, background: enVivo ? T.color.marca : T.color.superficie2, color: enVivo ? "#fff" : T.color.tinta3 }}>
-        {enVivo ? `GPS en vivo · ultima senal hace ${Math.max(1, Math.round((Date.now() - gps.ts) / 60000))} min`
-         : sel.estado === "en_transito" ? "El conductor no esta reportando GPS: se muestra la direccion de destino" : "Direccion de destino"}
+        {enVivo ? `GPS en vivo · última señal hace ${Math.max(1, Math.round((Date.now() - gps.ts) / 60000))} min`
+         : sel.estado === "en_transito" ? "El conductor no está reportando GPS: se muestra la dirección de destino" : "Direccion de destino"}
        </div>
        <iframe title="Mapa del destino" src={mapUrl} loading="lazy"
         style={{ width:"100%", height: esMovil ? "52vh" : "62vh", border:"none", display:"block" }}/>
@@ -6267,7 +6267,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
   return (
    <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? T.color.marca : T.color.borde}`, background:T.color.superficie }}>
     <div style={{ background: gpsReciente ? T.color.marca : T.color.superficie2, color: gpsReciente ? "#fff" : T.color.tinta3, padding:"8px 14px", fontSize:12, fontWeight:700 }}>
-     {gpsReciente ? `GPS en vivo · ultima senal ${minutos < 1 ? "ahora" : `hace ${minutos} min`}` : "El conductor no esta reportando GPS: se muestra la direccion de destino"}
+     {gpsReciente ? `GPS en vivo · última señal ${minutos < 1 ? "ahora" : `hace ${minutos} min`}` : "El conductor no está reportando GPS: se muestra la dirección de destino"}
     </div>
     <iframe title={"mapa-"+p.id} width="100%" height={alto} style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
     <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2, display:"flex", flexWrap:"wrap", gap:"4px 16px" }}>
