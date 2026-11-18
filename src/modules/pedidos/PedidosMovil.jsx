@@ -7,7 +7,7 @@ import { T, tonoFiltroPedido } from '../../design/tokens';
 import { ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO, FILTROS_PROMESA, estadoVisible } from '../../Constants';
 import { transportePedido, faltantesPedido } from '../../utils/transporte';
-import { RANGOS_FECHA } from '../../utils/fechas';
+import { CAMPOS_FECHA_PEDIDO } from '../../utils/fechas';
 
 // La tabla de pedidos no cabe en un telefono. Cada fila pasa a ser una tarjeta
 // de tres lineas -- numero y estado arriba, cliente en medio, carga y conductor
@@ -26,9 +26,6 @@ const TONO_ESTADO = {
  cliente_recoge: T.estadoTono.cliente_recoge,
 };
 
-// Los mismos atajos del escritorio (fecha de ingreso); "Fechas" muestra
-// Desde y Hasta.
-const RANGOS = RANGOS_FECHA;
 
 const TIPOS = [
  { id: "", label: "Todos" },
@@ -67,7 +64,7 @@ function useCerrarAlTocarFuera(abierto, cerrar) {
 // ── Hoja de filtros ─────────────────────────────────────────────────────────
 export function HojaFiltros({
  ciudades, pedidos, conductoresActivos, total,
- rango, setRango, desde = "", setDesde, hasta = "", setHasta,
+ campoFecha = "ingreso", setCampoFecha, desde = "", setDesde, hasta = "", setHasta,
  ciudadF, setCiudadF, conductorF, setConductorF, tipoF, setTipoF,
  completarF = false, setCompletarF, porCompletar = 0,
  onLimpiar, onClose,
@@ -118,27 +115,15 @@ export function HojaFiltros({
     </div>
 
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-     <span style={{ fontSize: 12, fontWeight: 600, color: T.color.tinta2 }}>Fecha de ingreso</span>
-     <div style={{
-      display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 2, background: T.color.superficie2,
-      border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control, padding: 3,
-     }}>
-      {RANGOS.map(r => {
-       const activo = rango === r.id;
-       return (
-        <button key={r.id} onClick={() => setRango(r.id)} style={{
-         flex: 1, textAlign: "center", padding: "8px 0", borderRadius: 7,
-         border: "none", cursor: "pointer", fontFamily: "inherit",
-         fontSize: 13, fontWeight: activo ? 600 : 500,
-         background: activo ? T.color.superficie : "transparent",
-         color: activo ? T.color.tinta : T.color.tinta3,
-         boxShadow: activo ? "0 1px 2px rgba(0,0,0,.08)" : "none",
-        }}>{r.corto}</button>
-       );
-      })}
-     </div>
-     {rango === "rango" && (
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
+     <span style={{ fontSize: 12, fontWeight: 600, color: T.color.tinta2 }}>Fecha</span>
+     <label style={{ ...campo, position: "relative", color: T.color.tinta }}>
+      {(CAMPOS_FECHA_PEDIDO.find(c => c.id === campoFecha) || CAMPOS_FECHA_PEDIDO[0]).label}
+      <ChevronDown size={15} style={{ color: T.color.tinta4, marginLeft: "auto", flexShrink: 0 }} />
+      <select value={campoFecha} onChange={e => setCampoFecha && setCampoFecha(e.target.value)} style={selectInvisible}>
+       {CAMPOS_FECHA_PEDIDO.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+      </select>
+     </label>
+     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
        {[["Desde", desde, setDesde, { max: hasta || undefined }], ["Hasta", hasta, setHasta, { min: desde || undefined }]].map(([etq, valor, poner, lim]) => (
         <label key={etq} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11.5, color: T.color.tinta3, minWidth: 0 }}>
          {etq}
@@ -147,7 +132,6 @@ export function HojaFiltros({
         </label>
        ))}
       </div>
-     )}
     </div>
 
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -313,7 +297,7 @@ function TarjetaPedido({ pedido, conductor, onAbrir }) {
 export function PedidosMovil({
  pedidos, filtrados, conductores, ciudades, conductoresActivos,
  busq, setBusq, filtro, setFiltro, conteoPorEstado, estadosOrden,
- rango, setRango, desde = "", setDesde, hasta = "", setHasta,
+ campoFecha = "ingreso", setCampoFecha, desde = "", setDesde, hasta = "", setHasta,
  ciudadF, setCiudadF, conductorF, setConductorF, tipoF, setTipoF,
  completarF = false, setCompletarF, porCompletar = 0,
  onAbrir, onNuevo, onPlanilla, onCSV, onCargarGuias, avisos = 0,
@@ -325,13 +309,13 @@ export function PedidosMovil({
 
  // Se muestra de a 40 y crece al llegar al final: en el celular un paginador
  // con numeros es mas trabajo que seguir bajando.
- useEffect(() => { setTope(40); }, [busq, filtro, rango, desde, hasta, ciudadF, conductorF, tipoF, completarF]);
+ useEffect(() => { setTope(40); }, [busq, filtro, campoFecha, desde, hasta, ciudadF, conductorF, tipoF, completarF]);
 
- const activos = [rango !== "todo", !!ciudadF, !!conductorF, !!tipoF, completarF].filter(Boolean).length;
+ const activos = [!!(desde || hasta), !!ciudadF, !!conductorF, !!tipoF, completarF].filter(Boolean).length;
  const visibles = filtrados.slice(0, tope);
  const pie = ALTO_BARRA + 16;
 
- const limpiar = () => { setRango("todo"); if (setDesde) setDesde(""); if (setHasta) setHasta(""); setCiudadF(""); setConductorF(""); setTipoF(""); if (setCompletarF) setCompletarF(false); };
+ const limpiar = () => { if (setCampoFecha) setCampoFecha("ingreso"); if (setDesde) setDesde(""); if (setHasta) setHasta(""); setCiudadF(""); setConductorF(""); setTipoF(""); if (setCompletarF) setCompletarF(false); };
 
  const etiquetaFiltro = filtro === "todos"
   ? "pedidos"
@@ -497,7 +481,7 @@ export function PedidosMovil({
      pedidos={pedidos}
      conductoresActivos={conductoresActivos}
      total={filtrados.length}
-     rango={rango} setRango={setRango}
+     campoFecha={campoFecha} setCampoFecha={setCampoFecha}
      desde={desde} setDesde={setDesde} hasta={hasta} setHasta={setHasta}
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}

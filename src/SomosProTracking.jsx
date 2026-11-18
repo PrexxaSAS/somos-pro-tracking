@@ -29,7 +29,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroIngreso, th, td, tdCifra, mono, chipMono,
+ Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -50,7 +50,7 @@ import { Conductores } from './modules/conductores/Conductores';
 import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
-import { hoyLocal, hoyMas, diaLocal, limitesFecha, diaEnLimites } from './utils/fechas';
+import { hoyLocal, hoyMas, diaLocal, diaEnLimites, CAMPOS_FECHA_PEDIDO, diaDePedido } from './utils/fechas';
 import { mapaPromesas, fueraDePromesa, enRiesgoDePromesa } from './utils/promesa';
 import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
@@ -1597,8 +1597,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [reporteImportacion, setReporteImportacion] = useState(null);
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(100);
- const [rango, setRango] = useState("todo");
- // Desde y hasta del rango elegido a mano (rango === "rango").
+ // Fecha por la que se filtra (ingreso, pedido, despacho, entrega, estimada) y
+ // su rango.
+ const [campoFecha, setCampoFecha] = useState("ingreso");
  const [desdeF, setDesdeF] = useState("");
  const [hastaF, setHastaF] = useState("");
  const [ciudadF, setCiudadF] = useState("");
@@ -1627,9 +1628,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const conductoresActivos = conductores.filter(c => c.activo !== false);
 
- // El rango es sobre la fecha de ingreso: cuando el pedido entro al sistema
- // (created_at, en hora local), que en los de cartera es cuando entro al corte.
- const limites = limitesFecha(rango, desdeF, hastaF);
+ const limites = { desde: desdeF || null, hasta: hastaF || null };
 
  // Filtros que llegan desde el Dashboard: la misma regla con que alli se cuentan.
  const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
@@ -1638,7 +1637,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const okF = filtro === "todos" || estadoVisible(p) === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
    || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
    || (filtro === "en_riesgo" && enRiesgoDePromesa(p, promMap, hoyPromesa, mananaPromesa));
-  const okFecha = diaEnLimites(diaLocal(p.created_at) || p.fecha_creacion || "", limites);
+  const okFecha = diaEnLimites(diaDePedido(p, campoFecha), limites);
   const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
   const okCond = !conductorF
    || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
@@ -1661,7 +1660,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
  const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
  const pageEnd = Math.min(filtrados.length, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF, rango, desdeF, hastaF]);
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF, campoFecha, desdeF, hastaF]);
  const porCompletar = pedidos.filter(p => faltantesPedido(p).length > 0).length;
 
  const guardar = async () => {
@@ -1924,7 +1923,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      filtro={filtro} setFiltro={setFiltro}
      conteoPorEstado={conteoPorEstado}
      estadosOrden={[...ORDEN_ESTADOS_PEDIDO, ...Object.keys(FILTROS_PROMESA)]}
-     rango={rango} setRango={setRango}
+     campoFecha={campoFecha} setCampoFecha={setCampoFecha}
      desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
@@ -2033,7 +2032,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         }}/>
       </div>
 
-      <FiltroIngreso rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}/>
+      <FiltroPorFecha campo={campoFecha} setCampo={setCampoFecha} campos={CAMPOS_FECHA_PEDIDO} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}/>
 
       <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
        <option value="">Todas las ciudades</option>
@@ -2180,7 +2179,16 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
        Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
       </span>
-      <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
+      <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+       {/* Cuantos por pagina: desde 100. */}
+       <label style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta3 }}>
+        Mostrar
+        <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} style={{ ...selectFiltro, padding:"5px 8px" }}>
+         {[100, 200, 500].map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+       </label>
+       <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
+      </div>
      </div>
     </section>
    </div>
