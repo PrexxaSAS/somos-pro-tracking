@@ -6250,9 +6250,11 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
   descargarCSV(`estado_pedidos_${hoyLocal()}.csv`, cab, filas.join("\n"));
  };
 
- const renderMapa = (p, cond, ciudad) => {
+ // alto: la ventana del escritorio usa un mapa mas alto que la tarjeta del celular.
+ const renderMapa = (p, cond, ciudad, alto = 280) => {
   const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
   const gpsReciente = gps && (Date.now()-gps.ts) < 300000;
+  const minutos = gps ? Math.round((Date.now() - gps.ts) / 60000) : 0;
   const entregado = ["entregado","novedad"].includes(p.estado);
   if (entregado) return (
    <div style={{ background:T.color.bienSuave, border:`1px solid ${T.color.bienSuave}`, borderRadius:12, padding:"12px 16px", color:T.color.bien, fontWeight:600, fontSize:13 }}>
@@ -6264,12 +6266,13 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
    : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"") + ", " + (ciudad?.name||p.ciudad_nombre||"") + ", Colombia")}&output=embed&z=15`;
   return (
    <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? T.color.marca : T.color.borde}`, background:T.color.superficie }}>
-    {gpsReciente && <div style={{ background:T.color.marca, color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:700 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
-    <iframe title={"mapa-"+p.id} width="100%" height="280" style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
-    <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2 }}>
-     {gpsReciente ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : `${p.direccion || ""}, ${ciudad?.name || p.ciudad_nombre || ""}`}
-     {cond && <span style={{ marginLeft:12 }}>{cond.nombre} · {p.placa}</span>}
-     {!gpsReciente && <span style={{ marginLeft:8, color:T.color.tinta4 }}>(GPS no activo, mostrando destino)</span>}
+    <div style={{ background: gpsReciente ? T.color.marca : T.color.superficie2, color: gpsReciente ? "#fff" : T.color.tinta3, padding:"8px 14px", fontSize:12, fontWeight:700 }}>
+     {gpsReciente ? `GPS en vivo · ultima senal ${minutos < 1 ? "ahora" : `hace ${minutos} min`}` : "El conductor no esta reportando GPS: se muestra la direccion de destino"}
+    </div>
+    <iframe title={"mapa-"+p.id} width="100%" height={alto} style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
+    <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2, display:"flex", flexWrap:"wrap", gap:"4px 16px" }}>
+     <span><strong style={{ color:T.color.tinta }}>Destino:</strong> {[p.direccion, ciudad?.name || p.ciudad_nombre].filter(Boolean).join(", ") || "-"}</span>
+     {cond && <span><strong style={{ color:T.color.tinta }}>Conductor:</strong> {cond.nombre}{p.placa ? ` · ${p.placa}` : ""}</span>}
     </div>
    </div>
   );
@@ -6387,12 +6390,11 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
               borderColor: rastreable ? T.color.marcaBorde : T.color.borde2,
               background: abierto ? T.color.marcaSuave : T.color.superficie,
               cursor: rastreable ? "pointer" : "not-allowed",
-             }}><MapPin size={13}/> {abierto ? "Ocultar" : "Rastrear"}</button>
+             }}><MapPin size={13}/> Rastrear</button>
              <button onClick={()=>setModGuia(p)} style={{ ...botonFila, display:"inline-flex", alignItems:"center", gap:5 }}><FileText size={13}/> Guia</button>
             </div>
            </td>
           </tr>
-          {abierto && <tr><td colSpan={10} style={{ padding:16, background:T.color.superficie2, borderBottom:`1px solid ${T.color.borde}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
          </React.Fragment>
         );
        })}
@@ -6406,6 +6408,18 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
     />
    </section>
 
+   {/* El mapa abre en su propia ventana: dentro de la tabla se cortaba a la derecha. */}
+   {modMapa && (() => {
+    const cond = conductores.find(c => String(c.id) === String(modMapa.conductor_id));
+    const ciudad = (ciudades||[]).find(c => c.code === modMapa.ciudad_codigo);
+    return (
+     <ModalGestion titulo="Rastreo" id={modMapa.guia_interna || modMapa.id}
+      estado={<ChipEstado estado={estadoVisible(modMapa)} />}
+      descripcion={modMapa.cliente} onClose={() => setModMapa(null)} textoCancelar="Cerrar">
+      {renderMapa(modMapa, cond, ciudad, 420)}
+     </ModalGestion>
+    );
+   })()}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
   </Pagina>
  );
