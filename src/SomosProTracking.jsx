@@ -29,7 +29,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroIngreso, th, td, tdCifra, mono, chipMono,
+ Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -50,7 +50,7 @@ import { Conductores } from './modules/conductores/Conductores';
 import { ModuloCartera } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
-import { hoyLocal, hoyMas, diaLocal, limitesFecha, diaEnLimites } from './utils/fechas';
+import { hoyLocal, hoyMas, diaLocal, diaEnLimites, CAMPOS_FECHA_PEDIDO, diaDePedido } from './utils/fechas';
 import { mapaPromesas, fueraDePromesa, enRiesgoDePromesa } from './utils/promesa';
 import { EnviosMovil, PqrsMovil, nombreCorto } from './modules/gestion/ListasMovil';
 import { FormDevolucionMovil, FormRecogidaMovil, FormPqrsMovil } from './modules/gestion/SolicitudesMovil';
@@ -131,8 +131,9 @@ const fechaHoraLocal = (iso) => {
 };
 const CeldaFechaIngreso = ({ p, estilo }) => {
  const f = fechaIngreso(p);
+ // Fecha y hora en un solo renglon para que la fila no crezca.
  return <td style={{ ...estilo, whiteSpace:"nowrap" }}>
-  {f ? <><div>{f.fecha}</div><div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{f.hora}</div></>
+  {f ? <>{f.fecha} <span style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{f.hora}</span></>
    : <span style={{ color:T.color.tinta3 }}>-</span>}
  </td>;
 };
@@ -1597,8 +1598,9 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const [reporteImportacion, setReporteImportacion] = useState(null);
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(100);
- const [rango, setRango] = useState("todo");
- // Desde y hasta del rango elegido a mano (rango === "rango").
+ // Fecha por la que se filtra (ingreso, pedido, despacho, entrega, estimada) y
+ // su rango.
+ const [campoFecha, setCampoFecha] = useState("ingreso");
  const [desdeF, setDesdeF] = useState("");
  const [hastaF, setHastaF] = useState("");
  const [ciudadF, setCiudadF] = useState("");
@@ -1627,9 +1629,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const f = k => v => setForm(p => ({ ...p, [k]: v }));
  const conductoresActivos = conductores.filter(c => c.activo !== false);
 
- // El rango es sobre la fecha de ingreso: cuando el pedido entro al sistema
- // (created_at, en hora local), que en los de cartera es cuando entro al corte.
- const limites = limitesFecha(rango, desdeF, hastaF);
+ const limites = { desde: desdeF || null, hasta: hastaF || null };
 
  // Filtros que llegan desde el Dashboard: la misma regla con que alli se cuentan.
  const promMap = useMemo(() => mapaPromesas(promesas), [promesas]);
@@ -1638,7 +1638,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   const okF = filtro === "todos" || estadoVisible(p) === filtro || (filtro === "paqueteria_tipo" && p.tipo === "paqueteria")
    || (filtro === "fuera_promesa" && fueraDePromesa(p, promMap, hoyPromesa))
    || (filtro === "en_riesgo" && enRiesgoDePromesa(p, promMap, hoyPromesa, mananaPromesa));
-  const okFecha = diaEnLimites(diaLocal(p.created_at) || p.fecha_creacion || "", limites);
+  const okFecha = diaEnLimites(diaDePedido(p, campoFecha), limites);
   const okCiudad = !ciudadF || p.ciudad_codigo === ciudadF;
   const okCond = !conductorF
    || (conductorF === "sin" ? !p.conductor_id : String(p.conductor_id) === conductorF);
@@ -1661,7 +1661,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  const pageItems = filtrados.slice((page - 1) * pageSize, page * pageSize);
  const pageStart = filtrados.length === 0 ? 0 : (page - 1) * pageSize + 1;
  const pageEnd = Math.min(filtrados.length, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF, rango, desdeF, hastaF]);
+ useEffect(() => { setPage(1); }, [busq, filtro, pageSize, completarF, campoFecha, desdeF, hastaF]);
  const porCompletar = pedidos.filter(p => faltantesPedido(p).length > 0).length;
 
  const guardar = async () => {
@@ -1899,8 +1899,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   return s;
  });
 
- const th2 = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "12px 16px", whiteSpace: "nowrap", fontSize: 10.5 };
- const td2 = { padding: "13px 16px", fontSize: 13.5, color: T.color.tinta2, verticalAlign: "middle" };
+ const th2 = { ...T.texto.seccion, color: T.color.tinta3, textAlign: "left", padding: "10px 12px", whiteSpace: "nowrap", fontSize: 10.5 };
+ const td2 = { padding: "7px 12px", fontSize: 13, color: T.color.tinta2, verticalAlign: "middle", lineHeight: 1.35 };
  const botonBarra = {
   display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 14px",
   border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
@@ -1924,7 +1924,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      filtro={filtro} setFiltro={setFiltro}
      conteoPorEstado={conteoPorEstado}
      estadosOrden={[...ORDEN_ESTADOS_PEDIDO, ...Object.keys(FILTROS_PROMESA)]}
-     rango={rango} setRango={setRango}
+     campoFecha={campoFecha} setCampoFecha={setCampoFecha}
      desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}
      ciudadF={ciudadF} setCiudadF={setCiudadF}
      conductorF={conductorF} setConductorF={setConductorF}
@@ -2033,7 +2033,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         }}/>
       </div>
 
-      <FiltroIngreso rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}/>
+      <FiltroPorFecha campo={campoFecha} setCampo={setCampoFecha} campos={CAMPOS_FECHA_PEDIDO} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF}/>
 
       <select value={ciudadF} onChange={e => { setCiudadF(e.target.value); setPage(1); }} style={selectFiltro}>
        <option value="">Todas las ciudades</option>
@@ -2111,17 +2111,24 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
            <td style={td2}>
             <input type="checkbox" checked={marcado} onChange={() => alternarSeleccion(p.id)} style={{ cursor:"pointer" }}/>
            </td>
-           <td style={td2}>
+           <td style={{ ...td2, whiteSpace:"nowrap" }}>
             <button onClick={() => setModDet(p)} style={{
              border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
-             padding:0, textAlign:"left", color:T.color.marca, fontWeight:700, fontSize:13.5,
+             padding:0, textAlign:"left", color:T.color.marca, fontWeight:700, fontSize:13,
             }}>{p.guia_interna || p.id}</button>
-            {p.guia_interna && p.guia_interna !== p.id && (
-             <div style={{ color:T.color.tinta3, fontSize:12, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</div>
-            )}
-            {faltantesPedido(p).length > 0 && (
-             <div style={{ color:T.color.ojo, fontSize:11.5, fontWeight:600, marginTop:2 }}>{`Falta: ${faltantesPedido(p).join(", ")}`}</div>
-            )}
+            {/* Numero del pedido y, si le faltan datos, una etiqueta corta; al pasar
+                el mouse dice cuales. Antes la lista completa alargaba la fila. */}
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+             {p.guia_interna && p.guia_interna !== p.id && (
+              <span style={{ color:T.color.tinta3, fontSize:11.5, fontFamily:"ui-monospace, Menlo, monospace" }}>{p.id}</span>
+             )}
+             {faltantesPedido(p).length > 0 && (
+              <span title={`Falta: ${faltantesPedido(p).join(", ")}`} style={{
+               color:T.color.ojo, background:T.color.ojoSuave, fontSize:10.5, fontWeight:700,
+               padding:"0 6px", borderRadius:T.radio.pastilla, cursor:"help",
+              }}>⚠ {faltantesPedido(p).length === 1 ? `Falta ${faltantesPedido(p)[0]}` : `Faltan ${faltantesPedido(p).length}`}</span>
+             )}
+            </div>
            </td>
            <td style={{ ...td2, fontFamily:"ui-monospace, Menlo, monospace", fontSize:12.5 }}>
             {p.factura || <span style={{ color:T.color.tinta3 }}>-</span>}
@@ -2180,7 +2187,16 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
        Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
       </span>
-      <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
+      <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+       {/* Cuantos por pagina: desde 100. */}
+       <label style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta3 }}>
+        Mostrar
+        <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} style={{ ...selectFiltro, padding:"5px 8px" }}>
+         {[100, 200, 500].map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+       </label>
+       <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
+      </div>
      </div>
     </section>
    </div>
@@ -2373,13 +2389,65 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   </div>
  );
 }
+// ── Ubicacion real de los conductores (docs/gps_conductores.sql) ──
+// El celular del conductor guarda su ultima ubicacion en la base; las demas
+// pantallas la leen y la dejan en window._gpsData, que es donde ya la buscaban
+// el resumen y la vista del cliente. Antes solo existia en el celular.
+const GPS_ENVIO_MS = 20000, GPS_ENVIO_METROS = 50, GPS_FRESCO_MS = 300000;
+let gpsUltimoEnvio = null;
+let gpsEscrituras = Promise.resolve();
+function guardarGps(operacion) {
+ const pendiente = gpsEscrituras.then(operacion);
+ gpsEscrituras = pendiente.catch(() => {});
+ return pendiente;
+}
+function recibirGps(g) {
+ if (!window._gpsData) window._gpsData = {};
+ window._gpsData[String(g.conductor_id)] = { lat: g.lat, lng: g.lng, ts: Date.parse(g.actualizado_en), apagado: g.apagado_por_conductor === true };
+ window.dispatchEvent(new Event('gps-actualizado'));
+}
+function distanciaMetros(a, b) {
+ const r = Math.PI / 180;
+ const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+ const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+ return 6371000 * 2 * Math.asin(Math.sqrt(h));
+}
+async function enviarUbicacion(conductorId, lat, lng, precision) {
+ if (!conductorId) return;
+ const ahora = Date.now();
+ const u = gpsUltimoEnvio;
+ if (u && ahora - u.ts < GPS_ENVIO_MS && distanciaMetros(u, { lat, lng }) < GPS_ENVIO_METROS) return;
+ gpsUltimoEnvio = { lat, lng, ts: ahora };
+ const { error } = await guardarGps(() => supabase.from('gps_conductores').upsert({
+  conductor_id: conductorId, lat, lng, precision_m: precision ?? null, apagado_por_conductor: false, actualizado_en: new Date(ahora).toISOString(),
+ }));
+ if (error) gpsUltimoEnvio = null; // se reintenta con la siguiente lectura
+}
+async function leerUbicaciones() {
+ const { data, error } = await supabase.from('gps_conductores').select('conductor_id,lat,lng,actualizado_en,apagado_por_conductor');
+ if (error) return false;
+ if (!window._gpsData) window._gpsData = {};
+ (data || []).forEach(recibirGps);
+ return true;
+}
+
 function RastreoGPS({ pedidos, conductores, ciudades }) {
  const esMovil = useEsMovil();
- const conCond = pedidos.filter(p => p.conductor_id);
- const [sel, setSel] = useState(conCond[0] || null);
+ const conCond = pedidos.filter(p => p.conductor_id && p.estado === "en_transito");
+ const [seleccionId, setSeleccionId] = useState(conCond[0]?.id ?? null);
+ const sel = conCond.find(p => p.id === seleccionId) || conCond[0] || null;
  const cond = conductores.find(c => String(c.id) === String(sel?.conductor_id));
  const ciudad = (ciudades || []).find(c => c.code === sel?.ciudad_codigo);
- const mapUrl = sel ? `https://maps.google.com/maps?q=${encodeURIComponent((sel.direccion || "") + ", " + (ciudad?.name || "") + ", Colombia")}&output=embed&z=14` : null;
+ // Se redibuja cada 10 s para tomar la ubicacion que se lee de la base.
+ const [, setTickGps] = useState(0);
+ useEffect(() => { const t = setInterval(() => setTickGps(n => n + 1), 10000); return () => clearInterval(t); }, []);
+ useEffect(() => { const actualizar = () => setTickGps(n => n + 1); window.addEventListener('gps-actualizado', actualizar); return () => window.removeEventListener('gps-actualizado', actualizar); }, []);
+ const gps = sel?.conductor_id && window._gpsData ? window._gpsData[String(sel.conductor_id)] : null;
+ const enVivo = gps && !gps.apagado && Date.now() - gps.ts < GPS_FRESCO_MS && ["en_transito"].includes(sel?.estado);
+ // Con GPS reciente se ve donde esta el conductor; si no, la direccion de destino.
+ const mapUrl = !sel ? null : gps
+  ? `https://maps.google.com/maps?q=${gps.lat.toFixed(4)},${gps.lng.toFixed(4)}&output=embed&z=15`
+  : `https://maps.google.com/maps?q=${encodeURIComponent((sel.direccion || "") + ", " + (ciudad?.name || "") + ", Colombia")}&output=embed&z=14`;
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
 
@@ -2387,7 +2455,7 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
   <Pagina>
    <Encabezado
     titulo="Rastreo GPS"
-    descripcion="Seguimiento geografico de pedidos con conductor asignado"
+    descripcion="Seguimiento de pedidos en tránsito con conductor asignado"
    />
 
    <div style={{
@@ -2401,20 +2469,20 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
      <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
       <div style={{ ...T.texto.tarjeta }}>En ruta</div>
       <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
-       {conCond.length} {conCond.length===1 ? "pedido con conductor" : "pedidos con conductor"}
+       {conCond.length} {conCond.length===1 ? "pedido en tránsito" : "pedidos en tránsito"}
       </div>
      </div>
      <div style={{ overflowY:"auto" }}>
       {conCond.length===0 && (
        <div style={{ padding:40, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-        Ningun pedido tiene conductor asignado.
+        No hay pedidos en tránsito con conductor asignado.
        </div>
       )}
       {conCond.map(p=>{
        const c = conductores.find(x=>String(x.id)===String(p.conductor_id));
        const activo = sel?.id === p.id;
        return (
-        <button key={p.id} onClick={()=>setSel(p)} style={{
+        <button key={p.id} onClick={()=>setSeleccionId(p.id)} style={{
          width:"100%", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit",
          padding:"12px 16px", borderBottom:`1px solid ${T.color.divisor}`,
          background: activo ? T.color.marcaSuave : "transparent",
@@ -2455,6 +2523,10 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
          <div style={{ fontSize:13, fontWeight:600, color:T.color.tinta }}>{cond?.nombre || "Sin conductor"}</div>
          {cond?.placa && <div style={{ ...mono, marginTop:2 }}>{cond.placa}</div>}
         </div>
+       </div>
+       <div style={{ padding:"8px 18px", fontSize:12, fontWeight:700, background: enVivo ? T.color.marca : T.color.superficie2, color: enVivo ? "#fff" : T.color.tinta3 }}>
+        {enVivo ? `GPS en vivo · última señal hace ${Math.max(1, Math.round((Date.now() - gps.ts) / 60000))} min`
+         : gps?.apagado ? "GPS apagado por el conductor" : gps ? "Última ubicación conocida" : sel.estado === "en_transito" ? "El conductor no está reportando GPS: se muestra la dirección de destino" : "Direccion de destino"}
        </div>
        <iframe title="Mapa del destino" src={mapUrl} loading="lazy"
         style={{ width:"100%", height: esMovil ? "52vh" : "62vh", border:"none", display:"block" }}/>
@@ -3415,6 +3487,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
 export function ResumenTransportador({ pedidos, conductores, devoluciones = [], recogidas = [] }) {
  const esMovil = useEsMovil();
  const [gpsTick, setGpsTick] = useState(0);
+ useEffect(() => { const actualizar = () => setGpsTick(n => n + 1); window.addEventListener('gps-actualizado', actualizar); return () => window.removeEventListener('gps-actualizado', actualizar); }, []);
  useEffect(() => { const t = setInterval(() => setGpsTick(n => n + 1), 10000); return () => clearInterval(t); }, []);
  const [selCond, setSelCond] = useState("");
  // Historial: con una fecha, los pedidos que el conductor despacho ese dia
@@ -3490,13 +3563,13 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
  };
 
  const gpsCond = cond && window._gpsData ? window._gpsData[String(cond.id)] : null;
- const gpsFresco = gpsCond && (Date.now() - gpsCond.ts) < 300000;
+ const gpsFresco = gpsCond && !gpsCond.apagado && (Date.now() - gpsCond.ts) < 300000;
 
  // Disenio 26d: mismo calculo, en tarjetas numeradas; imprime con la misma funcion.
  if (esMovil) return (
   <Pagina>
    <ResumenMovil condOpts={condOpts} selCond={selCond} setSelCond={setSelCond} cond={cond} fechaHist={fechaHist} setFechaHist={setFechaHist}
-    misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} onImprimir={imprimir} />
+    misPeds={misPeds} misDV={misDV} misRC={misRC} totalCajas={totalCajas} gpsFresco={gpsFresco} gpsApagado={gpsCond?.apagado} onImprimir={imprimir} />
   </Pagina>
  );
 
@@ -3562,7 +3635,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
        color: gpsFresco ? T.color.bien : T.color.tinta3, fontSize:12, fontWeight:600,
       }}>
        <span style={{ width:6, height:6, borderRadius:3, background: gpsFresco ? T.color.bienPunto : T.color.neutroPunto }}/>
-       {gpsFresco ? "GPS activo" : "Sin reporte GPS"}
+       {gpsCond?.apagado ? "GPS apagado por el conductor" : gpsFresco ? "GPS activo" : gpsCond ? "Última ubicación conocida" : "Sin reporte GPS"}
       </span>
      </section>
 
@@ -5983,6 +6056,7 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   if (!window._gpsData) window._gpsData = {};
   const condId = user?.conductor_db_id || user?.id;
   if (condId) window._gpsData[String(condId)] = { lat, lng, ts: Date.now() };
+  enviarUbicacion(user?.conductor_db_id, lat, lng, acc);
   setLat(lat); setLng(lng); setPrecision(acc); setUltima(Date.now());
   setCentro(c => (!c || metrosEntre(c, { lat, lng }) > 80) ? { lat, lng } : c);
  };
@@ -5991,18 +6065,30 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   if (!navigator.geolocation) { setErr("GPS no disponible en este dispositivo."); return; }
   setErr("");
   watchRef.current = navigator.geolocation.watchPosition(
-   pos => { updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+   pos => { if (!window._gpsOn) return; updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
    e => setErr(e.code === 1 ? "El navegador no dio permiso de ubicacion. Activalo en los ajustes del sitio." : "Error GPS: " + e.message),
    { enableHighAccuracy:true, timeout:10000 }
   );
   window._gpsOn = true; window._gpsWatch = watchRef.current;
   setOn(true);
  };
- const detener = () => {
-  if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
+ const detener = async () => {
+  if (watchRef.current != null) navigator.geolocation.clearWatch(watchRef.current);
   watchRef.current = null;
   window._gpsOn = false; window._gpsWatch = null;
   setOn(false);
+  gpsUltimoEnvio = null;
+  const conductorId = user?.conductor_db_id;
+  if (!conductorId) return;
+  try {
+   const { error } = await guardarGps(() => supabase.from('gps_conductores')
+    .update({ apagado_por_conductor: true }).eq('conductor_id', conductorId));
+   if (error) throw error;
+   const anterior = window._gpsData?.[String(conductorId)];
+   if (anterior) window._gpsData[String(conductorId)] = { ...anterior, apagado: true };
+  } catch {
+   setErr("GPS detenido en este celular. No se pudo avisar a la central. Revisa tu conexión.");
+  }
  };
 
  const condId = user?.conductor_db_id || user?.id;
@@ -6012,7 +6098,9 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   rutaGps.ruta, promesas)[0] || null;
 
  const segundos = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
- const haceTexto = segundos == null ? "" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
+ // El celular entrega una lectura nueva cada segundo mientras se mueve, por eso
+ // casi siempre decia "hace 1 s": es correcto. Menos de 5 s se muestra "en vivo".
+ const haceTexto = segundos == null ? "" : segundos < 5 ? "en vivo" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
  const precisionTexto = precision ? ` · ±${Math.round(precision)} m` : "";
 
  // Cuatro decimales (~11 m): asi una lectura que apenas tiembla no cambia la
@@ -6135,6 +6223,7 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
 export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], recogidas=[], showToast, onNuevaPQRS, user }) {
  const esMovil = useEsMovil();
  const [gpsTick, setGpsTick] = useState(0);
+ useEffect(() => { const actualizar = () => setGpsTick(n => n + 1); window.addEventListener('gps-actualizado', actualizar); return () => window.removeEventListener('gps-actualizado', actualizar); }, []);
  useEffect(() => { const t = setInterval(()=>setGpsTick(n=>n+1), 10000); return ()=>clearInterval(t); }, []);
  const [busq, setBusq] = useState("");
  const [rango, setRango] = useState("30");
@@ -6187,26 +6276,29 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
   descargarCSV(`estado_pedidos_${hoyLocal()}.csv`, cab, filas.join("\n"));
  };
 
- const renderMapa = (p, cond, ciudad) => {
+ // alto: la ventana del escritorio usa un mapa mas alto que la tarjeta del celular.
+ const renderMapa = (p, cond, ciudad, alto = 280) => {
   const gps = p.conductor_id && window._gpsData && window._gpsData[String(p.conductor_id)];
-  const gpsReciente = gps && (Date.now()-gps.ts) < 300000;
+  const gpsReciente = gps && !gps.apagado && (Date.now()-gps.ts) < 300000;
+  const minutos = gps ? Math.round((Date.now() - gps.ts) / 60000) : 0;
   const entregado = ["entregado","novedad"].includes(p.estado);
   if (entregado) return (
    <div style={{ background:T.color.bienSuave, border:`1px solid ${T.color.bienSuave}`, borderRadius:12, padding:"12px 16px", color:T.color.bien, fontWeight:600, fontSize:13 }}>
     Pedido entregado. Rastreo GPS no disponible.
    </div>
   );
-  const mapSrc = gpsReciente
+  const mapSrc = gps
    ? `https://maps.google.com/maps?q=${gps.lat},${gps.lng}&output=embed&z=15`
    : `https://maps.google.com/maps?q=${encodeURIComponent((p.direccion||"") + ", " + (ciudad?.name||p.ciudad_nombre||"") + ", Colombia")}&output=embed&z=15`;
   return (
    <div style={{ borderRadius:14, overflow:"hidden", border:`1px solid ${gpsReciente ? T.color.marca : T.color.borde}`, background:T.color.superficie }}>
-    {gpsReciente && <div style={{ background:T.color.marca, color:"#fff", padding:"8px 14px", fontSize:12, fontWeight:700 }}>GPS en vivo · ultima actualizacion hace {Math.round((Date.now()-gps.ts)/60000)} min</div>}
-    <iframe title={"mapa-"+p.id} width="100%" height="280" style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
-    <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2 }}>
-     {gpsReciente ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : `${p.direccion || ""}, ${ciudad?.name || p.ciudad_nombre || ""}`}
-     {cond && <span style={{ marginLeft:12 }}>{cond.nombre} · {p.placa}</span>}
-     {!gpsReciente && <span style={{ marginLeft:8, color:T.color.tinta4 }}>(GPS no activo, mostrando destino)</span>}
+    <div style={{ background: gpsReciente ? T.color.marca : T.color.superficie2, color: gpsReciente ? "#fff" : T.color.tinta3, padding:"8px 14px", fontSize:12, fontWeight:700 }}>
+     {gpsReciente ? `GPS en vivo · última señal ${minutos < 1 ? "ahora" : `hace ${minutos} min`}` : gps?.apagado ? "GPS apagado por el conductor" : gps ? "Última ubicación conocida" : "El conductor no está reportando GPS: se muestra la dirección de destino"}
+    </div>
+    <iframe title={"mapa-"+p.id} width="100%" height={alto} style={{ border:"none", display:"block" }} src={mapSrc} allowFullScreen loading="lazy" />
+    <div style={{ background:T.color.superficie2, padding:"9px 14px", fontSize:12, color:T.color.tinta2, display:"flex", flexWrap:"wrap", gap:"4px 16px" }}>
+     <span><strong style={{ color:T.color.tinta }}>Destino:</strong> {[p.direccion, ciudad?.name || p.ciudad_nombre].filter(Boolean).join(", ") || "-"}</span>
+     {cond && <span><strong style={{ color:T.color.tinta }}>Conductor:</strong> {cond.nombre}{p.placa ? ` · ${p.placa}` : ""}</span>}
     </div>
    </div>
   );
@@ -6324,12 +6416,11 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
               borderColor: rastreable ? T.color.marcaBorde : T.color.borde2,
               background: abierto ? T.color.marcaSuave : T.color.superficie,
               cursor: rastreable ? "pointer" : "not-allowed",
-             }}><MapPin size={13}/> {abierto ? "Ocultar" : "Rastrear"}</button>
+             }}><MapPin size={13}/> Rastrear</button>
              <button onClick={()=>setModGuia(p)} style={{ ...botonFila, display:"inline-flex", alignItems:"center", gap:5 }}><FileText size={13}/> Guia</button>
             </div>
            </td>
           </tr>
-          {abierto && <tr><td colSpan={10} style={{ padding:16, background:T.color.superficie2, borderBottom:`1px solid ${T.color.borde}` }}>{renderMapa(p, cond, ciudad)}</td></tr>}
          </React.Fragment>
         );
        })}
@@ -6343,6 +6434,18 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
     />
    </section>
 
+   {/* El mapa abre en su propia ventana: dentro de la tabla se cortaba a la derecha. */}
+   {modMapa && (() => {
+    const cond = conductores.find(c => String(c.id) === String(modMapa.conductor_id));
+    const ciudad = (ciudades||[]).find(c => c.code === modMapa.ciudad_codigo);
+    return (
+     <ModalGestion titulo="Rastreo" id={modMapa.guia_interna || modMapa.id}
+      estado={<ChipEstado estado={estadoVisible(modMapa)} />}
+      descripcion={modMapa.cliente} onClose={() => setModMapa(null)} textoCancelar="Cerrar">
+      {renderMapa(modMapa, cond, ciudad, 420)}
+     </ModalGestion>
+    );
+   })()}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
   </Pagina>
  );
@@ -6637,6 +6740,23 @@ export default function SomosProTracking() {
   window.addEventListener("resize", check);
   return () => window.removeEventListener("resize", check);
  }, []);
+
+ // Ubicaciones en vivo de los conductores, cada 20 s, para quien las ve. Si la
+ // tabla aun no existe en esa base, se deja de intentar.
+ useEffect(() => {
+  if (!user || !["admin", "operador", "cliente", "transportista"].includes(user.rol)) return undefined;
+  let activo = true, t = null;
+  const ciclo = async () => {
+   const ok = await leerUbicaciones();
+   if (activo && ok) t = setTimeout(ciclo, 20000);
+  };
+  const canal = supabase.channel('gps-conductores').on('postgres_changes',
+   { event: '*', schema: 'public', table: 'gps_conductores' },
+   ({ new: fila }) => { if (activo && fila?.conductor_id) recibirGps(fila); }
+  ).subscribe();
+  ciclo();
+  return () => { activo = false; clearTimeout(t); supabase.removeChannel(canal); };
+ }, [user?.id, user?.rol]);
 
  if (cargando) return (
   <div style={{ minHeight:"100vh", background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:18, fontFamily:"'Segoe UI', system-ui, sans-serif" }}>

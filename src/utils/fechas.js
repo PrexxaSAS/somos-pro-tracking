@@ -52,7 +52,28 @@ export const limitesFecha = (rango, desde, hasta) => {
  return { desde: r?.dias ? hoyMas(-r.dias) : null, hasta: null };
 };
 
-export const diaEnLimites = (dia, l) => (!l.desde || dia >= l.desde) && (!l.hasta || dia <= l.hasta);
+// Sin limites pasa todo; con algun limite, un registro sin esa fecha no pasa.
+export const diaEnLimites = (dia, l) => (!l.desde && !l.hasta)
+ || (!!dia && (!l.desde || dia >= l.desde) && (!l.hasta || dia <= l.hasta));
+
+// Las fechas de un pedido por las que se puede filtrar el listado de Pedidos.
+export const CAMPOS_FECHA_PEDIDO = [
+ { id: "ingreso", label: "Fecha ingreso" },
+ { id: "pedido", label: "Fecha pedido" },
+ { id: "despacho", label: "Fecha despacho" },
+ { id: "entrega", label: "Fecha entrega" },
+ { id: "estimada", label: "Fecha estimada" },
+];
+
+// El dia (aaaa-mm-dd) de esa fecha en el pedido, o "" si no la tiene.
+export const diaDePedido = (p, campo) => {
+ const dia = (v) => String(v || "").slice(0, 10);
+ if (campo === "pedido") return dia(p.fecha_pedido);
+ if (campo === "despacho") return dia(p.fecha_despacho);
+ if (campo === "entrega") return dia(p.fecha_real);
+ if (campo === "estimada") return dia(p.fecha_estimada);
+ return diaLocal(p.created_at) || dia(p.fecha_creacion);
+};
 
 // Los mismos limites como instantes, para filtrar created_at en la base: desde
 // la medianoche local del primer dia hasta antes de la del dia siguiente al ultimo.

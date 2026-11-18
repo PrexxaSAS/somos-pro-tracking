@@ -426,7 +426,7 @@ export function CiudadesMovil({ ciudades = [], usos, onNueva, onImportar }) {
 // ── 26d: Resumen transportador ──────────────────────────────────────────────
 // El conductor es el encabezado y se cambia tocandolo; los tres conteos son
 // pestanias y lo que lleva son tarjetas numeradas con el total al pie.
-export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, fechaHist = "", setFechaHist, misPeds, misDV, misRC, totalCajas, gpsFresco, onImprimir }) {
+export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, fechaHist = "", setFechaHist, misPeds, misDV, misRC, totalCajas, gpsFresco, gpsApagado, onImprimir }) {
  const [pestana, setPestana] = useState("pedidos");
  const opciones = condOpts.slice().sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es"));
  const selector = (
@@ -460,7 +460,7 @@ export function ResumenMovil({ condOpts = [], selCond, setSelCond, cond, fechaHi
        <span style={{ fontSize: 12, color: T.color.tinta3, ...corta }}>
         <span style={{ fontFamily: T.fuente.mono }}>{cond.placa || "sin placa"}</span>{cond.empresa ? ` · ${cond.empresa}` : ""}
        </span>
-       <span style={{ fontSize: 11.5, fontWeight: 600, color: gpsFresco ? T.color.bien : T.color.tinta4 }}>{gpsFresco ? "GPS activo" : "Sin reporte GPS"}</span>
+       <span style={{ fontSize: 11.5, fontWeight: 600, color: gpsFresco ? T.color.bien : T.color.tinta4 }}>{gpsApagado ? "GPS apagado por el conductor" : gpsFresco ? "GPS activo" : "Sin reporte GPS"}</span>
       </div>
       <label style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 600, color: T.color.marca, cursor: "pointer", flexShrink: 0 }}>
        Cambiar <ChevronDown size={14} />{selector}

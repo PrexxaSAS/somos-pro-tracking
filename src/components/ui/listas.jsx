@@ -3,7 +3,7 @@ import { ChevronDown, MoreHorizontal, Search, Trash2, X } from 'lucide-react';
 import { T, tarjeta } from '../../design/tokens';
 import { useEsMovil, ALTO_BARRA } from '../../design/responsive';
 import { ESTADOS_PEDIDO } from '../../Constants';
-import { RANGOS_FECHA, limitesFecha } from '../../utils/fechas';
+import { RANGOS_FECHA } from '../../utils/fechas';
 
 // Piezas compartidas por las pantallas de listado (Pedidos, Conductores, Usuarios).
 // Viven aqui para que las tres se vean y se comporten igual: si cambia el estilo de
@@ -203,23 +203,17 @@ export function FiltroFechas({ rango, setRango, desde, setDesde, hasta, setHasta
  );
 }
 
-// La fecha de ingreso en un solo control: "Ingreso" abre los atajos y a la
-// derecha van Desde y Hasta. Con un atajo puesto, las fechas muestran lo que
-// abarca; escribir una fecha pasa a un rango elegido a mano.
-export function FiltroIngreso({ rango, setRango, desde, setDesde, hasta, setHasta }) {
- const l = limitesFecha(rango, desde, hasta);
- const atajo = RANGOS_FECHA.find(r => r.id === rango);
- const editar = (lado, valor) => {
-  setDesde(lado === "desde" ? valor : (l.desde || ""));
-  setHasta(lado === "hasta" ? valor : (l.hasta || ""));
-  setRango("rango");
- };
+// Filtro por fecha en un solo control: a la izquierda se elige por cual fecha
+// (ingreso, pedido, despacho...) y a la derecha van Desde y Hasta. Cualquiera de
+// los dos puede quedar vacio; la x los limpia.
+export function FiltroPorFecha({ campo, setCampo, campos, desde, setDesde, hasta, setHasta }) {
+ const actual = campos.find(c => c.id === campo) || campos[0];
  const fecha = {
   border: "none", outline: "none", background: "transparent", padding: 0, minWidth: 0, width: 118,
   fontSize: 12.5, fontFamily: T.fuente.mono, color: T.color.tinta2,
  };
  return (
-  <div title="Fecha de ingreso del pedido" style={{
+  <div title="Filtrar por fecha" style={{
    display: "inline-flex", alignItems: "stretch", height: 36, maxWidth: "100%",
    border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.control,
    background: T.color.superficie, overflow: "hidden",
@@ -229,18 +223,22 @@ export function FiltroIngreso({ rango, setRango, desde, setDesde, hasta, setHast
     background: T.color.superficie2, borderRight: `1px solid ${T.color.borde2}`,
     fontSize: 13, fontWeight: 600, color: T.color.tinta2, cursor: "pointer", whiteSpace: "nowrap",
    }}>
-    Ingreso{atajo && !["todo", "rango"].includes(rango) ? ` · ${atajo.corto}` : ""}
+    {actual.label}
     <ChevronDown size={14} style={{ color: T.color.tinta3 }} />
-    <select value={rango} aria-label="Fecha de ingreso"
-     onChange={e => { const v = e.target.value; setRango(v); if (v !== "rango") { setDesde(""); setHasta(""); } }}
+    <select value={actual.id} aria-label="Filtrar por fecha" onChange={e => setCampo(e.target.value)}
      style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", fontSize: 13 }}>
-     {RANGOS_FECHA.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+     {campos.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
     </select>
    </label>
    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "0 10px" }}>
-    <input type="date" aria-label="Desde" value={l.desde || ""} max={l.hasta || undefined} onChange={e => editar("desde", e.target.value)} style={fecha} />
+    <input type="date" aria-label="Desde" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)} style={fecha} />
     <span style={{ color: T.color.tinta4, fontSize: 12 }}>→</span>
-    <input type="date" aria-label="Hasta" value={l.hasta || ""} min={l.desde || undefined} onChange={e => editar("hasta", e.target.value)} style={fecha} />
+    <input type="date" aria-label="Hasta" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} style={fecha} />
+    {(desde || hasta) && (
+     <button onClick={() => { setDesde(""); setHasta(""); }} title="Quitar fechas" aria-label="Quitar fechas" style={{
+      border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.color.tinta3, display: "grid", placeItems: "center",
+     }}><X size={14} /></button>
+    )}
    </div>
   </div>
  );
@@ -426,9 +424,11 @@ export function Paginador({ total, page, setPage, pageSize }) {
 
  return (
   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+   {boton("«", () => setPage(1), false, page === 1, "pri")}
    {boton("<", () => setPage(Math.max(1, page - 1)), false, page === 1, "ant")}
    {piezas}
    {boton(">", () => setPage(Math.min(paginas, page + 1)), false, page === paginas, "sig")}
+   {boton("»", () => setPage(paginas), false, page === paginas, "ult")}
   </div>
  );
 }
