@@ -2389,13 +2389,53 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
   </div>
  );
 }
+// ── Ubicacion real de los conductores (docs/gps_conductores.sql) ──
+// El celular del conductor guarda su ultima ubicacion en la base; las demas
+// pantallas la leen y la dejan en window._gpsData, que es donde ya la buscaban
+// el resumen y la vista del cliente. Antes solo existia en el celular.
+const GPS_ENVIO_MS = 20000, GPS_ENVIO_METROS = 50, GPS_FRESCO_MS = 300000;
+let gpsUltimoEnvio = null;
+function distanciaMetros(a, b) {
+ const r = Math.PI / 180;
+ const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+ const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+ return 6371000 * 2 * Math.asin(Math.sqrt(h));
+}
+async function enviarUbicacion(conductorId, lat, lng, precision) {
+ if (!conductorId) return;
+ const ahora = Date.now();
+ const u = gpsUltimoEnvio;
+ if (u && ahora - u.ts < GPS_ENVIO_MS && distanciaMetros(u, { lat, lng }) < GPS_ENVIO_METROS) return;
+ gpsUltimoEnvio = { lat, lng, ts: ahora };
+ const { error } = await supabase.from('gps_conductores').upsert({
+  conductor_id: conductorId, lat, lng, precision_m: precision ?? null, actualizado_en: new Date(ahora).toISOString(),
+ });
+ if (error) gpsUltimoEnvio = null; // se reintenta con la siguiente lectura
+}
+async function leerUbicaciones() {
+ const desde = new Date(Date.now() - 6 * 3600000).toISOString();
+ const { data, error } = await supabase.from('gps_conductores').select('conductor_id,lat,lng,actualizado_en').gte('actualizado_en', desde);
+ if (error) return false;
+ if (!window._gpsData) window._gpsData = {};
+ (data || []).forEach(g => { window._gpsData[String(g.conductor_id)] = { lat: g.lat, lng: g.lng, ts: Date.parse(g.actualizado_en) }; });
+ return true;
+}
+
 function RastreoGPS({ pedidos, conductores, ciudades }) {
  const esMovil = useEsMovil();
  const conCond = pedidos.filter(p => p.conductor_id);
  const [sel, setSel] = useState(conCond[0] || null);
  const cond = conductores.find(c => String(c.id) === String(sel?.conductor_id));
  const ciudad = (ciudades || []).find(c => c.code === sel?.ciudad_codigo);
- const mapUrl = sel ? `https://maps.google.com/maps?q=${encodeURIComponent((sel.direccion || "") + ", " + (ciudad?.name || "") + ", Colombia")}&output=embed&z=14` : null;
+ // Se redibuja cada 10 s para tomar la ubicacion que se lee de la base.
+ const [, setTickGps] = useState(0);
+ useEffect(() => { const t = setInterval(() => setTickGps(n => n + 1), 10000); return () => clearInterval(t); }, []);
+ const gps = sel?.conductor_id && window._gpsData ? window._gpsData[String(sel.conductor_id)] : null;
+ const enVivo = gps && Date.now() - gps.ts < GPS_FRESCO_MS && ["en_transito"].includes(sel?.estado);
+ // Con GPS reciente se ve donde esta el conductor; si no, la direccion de destino.
+ const mapUrl = !sel ? null : enVivo
+  ? `https://maps.google.com/maps?q=${gps.lat.toFixed(4)},${gps.lng.toFixed(4)}&output=embed&z=15`
+  : `https://maps.google.com/maps?q=${encodeURIComponent((sel.direccion || "") + ", " + (ciudad?.name || "") + ", Colombia")}&output=embed&z=14`;
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
 
@@ -2471,6 +2511,10 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
          <div style={{ fontSize:13, fontWeight:600, color:T.color.tinta }}>{cond?.nombre || "Sin conductor"}</div>
          {cond?.placa && <div style={{ ...mono, marginTop:2 }}>{cond.placa}</div>}
         </div>
+       </div>
+       <div style={{ padding:"8px 18px", fontSize:12, fontWeight:700, background: enVivo ? T.color.marca : T.color.superficie2, color: enVivo ? "#fff" : T.color.tinta3 }}>
+        {enVivo ? `GPS en vivo · ultima senal hace ${Math.max(1, Math.round((Date.now() - gps.ts) / 60000))} min`
+         : sel.estado === "en_transito" ? "El conductor no esta reportando GPS: se muestra la direccion de destino" : "Direccion de destino"}
        </div>
        <iframe title="Mapa del destino" src={mapUrl} loading="lazy"
         style={{ width:"100%", height: esMovil ? "52vh" : "62vh", border:"none", display:"block" }}/>
@@ -5999,6 +6043,7 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   if (!window._gpsData) window._gpsData = {};
   const condId = user?.conductor_db_id || user?.id;
   if (condId) window._gpsData[String(condId)] = { lat, lng, ts: Date.now() };
+  enviarUbicacion(user?.conductor_db_id, lat, lng, acc);
   setLat(lat); setLng(lng); setPrecision(acc); setUltima(Date.now());
   setCentro(c => (!c || metrosEntre(c, { lat, lng }) > 80) ? { lat, lng } : c);
  };
@@ -6028,7 +6073,9 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   rutaGps.ruta, promesas)[0] || null;
 
  const segundos = ultima ? Math.max(0, Math.round((Date.now() - ultima) / 1000)) : null;
- const haceTexto = segundos == null ? "" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
+ // El celular entrega una lectura nueva cada segundo mientras se mueve, por eso
+ // casi siempre decia "hace 1 s": es correcto. Menos de 5 s se muestra "en vivo".
+ const haceTexto = segundos == null ? "" : segundos < 5 ? "en vivo" : segundos < 60 ? `hace ${segundos} s` : `hace ${Math.round(segundos / 60)} min`;
  const precisionTexto = precision ? ` · ±${Math.round(precision)} m` : "";
 
  // Cuatro decimales (~11 m): asi una lectura que apenas tiembla no cambia la
@@ -6653,6 +6700,19 @@ export default function SomosProTracking() {
   window.addEventListener("resize", check);
   return () => window.removeEventListener("resize", check);
  }, []);
+
+ // Ubicaciones en vivo de los conductores, cada 20 s, para quien las ve. Si la
+ // tabla aun no existe en esa base, se deja de intentar.
+ useEffect(() => {
+  if (!user || !["admin", "operador", "cliente", "transportista"].includes(user.rol)) return undefined;
+  let activo = true, t = null;
+  const ciclo = async () => {
+   const ok = await leerUbicaciones();
+   if (activo && ok) t = setTimeout(ciclo, 20000);
+  };
+  ciclo();
+  return () => { activo = false; clearTimeout(t); };
+ }, [user?.id, user?.rol]);
 
  if (cargando) return (
   <div style={{ minHeight:"100vh", background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:18, fontFamily:"'Segoe UI', system-ui, sans-serif" }}>
