@@ -2433,8 +2433,9 @@ async function leerUbicaciones() {
 
 function RastreoGPS({ pedidos, conductores, ciudades }) {
  const esMovil = useEsMovil();
- const conCond = pedidos.filter(p => p.conductor_id);
- const [sel, setSel] = useState(conCond[0] || null);
+ const conCond = pedidos.filter(p => p.conductor_id && p.estado === "en_transito");
+ const [seleccionId, setSeleccionId] = useState(conCond[0]?.id ?? null);
+ const sel = conCond.find(p => p.id === seleccionId) || conCond[0] || null;
  const cond = conductores.find(c => String(c.id) === String(sel?.conductor_id));
  const ciudad = (ciudades || []).find(c => c.code === sel?.ciudad_codigo);
  // Se redibuja cada 10 s para tomar la ubicacion que se lee de la base.
@@ -2454,7 +2455,7 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
   <Pagina>
    <Encabezado
     titulo="Rastreo GPS"
-    descripcion="Seguimiento geografico de pedidos con conductor asignado"
+    descripcion="Seguimiento de pedidos en tránsito con conductor asignado"
    />
 
    <div style={{
@@ -2468,20 +2469,20 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
      <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.color.borde}` }}>
       <div style={{ ...T.texto.tarjeta }}>En ruta</div>
       <div style={{ ...T.texto.meta, color:T.color.tinta3, marginTop:2 }}>
-       {conCond.length} {conCond.length===1 ? "pedido con conductor" : "pedidos con conductor"}
+       {conCond.length} {conCond.length===1 ? "pedido en tránsito" : "pedidos en tránsito"}
       </div>
      </div>
      <div style={{ overflowY:"auto" }}>
       {conCond.length===0 && (
        <div style={{ padding:40, textAlign:"center", color:T.color.tinta3, fontSize:14 }}>
-        Ningun pedido tiene conductor asignado.
+        No hay pedidos en tránsito con conductor asignado.
        </div>
       )}
       {conCond.map(p=>{
        const c = conductores.find(x=>String(x.id)===String(p.conductor_id));
        const activo = sel?.id === p.id;
        return (
-        <button key={p.id} onClick={()=>setSel(p)} style={{
+        <button key={p.id} onClick={()=>setSeleccionId(p.id)} style={{
          width:"100%", textAlign:"left", border:"none", cursor:"pointer", fontFamily:"inherit",
          padding:"12px 16px", borderBottom:`1px solid ${T.color.divisor}`,
          background: activo ? T.color.marcaSuave : "transparent",
