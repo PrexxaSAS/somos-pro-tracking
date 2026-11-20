@@ -59,6 +59,7 @@ import { EstadoPedidosMovil } from './modules/cliente/EstadoPedidosMovil';
 import { PromesasMovil, CiudadesMovil, ResumenMovil } from './modules/configuracion/ConfiguracionMovil';
 import { BotonEliminar } from './components/ui/listas';
 import { TransportistasMovil, PaqueteriasMovil } from './modules/red/RedMovil';
+import { limpiarUsuario } from './utils/usuarios';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -2816,7 +2817,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
      <Texto label="Persona de contacto" valor={formE.contacto} onChange={fe("contacto")} placeholder="Carlos Ruiz" />
      <Seccion titulo="Acceso al sistema" />
      <Fila>
-      <Texto label="Usuario" obligatorio mono valor={formE.user_login} onChange={fe("user_login")} placeholder="trans.xyz" />
+      <Texto label="Usuario" obligatorio mono valor={formE.user_login} onChange={v => fe("user_login")(limpiarUsuario(v))} placeholder="trans.xyz" />
       <Clave label="Contrasena" obligatorio valor={formE.pass_login} onChange={fe("pass_login")} />
      </Fila>
     </ModalForm>
@@ -2859,7 +2860,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
      <Texto label="Placa" obligatorio mono valor={formC.placa} onChange={fc("placa")} placeholder="XYZ-456" style={{ maxWidth:"50%" }} />
      <Seccion titulo="Acceso del conductor" />
      <Fila>
-      <Texto label="Usuario" obligatorio mono valor={formC.user_login} onChange={fc("user_login")} placeholder="juan.perez" />
+      <Texto label="Usuario" obligatorio mono valor={formC.user_login} onChange={v => fc("user_login")(limpiarUsuario(v))} placeholder="juan.perez" />
       <Clave label="Contrasena" obligatorio valor={formC.pass_login} onChange={fc("pass_login")} />
      </Fila>
     </ModalForm>

@@ -15,6 +15,7 @@ import {
 import { hoyLocal } from '../../utils/fechas';
 import { useEsMovil } from '../../design/responsive';
 import { ConductoresMovil } from '../red/RedMovil';
+import { limpiarUsuario } from '../../utils/usuarios';
 
 const POR_PAGINA = 50;
 
@@ -216,7 +217,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
     </Fila>
     <Seccion titulo="Acceso al sistema" />
     <Fila>
-     <Texto label="Usuario" obligatorio mono valor={form.user_login} onChange={f("user_login")} placeholder="juan.perez" />
+     <Texto label="Usuario" obligatorio mono valor={form.user_login} onChange={v => f("user_login")(limpiarUsuario(v))} placeholder="juan.perez" />
      <Clave label="Contrasena" obligatorio valor={form.pass_login} onChange={f("pass_login")} />
     </Fila>
    </ModalForm>
