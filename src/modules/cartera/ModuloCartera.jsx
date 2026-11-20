@@ -7,7 +7,7 @@ import { T, tarjeta } from '../../design/tokens';
 import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download, Building2, Calendar, Undo2 } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Paginador, FiltroFechas,
+ Segmentado, Paginador, usePaginacion, FiltroFechas,
  PieTabla, th, td, tdCifra, mono, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from '../../components/ui/listas';
 import {
@@ -591,6 +591,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
   const [asesores, setAsesores] = useState([]);
   const [busq, setBusq] = useState('');
   const [menuAsesor, setMenuAsesor] = useState(null);
+  const pagA = usePaginacion(asesores.length);
   const [modNuevo, setModNuevo] = useState(false);
   const [editando, setEditando] = useState(null);
   const vacio = {codigo:'',nombre:'',email:'',auxiliar_id:''};
@@ -711,7 +712,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
       </div>
      ) : (
       <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:760 }}>
         <thead>
          <tr>
           <th style={th}>Codigo</th>
@@ -722,7 +723,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
          </tr>
         </thead>
         <tbody>
-         {asesores.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(a => (
+         {pagA.cortar(asesores.slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"))).map(a => (
           <tr key={a.id}>
            <td style={td}><span style={chipMono}>{a.codigo}</span></td>
            <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{a.nombre || "-"}</td>
@@ -747,6 +748,10 @@ export function GestionAsesores({showToast, soloCrear = false}) {
         </tbody>
        </table>
       </div>
+     )}
+     {asesores.length > 0 && (
+      <PieTabla izquierda={`Mostrando ${pagA.desde}-${pagA.hasta} de ${asesores.length} asesores`}
+       derecha={<Paginador total={asesores.length} page={pagA.page} setPage={pagA.setPage} pageSize={pagA.pageSize} setPageSize={pagA.setPageSize}/>}/>
      )}
     </section>}
 
@@ -1473,7 +1478,6 @@ function CargarPedidosMovil({ archivo, pedidos, filasLeidas, errMsg, resultado, 
 // Trae los pedidos de cartera cuya fecha de ingreso (created_at) cae en los
 // limites, de a 1000: la base no entrega mas de 1000 filas por consulta, y sin
 // esto los listados se quedaban cortos sin avisar.
-const POR_PAGINA_CARTERA = 25;
 async function traerPedidosCartera(armar, limites) {
   const { desde, antesDe } = limitesInstante(limites);
   let todos = [];
@@ -1506,6 +1510,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
   const [desdeF,     setDesdeF]     = useState('');
   const [hastaF,     setHastaF]     = useState('');
   const [pagina,     setPagina]     = useState(1);
+  const [porPagina,  setPorPagina]  = useState(100);
   const limites = limitesFecha(rango, desdeF, hastaF);
 
   const cargar = async () => {
@@ -1530,7 +1535,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
     return true;
   });
 
-  const paginaItems = filtrados.slice((pagina - 1) * POR_PAGINA_CARTERA, pagina * POR_PAGINA_CARTERA);
+  const paginaItems = filtrados.slice((pagina - 1) * porPagina, pagina * porPagina);
   // La casilla de arriba marca los pendientes de la pagina que se ve.
   const pendientesAprobacion = paginaItems.filter(p=>['pendiente','preaprobado','cartera_vencida'].includes(p.estado_cartera));
 
@@ -1777,7 +1782,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
      )}
 
      <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
-      derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA_CARTERA}/>}/>
+      derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={porPagina} setPageSize={setPorPagina}/>}/>
     </section>
 
     {modRechazar && (
@@ -2747,6 +2752,7 @@ export function ModuloConsultas({showToast}) {
   const [desdeF, setDesdeF] = useState('');
   const [hastaF, setHastaF] = useState('');
   const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(100);
   const [tope,   setTope]   = useState(30);
   const limites = limitesFecha(rango, desdeF, hastaF);
 
@@ -2767,7 +2773,7 @@ export function ModuloConsultas({showToast}) {
     return true;
   });
 
-  const paginaItems = filtrados.slice((pagina - 1) * POR_PAGINA_CARTERA, pagina * POR_PAGINA_CARTERA);
+  const paginaItems = filtrados.slice((pagina - 1) * porPagina, pagina * porPagina);
   const filtroFechas = <FiltroFechas rango={rango} setRango={setRango} desde={desdeF} setDesde={setDesdeF} hasta={hastaF} setHasta={setHastaF} ancho={esMovil ? '100%' : 230}/>;
 
   const getEstadoTexto = (p) => {
@@ -2872,7 +2878,7 @@ export function ModuloConsultas({showToast}) {
      )}
 
      <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
-      derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA_CARTERA}/>}/>
+      derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={porPagina} setPageSize={setPorPagina}/>}/>
     </section>
    </Pagina>
   );

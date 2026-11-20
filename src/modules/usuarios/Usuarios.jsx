@@ -15,7 +15,6 @@ import {
 import { useEsMovil } from '../../design/responsive';
 import { UsuariosMovil } from '../red/RedMovil';
 
-const POR_PAGINA = 50;
 
 // Color por rol, para el punto de la pastilla y la inicial del avatar.
 const COLOR_ROL = {
@@ -45,6 +44,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  // Supabase Auth (auth_user_id). Sin ella no puede entrar al sistema.
  const [acceso, setAcceso] = useState("todos");
  const [pagina, setPagina] = useState(1);
+ const [porPagina, setPorPagina] = useState(100);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const roleColors = {admin:P[600],operador:P[400],transportista:"#0891b2",conductor:"#059669",cliente:"#d97706"};
  const border = "#e5e7eb";
@@ -243,7 +243,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  const tarjetasRol = [["todos", "Todos"], ...Object.entries(ROLES)];
 
  useEffect(() => { setPagina(1); }, [busq, rolFiltro, acceso]);
- const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+ const visibles = filtrados.slice((pagina - 1) * porPagina, pagina * porPagina);
  const sel = useSeleccion(visibles.map(u => u.id));
 
  const modales = (<>
@@ -348,7 +348,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
     )}
 
     <div style={{ overflowX: "auto" }}>
-     <table style={{ width: "100%", borderCollapse: "collapse" }}>
+     <table style={{ width: "100%", borderCollapse: "collapse", minWidth:860 }}>
       <thead>
        <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
         <th style={{ ...th, width: 42 }}>
@@ -442,7 +442,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
 
     <PieTabla
      izquierda={`${filtrados.length} ${filtrados.length === 1 ? "usuario" : "usuarios"}`}
-     derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA} />}
+     derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={porPagina} setPageSize={setPorPagina} />}
     />
    </section>
 

@@ -38,7 +38,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  const [fechaDesde, setFechaDesde] = useState("");
  const [fechaHasta, setFechaHasta] = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const esMovil = useEsMovil();
 
  const vacio = { numero_factura:"", transportista_id:"", fecha_factura:"", valor_total:"", observaciones:"" };
@@ -311,7 +311,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length === 1 ? "factura" : "facturas"} · ${fmtCOP(totalFiltrado)}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 

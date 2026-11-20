@@ -30,7 +30,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
+ Paginador, usePaginacion, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -2089,7 +2089,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
      </div>
 
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1280 }}>
        <thead>
         <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
          <th style={{ ...th2, width:42 }}>
@@ -2201,16 +2201,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
        Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
       </span>
-      <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
-       {/* Cuantos por pagina: desde 100. */}
-       <label style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta3 }}>
-        Mostrar
-        <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} style={{ ...selectFiltro, padding:"5px 8px" }}>
-         {[100, 200, 500].map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
-       </label>
-       <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
-      </div>
+      <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
      </div>
     </section>
    </div>
@@ -2621,6 +2612,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  const [rangoT, setRangoT] = useState("todo");
  const [pestanaT, setPestanaT] = useState("todos");
  const [pageT, setPageT] = useState(1);
+ const [porPaginaT, setPorPaginaT] = useState(100);
  const [verPed, setVerPed] = useState(null);
  const [busqC, setBusqC] = useState("");
  const [filtroCond, setFiltroCond] = useState("todos");
@@ -2774,6 +2766,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
    return okVista && okBusq;
   });
  }, [empresas, busqEmp, vistaEmp]);
+ const pagEmp = usePaginacion(empresasFiltradas.length);
+ useEffect(() => { pagEmp.setPage(1); }, [busqEmp, vistaEmp]);
 
  const alternarFila = (nit) => setAbiertas(prev => {
   const s = new Set(prev);
@@ -2987,7 +2981,6 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
     return [p.id, p.guia_interna, p.cliente, p.ciudad_nombre, p.direccion, cond?.nombre].some(v => String(v || "").toLowerCase().includes(q));
    });
-  const porPaginaT = 10;
   const itemsT = filtradosT.slice((pageT - 1) * porPaginaT, pageT * porPaginaT);
   const desdeN = filtradosT.length === 0 ? 0 : (pageT - 1) * porPaginaT + 1;
   const hastaN = Math.min(filtradosT.length, pageT * porPaginaT);
@@ -3050,7 +3043,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
   const pie = (
    <PieTabla
     izquierda={`Mostrando ${desdeN}–${hastaN} de ${filtradosT.length} pedidos${vista === "pedidos" ? ` · ${cajasT} cajas` : ""}`}
-    derecha={filtradosT.length > porPaginaT ? <Paginador total={filtradosT.length} page={pageT} setPage={setPageT} pageSize={porPaginaT}/> : null}
+    derecha={<Paginador total={filtradosT.length} page={pageT} setPage={setPageT} pageSize={porPaginaT} setPageSize={setPorPaginaT}/>}
    />
   );
 
@@ -3115,7 +3108,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        <Buscador valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" ancho={400}/>
       </BarraFiltros>
       <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead><tr>
          <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
          <th style={{ ...th, textAlign:"right" }}>Activos</th><th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3231,7 +3224,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        {selectorConductor}
       </BarraFiltros>
       <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead><tr>
          <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={{ ...th, textAlign:"right" }}>Cajas</th>
          <th style={th}>Conductor</th><th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3321,7 +3314,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
       )}
      </div>
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
        <thead><tr>
         <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
         <th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3357,7 +3350,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
       </div>
      </div>
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
        <thead><tr>
         <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={th}>Conductor</th>
         <th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3421,7 +3414,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     </BarraFiltros>
 
     <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
       <thead>
        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
         <th style={{ ...th, width:44 }} />
@@ -3439,7 +3432,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
          {empresas.length === 0 ? "Sin empresas registradas." : "Ninguna empresa coincide con el filtro."}
         </td></tr>
        )}
-       {empresasFiltradas.map(e => {
+       {pagEmp.cortar(empresasFiltradas).map(e => {
         const abierta = abiertas.has(e.nit);
         return (
          <React.Fragment key={e.nit || e.id}>
@@ -3541,12 +3534,17 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     </div>
 
     <PieTabla
-     izquierda={`${empresasFiltradas.length} ${empresasFiltradas.length === 1 ? "empresa" : "empresas"}`}
+     izquierda={empresasFiltradas.length > pagEmp.pageSize
+      ? `Mostrando ${pagEmp.desde}-${pagEmp.hasta} de ${empresasFiltradas.length} empresas`
+      : `${empresasFiltradas.length} ${empresasFiltradas.length === 1 ? "empresa" : "empresas"}`}
      derecha={
+      <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", justifyContent:"flex-end" }}>
+      <Paginador total={empresasFiltradas.length} page={pagEmp.page} setPage={pagEmp.setPage} pageSize={pagEmp.pageSize} setPageSize={pagEmp.setPageSize}/>
       <button onClick={() => setActiveTabExterno && setActiveTabExterno("conductores")} style={{
        border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
        color:T.color.marca, fontSize:13, fontWeight:600, padding:0,
       }}>Ver todos los conductores &rarr;</button>
+      </div>
      }
     />
    </section>
@@ -3736,7 +3734,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
         </div>
        ) : (
         <div style={{ overflowX:"auto" }}>
-         <table style={{ width:"100%", borderCollapse:"collapse" }}>
+         <table style={{ width:"100%", borderCollapse:"collapse", minWidth:560 }}>
           <thead>
            <tr>
             <th style={th}>{bloque.tipo === "pedido" ? "Pedido" : "Guia"}</th>
@@ -3786,6 +3784,8 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
  };
 
  const filt=ciudades.filter(c=>!busq||c.name.toLowerCase().includes(busq.toLowerCase())||c.code.includes(busq));
+ const pagC = usePaginacion(filt.length);
+ useEffect(() => { pagC.setPage(1); }, [busq]);
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
@@ -3869,7 +3869,7 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
         </tr>
        </thead>
        <tbody>
-        {filt.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es",{sensitivity:"base"})).map(c => (
+        {pagC.cortar(filt.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es",{sensitivity:"base"}))).map(c => (
          <tr key={c.code}>
           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.name}</td>
           <td style={td}><span style={chipMono}>{c.code}</span></td>
@@ -3879,6 +3879,10 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
        </tbody>
       </table>
      </div>
+    )}
+    {filt.length > 0 && (
+     <PieTabla izquierda={`Mostrando ${pagC.desde}-${pagC.hasta} de ${filt.length} ciudades`}
+      derecha={<Paginador total={filt.length} page={pagC.page} setPage={pagC.setPage} pageSize={pagC.pageSize} setPageSize={pagC.setPageSize}/>}/>
     )}
    </section>
 
@@ -4431,7 +4435,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const [guard,  setGuard]  = useState(false);
  const [busq,   setBusq]   = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
 
  // Map for quick lookup
  const promMap = Object.fromEntries((promesas||[]).map(p => [p.ciudad_codigo, p.dias_plazo]));
@@ -4543,7 +4547,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
      </div>
     ) : (
      <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:640 }}>
        <thead>
         <tr>
          <th style={th}>Ciudad</th>
@@ -4595,7 +4599,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
 
     <PieTabla
      izquierda={`${conPromesa.length} ${conPromesa.length === 1 ? "ciudad" : "ciudades"} con promesa`}
-     derecha={<Paginador total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -4761,7 +4765,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const fileRef = useRef(null);
 
  const vacio = {
@@ -5011,7 +5015,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length===1 ? "devolucion" : "devoluciones"}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -5222,7 +5226,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const fileRef = useRef(null);
 
  const vacio = {
@@ -5472,7 +5476,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length===1 ? "recogida" : "recogidas"}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -5706,7 +5710,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  const [filtroEst, setFiltroEst] = useState("todos");
  const [gestion,  setGestion]  = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const vacio = { factura:"", pedido_ref:"", motivo:"", descripcion:"" };
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
@@ -5989,7 +5993,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
 
     <PieTabla
      izquierda={`${filt.length} ${filt.length===1 ? "caso" : "casos"}`}
-     derecha={<Paginador total={filt.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filt.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -6285,7 +6289,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const [modMapa, setModMapa] = useState(null);
  const [modGuia, setModGuia] = useState(null);
  const [page, setPage] = useState(1);
- const pageSize = 8;
+ const [pageSize, setPageSize] = useState(100);
 
  const desde = (() => { const r = RANGOS_PEDIDOS.find(x => x.id === rango); return r && r.dias ? hoyMas(-r.dias) : null; })();
  const enRango = pedidos.filter(p => !desde || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde);
@@ -6407,7 +6411,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
     </BarraFiltros>
 
     <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse" }}>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
       <thead>
        <tr>
         <th style={th}>N° pedido</th>
@@ -6483,7 +6487,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
 
     <PieTabla
      izquierda={`Mostrando ${pageStart}–${pageEnd} de ${filtP.length} pedidos · ${totalCajas} cajas`}
-     derecha={<Paginador total={filtP.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtP.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -6948,7 +6952,7 @@ export default function SomosProTracking() {
      contadores={{ pqrs: Object.keys(pqrsNoLeidas).length }} />
    )}
    <main style={{
-    flex: 1, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
+    flex: 1, minWidth: 0, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
     padding: esMovil ? "16px 16px " + (ALTO_BARRA + 16) + "px" : "28px 24px",
    }}>
     {renderContent()}
