@@ -509,7 +509,7 @@ function FranjaFoco({ foco, cuantos, onQuitar }) {
 export function Dashboard({
  pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [], pqrsConMensajes = 0,
  promesas = [], ciudades = [], transportistas = [],
- setActiveTab, onBuscarPedido, onVerEstado,
+ setActiveTab, onBuscarPedido, onVerEstado, onVerModulo,
  // Con que sujeto abrir. Siempre vacio en la aplicacion; existe para que la
  // prueba pueda dibujar el tablero ya enfocado sin simular la busqueda.
  focoInicial = null,
@@ -529,6 +529,8 @@ export function Dashboard({
  };
  // Lleva a Pedidos con el filtro puesto (fuera_promesa, en_riesgo o un estado).
  const verFiltro = (filtro) => (onVerEstado ? onVerEstado(filtro) : irA("pedidos"));
+ // Lleva a PQRS o Recogidas con el estado ya filtrado.
+ const verModulo = (tab, filtro) => (onVerModulo ? onVerModulo(tab, filtro) : irA(tab));
 
  const m = useMemo(() => {
   const dias = (RANGOS.find(r => r.id === rango) || RANGOS[3]).dias;
@@ -624,11 +626,11 @@ export function Dashboard({
    color: T.color.ojo, tab: "pedidos", onTitulo: () => verFiltro("en_riesgo"), onItem: abrirPedido,
    items: m.enRiesgo.slice(0, 4).map(p => ({ id: p.id, detalle: p.fecha_estimada || "" })),
   },
-  { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs" },
+  { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs", onTitulo: () => verModulo("pqrs", "abierta") },
   { id: "pqrs_msj", texto: "PQRS con mensajes nuevos", cantidad: pqrsConMensajes, color: T.color.marca, tab: "pqrs" },
   {
    id: "recog", texto: "Recogidas sin asignar", cantidad: rec ? rec.sinAsignar.length : 0,
-   color: T.color.ojo, tab: "recogidas",
+   color: T.color.ojo, tab: "recogidas", onTitulo: () => verModulo("recogidas", "sin_asignar"),
   },
  ];
 
@@ -820,11 +822,11 @@ export function Dashboard({
       <TituloTarjeta accion={<Enlace onClick={() => irA("pqrs")}>Abrir</Enlace>}>PQRS</TituloTarjeta>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
        {[
-        { label: "Abiertas", valor: pqrsAbiertas, color: T.color.mal, fondo: T.color.malSuave },
-        { label: "En gestion", valor: pqrsGestion, color: T.color.ojo, fondo: T.color.ojoSuave },
-        { label: "Cerradas", valor: pqrsCerradas, color: T.color.bien, fondo: T.color.bienSuave },
+        { label: "Abiertas", filtro: "abierta", valor: pqrsAbiertas, color: T.color.mal, fondo: T.color.malSuave },
+        { label: "En gestion", filtro: "en_gestion", valor: pqrsGestion, color: T.color.ojo, fondo: T.color.ojoSuave },
+        { label: "Cerradas", filtro: "cerrada", valor: pqrsCerradas, color: T.color.bien, fondo: T.color.bienSuave },
        ].map(f => (
-        <button key={f.label} onClick={() => irA("pqrs")} style={{
+        <button key={f.label} onClick={() => verModulo("pqrs", f.filtro)} style={{
          display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
          padding: "11px 14px", borderRadius: T.radio.control, border: "none", cursor: "pointer", fontFamily: "inherit",
          background: f.valor > 0 ? f.fondo : T.color.superficie2,
@@ -844,12 +846,12 @@ export function Dashboard({
       ) : (
        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {[
-         { label: "Sin asignar", valor: rec.sinAsignar.length, color: T.color.ojo, fondo: T.color.ojoSuave },
-         { label: "En transito", valor: rec.enTransito, color: T.color.marca, fondo: T.color.marcaSuave },
-         { label: "Entregadas", valor: rec.entregadas, color: T.color.bien, fondo: T.color.bienSuave },
-         { label: "Con novedad", valor: rec.novedad, color: T.color.mal, fondo: T.color.malSuave },
+         { label: "Sin asignar", filtro: "sin_asignar", valor: rec.sinAsignar.length, color: T.color.ojo, fondo: T.color.ojoSuave },
+         { label: "En transito", filtro: "en_transito", valor: rec.enTransito, color: T.color.marca, fondo: T.color.marcaSuave },
+         { label: "Entregadas", filtro: "entregado", valor: rec.entregadas, color: T.color.bien, fondo: T.color.bienSuave },
+         { label: "Con novedad", filtro: "novedad", valor: rec.novedad, color: T.color.mal, fondo: T.color.malSuave },
         ].map(f => (
-         <button key={f.label} onClick={() => irA("recogidas")} style={{
+         <button key={f.label} onClick={() => verModulo("recogidas", f.filtro)} style={{
           display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
           padding: "11px 14px", borderRadius: T.radio.control, border: "none", cursor: "pointer", fontFamily: "inherit",
           background: f.valor > 0 ? f.fondo : T.color.superficie2,

@@ -5220,7 +5220,8 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
 
 // ModuloRecogidas 
 
-export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
+export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar, filtroInicial = "" }) {
+ const [filtroEst, setFiltroEst] = useState(filtroInicial || "todos");
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
@@ -5375,8 +5376,12 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
   if (recargar) await recargar();
  };
 
+ // "novedad" tambien cuenta las entregadas con novedad, como el Dashboard.
+ const okEstado = (r) => filtroEst === "todos"
+  || (filtroEst === "novedad" ? (r.estado === "novedad" || r.novedad) : r.estado === filtroEst);
  const filtradas = recogidas.filter(r=>{
   if (esCliente && ![user.nombre, user.user].includes(r.solicitado_por)) return false;
+  if (!okEstado(r)) return false;
   const q=busq.toLowerCase();
   return !busq||r.guia.toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
  });
@@ -5387,7 +5392,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const totalAbiertas = filtradas.filter(r => r.estado !== "entregado" && r.estado !== "novedad").length;
  const totalCerradas = filtradas.length - totalAbiertas;
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, pageSize]);
+ useEffect(() => { setPage(1); }, [busq, pageSize, filtroEst]);
 
  // Disenios 22b, 24b y 25b, con los mismos crear, asignar y marcarEntregado.
  if (esMovil) return (
@@ -5395,7 +5400,8 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
    <EnviosMovil tipo="recogida" conductores={conductores} vistaCliente={esCliente}
     items={recogidas.filter(r => !esCliente || [user.nombre, user.user].includes(r.solicitado_por))}
     sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
-    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
+    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente}
+    pestanaInicial={["entregado", "novedad"].includes(filtroInicial) ? "cerradas" : "abiertas"} />
    {(modNueva||modEditar)&&(
     <FormRecogidaMovil form={form} setForm={setForm} ciudades={ciudades}
      editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
@@ -5428,6 +5434,13 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
    <section style={{ ...tarjeta, overflow:"hidden" }}>
     <BarraFiltros derecha={`${filtradas.length} de ${recogidas.length}`}>
      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, ciudad o direccion" ancho={280}/>
+     <SelectFiltro valor={filtroEst} onChange={setFiltroEst} ancho={190}>
+      <option value="todos">Todos los estados</option>
+      <option value="sin_asignar">Sin asignar</option>
+      <option value="en_transito">En transito</option>
+      <option value="entregado">Entregadas</option>
+      <option value="novedad">Con novedad</option>
+     </SelectFiltro>
     </BarraFiltros>
 
     <TablaDesplazable>
@@ -5678,7 +5691,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
 
 // ModuloPQRS 
 
-export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva, noLeidas = {}, onLeida }) {
+export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva, noLeidas = {}, onLeida, filtroInicial = "" }) {
  const esMovil = useEsMovil();
  const MOTIVOS = [
   "Entrega tarda fuera de tiempo estimado",
@@ -5716,7 +5729,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
   if (nuevaInicial) { setModNueva(true); if (onConsumirNueva) onConsumirNueva(); }
  }, [nuevaInicial]);
  const [busq,    setBusq]    = useState("");
- const [filtroEst, setFiltroEst] = useState("todos");
+ const [filtroEst, setFiltroEst] = useState(filtroInicial || "todos");
  const [gestion,  setGestion]  = useState("");
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(100);
@@ -5856,6 +5869,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  if (esMovil) return (
   <Pagina>
    <PqrsMovil vistaCliente={esCliente}
+    pestanaInicial={filtroInicial === "cerrada" ? "cerradas" : filtroInicial === "en_gestion" && !esCliente ? "en_gestion" : "abiertas"}
     items={pqrs.filter(p => !esCliente || [user.nombre, user.user].includes(p.solicitado_por))}
     sobre={esCliente ? (user.nombre || user.user) : "Peticiones, quejas, reclamos y sugerencias"}
     onAbrir={x => { setGestion(""); setModGestion(x); }}
@@ -6543,7 +6557,10 @@ export default function SomosProTracking() {
  // esto, cada regreso a Pedidos volvia a aplicar la ultima busqueda, y cualquier
  // enlace terminaba mostrando siempre el mismo pedido.
  const [estadoPedidos, setEstadoPedidos] = useState("");
- const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
+ const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setFiltroModulo(null); setTab(destino); };
+ // Estado con el que abrir PQRS o Recogidas al venir de una fila del Dashboard.
+ const [filtroModulo, setFiltroModulo] = useState(null);
+ const filtroDe = (destino) => (filtroModulo?.tab === destino ? filtroModulo.filtro : "");
  // "Nueva PQRS" desde Estado de pedidos: se va a PQRS con el formulario abierto.
  const [pqrsNueva, setPqrsNueva] = useState(false);
  // "Ver" en un conductor del transportista abre Pedidos filtrado por el.
@@ -6910,6 +6927,7 @@ export default function SomosProTracking() {
   const re = cargarTodo;
   switch (tab) {
    case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} transportistas={transportistas} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} pqrsConMensajes={Object.keys(pqrsNoLeidas).length} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
+    onVerModulo={(destino, filtro) => { navegar(destino); setFiltroModulo({ tab: destino, filtro }); }}
     onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setEstadoPedidos(""); setTab("pedidos"); }}
     onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
@@ -6940,9 +6958,9 @@ export default function SomosProTracking() {
     onNuevaPQRS={() => { navegar("pqrs"); setPqrsNueva(true); }}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
     nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}
-    noLeidas={pqrsNoLeidas} onLeida={marcarPqrsLeida}/>;
+    noLeidas={pqrsNoLeidas} onLeida={marcarPqrsLeida} filtroInicial={filtroDe("pqrs")}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
-   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
+   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas} filtroInicial={filtroDe("recogidas")}/>;
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.
    case "cartera_sedes":
    case "cartera_asesores":

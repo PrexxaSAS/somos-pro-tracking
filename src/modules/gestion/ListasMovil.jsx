@@ -227,11 +227,11 @@ export function TarjetaEnvio({ tipo, item, conductor, vistaCliente, onAbrir, onE
 
 // ── Lista de devoluciones o recogidas ───────────────────────────────────────
 export function EnviosMovil({
- tipo, items, conductores = [], vistaCliente, sobre, onAbrir, onNuevo, onEditar,
+ tipo, items, conductores = [], vistaCliente, sobre, onAbrir, onNuevo, onEditar, pestanaInicial = "abiertas",
 }) {
  const esDev = tipo === "devolucion";
  const [busq, setBusq] = useState("");
- const [pestana, setPestana] = useState("abiertas");
+ const [pestana, setPestana] = useState(pestanaInicial);
  const [orden, setOrden] = useState("reciente");
  const [tope, setTope] = useState(30);
  useEffect(() => { setTope(30); }, [busq, pestana, orden]);
@@ -342,10 +342,10 @@ export function TarjetaPqrs({ item, vistaCliente, onAbrir, onEditar, nuevos = 0 
 }
 
 // ── Lista de PQRS ───────────────────────────────────────────────────────────
-export function PqrsMovil({ items, vistaCliente, sobre, onAbrir, onNueva, onEditar, noLeidas = {} }) {
+export function PqrsMovil({ items, vistaCliente, sobre, onAbrir, onNueva, onEditar, noLeidas = {}, pestanaInicial = "abiertas" }) {
  const [busq, setBusq] = useState("");
  // La central las atiende de la mas vieja a la mas nueva; el cliente las ve al reves.
- const [pestana, setPestana] = useState("abiertas");
+ const [pestana, setPestana] = useState(pestanaInicial);
  const [orden, setOrden] = useState(vistaCliente ? "reciente" : "antigua");
  const [tope, setTope] = useState(30);
  useEffect(() => { setTope(30); }, [busq, pestana, orden]);
