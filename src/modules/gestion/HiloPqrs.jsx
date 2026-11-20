@@ -42,6 +42,12 @@ export function HiloPqrs({ pqrs, usuarioId, puedeEscribir, borrador, setBorrador
   onCargado?.((data || []).length);
  };
  useEffect(() => { setCargando(true); cargar(); }, [pqrs.id]);
+ // Mensaje nuevo en vivo (lo emite la app al recibirlo de la base).
+ useEffect(() => {
+  const alLlegar = (e) => { if (e.detail?.pqrs_id === pqrs.id) cargar(); };
+  window.addEventListener('pqrs-observacion', alLlegar);
+  return () => window.removeEventListener('pqrs-observacion', alLlegar);
+ }, [pqrs.id]);
  useEffect(() => { fin.current?.scrollIntoView({ block: "nearest" }); }, [obs.length]);
 
  // Las PQRS respondidas antes de existir el hilo tienen su respuesta solo en

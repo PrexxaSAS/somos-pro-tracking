@@ -5665,7 +5665,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
 
 // ModuloPQRS 
 
-export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva }) {
+export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva, noLeidas = {}, onLeida }) {
  const esMovil = useEsMovil();
  const MOTIVOS = [
   "Entrega tarda fuera de tiempo estimado",
@@ -5771,6 +5771,15 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  // se escriben cuantas se necesiten mientras la PQRS no este cerrada. Lo que
  // quede escrito al cerrar se guarda primero como observacion.
  const [hayObservaciones, setHayObservaciones] = useState(0);
+ // Abrir una PQRS la marca leida (docs/pqrs_no_leidos.sql); un mensaje que
+ // llega mientras esta abierta tambien queda leido.
+ useEffect(() => { if (modGestion?.id) onLeida?.(modGestion.id); }, [modGestion?.id]);
+ useEffect(() => {
+  if (!modGestion?.id) return undefined;
+  const alLlegar = (e) => { if (e.detail?.pqrs_id === modGestion.id) onLeida?.(modGestion.id); };
+  window.addEventListener('pqrs-observacion', alLlegar);
+  return () => window.removeEventListener('pqrs-observacion', alLlegar);
+ }, [modGestion?.id, noLeidas]);
  const cerrarDesdeModal = async () => {
   if (gestion.trim()) {
    const { error } = await agregarObservacionPqrs(modGestion.id, gestion);
@@ -5820,7 +5829,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
   const okB=!busq||p.id.toLowerCase().includes(q)||p.factura.toLowerCase().includes(q)||p.pedido_ref.toLowerCase().includes(q)||p.motivo.toLowerCase().includes(q);
   const okE=filtroEst==="todos"||p.estado===filtroEst;
   return okB&&okE;
- });
+ }).sort((a, b) => (noLeidas[b.id] ? 1 : 0) - (noLeidas[a.id] ? 1 : 0));
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
@@ -5837,7 +5846,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
     items={pqrs.filter(p => !esCliente || [user.nombre, user.user].includes(p.solicitado_por))}
     sobre={esCliente ? (user.nombre || user.user) : "Peticiones, quejas, reclamos y sugerencias"}
     onAbrir={x => { setGestion(""); setModGestion(x); }}
-    onNueva={() => setModNueva(true)} onEditar={abrirEditarCliente} />
+    onNueva={() => setModNueva(true)} onEditar={abrirEditarCliente} noLeidas={noLeidas} />
    {(modNueva||modEditar)&&(
     <FormPqrsMovil form={form} setForm={setForm} pedidos={pedidos || []} motivos={MOTIVOS}
      editando={Boolean(modEditar)} onEnviar={crear} onClose={cerrarFormulario} />
@@ -5918,7 +5927,16 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
          : { fondo:T.color.superficie3, texto:T.color.tinta2, punto:T.color.neutroPunto, label:ESTADOS_PQRS[x.estado]?.label || x.estado || "Sin estado" };
         return (
          <tr key={x.id}>
-          <td style={td}><span style={chipMono}>{x.id}</span></td>
+          <td style={td}>
+           <span style={chipMono}>{x.id}</span>
+           {noLeidas[x.id] && (
+            <div style={{ marginTop:4 }}>
+             <span title="Mensajes sin leer" style={{ fontSize:11, fontWeight:700, padding:"1px 8px", borderRadius:T.radio.pastilla, background:T.color.malPunto, color:"#fff" }}>
+              {noLeidas[x.id].cantidad === 1 ? "1 mensaje nuevo" : `${noLeidas[x.id].cantidad} mensajes nuevos`}
+             </span>
+            </div>
+           )}
+          </td>
           <td style={td}><span style={mono}>{x.factura || "-"}</span></td>
           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{x.pedido_ref || "-"}</td>
           <td style={{ ...td, maxWidth:260 }}>
@@ -6790,6 +6808,38 @@ export default function SomosProTracking() {
   return () => window.removeEventListener("resize", check);
  }, []);
 
+ // PQRS con mensajes nuevos para quien entra (docs/pqrs_no_leidos.sql): mapa
+ // {pqrs_id: {cantidad, ultimo}}. Se carga al entrar y se actualiza en vivo; un
+ // mensaje del "otro lado" muestra un aviso. Si la base aun no tiene las
+ // funciones, no se muestra nada.
+ const [pqrsNoLeidas, setPqrsNoLeidas] = useState({});
+ const cargarPqrsNoLeidas = async () => {
+  const { data, error } = await supabase.rpc('pqrs_no_leidas');
+  if (error) return;
+  setPqrsNoLeidas(Object.fromEntries((data || []).map(r => [r.pqrs_id, { cantidad: r.cantidad, ultimo: r.ultimo }])));
+ };
+ const marcarPqrsLeida = async (id) => {
+  if (!id) return;
+  setPqrsNoLeidas(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  await supabase.rpc('marcar_pqrs_leida', { p_pqrs: id });
+ };
+ useEffect(() => {
+  if (!user || !["admin", "operador", "cliente"].includes(user.rol)) return undefined;
+  const soyLogistica = ["admin", "operador"].includes(user.rol);
+  cargarPqrsNoLeidas();
+  const canal = supabase.channel('pqrs-observaciones').on('postgres_changes',
+   { event: 'INSERT', schema: 'public', table: 'pqrs_observaciones' },
+   ({ new: fila }) => {
+    if (!fila?.pqrs_id || fila.autor_id === user.id) return;
+    window.dispatchEvent(new CustomEvent('pqrs-observacion', { detail: fila }));
+    const deLogistica = ["admin", "operador"].includes(fila.autor_rol);
+    if (deLogistica === soyLogistica) return;
+    showToast(`Nuevo mensaje en ${fila.pqrs_id}${fila.autor_nombre ? ` de ${fila.autor_nombre}` : ""}`, "info");
+    cargarPqrsNoLeidas();
+   }).subscribe();
+  return () => { supabase.removeChannel(canal); };
+ }, [user?.id, user?.rol]);
+
  // GPS del conductor: arranca solo al entrar a QTracking. La primera vez se le
  // muestra el aviso de que su ubicacion se comparte con la empresa (Ley 1581) y
  // arranca al aceptarlo. Si lo detuvo en esta sesion, no se vuelve a prender.
@@ -6844,7 +6894,7 @@ export default function SomosProTracking() {
   const sb = supabase;
   const re = cargarTodo;
   switch (tab) {
-   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} transportistas={transportistas} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
+   case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} transportistas={transportistas} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} pqrsConMensajes={Object.keys(pqrsNoLeidas).length} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
     onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setEstadoPedidos(""); setTab("pedidos"); }}
     onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
@@ -6874,7 +6924,8 @@ export default function SomosProTracking() {
    case "consultas":   return <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}
     onNuevaPQRS={() => { navegar("pqrs"); setPqrsNueva(true); }}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
-    nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}/>;
+    nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}
+    noLeidas={pqrsNoLeidas} onLeida={marcarPqrsLeida}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
    case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.
@@ -6893,7 +6944,8 @@ export default function SomosProTracking() {
  return (
   <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#fafafa" }}>
    {!esMovil && (
-    <SidebarApp user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs} />
+    <SidebarApp user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} collapsed={collapsed} setCollapsed={setCollapsed} pqrs={pqrs}
+     contadores={{ pqrs: Object.keys(pqrsNoLeidas).length }} />
    )}
    <main style={{
     flex: 1, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
@@ -6902,7 +6954,8 @@ export default function SomosProTracking() {
     {renderContent()}
    </main>
    {esMovil && (
-    <NavegacionMovil user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)} />
+    <NavegacionMovil user={user} activeTab={tab} setActiveTab={navegar} onLogout={handleLogout} onShareApp={()=>setModCompartir(true)}
+     contadores={{ pqrs: Object.keys(pqrsNoLeidas).length }} />
    )}
    {modCompartir && <LinkCompartir onClose={()=>setModCompartir(false)} />}
    {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}

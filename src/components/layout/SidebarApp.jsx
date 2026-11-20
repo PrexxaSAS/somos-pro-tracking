@@ -144,7 +144,9 @@ function Marca({ colapsado }) {
   );
 }
 
-export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed }) {
+// contadores: {tab: n} para marcar opciones con algo pendiente (PQRS con
+// mensajes nuevos).
+export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp, collapsed, setCollapsed, contadores = {} }) {
   const grupos = MENUS[user.rol] || [];
   const inicial = (user.nombre || "?").trim().charAt(0).toUpperCase();
 
@@ -221,8 +223,20 @@ export function SidebarApp({ user, activeTab, setActiveTab, onLogout, onShareApp
                       background: activo ? T.color.marcaSuave : "transparent",
                       transition: "background .12s, color .12s",
                     }}>
-                    <Icono size={17} strokeWidth={activo ? 2.3 : 1.9} style={{ flexShrink: 0 }} />
-                    {!collapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
+                    <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+                      <Icono size={17} strokeWidth={activo ? 2.3 : 1.9} />
+                      {collapsed && contadores[tab] > 0 && (
+                        <span style={{ position: "absolute", top: -3, right: -4, width: 8, height: 8, borderRadius: 4, background: T.color.malPunto }} />
+                      )}
+                    </span>
+                    {!collapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{label}</span>}
+                    {!collapsed && contadores[tab] > 0 && (
+                      <span title="Con mensajes nuevos" style={{
+                        minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, flexShrink: 0,
+                        background: T.color.malPunto, color: "#fff", fontSize: 11, fontWeight: 700,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      }}>{contadores[tab]}</span>
+                    )}
                   </button>
                 );
               })}
