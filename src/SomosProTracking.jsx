@@ -6547,6 +6547,18 @@ export default function SomosProTracking() {
    window.history.replaceState({}, "", window.location.pathname);
   } catch { /* sin permiso para cambiar la direccion */ }
  }, [user]);
+ // El boton del correo de pedido devuelto lleva a ?vista=devueltos: se abre
+ // Pedidos devueltos (para quien la ve) y se limpia el parametro.
+ useEffect(() => {
+  if (!user) return;
+  let vista = "";
+  try { vista = new URLSearchParams(window.location.search).get("vista") || ""; } catch { vista = ""; }
+  if (vista !== "devueltos") return;
+  if (["admin", "operador", "cliente"].includes(user.rol)) setTab("cartera_devueltos");
+  try {
+   window.history.replaceState({}, "", window.location.pathname);
+  } catch { /* sin permiso para cambiar la direccion */ }
+ }, [user]);
  const [toast,     setToast]     = useState(null);
 
  const showToast = (msg, type = "info") => setToast({ msg, type });

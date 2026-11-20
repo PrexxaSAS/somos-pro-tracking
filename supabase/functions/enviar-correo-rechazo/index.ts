@@ -12,6 +12,8 @@
 // Secretos que necesita (Edge Functions > Secrets en Supabase):
 //   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
 //   SMTP_FROM_NAME, SMTP_FROM_EMAIL
+// Opcional: APP_URL, la direccion de QTracking para el boton del correo (por
+// defecto la de produccion). En staging conviene ponerla con la de staging.
 // Supabase bloquea la salida por los puertos 25 y 587: usar 465 (SSL).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
@@ -57,6 +59,7 @@ Deno.serve(async (req) => {
     fromName: Deno.env.get("SMTP_FROM_NAME") || "QTracking",
     fromEmail: Deno.env.get("SMTP_FROM_EMAIL") || Deno.env.get("SMTP_USER"),
   };
+  const appUrl = clean(Deno.env.get("APP_URL") || "https://somos-pro-tracking.vercel.app").replace(/\/+$/, "");
   if (!smtp.host || !smtp.user || !smtp.pass || !smtp.fromEmail) {
     return json({ error: "El correo no esta configurado: faltan los secretos SMTP de la funcion." }, 500);
   }
@@ -102,12 +105,12 @@ Deno.serve(async (req) => {
   if (!para) return json({ enviado: false, razon: asesor ? "asesor_sin_correo" : "asesor_no_registrado" });
 
   const NOMBRE_CAMPO: Record<string, string> = {
-    cliente: "Cliente", nit: "NIT", direccion: "Direccion de entrega", sector_dane: "Ciudad destino (DANE)",
-    codigo_mensaje: "Codigo de mensaje", observacion: "Observacion", cantidades: "Cantidades de las referencias",
+    cliente: "Cliente", nit: "NIT", direccion: "Dirección de entrega", sector_dane: "Ciudad destino (DANE)",
+    codigo_mensaje: "Código de mensaje", observacion: "Observación", cantidades: "Cantidades de las referencias",
   };
   const campos = (pedido.campos_corregir || []).map((c: string) => NOMBRE_CAMPO[c] || c).join(", ");
   const asunto = devuelto
-    ? `Pedido ${clean(pedido.numero_pedido)} devuelto por logistica: falta informacion`
+    ? `Pedido ${clean(pedido.numero_pedido)} devuelto por logística: falta información`
     : `Pedido ${clean(pedido.numero_pedido)} rechazado por cartera`;
   const filas = [
     ["Pedido", pedido.numero_pedido],
@@ -116,21 +119,29 @@ Deno.serve(async (req) => {
     [devuelto ? "Motivo" : "Motivo del rechazo", pedido.motivo_rechazo || "(sin motivo)"],
     ...(devuelto ? [["Corregir", campos || "(sin campos)"]] : []),
   ];
-  const titulo = devuelto ? "Pedido devuelto por logistica" : "Pedido rechazado";
+  const titulo = devuelto ? "Pedido devuelto por logística" : "Pedido rechazado";
   const intro = devuelto
-    ? "logistica devolvio un pedido tuyo porque le falta informacion. Corrigelo en QTracking, en Pedidos devueltos, y reenvialo:"
+    ? "logística devolvió un pedido tuyo porque le falta información. Corrígelo en QTracking, en Pedidos devueltos, y reenvíalo:"
     : "cartera rechazó un pedido tuyo:";
+  // El boton abre QTracking directo en Pedidos devueltos (?vista=devueltos).
+  const enlace = `${appUrl}/?vista=devueltos`;
+  const boton = devuelto
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 0"><tr><td style="border-radius:10px;background:#6d42d8">
+        <a href="${esc(enlace)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:10px">Abrir QTracking</a>
+      </td></tr></table>`
+    : "";
   const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:24px;background:#f6f5fa;font-family:Arial,sans-serif;color:#17141f">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e7e5ee;border-radius:12px;padding:24px">
-    <div style="font-size:13px;color:#77738a">QTracking · ${devuelto ? "Logistica" : "Cartera"}</div>
+    <div style="font-size:13px;color:#77738a">QTracking · ${devuelto ? "Logística" : "Cartera"}</div>
     <h1 style="font-size:20px;margin:6px 0 16px">${titulo}</h1>
     <p style="margin:0 0 16px;font-size:14px">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, ${intro}</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px">
       ${filas.map(([k, v]) => `<tr><td style="padding:8px 0;color:#77738a;width:160px;vertical-align:top">${k}</td><td style="padding:8px 0;font-weight:bold">${esc(v)}</td></tr>`).join("")}
     </table>
+    ${boton}
     <p style="margin:20px 0 0;font-size:12px;color:#77738a">Este es un aviso automático; no respondas a este correo.</p>
   </div></body></html>`;
-  const texto = `${devuelto ? "Pedido devuelto por logistica" : "Pedido rechazado por cartera"}\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}\n\nEste es un aviso automatico.`;
+  const texto = `${devuelto ? "Pedido devuelto por logística" : "Pedido rechazado por cartera"}\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}${devuelto ? `\n\nCorrígelo en QTracking: ${enlace}` : ""}\n\nEste es un aviso automático.`;
 
   try {
     const transporte = nodemailer.createTransport({
