@@ -60,6 +60,7 @@ import { PromesasMovil, CiudadesMovil, ResumenMovil } from './modules/configurac
 import { BotonEliminar } from './components/ui/listas';
 import { TransportistasMovil, PaqueteriasMovil } from './modules/red/RedMovil';
 import { limpiarUsuario } from './utils/usuarios';
+import { SELECT_GUIAS_FACTURA, normalizarGuiaFactura } from './utils/envioFactura';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -164,11 +165,11 @@ async function obtenerFacturasConGuias() {
   .from('facturas_proveedor').select('*').order('created_at', { ascending: false }).order('id'));
  const guias = await traerTodas(() => supabase
   .from('factura_guias')
-  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho,'
-   + 'fecha_real,fecha_pedido,guia_paqueteria,ciudad_origen_codigo,ciudad_origen_nombre,notas)')
+  .select(SELECT_GUIAS_FACTURA)
   .order('id'));
  const porFactura = {};
- (guias || []).forEach(g => {
+ // Pedido, devolucion o recogida: g.pedidos queda con el envio (utils/envioFactura).
+ (guias || []).map(normalizarGuiaFactura).forEach(g => {
   if (!porFactura[g.factura_id]) porFactura[g.factura_id] = [];
   porFactura[g.factura_id].push(g);
  });
@@ -6938,7 +6939,7 @@ export default function SomosProTracking() {
    case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
-    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
+    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} recargar={recargarFacturas}/>
     : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}/>;
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} pedidos={pedidos} showToast={showToast} recargar={recargarCiudades}/>;

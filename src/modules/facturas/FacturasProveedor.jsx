@@ -22,7 +22,7 @@ import { mensajeError } from '../../utils/errors';
 import { exportarCSVFacturaProveedor } from '../../utils/facturasCsv';
 import { hoyLocal } from '../../utils/fechas';
 import { armarLineasInforme, descargarInformeCSV, exportarInformePDF } from '../../utils/informeFletes';
-import { PaginationControls } from '../../components/ui/PaginationControls';
+import { TIPO_ENVIO, claveGuia } from '../../utils/envioFactura';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -30,7 +30,7 @@ const iSt = {
  width:"100%",boxSizing:"border-box",
 };
 
-export function FacturasProveedor({ facturas, transportistas, pedidos, showToast, recargar }) {
+export function FacturasProveedor({ facturas, transportistas, pedidos, devoluciones = [], recogidas = [], showToast, recargar }) {
  const [modNueva, setModNueva] = useState(false);
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
@@ -179,6 +179,8 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
     <ModalFacturaGuias
      factura={modDet}
      pedidos={pedidos}
+     devoluciones={devoluciones}
+     recogidas={recogidas}
      transportistas={transportistas}
      showToast={showToast}
      recargar={async()=>{ if(recargar) await recargar(); setModDet(null); }}
@@ -265,8 +267,8 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
          <th style={th}>Transportista</th>
          <th style={th}>Fecha</th>
          <th style={{...th, textAlign:"right"}}>Valor</th>
-         <th style={{...th, textAlign:"right"}}>Guias</th>
-         <th style={{...th, textAlign:"right"}}>Cajas</th>
+         <th style={{...th, textAlign:"right"}} title="Pedidos, devoluciones y recogidas">Guias</th>
+         <th style={{...th, textAlign:"right"}}>Cajas / und.</th>
          <th style={{...th, textAlign:"right"}}>Acciones</th>
         </tr>
        </thead>
@@ -321,7 +323,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
  );
 }
 
-function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recargar, onClose, formatCOP }) {
+function ModalFacturaGuias({ factura, pedidos, devoluciones = [], recogidas = [], transportistas, showToast, recargar, onClose, formatCOP }) {
  const [guiasRel,  setGuiasRel]  = useState(factura.factura_guias || []);
  const [pedidoSel, setPedidoSel] = useState("");
  const [guard,   setGuard]   = useState(false);
@@ -329,24 +331,28 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
 
  const trans = transportistas.find(t => t.id === factura.transportista_id);
 
- // Pedidos disponibles (no ya relacionados, filtrados por transportista via nit_proveedor)
- const pedidosRel  = guiasRel.map(g => g.pedido_id);
- // Solo pedidos del transportista de la factura, ya entregados, no relacionados an
+ // Envios que se pueden relacionar: pedidos, devoluciones y recogidas del
+ // transportista de la factura, ya entregados (o con novedad) y que no esten
+ // ya en ella. La clave dice el tipo: "pedido:ID", "devolucion:ID", "recogida:ID".
+ const yaRel = new Set(guiasRel.map(claveGuia));
  const transNit = trans?.nit || "";
- const pedidosFiltrados = pedidos.filter(p => {
-  if (pedidosRel.includes(p.id)) return false;
-  // Debe ser entregado o con novedad
-  if (!["entregado","novedad"].includes(p.estado)) return false;
-  // Debe pertenecer al transportista de la factura
-  if (transNit && p.nit_proveedor !== transNit) return false;
-  if (busqPed) {
-   const q = busqPed.toLowerCase();
-   return p.id.toLowerCase().includes(q) ||
-       (p.guia_interna||"").toLowerCase().includes(q) ||
-       (p.factura||"").toLowerCase().includes(q) ||
-       (p.cliente||"").toLowerCase().includes(q);
-  }
-  return true;
+ const [tipoSel, setTipoSel] = useState("todos");
+ const candidatos = [
+  ...pedidos.map(p => ({ clave:`pedido:${p.id}`, tipo:"pedido", x:p, guia:p.guia_interna, ref:p.id,
+   texto:[p.id, p.guia_interna, p.factura, p.cliente], cant:p.cajas, unidad:"cajas" })),
+  ...devoluciones.map(d => ({ clave:`devolucion:${d.id}`, tipo:"devolucion", x:d, guia:d.guia, ref:d.pedido_ref,
+   texto:[d.guia, d.factura, d.pedido_ref, d.ciudad_nombre], cant:d.unidades, unidad:"und." })),
+  ...recogidas.map(r => ({ clave:`recogida:${r.id}`, tipo:"recogida", x:r, guia:r.guia, ref:"",
+   texto:[r.guia, r.ciudad_recogida_nombre, r.ciudad_entrega_nombre], cant:r.unidades, unidad:"und." })),
+ ];
+ const q = busqPed.toLowerCase();
+ const pedidosFiltrados = candidatos.filter(c => {
+  if (yaRel.has(c.clave)) return false;
+  if (tipoSel !== "todos" && c.tipo !== tipoSel) return false;
+  // Debe estar entregado o con novedad, y ser del transportista de la factura
+  if (!["entregado","novedad"].includes(c.x.estado)) return false;
+  if (transNit && c.x.nit_proveedor !== transNit) return false;
+  return !q || c.texto.some(v => String(v || "").toLowerCase().includes(q));
  });
 
  // Calcular valor por guia
@@ -354,12 +360,14 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
  const valorCaja = totalCajas > 0 ? factura.valor_total / totalCajas : 0;
 
  const agregarGuia = async () => {
-  if (!pedidoSel) { showToast("Selecciona un pedido", "error"); return; }
+  if (!pedidoSel) { showToast("Selecciona un pedido, devolucion o recogida", "error"); return; }
+  const [tipo, ...resto] = pedidoSel.split(":");
+  const columna = { pedido:"pedido_id", devolucion:"devolucion_id", recogida:"recogida_id" }[tipo];
   setGuard(true);
   try {
    const { error } = await supabase.from('factura_guias').insert({
     factura_id: factura.id,
-    pedido_id: pedidoSel,
+    [columna]: resto.join(":"),
    });
    if (error) { showToast(mensajeError(error, "la guia relacionada"), "error"); setGuard(false); return; }
    showToast(" Guia relacionada", "success");
@@ -393,21 +401,31 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
 
     {/* Agregar guia */}
     <div style={{background:"#f8fafc",borderRadius:12,padding:14,border:"1px solid #e2e8f0"}}>
-     <div style={{fontWeight:700,marginBottom:10,fontSize:13}}> Relacionar Pedido/Guia</div>
-     <input value={busqPed} onChange={e=>setBusqPed(e.target.value)}
-      placeholder=" Buscar por pedido, guia interna, factura o cliente..."
-      style={{...iSt,marginBottom:10}}/>
+     <div style={{fontWeight:700,marginBottom:10,fontSize:13}}> Relacionar pedido, devolución o recogida</div>
+     <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+      <input value={busqPed} onChange={e=>setBusqPed(e.target.value)}
+       placeholder=" Buscar por pedido, guia, factura, cliente o ciudad..."
+       style={{...iSt,flex:1,minWidth:220}}/>
+      <select value={tipoSel} onChange={e=>{setTipoSel(e.target.value);setPedidoSel("");}} style={{...iSt,width:"auto"}}>
+       <option value="todos">Todos</option>
+       <option value="pedido">Pedidos</option>
+       <option value="devolucion">Devoluciones</option>
+       <option value="recogida">Recogidas</option>
+      </select>
+     </div>
      <div style={{fontSize:11,color:"#64748b",marginBottom:6,padding:"6px 10px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
-       Solo muestra pedidos <strong>entregados</strong> del transportista <strong>{trans?.nombre||""}</strong>
+       Solo muestra lo <strong>entregado</strong> del transportista <strong>{trans?.nombre||""}</strong>. En devoluciones y recogidas, las unidades cuentan como cajas para repartir el valor.
      </div>
      <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
       <Field label="" value={pedidoSel} onChange={setPedidoSel} as="select"
        style={{flex:1}}
        options={[
-        {value:"",label:pedidosFiltrados.length===0?" Sin pedidos entregados disponibles ":" Seleccione pedido "},
-        ...pedidosFiltrados.slice(0,50).map(p=>({
-         value:p.id,
-         label:`${p.id} ${p.guia_interna||"sin guia"} ${p.cliente} ${p.cajas} cajas ${p.fecha_real||""}`
+        {value:"",label:pedidosFiltrados.length===0?" Nada entregado disponible ":" Seleccione "},
+        ...pedidosFiltrados.slice(0,50).map(c=>({
+         value:c.clave,
+         label: c.tipo === "pedido"
+          ? `Pedido · ${c.x.id} · ${c.x.guia_interna||"sin guia"} · ${c.x.cliente||""} · ${c.x.cajas||0} cajas · ${c.x.fecha_real||""}`
+          : `${TIPO_ENVIO[c.tipo]} · ${c.guia||"sin guia"}${c.ref ? ` · pedido ${c.ref}` : ""} · ${c.tipo === "recogida" ? (c.x.ciudad_recogida_nombre||"") : (c.x.ciudad_nombre||"")} · ${c.cant||0} und. · ${c.x.fecha_real||""}`
         }))
        ]}/>
       <Btn disabled={guard||!pedidoSel} onClick={agregarGuia}>
@@ -427,7 +445,7 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
        <thead style={{background:"#f8fafc"}}>
         <tr>
-         {["Pedido","Guia Interna","Cliente","Cajas","Valor Guia","Factura Int.","Quitar"].map(h=>(
+         {["Tipo","Pedido","Guia Interna","Cliente","Cajas/Und","Valor Guia","Factura Int.","Quitar"].map(h=>(
           <th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:700,color:"#475569",fontSize:11}}>{h}</th>
          ))}
         </tr>
@@ -439,7 +457,8 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
          const valorGuia = totalCajas>0 ? Math.round(valorCaja*cajasGuia) : 0;
          return (
           <tr key={g.id} style={{borderTop:"1px solid #f1f5f9",background:i%2?"#fafafa":"#fff"}}>
-           <td style={{padding:"9px 12px",fontWeight:700,fontFamily:"monospace",fontSize:11}}>{p?.id||""}</td>
+           <td style={{padding:"9px 12px",fontSize:11,fontWeight:600,color:"#475569"}}>{TIPO_ENVIO[p?.envio]||"Pedido"}</td>
+           <td style={{padding:"9px 12px",fontWeight:700,fontFamily:"monospace",fontSize:11}}>{p?.pedido_px ?? p?.id ?? ""}</td>
            <td style={{padding:"9px 12px",fontFamily:"monospace",fontSize:11,color:"#7c3aed"}}>{p?.guia_interna||""}</td>
            <td style={{padding:"9px 12px",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p?.cliente||""}</td>
            <td style={{padding:"9px 12px",textAlign:"center",fontWeight:700}}>{cajasGuia}</td>
@@ -454,7 +473,7 @@ function ModalFacturaGuias({ factura, pedidos, transportistas, showToast, recarg
         })}
         {/* Total row */}
         <tr style={{background:"#f5f3ff",fontWeight:700,borderTop:"2px solid #ddd6fe"}}>
-         <td colSpan={3} style={{padding:"9px 12px",textAlign:"right",fontSize:12}}>TOTALES</td>
+         <td colSpan={4} style={{padding:"9px 12px",textAlign:"right",fontSize:12}}>TOTALES</td>
          <td style={{padding:"9px 12px",textAlign:"center"}}>{totalCajas}</td>
          <td style={{padding:"9px 12px",color:"#7c3aed"}}>{formatCOP(factura.valor_total)}</td>
          <td colSpan={2}></td>

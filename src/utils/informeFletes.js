@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { imprimirHTML } from './imprimir';
+import { TIPO_ENVIO } from './envioFactura';
 
 const escHTML = (v) => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -17,9 +18,11 @@ const escHTML = (v) => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", 
 //   Sede origen       la sede cuyo DANE es el DANE origen del pedido
 //   Valor flete       valor de la factura repartido por las cajas de sus guias
 //   Observaciones     pedidos.notas
+//   Tipo              Pedido, Devolucion o Recogida (utils/envioFactura). En las
+//                     devoluciones y recogidas las cajas son sus unidades.
 
 export const COLUMNAS_INFORME_FLETES = [
- "Guia tercero", "Guia propia", "Fecha envio", "Fecha pedido", "Fecha corte", "Fecha entrega",
+ "Tipo", "Guia tercero", "Guia propia", "Fecha envio", "Fecha pedido", "Fecha corte", "Fecha entrega",
  "Proveedor", "Factura proveedor", "Factura PX", "Pedido PX", "Origen", "DANE origen",
  "Destino", "DANE destino", "Sede origen", "Cajas", "Valor flete", "Observaciones",
 ];
@@ -60,7 +63,8 @@ async function datosCartera(ids) {
 }
 
 export async function armarLineasInforme(facturas, transportistas) {
- const ids = facturas.flatMap(f => (f.factura_guias || []).map(g => g.pedidos?.id || g.pedido_id));
+ // Solo los pedidos pueden venir de cartera; las devoluciones y recogidas no.
+ const ids = facturas.flatMap(f => (f.factura_guias || []).filter(g => g.pedido_id).map(g => g.pedidos?.id || g.pedido_id));
  const { porNumero, sedePorDane } = await datosCartera(ids);
  const lineas = [];
  facturas.forEach(fac => {
@@ -70,9 +74,10 @@ export async function armarLineasInforme(facturas, transportistas) {
   const valorCaja = totalCajas > 0 ? Number(fac.valor_total || 0) / totalCajas : 0;
   guias.forEach(g => {
    const p = g.pedidos || {};
-   const c = porNumero.get(String(p.id || g.pedido_id || "").trim());
+   const c = g.pedido_id ? porNumero.get(String(p.id || g.pedido_id || "").trim()) : null;
    const cajas = Number(p.cajas) || 0;
    lineas.push({
+    tipo: TIPO_ENVIO[p.envio] || "Pedido",
     guiaTercero: p.guia_paqueteria || "",
     guiaPropia: p.guia_interna || "",
     fechaEnvio: p.fecha_despacho || "",
@@ -82,7 +87,7 @@ export async function armarLineasInforme(facturas, transportistas) {
     proveedor: trans?.nombre || "",
     facturaProveedor: fac.numero_factura || "",
     facturaPX: p.factura || "",
-    pedidoPX: p.id || g.pedido_id || "",
+    pedidoPX: p.pedido_px ?? (p.id || g.pedido_id || ""),
     origen: p.ciudad_origen_nombre || "",
     daneOrigen: p.ciudad_origen_codigo || "",
     destino: p.ciudad_nombre || "",
@@ -98,7 +103,7 @@ export async function armarLineasInforme(facturas, transportistas) {
 }
 
 const filaDe = (l) => [
- l.guiaTercero, l.guiaPropia, l.fechaEnvio, l.fechaPedido, l.fechaCorte, l.fechaEntrega,
+ l.tipo, l.guiaTercero, l.guiaPropia, l.fechaEnvio, l.fechaPedido, l.fechaCorte, l.fechaEntrega,
  l.proveedor, l.facturaProveedor, l.facturaPX, l.pedidoPX, l.origen, l.daneOrigen,
  l.destino, l.daneDestino, l.sedeOrigen, l.cajas, l.valorFlete, l.observaciones,
 ];
@@ -126,9 +131,9 @@ export function exportarInformePDF(lineas, { nombre, periodo }) {
  const totalCajas = lineas.reduce((a, l) => a + l.cajas, 0);
  const totalFlete = lineas.reduce((a, l) => a + l.valorFlete, 0);
  const facturas = new Set(lineas.map(l => l.facturaProveedor)).size;
- const derecha = new Set([15, 16]);
+ const derecha = new Set([16, 17]);
  // Solo los textos largos pasan a otra linea; codigos, fechas y valores no se parten.
- const ajusta = new Set([6, 10, 12, 14, 17]);
+ const ajusta = new Set([7, 11, 13, 15, 18]);
  const clase = (i) => [derecha.has(i) ? "der" : "", ajusta.has(i) ? "ajusta" : ""].filter(Boolean).join(" ");
  const attr = (i) => clase(i) ? ` class="${clase(i)}"` : "";
  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escHTML(nombre)}</title><style>
@@ -156,8 +161,8 @@ export function exportarInformePDF(lineas, { nombre, periodo }) {
   <table class="datos">
    <thead><tr>${COLUMNAS_INFORME_FLETES.map((c, i) => `<th${attr(i)}>${escHTML(c)}</th>`).join("")}</tr></thead>
    <tbody>
-    ${lineas.map(l => `<tr>${filaDe(l).map((v, i) => `<td${attr(i)}>${escHTML(i === 16 ? cop(v) : i === 15 ? Number(v).toLocaleString("es-CO") : v)}</td>`).join("")}</tr>`).join("")}
-    <tr class="total"><td colspan="15">Total</td><td class="der">${totalCajas.toLocaleString("es-CO")}</td><td class="der">${cop(totalFlete)}</td><td></td></tr>
+    ${lineas.map(l => `<tr>${filaDe(l).map((v, i) => `<td${attr(i)}>${escHTML(i === 17 ? cop(v) : i === 16 ? Number(v).toLocaleString("es-CO") : v)}</td>`).join("")}</tr>`).join("")}
+    <tr class="total"><td colspan="16">Total</td><td class="der">${totalCajas.toLocaleString("es-CO")}</td><td class="der">${cop(totalFlete)}</td><td></td></tr>
    </tbody>
   </table>
  </td></tr></tbody></table></body></html>`;
