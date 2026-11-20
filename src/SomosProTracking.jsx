@@ -22,6 +22,7 @@ import { RegistrarEntregaOperador } from './modules/pedidos/RegistrarEntregaOper
 import { NuevoPedidoMovil } from './modules/pedidos/NuevoPedidoMovil';
 import { GestionEnvioMovil } from './modules/gestion/GestionEnvioMovil';
 import { GestionPqrsMovil } from './modules/gestion/GestionPqrsMovil';
+import { HiloPqrs, agregarObservacionPqrs } from './modules/gestion/HiloPqrs';
 import { ConteosTransp, BloqueTransp, TarjetaConductorTransp, TarjetaPedidoTransp } from './modules/transportista/TransportistaMovil';
 import { useEsMovil, ALTO_BARRA } from './design/responsive';
 import { LinkCompartir } from './components/share/LinkCompartir';
@@ -5704,7 +5705,6 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  const [busq,    setBusq]    = useState("");
  const [filtroEst, setFiltroEst] = useState("todos");
  const [gestion,  setGestion]  = useState("");
- const [gestionSoporte, setGestionSoporte] = useState({ data:null, nombre:"" });
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
  const vacio = { factura:"", pedido_ref:"", motivo:"", descripcion:"" };
@@ -5763,55 +5763,45 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  };
 
  const yaGestionada = (x) => Boolean((x?.respuesta||"").trim() || x?.fecha_gestion || x?.gestionado_por);
+ // Gestionar una PQRS (escribir como logistica y cerrarla) es tarea de la
+ // operacion. El cliente interno ve el hilo de las suyas y tambien escribe.
+ const puedeGestionar = ["admin", "operador"].includes(user.rol);
 
- // El texto y el soporte llegan por parametro cuando la gestion se registra
- // desde la pantalla del celular (disenio 20), que lleva su propio estado; el
- // modal de escritorio sigue usando el estado del modulo. estadoFinal permite
- // registrar la respuesta y cerrar en el mismo paso.
- //
- // Una respuesta registrada solo la puede cambiar el admin, tambien con la PQRS
- // cerrada (docs/pqrs_admin_editar_respuesta.sql). Al editar se conserva quien
- // y cuando la registro, y el soporte solo se cambia si se adjunta uno nuevo.
- const guardarGestion = async (texto = gestion, soporte = gestionSoporte, estadoFinal = null) => {
-  const editando = yaGestionada(modGestion);
-  if (editando && !esAdmin) {
-   showToast("La respuesta de esta PQRS ya fue registrada y no se puede editar","error");
-   return false;
-  }
-  if (!String(texto || "").trim()) { showToast("Escribe una respuesta de gestion","error"); return false; }
-  const cambios = { respuesta:String(texto).trim(),
-   estado: estadoFinal || (modGestion.estado === "abierta" ? "en_gestion" : modGestion.estado) };
-  if (!editando) { cambios.gestionado_por = user.nombre||user.user; cambios.fecha_gestion = hoyLocal(); }
-  if (!editando || soporte?.data) { cambios.soporte_data = soporte?.data || null; cambios.soporte_nombre = soporte?.nombre || ""; }
-  const { error } = await supabase.from('pqrs').update(cambios).eq('id', modGestion.id);
-  if (error) { showToast(mensajeError(error, "la gestion de PQRS"),"error"); return false; }
-  setModGestion(null); setGestion(""); setGestionSoporte({ data:null, nombre:"" });
-  showToast(estadoFinal === "cerrada" ? "Caso cerrado" : editando ? " Gestion actualizada" : " Gestion registrada","success");
-  if (recargar) await recargar();
-  return true;
- };
-
- // Cerrar desde el modal de escritorio: si hay una respuesta escrita que
- // todavia no se registro (o el admin la cambio), se guarda junto con el
- // cierre; antes se cerraba y lo escrito se perdia.
+ // Las observaciones van en un hilo (HiloPqrs, docs/pqrs_observaciones.sql):
+ // se escriben cuantas se necesiten mientras la PQRS no este cerrada. Lo que
+ // quede escrito al cerrar se guarda primero como observacion.
+ const [hayObservaciones, setHayObservaciones] = useState(0);
  const cerrarDesdeModal = async () => {
-  const texto = gestion.trim();
-  if (texto && texto !== (modGestion.respuesta||"").trim()) { await guardarGestion(gestion, gestionSoporte, "cerrada"); return; }
+  if (gestion.trim()) {
+   const { error } = await agregarObservacionPqrs(modGestion.id, gestion);
+   if (error) { showToast(mensajeError(error, "la observacion"), "error"); return; }
+   setGestion("");
+  }
   await cerrar(modGestion.id, "cerrada");
   setModGestion(null);
+ };
+ // Al agregar una observacion de logistica la base pasa la PQRS a en gestion.
+ const alCambiarHilo = async () => {
+  if (puedeGestionar) setModGestion(m => m && m.estado === "abierta" ? { ...m, estado: "en_gestion" } : m);
+  if (recargar) await recargar();
  };
 
  const reabrir = async () => {
   if (!window.confirm("¿Reabrir esta PQRS?")) return;
-  await cerrar(modGestion.id, yaGestionada(modGestion) ? "en_gestion" : "abierta");
+  await cerrar(modGestion.id, yaGestionada(modGestion) || hayObservaciones ? "en_gestion" : "abierta");
   setModGestion(null);
  };
 
- const cargarSoporteGestion = async (files) => {
-  const file = files?.[0];
+ // El soporte de gestion se guarda en la PQRS al elegir el archivo.
+ const subirSoporteGestion = async (file) => {
   if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast("El archivo pesa mas de 5 MB", "error"); return; }
   const data = await fileToBase64(file);
-  setGestionSoporte({ data, nombre:file.name });
+  const { error } = await supabase.from('pqrs').update({ soporte_data: data, soporte_nombre: file.name }).eq('id', modGestion.id);
+  if (error) { showToast(mensajeError(error, "el soporte"), "error"); return; }
+  setModGestion(m => m ? { ...m, soporte_nombre: file.name } : m);
+  showToast("Soporte guardado", "success");
+  if (recargar) await recargar();
  };
 
  const cerrar = async (id, estado) => {
@@ -5823,8 +5813,6 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
 
  const esCliente = user.rol==="cliente";
  const esAdmin = user.rol==="admin";
- // Gestionar una PQRS (responder y cerrarla) es tarea de la operacion, no del cliente.
- const puedeGestionar = ["admin", "operador"].includes(user.rol);
  const esOperador = user.rol==="admin"||user.rol==="operador";
  const filt = pqrs.filter(p=>{
   if (esCliente && ![user.nombre, user.user].includes(p.solicitado_por)) return false;
@@ -5848,7 +5836,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
    <PqrsMovil vistaCliente={esCliente}
     items={pqrs.filter(p => !esCliente || [user.nombre, user.user].includes(p.solicitado_por))}
     sobre={esCliente ? (user.nombre || user.user) : "Peticiones, quejas, reclamos y sugerencias"}
-    onAbrir={x => { setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}
+    onAbrir={x => { setGestion(""); setModGestion(x); }}
     onNueva={() => setModNueva(true)} onEditar={abrirEditarCliente} />
    {(modNueva||modEditar)&&(
     <FormPqrsMovil form={form} setForm={setForm} pedidos={pedidos || []} motivos={MOTIVOS}
@@ -5856,10 +5844,12 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
    )}
    {modGestion&&(
     <GestionPqrsMovil item={modGestion} puedeGestionar={puedeGestionar} esAdmin={esAdmin}
+     usuarioId={user.id} puedeEscribir={["abierta","en_gestion"].includes(modGestion.estado)}
+     borrador={gestion} setBorrador={setGestion} onCambio={alCambiarHilo} onCargado={setHayObservaciones}
+     hayObservaciones={hayObservaciones}
      onClose={()=>setModGestion(null)}
-     onReabrir={async ()=>{ await cerrar(modGestion.id, yaGestionada(modGestion) ? "en_gestion" : "abierta"); setModGestion(null); }}
-     onRegistrar={(texto, soporte)=>guardarGestion(texto, soporte)}
-     onCerrar={async ()=>{ await cerrar(modGestion.id, "cerrada"); setModGestion(null); }}
+     onReabrir={async ()=>{ await cerrar(modGestion.id, yaGestionada(modGestion) || hayObservaciones ? "en_gestion" : "abierta"); setModGestion(null); }}
+     onCerrar={cerrarDesdeModal}
      onSoporte={(x)=>abrirArchivoRemoto("pqrs", x.id, "soporte_data", "soporte_nombre", x.soporte_nombre || "soporte", showToast)}
      showToast={showToast}/>
    )}
@@ -5960,15 +5950,12 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
             )}
             {puedeGestionar && ["abierta","en_gestion"].includes(x.estado) && (
              <button style={{ ...botonFila, background:T.color.marca, border:"none", color:"#fff" }}
-              onClick={()=>{ setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}>
+              onClick={()=>{ setGestion(""); setModGestion(x); }}>
               Gestionar
              </button>
             )}
-            {esAdmin && !["abierta","en_gestion"].includes(x.estado) && (
-             <button style={botonFila}
-              onClick={()=>{ setGestion(x.respuesta || ""); setGestionSoporte({ data:null, nombre:"" }); setModGestion(x); }}>
-              Editar
-             </button>
+            {(!puedeGestionar || !["abierta","en_gestion"].includes(x.estado)) && (
+             <button style={botonFila} onClick={()=>{ setGestion(""); setModGestion(x); }}>Ver</button>
             )}
             {esCliente && x.estado==="abierta" && (
              <button style={botonFila} onClick={()=>abrirEditarCliente(x)}>Editar</button>
@@ -6017,8 +6004,8 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
      : modGestion.estado==="en_gestion" ? { fondo:T.color.ojoSuave, texto:T.color.ojo, punto:T.color.ojoPunto, label:"En gestion" }
      : modGestion.estado==="cerrada" ? { fondo:T.color.bienSuave, texto:T.color.bien, punto:T.color.bienPunto, label:"Cerrada" }
      : { fondo:T.color.superficie3, texto:T.color.tinta2, punto:T.color.neutroPunto, label:ESTADOS_PQRS[modGestion.estado]?.label || modGestion.estado };
-    // El operador no puede cambiar una respuesta ya registrada; el admin si.
-    const editableG = !gestionadaG || esAdmin;
+    // Escriben logistica y el cliente interno mientras no este cerrada.
+    const escribeG = abiertaG && (puedeGestionar || esCliente);
     return (
    <ModalGestion
     titulo="PQRS"
@@ -6034,18 +6021,22 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
       {chipG.label}
      </span>
     }
-    descripcion={gestionadaG ? (esAdmin ? "Como admin puedes corregir la respuesta" : "La respuesta ya fue registrada") : "Registra la respuesta al cliente"}
-    ancho="S"
+    descripcion={puedeGestionar ? "Observaciones de la gestión hasta cerrar el caso" : "Seguimiento de tu PQRS"}
+    ancho="M"
     onClose={()=>setModGestion(null)}
-    onGuardar={editableG ? ()=>guardarGestion() : undefined}
-    textoGuardar={gestionadaG ? "Guardar cambios" : "Registrar gestion"}
-    textoCierre={abiertaG ? "Cerrar PQRS" : undefined}
-    onCierre={abiertaG ? cerrarDesdeModal : undefined}
-    cierreDeshabilitado={!gestion.trim() && !modGestion.respuesta}
-    enlaces={esAdmin && !abiertaG ? (
-     <button onClick={reabrir} style={{ border:"none", background:"transparent", padding:0, cursor:"pointer",
-      fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca }}>Reabrir PQRS</button>
-    ) : null}
+    textoCancelar="Salir"
+    textoCierre={abiertaG && puedeGestionar ? "Cerrar PQRS" : undefined}
+    onCierre={abiertaG && puedeGestionar ? cerrarDesdeModal : undefined}
+    cierreDeshabilitado={!gestion.trim() && !modGestion.respuesta && !hayObservaciones}
+    enlaces={<>
+     {(modGestion.soporte_nombre || modGestion.soporte_data) && (
+      <EnlacePie icono={<FileText size={15} />} onClick={()=>abrirArchivoRemoto("pqrs", modGestion.id, "soporte_data", "soporte_nombre", modGestion.soporte_nombre || "soporte", showToast)}>Soporte</EnlacePie>
+     )}
+     {esAdmin && !abiertaG && (
+      <button onClick={reabrir} style={{ border:"none", background:"transparent", padding:0, cursor:"pointer",
+       fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca }}>Reabrir PQRS</button>
+     )}
+    </>}
    >
     <Resumen titulo={modGestion.descripcion} datos={[
      { label:"Tipo", valor:modGestion.motivo },
@@ -6057,21 +6048,14 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
      ...(gestionadaG ? [{ label:"Gestionado por", valor:[modGestion.gestionado_por, modGestion.fecha_gestion].filter(Boolean).join(" · ") || "-" }] : []),
     ]}/>
 
-    {editableG ? (
-     <AreaTexto label="Respuesta / gestion realizada" obligatorio filas={4}
-      valor={gestion} onChange={setGestion}
-      placeholder="Describe la gestion realizada..." />
-    ) : (
-     <div style={{ fontSize:13.5, color:T.color.tinta, whiteSpace:"pre-line", lineHeight:1.45 }}>
-      <div style={{ fontSize:12.5, fontWeight:600, color:T.color.tinta2, marginBottom:6 }}>Respuesta registrada</div>
-      {modGestion.respuesta}
-     </div>
-    )}
+    <HiloPqrs pqrs={modGestion} usuarioId={user.id} puedeEscribir={escribeG}
+     borrador={gestion} setBorrador={setGestion} onCambio={alCambiarHilo}
+     onCargado={setHayObservaciones} showToast={showToast} />
 
-    {editableG && (
-     <Adjunto label={gestionadaG && (modGestion.soporte_nombre || modGestion.soporte_data) ? "Reemplazar soporte de gestion" : "Soporte de gestion"} nombre={gestionSoporte.nombre}
+    {puedeGestionar && abiertaG && (
+     <Adjunto label={modGestion.soporte_nombre ? `Soporte de gestión · ${modGestion.soporte_nombre}` : "Soporte de gestión"} nombre=""
       acepta="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-      onArchivo={(file)=>cargarSoporteGestion([file])} />
+      onArchivo={(file)=>subirSoporteGestion(file)} />
     )}
    </ModalGestion>
     );

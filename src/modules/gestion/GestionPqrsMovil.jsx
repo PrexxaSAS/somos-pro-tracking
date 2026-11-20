@@ -1,31 +1,23 @@
-import React, { useRef, useState } from 'react';
-import { Check, FileText, HelpCircle, History, Paperclip, Plus, X } from 'lucide-react';
+import React from 'react';
+import { Check, HelpCircle, Paperclip, X } from 'lucide-react';
 import { T } from '../../design/tokens';
-import { fileToBase64 } from '../../utils/files';
 import { fechaCorta } from '../pedidos/DetallePedidoMovil';
 import { hoyLocal } from '../../utils/fechas';
+import { HiloPqrs } from './HiloPqrs';
 
-// Disenio 20: admin y operador gestionan una PQRS desde el celular. Misma
-// estructura que la gestion de devoluciones (19): pantalla completa, cabecera
-// fija con cerrar, titulo y numero, y pie con dos acciones, "Registrar
-// gestion" (primaria) y "Cerrar PQRS" (verde). Cancelar es la X.
+// Disenio 20: la PQRS en el celular. Pantalla completa, cabecera fija con
+// cerrar, titulo y numero; el tipo va como rotulo y la descripcion como titulo
+// de la tarjeta, con filas etiqueta/valor y el tiempo que lleva abierta en
+// ambar, que es lo que define la urgencia.
 //
-// El tipo de PQRS va como rotulo y la descripcion como titulo de la tarjeta,
-// no como una celda que se parte en seis lineas. Debajo, filas etiqueta/valor
-// y el tiempo que lleva abierta en ambar: es lo que define la urgencia y la
-// grilla de escritorio no lo muestra.
+// Debajo, el hilo de observaciones (HiloPqrs), el mismo del escritorio:
+// logistica y el cliente interno escriben cuantas veces necesiten hasta que se
+// cierre. El pie lleva "Cerrar PQRS" para logistica y "Reabrir" para el admin
+// cuando ya esta cerrada.
 //
-// La base guarda UNA gestion por PQRS (respuesta, gestionado_por,
-// fecha_gestion). El disenio dibuja un historial de varias; aqui la gestion
-// registrada se muestra como esa linea de tiempo, con una sola entrada, y
-// despues de registrada el operador ya solo puede cerrar. El admin puede
-// corregir la respuesta, tambien con el caso cerrado, y reabrirlo. Permitir
-// varias gestiones es un cambio de datos, no de pantalla.
-//
-// Esta pantalla no decide nada: llama a los mismos onRegistrar y onCerrar que
-// el modal de escritorio.
-
-const MAX = 500;
+// Esta pantalla no decide nada: llama a los mismos onCerrar y onReabrir que el
+// modal de escritorio, y el borrador lo lleva el modulo para que al cerrar se
+// guarde lo que quedo escrito.
 
 const diasAbierta = (iso) => {
  if (!iso) return null;
@@ -43,13 +35,10 @@ function Fila({ etiqueta, valor, mono, ambar }) {
  );
 }
 
-export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onReabrir, onSoporte, showToast, puedeGestionar = true, esAdmin = false }) {
- const yaGestionadaIni = Boolean((item.respuesta || "").trim() || item.fecha_gestion || item.gestionado_por);
- const [texto, setTexto] = useState(esAdmin && yaGestionadaIni ? (item.respuesta || "") : "");
- const [soporte, setSoporte] = useState({ data: null, nombre: "", tamano: 0 });
- const [guardando, setGuardando] = useState(false);
- const archivoRef = useRef(null);
-
+export function GestionPqrsMovil({
+ item, onClose, onCerrar, onReabrir, onSoporte, showToast, puedeGestionar = true, esAdmin = false,
+ usuarioId, puedeEscribir = false, borrador = "", setBorrador, onCambio, onCargado, hayObservaciones = 0,
+}) {
  const cerrada = item.estado === "cerrada" || item.estado === "rechazada";
  const yaGestionada = Boolean((item.respuesta || "").trim() || item.fecha_gestion || item.gestionado_por);
  const dias = diasAbierta(item.fecha_creacion);
@@ -60,40 +49,14 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onReabr
   : { bg: T.color.bienSuave, color: T.color.bien, punto: T.color.bienPunto, label: "Cerrada" };
 
  const pista = cerrada ? "Caso cerrado"
-  : yaGestionada ? `1 gestion${dias != null ? ` · abierta hace ${dias} ${dias === 1 ? "dia" : "dias"}` : ""}`
-  : "Registra la respuesta al cliente";
+  : dias != null ? `Abierta hace ${dias} ${dias === 1 ? "dia" : "dias"}` : "";
 
- const elegirArchivo = async (files) => {
-  const file = files?.[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showToast("El archivo pesa mas de 5 MB", "error"); return; }
-  const data = await fileToBase64(file);
-  setSoporte({ data, nombre: file.name, tamano: file.size });
- };
-
- // Formulario de respuesta: para registrarla o, si es admin, para corregirla.
- const editable = puedeGestionar && (esAdmin || (!cerrada && !yaGestionada));
- const cambiada = texto.trim().length > 0 && texto.trim() !== (item.respuesta || "").trim();
- const puedeRegistrar = editable && (yaGestionada ? (cambiada || Boolean(soporte.data)) : texto.trim().length > 0);
- // Igual que en escritorio: se puede cerrar con una respuesta registrada o
- // con una escrita. Ojo: cerrar no guarda lo escrito, por eso se avisa.
- const puedeCerrar = puedeGestionar && !cerrada && (yaGestionada || texto.trim().length > 0);
-
- const registrar = async () => {
-  setGuardando(true);
-  await onRegistrar(texto, { data: soporte.data, nombre: soporte.nombre });
-  setGuardando(false);
- };
-
+ // Se cierra con al menos una observacion, registrada o escrita.
+ const puedeCerrar = puedeGestionar && !cerrada && (yaGestionada || hayObservaciones > 0 || String(borrador || "").trim().length > 0);
  const cerrar = () => {
-  const aviso = !yaGestionada && texto.trim()
-   ? "La respuesta escrita no se ha registrado y no quedara guardada. ¿Cerrar la PQRS de todos modos?"
-   : "¿Cerrar esta PQRS? El cliente ya no podra editarla.";
-  if (!window.confirm(aviso)) return;
+  if (!window.confirm("¿Cerrar esta PQRS? Ya no se podrán agregar observaciones.")) return;
   onCerrar();
  };
-
- const kb = (n) => n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 
  return (
   <div style={{ position: "fixed", inset: 0, zIndex: 118, background: T.color.fondo, display: "flex", flexDirection: "column", color: T.color.tinta }}>
@@ -128,115 +91,33 @@ export function GestionPqrsMovil({ item, onClose, onRegistrar, onCerrar, onReabr
      <Fila etiqueta="Pedido" valor={item.pedido_ref || "—"} mono />
      <Fila etiqueta="Reportado por" valor={item.solicitado_por || "—"} />
      <Fila etiqueta="Fecha" valor={fechaCorta(item.fecha_creacion) || "—"} />
-     {!cerrada && dias != null && (
-      <Fila etiqueta="Abierta hace" valor={`${dias} ${dias === 1 ? "dia" : "dias"}`} ambar />
+     {(item.soporte_nombre || item.soporte_data) && (
+      <Fila etiqueta="Soporte" valor={
+       <button onClick={() => onSoporte(item)} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: T.color.marca, fontWeight: 600, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+        <Paperclip size={13} /> {item.soporte_nombre || "Ver soporte"}
+       </button>
+      } />
      )}
     </section>
 
-    {yaGestionada && (
-     <section style={{ background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: T.radio.tarjeta, padding: "4px 14px 6px", display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 0 10px" }}>
-       <History size={16} style={{ color: T.color.marca }} />
-       <span style={{ fontWeight: 700, fontSize: 14 }}>Gestiones</span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "18px minmax(0,1fr)", gap: 10 }}>
-       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <span style={{ width: 10, height: 10, borderRadius: 5, flexShrink: 0, marginTop: 4, background: T.color.marca, border: `2px solid ${T.color.marca}` }} />
-       </div>
-       <div style={{ display: "flex", flexDirection: "column", gap: 3, paddingBottom: 10 }}>
-        <span style={{ fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-line" }}>{item.respuesta || "Gestion registrada"}</span>
-        <span style={{ fontSize: 12, color: T.color.tinta4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-         {[item.gestionado_por, fechaCorta(item.fecha_gestion)].filter(Boolean).join(" · ")}
-         {(item.soporte_nombre || item.soporte_data) && (
-          <button onClick={() => onSoporte(item)} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: T.color.marca, fontWeight: 600, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
-           <Paperclip size={12} /> {item.soporte_nombre || "Soporte"}
-          </button>
-         )}
-        </span>
-       </div>
-      </div>
-     </section>
-    )}
-
-    {editable && (
-     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-       <span style={{ ...T.texto.seccion, color: T.color.placeholder, whiteSpace: "nowrap" }}>Gestion</span>
-       <div style={{ flex: 1, height: 1, background: T.color.borde2 }} />
-      </div>
-
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-       <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>Respuesta / gestion realizada <span style={{ color: T.color.mal }}>•</span></span>
-       <div style={{ display: "flex", flexDirection: "column", border: `1px solid ${texto ? T.color.marca : T.color.borde2}`, boxShadow: texto ? `0 0 0 3px ${T.color.marcaSuave}` : "none", borderRadius: 12, padding: 12, background: T.color.superficie }}>
-        <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, MAX))} rows={4}
-         placeholder="Que se hizo y que se le respondio al cliente"
-         style={{ border: "none", outline: "none", resize: "vertical", minHeight: 84, padding: 0, background: "transparent", fontFamily: "inherit", fontSize: 14, lineHeight: 1.45, color: T.color.tinta }} />
-        <span style={{ alignSelf: "flex-end", fontSize: 11, color: T.color.placeholder }}>{texto.length} / {MAX}</span>
-       </div>
-      </label>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-       <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>Soporte de gestion <span style={{ color: T.color.placeholder, fontWeight: 400 }}>· opcional</span></span>
-       {soporte.nombre ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: `1px solid ${T.color.borde2}`, borderRadius: 12, background: T.color.superficie }}>
-         <span style={{ width: 36, height: 36, borderRadius: 9, background: T.color.marcaSuave, color: T.color.marca, display: "grid", placeItems: "center", flexShrink: 0 }}><FileText size={16} /></span>
-         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{soporte.nombre}</span>
-          <span style={{ fontSize: 12, color: T.color.tinta3 }}>{kb(soporte.tamano)}</span>
-         </div>
-         <button onClick={() => setSoporte({ data: null, nombre: "", tamano: 0 })} title="Quitar" style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", color: T.color.placeholder, display: "grid", placeItems: "center" }}><X size={16} /></button>
-        </div>
-       ) : (
-        <button onClick={() => archivoRef.current?.click()} style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, border: `1.5px dashed ${T.color.tenue}`, borderRadius: 12, background: T.color.hoverFila, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-         <span style={{ width: 40, height: 40, borderRadius: 10, background: T.color.marcaSuave, color: T.color.marca, display: "grid", placeItems: "center", flexShrink: 0 }}><Paperclip size={18} /></span>
-         <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta }}>Adjuntar archivo</span>
-          <span style={{ fontSize: 12, color: T.color.tinta3 }}>PDF, JPG o PNG · maximo 5 MB</span>
-         </span>
-         <Plus size={18} style={{ color: T.color.marca }} />
-        </button>
-       )}
-       <input ref={archivoRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }}
-        onChange={ev => { elegirArchivo(ev.target.files); ev.target.value = ""; }} />
-      </div>
-     </>
-    )}
-
-    {puedeGestionar && !esAdmin && !cerrada && yaGestionada && (
-     <div style={{ padding: "10px 12px", borderRadius: 10, background: T.color.superficie3, fontSize: 12.5, color: T.color.tinta2, lineHeight: 1.45 }}>
-      La respuesta ya fue registrada y no se puede editar. Lo que queda es cerrar la PQRS.
-     </div>
-    )}
+    <section style={{ background: T.color.superficie, border: `1px solid ${T.color.borde}`, borderRadius: T.radio.tarjeta, padding: 14 }}>
+     <HiloPqrs pqrs={item} usuarioId={usuarioId} puedeEscribir={puedeEscribir}
+      borrador={borrador} setBorrador={setBorrador || (() => {})} onCambio={onCambio} onCargado={onCargado} showToast={showToast} />
+    </section>
    </div>
 
    <footer style={{ flexShrink: 0, display: "flex", gap: 10, padding: "12px 16px", background: T.color.superficie, borderTop: `1px solid ${T.color.borde}`, paddingBottom: `calc(12px + env(safe-area-inset-bottom, 0px))` }}>
     {puedeGestionar && !cerrada ? (
-     <>
-      <button onClick={cerrar} disabled={!puedeCerrar} style={{
-       display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 48, padding: "0 14px", borderRadius: 12,
-       background: yaGestionada ? T.color.bienPunto : T.color.superficie, border: `1px solid ${yaGestionada ? T.color.bienPunto : T.color.bienSuave}`,
-       color: yaGestionada ? "#fff" : T.color.bien, fontFamily: "inherit", fontSize: 14, fontWeight: 600,
-       cursor: puedeCerrar ? "pointer" : "not-allowed", opacity: puedeCerrar ? 1 : 0.5, flexShrink: 0,
-      }}><Check size={16} /> Cerrar PQRS</button>
-      <button onClick={registrar} disabled={!puedeRegistrar || guardando} style={{
-       flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 12, border: "none",
-       background: T.color.marca, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600,
-       cursor: !puedeRegistrar || guardando ? "not-allowed" : "pointer", opacity: !puedeRegistrar || guardando ? 0.5 : 1,
-      }}>{guardando ? "Registrando..." : yaGestionada ? "Guardar cambios" : "Registrar gestion"}</button>
-     </>
+     <button onClick={cerrar} disabled={!puedeCerrar} style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 48, borderRadius: 12, border: "none",
+      background: T.color.bienPunto, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600,
+      cursor: puedeCerrar ? "pointer" : "not-allowed", opacity: puedeCerrar ? 1 : 0.5,
+     }}><Check size={16} /> Cerrar PQRS</button>
     ) : esAdmin && cerrada ? (
-     <>
-      <button onClick={() => { if (window.confirm("¿Reabrir esta PQRS?")) onReabrir(); }} style={{
-       display: "flex", alignItems: "center", justifyContent: "center", height: 48, padding: "0 14px", borderRadius: 12,
-       background: T.color.superficie, border: `1px solid ${T.color.borde2}`, color: T.color.marca,
-       fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer", flexShrink: 0,
-      }}>Reabrir</button>
-      <button onClick={registrar} disabled={!puedeRegistrar || guardando} style={{
-       flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 12, border: "none",
-       background: T.color.marca, color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600,
-       cursor: !puedeRegistrar || guardando ? "not-allowed" : "pointer", opacity: !puedeRegistrar || guardando ? 0.5 : 1,
-      }}>{guardando ? "Guardando..." : "Guardar cambios"}</button>
-     </>
+     <button onClick={() => { if (window.confirm("¿Reabrir esta PQRS?")) onReabrir(); }} style={{
+      flex: 1, height: 48, borderRadius: 12, border: `1px solid ${T.color.borde2}`, background: T.color.superficie,
+      color: T.color.marca, fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer",
+     }}>Reabrir PQRS</button>
     ) : (
      <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 12, border: `1px solid ${T.color.borde2}`, background: T.color.superficie, color: T.color.tinta2, fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
     )}
