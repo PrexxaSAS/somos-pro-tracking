@@ -30,7 +30,8 @@ export function HiloPqrs({ pqrs, usuarioId, puedeEscribir, borrador, setBorrador
  const [obs, setObs] = useState([]);
  const [cargando, setCargando] = useState(true);
  const [enviando, setEnviando] = useState(false);
- const fin = useRef(null);
+ // El cuadro del chat tiene alto maximo y su propio desplazamiento.
+ const caja = useRef(null);
 
  const cargar = async () => {
   const { data, error } = await supabase.from('pqrs_observaciones')
@@ -48,7 +49,9 @@ export function HiloPqrs({ pqrs, usuarioId, puedeEscribir, borrador, setBorrador
   window.addEventListener('pqrs-observacion', alLlegar);
   return () => window.removeEventListener('pqrs-observacion', alLlegar);
  }, [pqrs.id]);
- useEffect(() => { fin.current?.scrollIntoView({ block: "nearest" }); }, [obs.length]);
+ // Se baja al ultimo mensaje moviendo solo el cuadro del chat; scrollIntoView
+ // movia tambien la ventana o la pantalla entera.
+ useEffect(() => { if (caja.current) caja.current.scrollTop = caja.current.scrollHeight; }, [obs.length, cargando]);
 
  // Las PQRS respondidas antes de existir el hilo tienen su respuesta solo en
  // pqrs.respuesta: se muestra como la primera observacion, salvo que ya este
@@ -72,8 +75,8 @@ export function HiloPqrs({ pqrs, usuarioId, puedeEscribir, borrador, setBorrador
  return (
   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
    <span style={{ fontSize: 13, fontWeight: 600, color: T.color.tinta2 }}>Observaciones</span>
-   <div style={{
-    display: "flex", flexDirection: "column", gap: 8, padding: 10, maxHeight: 320, overflowY: "auto",
+   <div ref={caja} style={{
+    display: "flex", flexDirection: "column", gap: 8, padding: 10, maxHeight: "min(320px, 45vh)", overflowY: "auto", overscrollBehavior: "contain",
     background: T.color.superficie2, border: `1px solid ${T.color.borde}`, borderRadius: T.radio.control,
    }}>
     {cargando ? <span style={{ fontSize: 12.5, color: T.color.tinta3, padding: 6 }}>Cargando...</span>
@@ -82,7 +85,7 @@ export function HiloPqrs({ pqrs, usuarioId, puedeEscribir, borrador, setBorrador
       const propia = usuarioId && o.autor_id === usuarioId;
       const deLogistica = ["admin", "operador"].includes(o.autor_rol);
       return (
-       <div key={o.id} style={{ display: "flex", justifyContent: propia ? "flex-end" : "flex-start" }}>
+       <div key={o.id} style={{ display: "flex", justifyContent: propia ? "flex-end" : "flex-start", flexShrink: 0 }}>
         <div style={{
          maxWidth: "85%", padding: "8px 11px", borderRadius: 12,
          borderTopRightRadius: propia ? 4 : 12, borderTopLeftRadius: propia ? 12 : 4,
@@ -100,7 +103,6 @@ export function HiloPqrs({ pqrs, usuarioId, puedeEscribir, borrador, setBorrador
        </div>
       );
      })}
-    <div ref={fin} />
    </div>
 
    {puedeEscribir ? (
