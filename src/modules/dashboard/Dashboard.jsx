@@ -745,9 +745,10 @@ export function Dashboard({
      </Tarjeta>
     )}
 
+    {/* Cuatro bloques del mismo alto en una fila; si no caben, pasan a dos por fila. */}
     <div style={{
-     display: "grid", alignItems: "start",
-     gridTemplateColumns: esMovil ? "1fr" : "1.15fr 1fr 0.85fr",
+     display: "grid", alignItems: "stretch",
+     gridTemplateColumns: esMovil ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))",
      gap: esMovil ? 12 : 18,
     }}>
 
@@ -815,7 +816,6 @@ export function Dashboard({
       </div>
      </Tarjeta>
 
-     <div style={{ display: "flex", flexDirection: "column", gap: esMovil ? 12 : 18 }}>
      <Tarjeta>
       <TituloTarjeta accion={<Enlace onClick={() => irA("pqrs")}>Abrir</Enlace>}>PQRS</TituloTarjeta>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -862,7 +862,6 @@ export function Dashboard({
        </div>
       )}
      </Tarjeta>
-     </div>
     </div>
 
     <Tarjeta>
