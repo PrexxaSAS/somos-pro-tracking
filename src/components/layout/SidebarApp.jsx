@@ -18,6 +18,7 @@ import {
   Search,
   Share2,
   Truck,
+  Undo2,
   User,
   Users,
   Wallet,
@@ -52,6 +53,8 @@ export const MENUS = {
       // El admin tiene todas las funciones, tambien las del operador.
       ["cartera_logistica", "Impresión cortes", Printer],
       ["cartera_consultas", "Consultas cartera", Search],
+      // Pedidos que logistica devolvio al asesor y su auxiliar corrige.
+      ["cartera_devueltos", "Pedidos devueltos", Undo2],
       ["cartera_sedes", "Sedes y cortes", Warehouse],
       ["cartera_asesores", "Asesores", Users],
     ]]] : []),
@@ -79,6 +82,7 @@ export const MENUS = {
       ["cartera_cargar", "Cargar pedidos", Box],
       ["cartera_logistica", "Impresión cortes", Printer],
       ["cartera_pedidos", "Pedidos en cartera", Wallet],
+      ["cartera_devueltos", "Pedidos devueltos", Undo2],
     ]]] : []),
     ["Configuracion", [
       ["promesas", "Promesas de servicio", CalendarClock],
@@ -113,6 +117,7 @@ export const MENUS = {
       ["recogidas", "Mis recogidas", PackageCheck],
       ["pqrs", "PQRS", HelpCircle],
       ...(CARTERA_ACTIVA ? [
+        ["cartera_devueltos", "Pedidos devueltos", Undo2],
         ["cartera_consultas", "Consultas cartera", Search],
         ["cartera_asesores", "Asesores", Users],
       ] : []),

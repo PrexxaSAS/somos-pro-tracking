@@ -1,4 +1,5 @@
-// Envia por SMTP el aviso de pedido rechazado al asesor del pedido.
+// Envia por SMTP el aviso al asesor del pedido (a su correo registrado, que es
+// el de su auxiliar): pedido rechazado por cartera o devuelto por logistica.
 //
 // Antes salia desde el navegador con EmailJS, con las claves en el codigo y
 // sin saber si de verdad se enviaba. Ahora sale de aqui, con el SMTP de la
@@ -11,6 +12,8 @@
 // Secretos que necesita (Edge Functions > Secrets en Supabase):
 //   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
 //   SMTP_FROM_NAME, SMTP_FROM_EMAIL
+// Opcional: APP_URL, la direccion de QTracking para el boton del correo (por
+// defecto la de produccion). En staging conviene ponerla con la de staging.
 // Supabase bloquea la salida por los puertos 25 y 587: usar 465 (SSL).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
@@ -56,6 +59,7 @@ Deno.serve(async (req) => {
     fromName: Deno.env.get("SMTP_FROM_NAME") || "QTracking",
     fromEmail: Deno.env.get("SMTP_FROM_EMAIL") || Deno.env.get("SMTP_USER"),
   };
+  const appUrl = clean(Deno.env.get("APP_URL") || "https://somos-pro-tracking.vercel.app").replace(/\/+$/, "");
   if (!smtp.host || !smtp.user || !smtp.pass || !smtp.fromEmail) {
     return json({ error: "El correo no esta configurado: faltan los secretos SMTP de la funcion." }, 500);
   }
@@ -80,12 +84,13 @@ Deno.serve(async (req) => {
 
   const { data: pedido, error: pedidoError } = await adminClient
     .from("pedidos_cartera")
-    .select("numero_pedido, cliente, nit, vendedor, motivo_rechazo, estado_cartera")
+    .select("numero_pedido, cliente, nit, vendedor, motivo_rechazo, estado_cartera, campos_corregir")
     .eq("id", pedidoId)
     .maybeSingle();
   if (pedidoError || !pedido) return json({ error: "Pedido no encontrado." }, 404);
-  if (pedido.estado_cartera !== "rechazado") {
-    return json({ error: "El pedido no esta rechazado: no se envia el aviso." }, 409);
+  const devuelto = pedido.estado_cartera === "devuelto";
+  if (pedido.estado_cartera !== "rechazado" && !devuelto) {
+    return json({ error: "El pedido no esta rechazado ni devuelto: no se envia el aviso." }, 409);
   }
 
   // El asesor sale del codigo de vendedor del pedido.
@@ -99,24 +104,60 @@ Deno.serve(async (req) => {
   const para = clean(asesor?.email);
   if (!para) return json({ enviado: false, razon: asesor ? "asesor_sin_correo" : "asesor_no_registrado" });
 
-  const asunto = `Pedido ${clean(pedido.numero_pedido)} rechazado por cartera`;
+  const NOMBRE_CAMPO: Record<string, string> = {
+    cliente: "Cliente", nit: "NIT", direccion: "Dirección de entrega", sector_dane: "Ciudad destino (DANE)",
+    codigo_mensaje: "Código de mensaje", observacion: "Observación", cantidades: "Cantidades de las referencias",
+  };
+  const campos = (pedido.campos_corregir || []).map((c: string) => NOMBRE_CAMPO[c] || c).join(", ");
+  const asunto = devuelto
+    ? `Pedido ${clean(pedido.numero_pedido)} devuelto por logística: falta información`
+    : `Pedido ${clean(pedido.numero_pedido)} rechazado por cartera`;
   const filas = [
     ["Pedido", pedido.numero_pedido],
     ["Cliente", pedido.cliente],
     ["NIT", pedido.nit],
-    ["Motivo del rechazo", pedido.motivo_rechazo || "(sin motivo)"],
+    [devuelto ? "Motivo" : "Motivo del rechazo", pedido.motivo_rechazo || "(sin motivo)"],
+    ...(devuelto ? [["Corregir", campos || "(sin campos)"]] : []),
   ];
-  const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:24px;background:#f6f5fa;font-family:Arial,sans-serif;color:#17141f">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e7e5ee;border-radius:12px;padding:24px">
-    <div style="font-size:13px;color:#77738a">QTracking · Cartera</div>
-    <h1 style="font-size:20px;margin:6px 0 16px">Pedido rechazado</h1>
-    <p style="margin:0 0 16px;font-size:14px">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, cartera rechazó un pedido tuyo:</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px">
-      ${filas.map(([k, v]) => `<tr><td style="padding:8px 0;color:#77738a;width:160px;vertical-align:top">${k}</td><td style="padding:8px 0;font-weight:bold">${esc(v)}</td></tr>`).join("")}
-    </table>
-    <p style="margin:20px 0 0;font-size:12px;color:#77738a">Este es un aviso automático; no respondas a este correo.</p>
-  </div></body></html>`;
-  const texto = `Pedido rechazado por cartera\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}\n\nEste es un aviso automatico.`;
+  const titulo = devuelto ? "Pedido devuelto por logística" : "Pedido rechazado";
+  const intro = devuelto
+    ? "logística devolvió un pedido tuyo porque le falta información. Corrígelo en QTracking, en Pedidos devueltos, y reenvíalo:"
+    : "cartera rechazó un pedido tuyo:";
+  // El boton abre QTracking directo en Pedidos devueltos (?vista=devueltos).
+  const enlace = `${appUrl}/?vista=devueltos`;
+  // Todo en tablas y con el relleno en las celdas: Outlook ignora el padding de
+  // <a> y de <div>, y asi el boton y la tarjeta se ven igual en todos lados.
+  const fuente = "font-family:Arial,Helvetica,sans-serif;";
+  const boton = devuelto
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding-top:24px">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+          <td align="center" bgcolor="#6d42d8" style="background:#6d42d8;border-radius:10px;padding:13px 26px;${fuente}">
+            <a href="${esc(enlace)}" target="_blank" style="${fuente}font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;display:inline-block">Abrir QTracking</a>
+          </td>
+        </tr></table>
+      </td></tr></table>`
+    : "";
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f6f5fa">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f6f5fa" style="background:#f6f5fa"><tr><td align="center" style="padding:24px 12px">
+  <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="width:560px;max-width:100%;background:#ffffff;border:1px solid #e7e5ee;border-radius:12px">
+    <tr><td style="padding:26px 30px;${fuente}color:#17141f">
+      <p style="margin:0;font-size:13px;color:#77738a;${fuente}">QTracking · ${devuelto ? "Logística" : "Cartera"}</p>
+      <h1 style="margin:6px 0 14px;font-size:22px;line-height:1.3;color:#17141f;${fuente}">${titulo}</h1>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#17141f;${fuente}">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, ${intro}</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top:1px solid #efedf4">
+        ${filas.map(([k, v]) => `<tr>
+          <td valign="top" width="130" style="padding:10px 12px 10px 0;border-bottom:1px solid #efedf4;font-size:13px;color:#77738a;${fuente}">${k}</td>
+          <td valign="top" style="padding:10px 0;border-bottom:1px solid #efedf4;font-size:14px;font-weight:bold;color:#17141f;${fuente}">${esc(v)}</td>
+        </tr>`).join("")}
+      </table>
+      ${boton}
+      <p style="margin:24px 0 0;font-size:12px;color:#77738a;${fuente}">Este es un aviso automático; no respondas a este correo.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
+  const texto = `${devuelto ? "Pedido devuelto por logística" : "Pedido rechazado por cartera"}\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}${devuelto ? `\n\nCorrígelo en QTracking: ${enlace}` : ""}\n\nEste es un aviso automático.`;
 
   try {
     const transporte = nodemailer.createTransport({

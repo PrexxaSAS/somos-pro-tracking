@@ -43,11 +43,11 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto, SelectorPedido,
 } from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Undo2, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
-import { ModuloCartera } from './modules/cartera/ModuloCartera';
+import { ModuloCartera, ModalDevolverPedido } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
 import { hoyLocal, hoyMas, diaLocal, diaEnLimites, CAMPOS_FECHA_PEDIDO, diaDePedido } from './utils/fechas';
@@ -286,8 +286,11 @@ const selectFiltro = {
  cursor: "pointer", outline: "none", maxWidth: 210,
 };
 
-export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false }) {
+export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false, canDevolver = false }) {
  const [nuevoCond, setNuevoCond] = useState("");
+ // Logistica devuelve al asesor un pedido de cartera que aun no salio.
+ const [verDevolver, setVerDevolver] = useState(false);
+ const devolvible = canDevolver && pedido.estado === "sin_asignar" && !pedido.conductor_id;
  const {
   puedeReasignar,
   reasignarConductor,
@@ -369,6 +372,9 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
       onClick={()=>verPDFSoportes({ ...pedido, soportes_data:soportesData }, showToast)}>
       Soportes
      </EnlacePie>
+    )}
+    {devolvible && (
+     <EnlacePie icono={<Undo2 size={15} />} onClick={()=>setVerDevolver(true)}>Devolver al asesor</EnlacePie>
     )}
    </>}
   >
@@ -555,6 +561,11 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
    )}
 
    {verGuia && <GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)} />}
+   {verDevolver && (
+    <ModalDevolverPedido numero={pedido.id} cliente={pedido.cliente} showToast={showToast}
+     onClose={()=>setVerDevolver(false)}
+     onHecho={()=>{ setVerDevolver(false); onClose(); if (window._recargarPedidos) window._recargarPedidos(); }} />
+   )}
    {verCamara && <CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast} />}
   </ModalGestion>
  );
@@ -1619,6 +1630,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  // salen con conductor (Solo facturar, Cliente recoge) y para los que aun no
  // se han despachado. Los que van en transito los cierra su conductor.
  const [entregaMovil, setEntregaMovil] = useState(null);
+ // Pedido que logistica devuelve al asesor desde el celular.
+ const [devolverMovil, setDevolverMovil] = useState(null);
  const esMovil = useEsMovil();
  // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
  // sin seleccion, la planilla sale con todo lo que este filtrado.
@@ -2221,9 +2234,16 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       // operador. En los demas el soporte va dentro de la edicion, junto al
       // resto del pedido, y en Solo facturar no hay entrega que soportar.
       puedeEntregar={ped.estado === "cliente_recoge"}
+      onDevolver={["admin", "operador"].includes(user?.rol) && ped.estado === "sin_asignar" && !ped.conductor_id
+       ? () => setDevolverMovil(ped) : undefined}
      />
     );
    })()}
+   {devolverMovil && (
+    <ModalDevolverPedido numero={devolverMovil.id} cliente={devolverMovil.cliente} showToast={showToast}
+     onClose={() => setDevolverMovil(null)}
+     onHecho={() => { setDevolverMovil(null); setDetMovil(null); if (recargar) recargar(); }} />
+   )}
 
    {editMovil && (() => {
     const ped = pedidos.find(x => x.id === editMovil.id) || editMovil;
@@ -2350,7 +2370,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </ModalForm>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} canDevolver={["admin", "operador"].includes(user?.rol)} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
@@ -2423,6 +2443,57 @@ async function enviarUbicacion(conductorId, lat, lng, precision) {
  }));
  if (error) gpsUltimoEnvio = null; // se reintenta con la siguiente lectura
 }
+// Motor del GPS del conductor. Vive fuera de las pantallas: arranca solo al
+// entrar a QTracking (y la primera vez despues del aviso de ubicacion) y sigue
+// mientras la app este abierta, en cualquier pantalla. Mi ubicacion solo lo
+// muestra y permite detenerlo. Si el conductor lo detiene, queda apagado hasta
+// que vuelva a abrir QTracking (se guarda en sessionStorage).
+const CLAVE_GPS_APAGADO = 'qtracking_gps_apagado';
+const gpsAvisarCambio = () => window.dispatchEvent(new Event('gps-local'));
+function gpsApagadoEnSesion() {
+ try { return sessionStorage.getItem(CLAVE_GPS_APAGADO) === '1'; } catch { return false; }
+}
+function iniciarGpsConductor(conductorId) {
+ if (!navigator.geolocation) { window._gpsErr = "GPS no disponible en este dispositivo."; gpsAvisarCambio(); return; }
+ try { sessionStorage.removeItem(CLAVE_GPS_APAGADO); } catch { /* sin almacenamiento */ }
+ window._gpsOn = true;
+ window._gpsErr = "";
+ if (window._gpsWatch != null) { gpsAvisarCambio(); return; }
+ window._gpsWatch = navigator.geolocation.watchPosition(
+  pos => {
+   if (!window._gpsOn) return;
+   const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+   window._gpsLat = lat; window._gpsLng = lng; window._gpsAcc = acc; window._gpsTs = Date.now(); window._gpsErr = "";
+   if (!window._gpsData) window._gpsData = {};
+   if (conductorId) window._gpsData[String(conductorId)] = { lat, lng, ts: Date.now() };
+   enviarUbicacion(conductorId, lat, lng, acc);
+   gpsAvisarCambio();
+  },
+  e => {
+   window._gpsErr = e.code === 1 ? "El navegador no dio permiso de ubicación. Actívalo en los ajustes del sitio." : "Error GPS: " + e.message;
+   gpsAvisarCambio();
+  },
+  { enableHighAccuracy:true, timeout:10000 }
+ );
+ gpsAvisarCambio();
+}
+// avisarCentral: al detenerlo el conductor, la central ve "GPS apagado por el
+// conductor". Al cerrar sesion solo se suelta el GPS del celular.
+async function detenerGpsConductor(conductorId, avisarCentral = true) {
+ if (window._gpsWatch != null && navigator.geolocation) navigator.geolocation.clearWatch(window._gpsWatch);
+ window._gpsWatch = null; window._gpsOn = false; gpsUltimoEnvio = null;
+ gpsAvisarCambio();
+ if (!avisarCentral) return true;
+ try { sessionStorage.setItem(CLAVE_GPS_APAGADO, '1'); } catch { /* sin almacenamiento */ }
+ if (!conductorId) return true;
+ const { error } = await guardarGps(() => supabase.from('gps_conductores')
+  .update({ apagado_por_conductor: true }).eq('conductor_id', conductorId));
+ if (error) return false;
+ const anterior = window._gpsData?.[String(conductorId)];
+ if (anterior) window._gpsData[String(conductorId)] = { ...anterior, apagado: true };
+ return true;
+}
+
 async function leerUbicaciones() {
  const { data, error } = await supabase.from('gps_conductores').select('conductor_id,lat,lng,actualizado_en,apagado_por_conductor');
  if (error) return false;
@@ -6033,7 +6104,6 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
  // cada segundo y parpadearia. El centro se mueve solo al primer fix, al
  // pulsar Centrar, o cuando el conductor se alejo mas de ~80 m de el.
  const [centro, setCentro] = useState(window._gpsLat && window._gpsLng ? { lat: window._gpsLat, lng: window._gpsLng } : null);
- const watchRef = useRef(window._gpsWatch || null);
 
  const metrosEntre = (a, b) => {
   const r = Math.PI / 180;
@@ -6049,46 +6119,27 @@ function MiUbicacion({ user, pedidos = [], promesas = [] }) {
   return () => clearInterval(t);
  }, [on]);
 
- // Sync state to window globals so GPS persists when switching tabs
- const updateGps = (lat, lng, acc) => {
-  window._gpsLat = lat; window._gpsLng = lng; window._gpsAcc = acc; window._gpsTs = Date.now();
-  // Also store by conductor ID for multi-conductor tracking
-  if (!window._gpsData) window._gpsData = {};
-  const condId = user?.conductor_db_id || user?.id;
-  if (condId) window._gpsData[String(condId)] = { lat, lng, ts: Date.now() };
-  enviarUbicacion(user?.conductor_db_id, lat, lng, acc);
-  setLat(lat); setLng(lng); setPrecision(acc); setUltima(Date.now());
-  setCentro(c => (!c || metrosEntre(c, { lat, lng }) > 80) ? { lat, lng } : c);
- };
+ // El GPS lo maneja el motor (iniciarGpsConductor); esta pantalla solo copia
+ // lo que el motor va dejando en window y lo muestra.
+ useEffect(() => {
+  const copiar = () => {
+   setOn(!!window._gpsOn);
+   setErr(window._gpsErr || "");
+   if (window._gpsLat != null && window._gpsLng != null) {
+    const nuevo = { lat: window._gpsLat, lng: window._gpsLng };
+    setLat(nuevo.lat); setLng(nuevo.lng); setPrecision(window._gpsAcc || null); setUltima(window._gpsTs || null);
+    setCentro(c => (!c || metrosEntre(c, nuevo) > 80) ? nuevo : c);
+   }
+  };
+  copiar();
+  window.addEventListener('gps-local', copiar);
+  return () => window.removeEventListener('gps-local', copiar);
+ }, []);
 
- const iniciar = () => {
-  if (!navigator.geolocation) { setErr("GPS no disponible en este dispositivo."); return; }
-  setErr("");
-  watchRef.current = navigator.geolocation.watchPosition(
-   pos => { if (!window._gpsOn) return; updateGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
-   e => setErr(e.code === 1 ? "El navegador no dio permiso de ubicacion. Activalo en los ajustes del sitio." : "Error GPS: " + e.message),
-   { enableHighAccuracy:true, timeout:10000 }
-  );
-  window._gpsOn = true; window._gpsWatch = watchRef.current;
-  setOn(true);
- };
+ const iniciar = () => iniciarGpsConductor(user?.conductor_db_id);
  const detener = async () => {
-  if (watchRef.current != null) navigator.geolocation.clearWatch(watchRef.current);
-  watchRef.current = null;
-  window._gpsOn = false; window._gpsWatch = null;
-  setOn(false);
-  gpsUltimoEnvio = null;
-  const conductorId = user?.conductor_db_id;
-  if (!conductorId) return;
-  try {
-   const { error } = await guardarGps(() => supabase.from('gps_conductores')
-    .update({ apagado_por_conductor: true }).eq('conductor_id', conductorId));
-   if (error) throw error;
-   const anterior = window._gpsData?.[String(conductorId)];
-   if (anterior) window._gpsData[String(conductorId)] = { ...anterior, apagado: true };
-  } catch {
-   setErr("GPS detenido en este celular. No se pudo avisar a la central. Revisa tu conexión.");
-  }
+  const ok = await detenerGpsConductor(user?.conductor_db_id);
+  if (!ok) setErr("GPS detenido en este celular. No se pudo avisar a la central. Revisa tu conexión.");
  };
 
  const condId = user?.conductor_db_id || user?.id;
@@ -6496,6 +6547,18 @@ export default function SomosProTracking() {
    window.history.replaceState({}, "", window.location.pathname);
   } catch { /* sin permiso para cambiar la direccion */ }
  }, [user]);
+ // El boton del correo de pedido devuelto lleva a ?vista=devueltos: se abre
+ // Pedidos devueltos (para quien la ve) y se limpia el parametro.
+ useEffect(() => {
+  if (!user) return;
+  let vista = "";
+  try { vista = new URLSearchParams(window.location.search).get("vista") || ""; } catch { vista = ""; }
+  if (vista !== "devueltos") return;
+  if (["admin", "operador", "cliente"].includes(user.rol)) setTab("cartera_devueltos");
+  try {
+   window.history.replaceState({}, "", window.location.pathname);
+  } catch { /* sin permiso para cambiar la direccion */ }
+ }, [user]);
  const [toast,     setToast]     = useState(null);
 
  const showToast = (msg, type = "info") => setToast({ msg, type });
@@ -6674,6 +6737,8 @@ export default function SomosProTracking() {
  };
 
  const handleLogout = async () => {
+  // Al salir, el celular deja de compartir la ubicacion.
+  if (user?.rol === "conductor") await detenerGpsConductor(user?.conductor_db_id, false);
   await supabase.auth.signOut();
   setUser(null);
   setTab("");
@@ -6740,6 +6805,24 @@ export default function SomosProTracking() {
   window.addEventListener("resize", check);
   return () => window.removeEventListener("resize", check);
  }, []);
+
+ // GPS del conductor: arranca solo al entrar a QTracking. La primera vez se le
+ // muestra el aviso de que su ubicacion se comparte con la empresa (Ley 1581) y
+ // arranca al aceptarlo. Si lo detuvo en esta sesion, no se vuelve a prender.
+ const [avisoGps, setAvisoGps] = useState(false);
+ const claveAvisoGps = user ? `qtracking_aviso_gps_${user.id}` : "";
+ useEffect(() => {
+  if (user?.rol !== "conductor" || !user.conductor_db_id) return;
+  let aceptado = false;
+  try { aceptado = localStorage.getItem(claveAvisoGps) === "1"; } catch { aceptado = false; }
+  if (!aceptado) { setAvisoGps(true); return; }
+  if (!gpsApagadoEnSesion()) iniciarGpsConductor(user.conductor_db_id);
+ }, [user?.id, user?.conductor_db_id]);
+ const aceptarAvisoGps = () => {
+  try { localStorage.setItem(claveAvisoGps, "1"); } catch { /* sin almacenamiento */ }
+  setAvisoGps(false);
+  iniciarGpsConductor(user?.conductor_db_id);
+ };
 
  // Ubicaciones en vivo de los conductores, cada 20 s, para quien las ve. Si la
  // tabla aun no existe en esa base, se deja de intentar.
@@ -6817,6 +6900,7 @@ export default function SomosProTracking() {
    case "cartera_pedidos":
    case "cartera_logistica":
    case "cartera_consultas":
+   case "cartera_devueltos":
     return <ModuloCartera tab={tab} user={user} showToast={showToast} setTab={setTab} onPedidosCambiaron={recargarPedidos}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }
@@ -6838,6 +6922,17 @@ export default function SomosProTracking() {
    )}
    {modCompartir && <LinkCompartir onClose={()=>setModCompartir(false)} />}
    {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+   {avisoGps && (
+    <ModalForm titulo="Tu ubicación" descripcion="Uso de la ubicación del celular"
+     onClose={aceptarAvisoGps} onPrimario={aceptarAvisoGps} textoPrimario="Entendido" textoCancelar="Cerrar">
+     <div style={{ fontSize:14, lineHeight:1.55, color:T.color.tinta2, display:"flex", flexDirection:"column", gap:10 }}>
+      <p style={{ margin:0 }}>Mientras tengas QTracking abierto, tu ubicación se comparte con la empresa para hacer seguimiento a las entregas.</p>
+      <p style={{ margin:0 }}>Solo se guarda tu última posición, no el recorrido, y la ven logística y los responsables de los pedidos.</p>
+      <p style={{ margin:0 }}>Puedes apagarla cuando quieras en <strong>Mi ubicación</strong>. Al volver a abrir QTracking se activa de nuevo.</p>
+      <p style={{ margin:0, color:T.color.tinta3, fontSize:12.5 }}>Si el celular pregunta si permites usar la ubicación, elige <strong>Permitir</strong>.</p>
+     </div>
+    </ModalForm>
+   )}
   </div>
  );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import {
  AlertTriangle, Boxes, Check, ChevronLeft, ChevronRight, FileText, History,
- MapPin, MoreHorizontal, Package, Pencil, Phone, Truck, UserPlus,
+ MapPin, MoreHorizontal, Package, Pencil, Phone, Truck, Undo2, UserPlus,
 } from 'lucide-react';
 import { T } from '../../design/tokens';
 import { ESTADOS_PEDIDO, ESTADOS_SIN_DESPACHO, estadoVisible } from '../../Constants';
@@ -109,7 +109,7 @@ export function Fila({ etiqueta, valor, falta, mono, icono: Icono, onIcono }) {
 // ── Vista ───────────────────────────────────────────────────────────────────
 export function DetallePedidoMovil({
  pedido, conductor, promesa, onCerrar, onEditar, onGuia, onAcciones, onEntregar,
- puedeEntregar = false,
+ puedeEntregar = false, onDevolver,
 }) {
  const tr = transportePedido(pedido, conductor);
  const ev = estadoVisible(pedido);
@@ -374,6 +374,16 @@ export function DetallePedidoMovil({
     </section>
    </div>
 
+   {/* Logistica devuelve al asesor un pedido de cartera que aun no salio. */}
+   {onDevolver && (
+    <div style={{ flexShrink: 0, padding: "0 16px 10px", background: T.color.fondo }}>
+     <button onClick={onDevolver} style={{
+      width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 42,
+      background: T.color.ojoSuave, color: T.color.ojo, border: "none", borderRadius: 12,
+      fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+     }}><Undo2 size={16} /> Devolver al asesor</button>
+    </div>
+   )}
    <footer style={{
     flexShrink: 0, display: "flex", gap: 10, padding: "12px 16px",
     background: T.color.superficie, borderTop: `1px solid ${T.color.borde}`,

@@ -4,7 +4,7 @@ import { leerTextoCsv, filasCsv, descargarCSV } from '../../utils/files';
 import { imprimirHTML } from '../../utils/imprimir';
 import { P } from '../../Constants';
 import { T, tarjeta } from '../../design/tokens';
-import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download, Building2, Calendar } from 'lucide-react';
+import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download, Building2, Calendar, Undo2 } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
  Segmentado, Paginador, FiltroFechas,
@@ -47,6 +47,9 @@ const ESTADOS_CARTERA = {
   cartera_vencida: {label:"Cartera vencida", color:T.color.mal,  bg:T.color.malSuave},
   aprobado:        {label:"Aprobado",        color:T.color.info, bg:T.color.infoSuave},
   rechazado:       {label:"Rechazado",       color:T.color.tinta3, bg:T.color.superficie3},
+  // Logistica lo devolvio al asesor por falta de informacion; lo corrige su
+  // auxiliar en Pedidos devueltos (docs/cartera_devolucion_logistica.sql).
+  devuelto:        {label:"Devuelto al asesor", color:T.color.ojo, bg:T.color.ojoSuave},
 };
 
 
@@ -590,22 +593,32 @@ export function GestionAsesores({showToast, soloCrear = false}) {
   const [menuAsesor, setMenuAsesor] = useState(null);
   const [modNuevo, setModNuevo] = useState(false);
   const [editando, setEditando] = useState(null);
-  const vacio = {codigo:'',nombre:'',email:''};
+  const vacio = {codigo:'',nombre:'',email:'',auxiliar_id:''};
   const [form, setForm] = useState(vacio);
   const f = k => v => setForm(p=>({...p,[k]:v}));
   const [carg, setCarg] = useState(false);
   const fileRef = useRef(null);
+  // Auxiliar responsable: la usuaria cliente interno que corrige los pedidos que
+  // logistica le devuelve a este asesor. Quien solo crea (la auxiliar) queda
+  // asignada sola al crear (lo hace la base).
+  const [auxiliares, setAuxiliares] = useState([]);
+  const nombreAuxiliar = (id) => auxiliares.find(u => u.id === id)?.nombre || '';
 
   const cargar = async () => {
     const {data} = await supabase.from('asesores').select('*').order('codigo');
     setAsesores(data||[]);
   };
-  useEffect(()=>{cargar();},[]);
+  useEffect(()=>{
+    cargar();
+    if(!soloCrear) supabase.from('usuarios').select('id,nombre').eq('rol','cliente').order('nombre')
+      .then(({data})=>setAuxiliares(data||[]));
+  },[]);
 
   const guardar = async () => {
     if(!form.codigo||!form.nombre||!form.email){showToast("Completa todos los campos","error");return;}
     setCarg(true);
-    const datos = {codigo:form.codigo.trim(),nombre:form.nombre.trim(),email:form.email.trim()};
+    const datos = {codigo:form.codigo.trim(),nombre:form.nombre.trim(),email:form.email.trim(),
+      ...(soloCrear ? {} : {auxiliar_id: form.auxiliar_id || null})};
     // El upsert sobre un codigo existente es un update encubierto, y a quien
     // solo puede crear la base se lo rechaza: se inserta derecho y el codigo
     // repetido se avisa como lo que es.
@@ -686,7 +699,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
         <span style={{width:36,height:36,flexShrink:0,borderRadius:9,display:'grid',placeItems:'center',background:T.color.marcaSuave,color:T.color.marca,fontSize:11,fontWeight:700}}>{a.codigo}</span>
         <div style={{minWidth:0,flex:1}}><strong style={{fontSize:13}}>{a.nombre||'—'}</strong><div style={{fontSize:11.5,color:a.email?T.color.tinta3:T.color.ojo,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.email?<><Mail size={11} style={{verticalAlign:'middle',marginRight:3}}/>{a.email}</>:'✉ Sin correo'}</div></div>
         {!soloCrear&&<div style={{position:'relative'}}><button aria-label={`Opciones de ${a.nombre}`} onClick={()=>setMenuAsesor(menuAsesor===a.id?null:a.id)} style={{border:'none',background:'transparent',color:T.color.tinta3,fontSize:20,padding:5}}>···</button>
-         {menuAsesor===a.id&&<div style={{...tarjeta,position:'absolute',right:0,top:'100%',zIndex:20,padding:5,minWidth:105,boxShadow:T.sombra.flotante}}><button onClick={()=>{setForm({codigo:a.codigo,nombre:a.nombre||'',email:a.email||''});setEditando(a.id);setModNuevo(true);setMenuAsesor(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none'}}>Editar</button><button onClick={()=>{eliminar(a.id,a.nombre||a.codigo);setMenuAsesor(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none',color:T.color.mal}}>Eliminar</button></div>}
+         {menuAsesor===a.id&&<div style={{...tarjeta,position:'absolute',right:0,top:'100%',zIndex:20,padding:5,minWidth:105,boxShadow:T.sombra.flotante}}><button onClick={()=>{setForm({codigo:a.codigo,nombre:a.nombre||'',email:a.email||'',auxiliar_id:a.auxiliar_id||''});setEditando(a.id);setModNuevo(true);setMenuAsesor(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none'}}>Editar</button><button onClick={()=>{eliminar(a.id,a.nombre||a.codigo);setMenuAsesor(null);}} style={{...botonBarra,width:'100%',justifyContent:'center',border:'none',color:T.color.mal}}>Eliminar</button></div>}
         </div>}
        </div>)}
      </section>
@@ -704,6 +717,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
           <th style={th}>Codigo</th>
           <th style={th}>Nombre</th>
           <th style={th}>Correo</th>
+          {!soloCrear && <th style={th}>Auxiliar</th>}
           {!soloCrear && <th style={{...th, textAlign:"right"}}>Acciones</th>}
          </tr>
         </thead>
@@ -715,11 +729,12 @@ export function GestionAsesores({showToast, soloCrear = false}) {
            <td style={td}>
             {a.email || <span style={{ color:T.color.ojo }}>Sin correo</span>}
            </td>
+           {!soloCrear && <td style={td}>{nombreAuxiliar(a.auxiliar_id) || <span style={{ color:T.color.tinta4 }}>Sin asignar</span>}</td>}
            {!soloCrear && (
             <td style={{ ...td, textAlign:"right" }}>
              <div style={{ display:"inline-flex", gap:6, alignItems:"center" }}>
               <button style={botonFila}
-               onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||""}); setEditando(a.id); setModNuevo(true);}}>
+               onClick={()=>{setForm({codigo:a.codigo, nombre:a.nombre||"", email:a.email||"", auxiliar_id:a.auxiliar_id||""}); setEditando(a.id); setModNuevo(true);}}>
                Editar
               </button>
               <button title="Eliminar asesor" onClick={()=>eliminar(a.id, a.nombre||a.codigo)}
@@ -750,6 +765,11 @@ export function GestionAsesores({showToast, soloCrear = false}) {
       <Texto label="Codigo del asesor" obligatorio mono valor={form.codigo} onChange={f("codigo")} placeholder="V001" />
       <Texto label="Nombre" valor={form.nombre} onChange={f("nombre")} placeholder="Juan Perez" />
       <Texto label="Correo" tipo="email" valor={form.email} onChange={f("email")} placeholder="juan.perez@prexxa.com.co" />
+      {!soloCrear && (
+       <Selector label="Auxiliar responsable" opcional valor={form.auxiliar_id} onChange={f("auxiliar_id")}
+        placeholder="Sin asignar"
+        opciones={auxiliares.map(u=>({ value:u.id, label:u.nombre }))} />
+      )}
      </ModalForm>
     )}
    </Pagina>
@@ -1907,6 +1927,8 @@ export function ModalRechazar({pedido, onRechazar, onClose}) {
 // ── MÓDULO LOGÍSTICA ───────────────────────────────────────────────────────────
 export function ModuloLogistica({showToast}) {
   const esMovil = useEsMovil();
+  // Pedido que logistica devuelve al asesor (ModalDevolverPedido).
+  const [devolver, setDevolver] = useState(null);
   const [sedes,   setSedes]   = useState([]);
   const [cortes,  setCortes]  = useState([]);
   const [filtroSede, setFiltroSede] = useState('');
@@ -2138,6 +2160,10 @@ export function ModuloLogistica({showToast}) {
      </p>
     </ModalForm>
   );
+  const modalDevolver = devolver && (
+    <ModalDevolverPedido numero={devolver.numero_pedido} cliente={devolver.cliente} showToast={showToast}
+     onClose={()=>setDevolver(null)} onHecho={()=>{ setDevolver(null); cargar(); }} />
+  );
 
   // Solo los numeros de pedido del corte, con el mismo encabezado del consolidado.
   const generarHTMLListaCorte = (lista, corte) => {
@@ -2241,7 +2267,8 @@ export function ModuloLogistica({showToast}) {
    filtroSede={filtroSede} setFiltroSede={setFiltroSede} filtroFecha={filtroFecha} setFiltroFecha={setFiltroFecha}
    modoFecha={modoFecha} setModoFecha={setModoFecha} filtroImp={filtroImp} setFiltroImp={setFiltroImp}
    imprimiendo={imprimiendo} imprimirCorte={imprimirCorte} impresionDe={impresionDe} imprimir={imprimir}
-  /></>;
+   onDevolver={setDevolver}
+  />{modalDevolver}</>;
 
   // El corte que se ve a la derecha. Si el elegido ya no esta en la lista
   // (cambio el filtro o se imprimio), se muestra el primero.
@@ -2256,6 +2283,7 @@ export function ModuloLogistica({showToast}) {
   return (
    <Pagina anchoCompleto>
     {modalConfirmar}
+    {modalDevolver}
     <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
      <div>
       <h1 style={{ margin:0, ...T.texto.titulo }}>Impresión cortes</h1>
@@ -2421,6 +2449,10 @@ export function ModuloLogistica({showToast}) {
            style={{ ...botonFila, width:32, height:32, padding:0, justifyContent:"center", flexShrink:0 }}>
            <Printer size={15}/>
           </button>
+          <button aria-label={`Devolver pedido ${x.numero_pedido} al asesor`} title="Devolver al asesor por falta de informacion" onClick={()=>setDevolver(x)}
+           style={{ ...botonFila, width:32, height:32, padding:0, justifyContent:"center", flexShrink:0, color:T.color.ojo }}>
+           <Undo2 size={15}/>
+          </button>
          </div>
         ))}
        </>
@@ -2489,7 +2521,7 @@ function PastillaImpresion({ imp }) {
 }
 
 function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSede,filtroFecha,setFiltroFecha,
- modoFecha,setModoFecha,filtroImp,setFiltroImp,imprimiendo,imprimirCorte,impresionDe,imprimir}) {
+ modoFecha,setModoFecha,filtroImp,setFiltroImp,imprimiendo,imprimirCorte,impresionDe,imprimir,onDevolver}) {
  return <Pagina anchoCompleto>
   <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>!impresionDe(c).completo).length} cortes por imprimir</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Impresión cortes</h1></header>
   <div style={{display:'flex',gap:7}}>
@@ -2512,6 +2544,7 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
    {pedidos.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay pedidos para mostrar.</div>:<div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:7}}>{pedidos.map(p=><article key={p.id} style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:9}}>
     <div style={{minWidth:0,flex:1}}><div style={{display:'flex',justifyContent:'space-between',gap:6,fontSize:13}}><strong>{p.numero_pedido}</strong><strong>{fCOP(p.valor_total)}</strong></div><div style={{fontSize:12,marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div><div style={{fontSize:11,color:T.color.tinta3,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.direccion||'—'} · {p.sector_dane||'—'} · {p.fecha_corte?fFechaHora(p.fecha_corte):'Sin corte'}</div></div>
     <button aria-label={`Imprimir pedido ${p.numero_pedido}`} onClick={()=>imprimir([p])} style={{...botonBarra,width:40,height:40,padding:0,display:'grid',placeItems:'center',flexShrink:0}}><Printer size={17}/></button>
+    {onDevolver&&<button aria-label={`Devolver pedido ${p.numero_pedido} al asesor`} title="Devolver al asesor" onClick={()=>onDevolver(p)} style={{...botonBarra,width:40,height:40,padding:0,display:'grid',placeItems:'center',flexShrink:0,color:T.color.ojo}}><Undo2 size={17}/></button>}
    </article>)}</div>}
   </section>
   {porImprimir.length>0&&<><div style={{height:58}}/><div style={{position:'fixed',left:0,right:0,bottom:'calc(62px + env(safe-area-inset-bottom, 0px))',zIndex:60,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'9px 16px'}}><button onClick={()=>imprimir(porImprimir)} style={{...botonPrincipal,width:'100%',justifyContent:'center'}}><Printer size={16}/> Imprimir ({porImprimir.length})</button></div></>}
@@ -2519,6 +2552,190 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
 }
 
 // ── MÓDULO CONSULTAS ───────────────────────────────────────────────────────────
+// ── Devolucion de pedidos desde logistica (docs/cartera_devolucion_logistica.sql) ──
+// Los campos que logistica puede pedir corregir. Son datos del plano; el DANE
+// origen, el valor y el plazo no: cambian la sede, el corte o la aprobacion.
+export const CAMPOS_DEVOLUCION = [
+  ["cliente", "Cliente"],
+  ["nit", "NIT"],
+  ["direccion", "Direccion de entrega"],
+  ["sector_dane", "Ciudad destino (DANE)"],
+  ["codigo_mensaje", "Codigo de mensaje"],
+  ["observacion", "Observacion"],
+  // Las cantidades de cada referencia del pedido. El valor de la linea y el
+  // total se recalculan en proporcion, con el precio que trajo el plano.
+  ["cantidades", "Cantidades de las referencias"],
+];
+const nombreCampo = (c) => (CAMPOS_DEVOLUCION.find(x => x[0] === c) || [c, c])[1];
+
+// Logistica devuelve un pedido que aun no salio. numero: el numero del pedido.
+export function ModalDevolverPedido({ numero, cliente, onClose, onHecho, showToast }) {
+  const [motivo, setMotivo] = useState('');
+  const [campos, setCampos] = useState([]);
+  const [carg, setCarg] = useState(false);
+  const alternar = (c) => setCampos(v => v.includes(c) ? v.filter(x => x !== c) : [...v, c]);
+  const listo = motivo.trim() && campos.length > 0;
+  const confirmar = async () => {
+    if (!listo) return;
+    setCarg(true);
+    const { data: id, error } = await supabase.rpc('devolver_pedido_logistica', { p_numero: numero, p_motivo: motivo.trim(), p_campos: campos });
+    if (error) { setCarg(false); showToast(error.message || 'No se pudo devolver el pedido', 'error'); return; }
+    const correo = await enviarCorreoRechazo(id);
+    setCarg(false);
+    showToast(`Pedido devuelto al asesor · ${correo.texto}`, correo.ok ? 'success' : 'error');
+    onHecho?.();
+  };
+  return (
+   <ModalForm titulo={`Devolver pedido ${numero}`} descripcion={cliente || 'Devolver al asesor por falta de informacion'}
+    onClose={onClose} onPrimario={confirmar} guardando={carg} primarioDeshabilitado={!listo}
+    textoPrimario={carg ? 'Devolviendo...' : 'Devolver al asesor'}>
+    <FranjaInfo>El pedido sale de Pedidos y libera su cupo en el corte. Si ya se imprimió, sepáralo en bodega.</FranjaInfo>
+    <AreaTexto label="Motivo" obligatorio filas={3} valor={motivo} onChange={setMotivo}
+     placeholder="Qué falta o qué está mal en el pedido" />
+    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+     <span style={{ fontSize:13, fontWeight:600, color:T.color.tinta2 }}>Campos que la auxiliar podrá corregir <span style={{ color:T.color.mal }}>*</span></span>
+     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:6 }}>
+      {CAMPOS_DEVOLUCION.map(([c, l]) => (
+       <label key={c} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:T.radio.control, cursor:'pointer', fontSize:13,
+        border:`1px solid ${campos.includes(c) ? T.color.marca : T.color.borde2}`, background: campos.includes(c) ? T.color.marcaSuave : T.color.superficie }}>
+        <input type="checkbox" checked={campos.includes(c)} onChange={() => alternar(c)} style={{ accentColor:T.color.marca }}/>
+        {l}
+       </label>
+      ))}
+     </div>
+    </div>
+    <div style={{ display:'flex', gap:8, background:T.color.ojoSuave, color:T.color.ojo, borderRadius:10, padding:11, fontSize:12, lineHeight:1.4 }}>
+     <Mail size={16} style={{ flexShrink:0 }}/>Se envía un correo al correo registrado del asesor (su auxiliar) con el motivo y los campos a corregir.
+    </div>
+   </ModalForm>
+  );
+}
+
+// La auxiliar (cliente interno) ve los pedidos devueltos de los asesores a su
+// cargo, corrige los campos marcados y lo reenvia. Admin y operador ven todos.
+export function PedidosDevueltos({ user, showToast, onPedidosCambiaron }) {
+  const esMovil = useEsMovil();
+  const [lista, setLista] = useState([]);
+  const [carg, setCarg] = useState(true);
+  const [abierto, setAbierto] = useState(null);
+  const [form, setForm] = useState({});
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = async () => {
+    setCarg(true);
+    const { data, error } = await supabase.rpc('mis_pedidos_devueltos');
+    if (error) showToast('No se pudieron cargar los pedidos devueltos', 'error');
+    setLista(data || []);
+    setCarg(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  // Cantidad nueva de cada linea, por id de la linea.
+  const [cantidades, setCantidades] = useState({});
+  const abrir = (x) => {
+    setAbierto(x);
+    setForm(Object.fromEntries(CAMPOS_DEVOLUCION.filter(([c]) => c !== 'cantidades').map(([c]) => [c, x[c] || ''])));
+    setCantidades(Object.fromEntries((x.lineas || []).map(l => [l.id, String(l.cantidad_pedida ?? 0)])));
+  };
+  const reenviar = async () => {
+    const editables = abierto.campos_corregir || [];
+    const datos = editables.filter(c => c !== 'cantidades');
+    if (datos.some(c => !String(form[c] || '').trim())) { showToast('Completa los campos marcados', 'error'); return; }
+    const conCantidades = editables.includes('cantidades');
+    if (conCantidades && Object.values(cantidades).some(v => !/^\d+$/.test(String(v).trim()))) {
+      showToast('Las cantidades deben ser números enteros (0 o más)', 'error'); return;
+    }
+    setGuardando(true);
+    const cambios = Object.fromEntries(datos.map(c => [c, form[c]]));
+    if (conCantidades) cambios.lineas = Object.entries(cantidades).map(([id, v]) => ({ id, cantidad_pedida: Number(v) }));
+    const { data, error } = await supabase.rpc('reenviar_pedido_devuelto', { p_id: abierto.id, p_cambios: cambios });
+    setGuardando(false);
+    if (error) { showToast(error.message || 'No se pudo reenviar', 'error'); return; }
+    showToast(data?.estado === 'aprobado'
+      ? (data.sin_corte ? 'Reenviado y aprobado, pero sin corte: revisar la sede del DANE origen' : `Reenviado: aprobado en el corte del ${fFechaHora(data.fecha_corte)}`)
+      : 'Reenviado: queda pendiente de revisión de cartera', data?.sin_corte ? 'error' : 'success');
+    setAbierto(null);
+    cargar();
+    if (data?.estado === 'aprobado') onPedidosCambiaron?.();
+  };
+
+  const tarjetaPedido = (x) => (
+   <article key={x.id} style={{ ...tarjeta, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+    <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+     <span style={chipMono}>{x.numero_pedido}</span>
+     <strong style={{ fontSize:14, color:T.color.tinta, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{x.cliente}</strong>
+     <span style={{ fontSize:12, color:T.color.tinta3 }}>Devuelto {fFechaHora(x.fecha_devolucion)}</span>
+    </div>
+    <div style={{ fontSize:12.5, color:T.color.tinta3 }}>Asesor {x.asesor_nombre || x.vendedor || '—'} · {x.plazo > 0 ? `${x.plazo} días` : 'Contado'} · {fCOP(x.valor_total)}</div>
+    <div style={{ background:T.color.ojoSuave, color:T.color.ojo, borderRadius:10, padding:'9px 11px', fontSize:13, lineHeight:1.45, whiteSpace:'pre-line' }}>
+     <strong>Motivo:</strong> {x.motivo_rechazo || '—'}
+     <div style={{ marginTop:4 }}><strong>Corregir:</strong> {(x.campos_corregir || []).map(nombreCampo).join(', ')}</div>
+    </div>
+    <div><button onClick={() => abrir(x)} style={{ ...botonPrincipal, padding:'8px 14px' }}>Corregir y reenviar</button></div>
+   </article>
+  );
+
+  return (
+   <Pagina>
+    <Encabezado titulo="Pedidos devueltos"
+     descripcion={['admin', 'operador'].includes(user?.rol) ? 'Pedidos que logística devolvió al asesor, de todos los asesores' : 'Pedidos de tus asesores que logística devolvió por falta de información'}
+     acciones={<button onClick={cargar} style={botonBarra} disabled={carg}><RefreshCw size={15}/> {carg ? 'Actualizando...' : 'Actualizar'}</button>} />
+    {carg ? <div style={{ ...tarjeta, padding:28, textAlign:'center', color:T.color.tinta3 }}>Cargando...</div>
+     : lista.length === 0 ? <div style={{ ...tarjeta, padding:36, textAlign:'center', color:T.color.tinta3, fontSize:14 }}>
+        No hay pedidos devueltos.{user?.rol === 'cliente' ? ' Si esperabas alguno, revisa en Asesores que seas la auxiliar responsable de ese asesor.' : ''}
+       </div>
+     : <div style={{ display:'grid', gridTemplateColumns: esMovil ? 'minmax(0,1fr)' : 'repeat(auto-fill,minmax(420px,1fr))', gap:12 }}>{lista.map(tarjetaPedido)}</div>}
+
+    {abierto && (
+     <ModalForm titulo={`Corregir pedido ${abierto.numero_pedido}`} descripcion="Solo puedes cambiar los campos que marcó logística"
+      onClose={() => setAbierto(null)} onPrimario={reenviar} guardando={guardando}
+      textoPrimario={guardando ? 'Reenviando...' : 'Reenviar'}>
+      <FranjaInfo>{abierto.motivo_rechazo}</FranjaInfo>
+      {CAMPOS_DEVOLUCION.filter(([c]) => c !== 'cantidades').map(([c, l]) => {
+       const editable = (abierto.campos_corregir || []).includes(c);
+       return c === 'observacion'
+        ? (editable
+           ? <AreaTexto key={c} label={l} obligatorio filas={3} valor={form[c]} onChange={v => setForm(f => ({ ...f, [c]: v }))} />
+           : <Texto key={c} label={l} valor={form[c]} onChange={() => {}} deshabilitado />)
+        : <Texto key={c} label={l} obligatorio={editable} mono={c === 'nit' || c === 'sector_dane'} valor={form[c]}
+           onChange={v => setForm(f => ({ ...f, [c]: v }))} deshabilitado={!editable} />;
+      })}
+      {(abierto.lineas || []).length > 0 && (() => {
+       const editable = (abierto.campos_corregir || []).includes('cantidades');
+       return (
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+         <span style={{ fontSize:13, fontWeight:600, color:T.color.tinta2 }}>
+          Referencias {editable ? <span style={{ color:T.color.mal }}>*</span> : <span style={{ color:T.color.tinta4, fontWeight:400 }}>· no se pueden cambiar</span>}
+         </span>
+         <div style={{ border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control, overflow:'hidden' }}>
+          {abierto.lineas.map((l, i) => (
+           <div key={l.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderTop: i ? `1px solid ${T.color.divisor}` : 'none' }}>
+            <div style={{ flex:1, minWidth:0 }}>
+             <div style={{ fontSize:12.5, fontWeight:600, fontFamily:T.fuente.mono }}>{l.referencia || '—'}</div>
+             <div style={{ fontSize:12, color:T.color.tinta3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.descripcion || ''}</div>
+            </div>
+            {editable ? (
+             <input type="number" min="0" step="1" inputMode="numeric" aria-label={`Cantidad de ${l.referencia || 'la referencia'}`}
+              value={cantidades[l.id] ?? ''} onChange={e => setCantidades(c => ({ ...c, [l.id]: e.target.value }))}
+              style={{ width:80, padding:'7px 8px', border:`1px solid ${T.color.borde2}`, borderRadius:8, fontSize:14, fontFamily:'inherit', textAlign:'right' }}/>
+            ) : (
+             <span style={{ fontSize:13, fontWeight:700, minWidth:40, textAlign:'right' }}>{l.cantidad_pedida ?? 0}</span>
+            )}
+           </div>
+          ))}
+         </div>
+        </div>
+       );
+      })()}
+      <div style={{ fontSize:12, color:T.color.tinta3, lineHeight:1.45 }}>
+       Al reenviar sigue el mismo camino que un pedido recién subido en el plano: {abierto.plazo > 0 ? 'como tiene plazo, queda aprobado y toma el siguiente corte con cupo.' : 'como es de contado, queda pendiente de revisión de cartera.'}
+      </div>
+     </ModalForm>
+    )}
+   </Pagina>
+  );
+}
+
 export function ModuloConsultas({showToast}) {
   const esMovil = useEsMovil();
   const [pedidos, setPedidos] = useState([]);
@@ -2675,6 +2892,7 @@ export function ModuloCartera({ tab, user, showToast, setTab, onPedidosCambiaron
   case "cartera_pedidos":   return <GestionPedidos user={user} showToast={showToast} onPedidosCambiaron={onPedidosCambiaron}/>;
   case "cartera_logistica": return <ModuloLogistica showToast={showToast}/>;
   case "cartera_consultas": return <ModuloConsultas showToast={showToast}/>;
+  case "cartera_devueltos": return <PedidosDevueltos user={user} showToast={showToast} onPedidosCambiaron={onPedidosCambiaron}/>;
   default: return null;
  }
 }

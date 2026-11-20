@@ -26,7 +26,7 @@ import { EditarPedidoMovil, HojaConductores } from '${raiz.replace(/\\/g, '/')}/
 import { RegistrarEntregaMovil } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaMovil';
 import { RegistrarEntregaOperador } from '${raiz.replace(/\\/g, '/')}/src/modules/pedidos/RegistrarEntregaOperador';
 import { GuiaImprimible } from '${raiz.replace(/\\/g, '/')}/src/components/delivery/GuiaImprimible';
-import { consolidarCorte, razonCorteNoCabe, razonSedeNoCabe, ResultadoCargue, ArchivoFila, PedidosConError, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
+import { consolidarCorte, razonCorteNoCabe, razonSedeNoCabe, ResultadoCargue, ArchivoFila, PedidosConError, GestionSedes, ModalCortes, GestionAsesores, CargarPedidos, GestionPedidos, ModalRechazar, ModuloLogistica, ModuloConsultas, PedidosDevueltos, ModalDevolverPedido } from '${raiz.replace(/\\/g, '/')}/src/modules/cartera/ModuloCartera';
 import { TarjetaEntrega, TarjetaEntregada, TarjetaDevolucion, TarjetaRecogida, CabeceraConductor, ProgresoRuta, Pestanas, ListaVacia, ReordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/PantallasConductor';
 import { ordenarRuta } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/ruta';
 import { DetallePedidoConductor } from '${raiz.replace(/\\/g, '/')}/src/modules/conductor/DetallePedidoConductor';
@@ -370,6 +370,8 @@ casos.push(["Usuarios", usuarios27()]);
 casos.push(["GestionAsesores/admin", React.createElement(GestionAsesores, { showToast(){} })]);
 casos.push(["GestionAsesores/cliente", React.createElement(GestionAsesores, { showToast(){}, soloCrear:true })]);
 casos.push(["CargarPedidos/cartera", React.createElement(CargarPedidos, { user:{ id:'u1', rol:'cartera' }, showToast(){} })]);
+casos.push(["PedidosDevueltos/cliente", React.createElement(PedidosDevueltos, { user:{ id:'u2', rol:'cliente' }, showToast(){} })]);
+casos.push(["ModalDevolverPedido", React.createElement(ModalDevolverPedido, { numero:'PX1', cliente:'ACME', onClose(){}, onHecho(){}, showToast(){} })]);
 casos.push(["GestionPedidos/cartera", React.createElement(GestionPedidos, { user:{ id:'u1', rol:'cartera' }, showToast(){} })]);
 casos.push(["ModalRechazar/cartera", React.createElement(ModalRechazar, {
  pedido:{ id:'p1', numero_pedido:'4582920', cliente:'Cliente prueba', nit:'900123', valor_total:3200000, vendedor:'023', plazo:0 },
