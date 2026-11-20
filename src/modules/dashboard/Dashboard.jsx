@@ -824,15 +824,15 @@ export function Dashboard({
         { label: "En gestion", valor: pqrsGestion, color: T.color.ojo, fondo: T.color.ojoSuave },
         { label: "Cerradas", valor: pqrsCerradas, color: T.color.bien, fondo: T.color.bienSuave },
        ].map(f => (
-        <div key={f.label} style={{
-         display: "flex", alignItems: "center", gap: 10,
-         padding: "11px 14px", borderRadius: T.radio.control,
+        <button key={f.label} onClick={() => irA("pqrs")} style={{
+         display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+         padding: "11px 14px", borderRadius: T.radio.control, border: "none", cursor: "pointer", fontFamily: "inherit",
          background: f.valor > 0 ? f.fondo : T.color.superficie2,
         }}>
          <span style={{ width: 8, height: 8, borderRadius: 4, background: f.color, flexShrink: 0 }} />
          <span style={{ flex: 1, fontSize: 13, color: T.color.tinta2 }}>{f.label}</span>
          <span style={{ fontSize: 15, fontWeight: 800, color: T.color.tinta }}>{f.valor}</span>
-        </div>
+        </button>
        ))}
       </div>
      </Tarjeta>
