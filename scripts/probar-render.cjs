@@ -505,20 +505,20 @@ for (const [nombre, elemento] of casos) {
  exigir(paso2.includes("Saltar") && paso2.includes("Crear pedido"), "el paso 2 no deja saltar ni crear");
 }
 
-// Disenio 20: la abierta pide la respuesta y deja registrar; la gestionada
-// muestra la gestion como historial y ya no deja escribir otra (la base guarda
-// una sola); la cerrada no ofrece acciones. Estado de pedidos: cabecera,
+// Disenio 20 con el hilo de observaciones: abierta o en gestion se puede seguir
+// escribiendo y logistica la puede cerrar; cerrada, el hilo es de solo lectura
+// y no hay acciones. Estado de pedidos: cabecera,
 // indicadores como filtro, y Rastrear/Guia por fila.
 {
  const exigir = (cond, queja) => { if (!cond) { console.log("FALLA  pqrs: " + queja); fallos++; } };
- const abierta = renderToString(gestionPqrs({ item: pqrsAbierta }));
- const gestionada = renderToString(gestionPqrs({ item: pqrsGestionada }));
- const cerrada = renderToString(gestionPqrs({ item: { ...pqrsGestionada, estado:"cerrada" } }));
- exigir(abierta.includes("Registrar gestion") && abierta.includes("Que se hizo y que se le respondio"), "la abierta no pide la respuesta");
+ const abierta = renderToString(gestionPqrs({ item: pqrsAbierta, puedeEscribir: true }));
+ const gestionada = renderToString(gestionPqrs({ item: pqrsGestionada, puedeEscribir: true }));
+ const cerrada = renderToString(gestionPqrs({ item: { ...pqrsGestionada, estado:"cerrada" }, puedeEscribir: false }));
+ exigir(abierta.includes("Observaciones") && abierta.includes("Escribe una observación") && abierta.includes("Cerrar PQRS"), "la abierta no deja escribir ni cerrar");
  exigir(abierta.includes("Abierta hace"), "la abierta no dice cuanto lleva abierta");
- exigir(gestionada.includes("Gestiones") && gestionada.includes("Operador") && gestionada.includes("confirmacion-cliente.pdf"), "la gestionada no muestra el historial");
- exigir(!gestionada.includes("Que se hizo y que se le respondio") && gestionada.includes("ya fue registrada"), "la gestionada deja escribir otra respuesta");
- exigir(!cerrada.includes("Registrar gestion") && !cerrada.includes("Cerrar PQRS"), "la cerrada ofrece acciones");
+ exigir(gestionada.includes("Observaciones") && gestionada.includes("confirmacion-cliente.pdf"), "la gestionada no muestra el hilo ni el soporte");
+ exigir(gestionada.includes("Escribe una observación"), "la gestionada no deja agregar otra observacion");
+ exigir(!cerrada.includes("Cerrar PQRS") && !cerrada.includes("Escribe una observación") && cerrada.includes("solo lectura"), "la cerrada ofrece acciones");
  // Fechas de hoy: Estado de pedidos muestra por defecto los ultimos 30 dias, y
  // con las fechas fijas de los datos de prueba la tabla quedaba vacia con el tiempo.
  const hoyPrueba = new Date().toISOString().slice(0, 10);

@@ -293,7 +293,7 @@ export function EnviosMovil({
 // Central: el motivo es el titulo y el pie dice quien reporto y hace cuanto
 // esta abierta (ambar desde 3 dias). Cliente: la ultima respuesta de la
 // central, que es lo que viene a ver.
-export function TarjetaPqrs({ item, vistaCliente, onAbrir, onEditar }) {
+export function TarjetaPqrs({ item, vistaCliente, onAbrir, onEditar, nuevos = 0 }) {
  const chip = chipPqrs(item.estado);
  const abierta = ["abierta", "en_gestion"].includes(item.estado);
  const dias = diasDesde(item.fecha_creacion);
@@ -305,6 +305,7 @@ export function TarjetaPqrs({ item, vistaCliente, onAbrir, onEditar }) {
   <div role="button" tabIndex={0} onClick={() => onAbrir(item)} style={tarjeta}>
    <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
     <span style={{ fontFamily: T.fuente.mono, fontSize: 12, fontWeight: 600, color: T.color.tinta2 }}>{item.id}</span>
+    {nuevos > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: T.color.malPunto, color: "#fff" }}>{nuevos === 1 ? "1 nuevo" : `${nuevos} nuevos`}</span>}
     {vistaCliente && item.fecha_creacion && <span style={{ fontSize: 12, color: T.color.tinta3 }}>{fechaCorta(item.fecha_creacion)}</span>}
     <Chip {...chip} />
    </span>
@@ -341,7 +342,7 @@ export function TarjetaPqrs({ item, vistaCliente, onAbrir, onEditar }) {
 }
 
 // ── Lista de PQRS ───────────────────────────────────────────────────────────
-export function PqrsMovil({ items, vistaCliente, sobre, onAbrir, onNueva, onEditar }) {
+export function PqrsMovil({ items, vistaCliente, sobre, onAbrir, onNueva, onEditar, noLeidas = {} }) {
  const [busq, setBusq] = useState("");
  // La central las atiende de la mas vieja a la mas nueva; el cliente las ve al reves.
  const [pestana, setPestana] = useState("abiertas");
@@ -390,7 +391,7 @@ export function PqrsMovil({ items, vistaCliente, sobre, onAbrir, onNueva, onEdit
    ) : (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
      {lista.slice(0, tope).map(x => (
-      <TarjetaPqrs key={x.id} item={x} vistaCliente={vistaCliente} onAbrir={onAbrir} onEditar={onEditar} />
+      <TarjetaPqrs key={x.id} item={x} vistaCliente={vistaCliente} onAbrir={onAbrir} onEditar={onEditar} nuevos={noLeidas[x.id]?.cantidad || 0} />
      ))}
      {lista.length > tope && (
       <button onClick={() => setTope(t => t + 30)} style={{

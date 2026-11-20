@@ -504,7 +504,7 @@ function FranjaFoco({ foco, cuantos, onQuitar }) {
 // ── Dashboard ───────────────────────────────────────────────────────────────
 
 export function Dashboard({
- pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [],
+ pedidos, conductores, devoluciones = [], recogidas = [], pqrs = [], pqrsConMensajes = 0,
  promesas = [], ciudades = [], transportistas = [],
  setActiveTab, onBuscarPedido, onVerEstado,
  // Con que sujeto abrir. Siempre vacio en la aplicacion; existe para que la
@@ -602,6 +602,7 @@ export function Dashboard({
    items: m.enRiesgo.slice(0, 4).map(p => ({ id: p.id, detalle: p.fecha_estimada || "" })),
   },
   { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs" },
+  { id: "pqrs_msj", texto: "PQRS con mensajes nuevos", cantidad: pqrsConMensajes, color: T.color.marca, tab: "pqrs" },
  ];
 
  const kpis = [

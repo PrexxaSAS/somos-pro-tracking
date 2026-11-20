@@ -49,7 +49,7 @@ const ICONO = { dashboard: LayoutGrid };
 
 const aplanar = (grupos) => grupos.flatMap(([, items]) => items);
 
-function Casilla({ icono: Icono, etiqueta, activo, onClick }) {
+function Casilla({ icono: Icono, etiqueta, activo, onClick, cantidad = 0 }) {
  return (
   <button onClick={onClick} style={{
    flex: 1, minWidth: 0, border: "none", background: "transparent",
@@ -57,7 +57,16 @@ function Casilla({ icono: Icono, etiqueta, activo, onClick }) {
    gap: 3, padding: "8px 2px 6px", cursor: "pointer", fontFamily: "inherit",
    color: activo ? T.color.marca : T.color.tinta3,
   }}>
-   <Icono size={21} strokeWidth={activo ? 2.3 : 1.8} />
+   <span style={{ position: "relative", display: "inline-flex" }}>
+    <Icono size={21} strokeWidth={activo ? 2.3 : 1.8} />
+    {cantidad > 0 && (
+     <span style={{
+      position: "absolute", top: -5, right: -9, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8,
+      background: T.color.malPunto, color: "#fff", fontSize: 10, fontWeight: 700,
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+     }}>{cantidad}</span>
+    )}
+   </span>
    <span style={{
     fontSize: 10.5, fontWeight: activo ? 700 : 500, lineHeight: 1.2,
     maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -67,7 +76,7 @@ function Casilla({ icono: Icono, etiqueta, activo, onClick }) {
 }
 
 // Hoja inferior con el usuario y las opciones que no cupieron en la barra.
-export function HojaMas({ user, grupos, activeTab, onIr, onLogout, onShareApp, onClose }) {
+export function HojaMas({ user, grupos, activeTab, onIr, onLogout, onShareApp, onClose, contadores = {} }) {
  const [dentro, setDentro] = useState(false);
  const inicial = (user.nombre || "?").trim().charAt(0).toUpperCase();
 
@@ -149,7 +158,10 @@ export function HojaMas({ user, grupos, activeTab, onIr, onLogout, onShareApp, o
            textAlign: "left", cursor: "pointer",
           }}>
            <Icono size={18} strokeWidth={activo ? 2.2 : 1.8} style={{ flexShrink: 0 }} />
-           <span style={{ minWidth: 0, lineHeight: 1.25 }}>{label}</span>
+           <span style={{ minWidth: 0, lineHeight: 1.25, flex: 1 }}>{label}</span>
+           {contadores[tab] > 0 && (
+            <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: T.color.malPunto, color: "#fff", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{contadores[tab]}</span>
+           )}
           </button>
          );
         })}
@@ -170,7 +182,7 @@ export function HojaMas({ user, grupos, activeTab, onIr, onLogout, onShareApp, o
  );
 }
 
-export function NavegacionMovil({ user, activeTab, setActiveTab, onLogout, onShareApp }) {
+export function NavegacionMovil({ user, activeTab, setActiveTab, onLogout, onShareApp, contadores = {} }) {
  const [hoja, setHoja] = useState(false);
  const grupos = MENUS[user.rol] || [];
  const todas = aplanar(grupos);
@@ -210,6 +222,7 @@ export function NavegacionMovil({ user, activeTab, setActiveTab, onLogout, onSha
       etiqueta={user.rol === 'cartera' && tab === 'cartera_pedidos' ? 'Gestión' : CORTO[tab] || label}
       activo={activeTab === tab}
       onClick={() => setActiveTab(tab)}
+      cantidad={contadores[tab] || 0}
      />
     ))}
     <Casilla
@@ -229,6 +242,7 @@ export function NavegacionMovil({ user, activeTab, setActiveTab, onLogout, onSha
      onLogout={onLogout}
      onShareApp={onShareApp}
      onClose={() => setHoja(false)}
+     contadores={contadores}
     />
    )}
   </>
