@@ -9,7 +9,7 @@ import { useEsMovil } from '../../design/responsive';
 import { FacturasMovil } from '../configuracion/ConfiguracionMovil';
 import { T, tarjeta } from '../../design/tokens';
 import {
- Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Paginador, PieTabla,
+ Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, Paginador, TablaDesplazable, PieTabla,
  th, td, tdCifra, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion, BotonEliminar,
 } from '../../components/ui/listas';
 
@@ -257,7 +257,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
       {(facturas||[]).length === 0 ? "Sin facturas registradas." : "Ninguna factura coincide con los filtros."}
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:900 }}>
        <thead>
         <tr>
@@ -306,7 +306,7 @@ export function FacturasProveedor({ facturas, transportistas, pedidos, showToast
         })}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     )}
 
     <PieTabla

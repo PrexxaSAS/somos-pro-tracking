@@ -469,6 +469,44 @@ export function usePaginacion(total, inicial = TAMANOS_PAGINA[0]) {
  return { page, setPage, pageSize, setPageSize, desde, hasta, cortar };
 }
 
+// Contenedor de una tabla ancha. La barra de desplazamiento horizontal nativa
+// queda al final de la tabla, debajo de todas las filas, y no se ve: si la
+// tabla no cabe se pone otra barra arriba, sincronizada con la de abajo.
+// Las dos usan la clase barra-x (index.css), mas gruesa que el resto.
+export function TablaDesplazable({ children }) {
+ const abajo = useRef(null);
+ const arriba = useRef(null);
+ const [ancho, setAncho] = useState(0);
+ const [desborda, setDesborda] = useState(false);
+ useEffect(() => {
+  const el = abajo.current;
+  if (!el) return undefined;
+  const medir = () => { setAncho(el.scrollWidth); setDesborda(el.scrollWidth > el.clientWidth + 1); };
+  medir();
+  if (typeof ResizeObserver === "undefined") return undefined;
+  const ro = new ResizeObserver(medir);
+  ro.observe(el);
+  if (el.firstElementChild) ro.observe(el.firstElementChild);
+  return () => ro.disconnect();
+ }, []);
+ const seguir = (de, a) => () => {
+  if (de.current && a.current && a.current.scrollLeft !== de.current.scrollLeft) a.current.scrollLeft = de.current.scrollLeft;
+ };
+ return (
+  <div>
+   {desborda && (
+    <div ref={arriba} onScroll={seguir(arriba, abajo)} className="barra-x" aria-hidden="true"
+     style={{ overflowX: "auto", overflowY: "hidden", borderBottom: `1px solid ${T.color.divisor}` }}>
+     <div style={{ width: ancho, height: 1 }} />
+    </div>
+   )}
+   <div ref={abajo} onScroll={seguir(abajo, arriba)} className="barra-x" style={{ overflowX: "auto" }}>
+    {children}
+   </div>
+  </div>
+ );
+}
+
 export function PieTabla({ izquierda, derecha }) {
  return (
   <div style={{

@@ -9,7 +9,7 @@ import { descargarCSV } from '../../utils/files';
 import { mensajeErrorFuncion } from '../../utils/errors';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Casilla, MenuFila, Paginador, PieTabla, useSeleccion,
+ Segmentado, Casilla, MenuFila, Paginador, TablaDesplazable, PieTabla, useSeleccion,
  th, td, mono, botonBarra, botonPrincipal,
 } from '../../components/ui/listas';
 import { hoyLocal } from '../../utils/fechas';
@@ -299,7 +299,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
      </BarraFiltros>
     )}
 
-    <div style={{ overflowX: "auto" }}>
+    <TablaDesplazable>
      <table style={{ width: "100%", borderCollapse: "collapse", minWidth:960 }}>
       <thead>
        <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
@@ -368,7 +368,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length === 1 ? "conductor" : "conductores"}`}

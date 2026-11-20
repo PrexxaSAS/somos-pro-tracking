@@ -7,7 +7,7 @@ import { T, tarjeta } from '../../design/tokens';
 import { Plus, Printer, Trash2, Upload, Check, X, RefreshCw, Mail, Clock, FolderOpen, FileX, FileCheck, AlertCircle, ArrowRight, Download, Building2, Calendar, Undo2 } from 'lucide-react';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Paginador, usePaginacion, FiltroFechas,
+ Segmentado, Paginador, TablaDesplazable, usePaginacion, FiltroFechas,
  PieTabla, th, td, tdCifra, mono, chipMono, botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from '../../components/ui/listas';
 import {
@@ -376,7 +376,7 @@ export function GestionSedes({showToast}) {
        No hay sedes registradas. Agrega la primera para poder programar cortes.
       </div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:820 }}>
         <thead>
          <tr>
@@ -426,7 +426,7 @@ export function GestionSedes({showToast}) {
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
     </section>}
 
@@ -711,7 +711,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
        Sin asesores registrados. Sin ellos, el rechazo de un pedido no avisa a nadie.
       </div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:760 }}>
         <thead>
          <tr>
@@ -747,7 +747,7 @@ export function GestionAsesores({showToast, soloCrear = false}) {
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
      {asesores.length > 0 && (
       <PieTabla izquierda={`Mostrando ${pagA.desde}-${pagA.hasta} de ${asesores.length} asesores`}
@@ -1685,7 +1685,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
        {pedidos.length === 0 ? (rango === 'todo' ? "Sin pedidos cargados. Empieza por Cargar pedidos." : "No hay pedidos cargados en esas fechas.") : "Ningun pedido coincide con el filtro."}
       </div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
         <thead>
          <tr>
@@ -1778,7 +1778,7 @@ export function GestionPedidos({user, showToast, onPedidosCambiaron}) {
          })}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
 
      <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}
@@ -2344,7 +2344,7 @@ export function ModuloLogistica({showToast}) {
         {enPendientes ? "No hay pedidos aprobados por imprimir." : filtroImp === "todos" ? "No hay cortes para esa fecha y esa sede." : filtroImp === "impreso" ? "No hay cortes impresos con esos filtros." : "No hay cortes por imprimir con esos filtros."}
        </div>
       ) : (
-       <div style={{ overflowX:"auto" }}>
+       <TablaDesplazable>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
          <tbody>
           {cortesVistos.map(c => {
@@ -2393,7 +2393,7 @@ export function ModuloLogistica({showToast}) {
           })}
          </tbody>
         </table>
-       </div>
+       </TablaDesplazable>
       )}
      </section>
 
@@ -2833,7 +2833,7 @@ export function ModuloConsultas({showToast}) {
        {pedidos.length === 0 ? (rango === 'todo' ? "Sin pedidos cargados." : "No hay pedidos cargados en esas fechas.") : "Ningun pedido coincide con el filtro."}
       </div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead>
          <tr>
@@ -2874,7 +2874,7 @@ export function ModuloConsultas({showToast}) {
          })}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
 
      <PieTabla izquierda={`${filtrados.length} ${filtrados.length === 1 ? "pedido" : "pedidos"}`}

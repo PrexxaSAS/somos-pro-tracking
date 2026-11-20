@@ -9,7 +9,7 @@ import { supabase } from '../../supabase';
 import { mensajeErrorFuncion } from '../../utils/errors';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Casilla, Paginador, PieTabla, useSeleccion,
+ Segmentado, Casilla, Paginador, TablaDesplazable, PieTabla, useSeleccion,
  th, td, mono, botonBarra, botonPrincipal, iconoAccion,
 } from '../../components/ui/listas';
 import { useEsMovil } from '../../design/responsive';
@@ -347,7 +347,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
      </BarraFiltros>
     )}
 
-    <div style={{ overflowX: "auto" }}>
+    <TablaDesplazable>
      <table style={{ width: "100%", borderCollapse: "collapse", minWidth:860 }}>
       <thead>
        <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
@@ -438,7 +438,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtrados.length} ${filtrados.length === 1 ? "usuario" : "usuarios"}`}

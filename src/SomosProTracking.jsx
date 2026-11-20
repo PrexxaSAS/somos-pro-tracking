@@ -30,7 +30,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, usePaginacion, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
+ Paginador, usePaginacion, TablaDesplazable, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -2088,7 +2088,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       )}
      </div>
 
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1280 }}>
        <thead>
         <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
@@ -2195,7 +2195,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         })}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
 
      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderTop:`1px solid ${T.color.borde}` }}>
       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
@@ -3107,7 +3107,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
       <BarraFiltros derecha={`${lista.length} en esta pagina`}>
        <Buscador valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" ancho={400}/>
       </BarraFiltros>
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead><tr>
          <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
@@ -3140,7 +3140,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
       <PieTabla izquierda={`Mostrando ${lista.length} de ${base.length} conductores`}/>
      </section>
      {modales}
@@ -3223,7 +3223,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        </SelectFiltro>
        {selectorConductor}
       </BarraFiltros>
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead><tr>
          <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={{ ...th, textAlign:"right" }}>Cajas</th>
@@ -3234,7 +3234,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
          {itemsT.map(p => filaPedido(p, true))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
       {pie}
      </section>
      {detalle}
@@ -3313,7 +3313,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        <button onClick={() => onIr && onIr("mis_conductores_transp")} style={{ border:"none", background:"transparent", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca }}>Ver todos</button>
       )}
      </div>
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
        <thead><tr>
         <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
@@ -3335,7 +3335,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
         ))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     </section>
 
     <section style={{ ...tarjeta, overflow:"hidden" }}>
@@ -3349,7 +3349,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        {selectorConductor}
       </div>
      </div>
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
        <thead><tr>
         <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={th}>Conductor</th>
@@ -3360,7 +3360,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
         {itemsT.map(p => filaPedido(p, false))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
      {pie}
     </section>
     {detalle}
@@ -3413,7 +3413,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
       opciones={[["todas","Todas"], ["con","Con conductores"], ["sin","Sin conductores"]]} />
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
       <thead>
        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
@@ -3531,7 +3531,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={empresasFiltradas.length > pagEmp.pageSize
@@ -3733,7 +3733,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
          {fechaHist ? "Este conductor no despacho pedidos ese dia." : "Nada asignado en este momento."}
         </div>
        ) : (
-        <div style={{ overflowX:"auto" }}>
+        <TablaDesplazable>
          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:560 }}>
           <thead>
            <tr>
@@ -3759,7 +3759,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
            ))}
           </tbody>
          </table>
-        </div>
+        </TablaDesplazable>
        )}
       </section>
      ))}
@@ -3859,7 +3859,7 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
       {(ciudades||[]).length === 0 ? "Sin ciudades registradas." : "Ninguna ciudad coincide con la busqueda."}
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse" }}>
        <thead>
         <tr>
@@ -3878,7 +3878,7 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
         ))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     )}
     {filt.length > 0 && (
      <PieTabla izquierda={`Mostrando ${pagC.desde}-${pagC.hasta} de ${filt.length} ciudades`}
@@ -4252,7 +4252,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
      {activos.length===0 ? (
       <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes pedidos activos por el momento.</div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
         <thead>
          <tr>
@@ -4290,7 +4290,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
     </section>
 
@@ -4306,7 +4306,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
      {completados.length===0 ? (
       <div style={{ padding:30, textAlign:"center", color:"#9ca3af" }}>Aun no tienes pedidos entregados.</div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
         <thead>
          <tr>
@@ -4342,7 +4342,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
     </section>
    </main>
@@ -4546,7 +4546,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
       Aun no hay promesas configuradas. Sin promesa, el riesgo de un pedido se calcula con su fecha estimada.
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:640 }}>
        <thead>
         <tr>
@@ -4594,7 +4594,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
         ))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     )}
 
     <PieTabla
@@ -4710,7 +4710,7 @@ export function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recar
       Sin empresas registradas. Agrega la primera arriba.
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse" }}>
        <thead>
         <tr>
@@ -4750,7 +4750,7 @@ export function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recar
         })}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     )}
    </section>
   </Pagina>
@@ -4964,7 +4964,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, factura, pedido o ciudad" ancho={300}/>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
       <thead>
        <tr>
@@ -5011,7 +5011,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
        ))}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length===1 ? "devolucion" : "devoluciones"}`}
@@ -5421,7 +5421,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, ciudad o direccion" ancho={280}/>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
       <thead>
        <tr>
@@ -5472,7 +5472,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
        ))}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length===1 ? "recogida" : "recogidas"}`}
@@ -5900,7 +5900,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
      </SelectFiltro>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
       <thead>
        <tr>
@@ -5989,7 +5989,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filt.length} ${filt.length===1 ? "caso" : "casos"}`}
@@ -6410,7 +6410,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
      </SelectFiltro>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
       <thead>
        <tr>
@@ -6483,7 +6483,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`Mostrando ${pageStart}–${pageEnd} de ${filtP.length} pedidos · ${totalCajas} cajas`}
