@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
 
   const NOMBRE_CAMPO: Record<string, string> = {
     cliente: "Cliente", nit: "NIT", direccion: "Direccion de entrega", sector_dane: "Ciudad destino (DANE)",
-    codigo_mensaje: "Codigo de mensaje", observacion: "Observacion",
+    codigo_mensaje: "Codigo de mensaje", observacion: "Observacion", cantidades: "Cantidades de las referencias",
   };
   const campos = (pedido.campos_corregir || []).map((c: string) => NOMBRE_CAMPO[c] || c).join(", ");
   const asunto = devuelto

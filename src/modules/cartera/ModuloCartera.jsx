@@ -2267,7 +2267,8 @@ export function ModuloLogistica({showToast}) {
    filtroSede={filtroSede} setFiltroSede={setFiltroSede} filtroFecha={filtroFecha} setFiltroFecha={setFiltroFecha}
    modoFecha={modoFecha} setModoFecha={setModoFecha} filtroImp={filtroImp} setFiltroImp={setFiltroImp}
    imprimiendo={imprimiendo} imprimirCorte={imprimirCorte} impresionDe={impresionDe} imprimir={imprimir}
-  /></>;
+   onDevolver={setDevolver}
+  />{modalDevolver}</>;
 
   // El corte que se ve a la derecha. Si el elegido ya no esta en la lista
   // (cambio el filtro o se imprimio), se muestra el primero.
@@ -2520,7 +2521,7 @@ function PastillaImpresion({ imp }) {
 }
 
 function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSede,filtroFecha,setFiltroFecha,
- modoFecha,setModoFecha,filtroImp,setFiltroImp,imprimiendo,imprimirCorte,impresionDe,imprimir}) {
+ modoFecha,setModoFecha,filtroImp,setFiltroImp,imprimiendo,imprimirCorte,impresionDe,imprimir,onDevolver}) {
  return <Pagina anchoCompleto>
   <header><div style={{fontSize:12,color:T.color.tinta3}}>{porImprimir.length} sin imprimir · {cortes.filter(c=>!impresionDe(c).completo).length} cortes por imprimir</div><h1 style={{...T.texto.titulo,fontSize:23,margin:0}}>Impresión cortes</h1></header>
   <div style={{display:'flex',gap:7}}>
@@ -2543,6 +2544,7 @@ function LogisticaMovil({sedes,cortes,pedidos,porImprimir,filtroSede,setFiltroSe
    {pedidos.length===0?<div style={{...tarjeta,padding:18,fontSize:12.5,color:T.color.tinta3}}>No hay pedidos para mostrar.</div>:<div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:7}}>{pedidos.map(p=><article key={p.id} style={{...tarjeta,padding:'10px 12px',display:'flex',alignItems:'center',gap:9}}>
     <div style={{minWidth:0,flex:1}}><div style={{display:'flex',justifyContent:'space-between',gap:6,fontSize:13}}><strong>{p.numero_pedido}</strong><strong>{fCOP(p.valor_total)}</strong></div><div style={{fontSize:12,marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.cliente}</div><div style={{fontSize:11,color:T.color.tinta3,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.direccion||'—'} · {p.sector_dane||'—'} · {p.fecha_corte?fFechaHora(p.fecha_corte):'Sin corte'}</div></div>
     <button aria-label={`Imprimir pedido ${p.numero_pedido}`} onClick={()=>imprimir([p])} style={{...botonBarra,width:40,height:40,padding:0,display:'grid',placeItems:'center',flexShrink:0}}><Printer size={17}/></button>
+    {onDevolver&&<button aria-label={`Devolver pedido ${p.numero_pedido} al asesor`} title="Devolver al asesor" onClick={()=>onDevolver(p)} style={{...botonBarra,width:40,height:40,padding:0,display:'grid',placeItems:'center',flexShrink:0,color:T.color.ojo}}><Undo2 size={17}/></button>}
    </article>)}</div>}
   </section>
   {porImprimir.length>0&&<><div style={{height:58}}/><div style={{position:'fixed',left:0,right:0,bottom:'calc(62px + env(safe-area-inset-bottom, 0px))',zIndex:60,background:T.color.superficie,borderTop:`1px solid ${T.color.borde}`,padding:'9px 16px'}}><button onClick={()=>imprimir(porImprimir)} style={{...botonPrincipal,width:'100%',justifyContent:'center'}}><Printer size={16}/> Imprimir ({porImprimir.length})</button></div></>}
@@ -2560,6 +2562,9 @@ export const CAMPOS_DEVOLUCION = [
   ["sector_dane", "Ciudad destino (DANE)"],
   ["codigo_mensaje", "Codigo de mensaje"],
   ["observacion", "Observacion"],
+  // Las cantidades de cada referencia del pedido. El valor de la linea y el
+  // total se recalculan en proporcion, con el precio que trajo el plano.
+  ["cantidades", "Cantidades de las referencias"],
 ];
 const nombreCampo = (c) => (CAMPOS_DEVOLUCION.find(x => x[0] === c) || [c, c])[1];
 
@@ -2625,12 +2630,24 @@ export function PedidosDevueltos({ user, showToast, onPedidosCambiaron }) {
   };
   useEffect(() => { cargar(); }, []);
 
-  const abrir = (x) => { setAbierto(x); setForm(Object.fromEntries(CAMPOS_DEVOLUCION.map(([c]) => [c, x[c] || '']))); };
+  // Cantidad nueva de cada linea, por id de la linea.
+  const [cantidades, setCantidades] = useState({});
+  const abrir = (x) => {
+    setAbierto(x);
+    setForm(Object.fromEntries(CAMPOS_DEVOLUCION.filter(([c]) => c !== 'cantidades').map(([c]) => [c, x[c] || ''])));
+    setCantidades(Object.fromEntries((x.lineas || []).map(l => [l.id, String(l.cantidad_pedida ?? 0)])));
+  };
   const reenviar = async () => {
     const editables = abierto.campos_corregir || [];
-    if (editables.some(c => !String(form[c] || '').trim())) { showToast('Completa los campos marcados', 'error'); return; }
+    const datos = editables.filter(c => c !== 'cantidades');
+    if (datos.some(c => !String(form[c] || '').trim())) { showToast('Completa los campos marcados', 'error'); return; }
+    const conCantidades = editables.includes('cantidades');
+    if (conCantidades && Object.values(cantidades).some(v => !/^\d+$/.test(String(v).trim()))) {
+      showToast('Las cantidades deben ser números enteros (0 o más)', 'error'); return;
+    }
     setGuardando(true);
-    const cambios = Object.fromEntries(editables.map(c => [c, form[c]]));
+    const cambios = Object.fromEntries(datos.map(c => [c, form[c]]));
+    if (conCantidades) cambios.lineas = Object.entries(cantidades).map(([id, v]) => ({ id, cantidad_pedida: Number(v) }));
     const { data, error } = await supabase.rpc('reenviar_pedido_devuelto', { p_id: abierto.id, p_cambios: cambios });
     setGuardando(false);
     if (error) { showToast(error.message || 'No se pudo reenviar', 'error'); return; }
@@ -2674,7 +2691,7 @@ export function PedidosDevueltos({ user, showToast, onPedidosCambiaron }) {
       onClose={() => setAbierto(null)} onPrimario={reenviar} guardando={guardando}
       textoPrimario={guardando ? 'Reenviando...' : 'Reenviar'}>
       <FranjaInfo>{abierto.motivo_rechazo}</FranjaInfo>
-      {CAMPOS_DEVOLUCION.map(([c, l]) => {
+      {CAMPOS_DEVOLUCION.filter(([c]) => c !== 'cantidades').map(([c, l]) => {
        const editable = (abierto.campos_corregir || []).includes(c);
        return c === 'observacion'
         ? (editable
@@ -2683,6 +2700,33 @@ export function PedidosDevueltos({ user, showToast, onPedidosCambiaron }) {
         : <Texto key={c} label={l} obligatorio={editable} mono={c === 'nit' || c === 'sector_dane'} valor={form[c]}
            onChange={v => setForm(f => ({ ...f, [c]: v }))} deshabilitado={!editable} />;
       })}
+      {(abierto.lineas || []).length > 0 && (() => {
+       const editable = (abierto.campos_corregir || []).includes('cantidades');
+       return (
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+         <span style={{ fontSize:13, fontWeight:600, color:T.color.tinta2 }}>
+          Referencias {editable ? <span style={{ color:T.color.mal }}>*</span> : <span style={{ color:T.color.tinta4, fontWeight:400 }}>· no se pueden cambiar</span>}
+         </span>
+         <div style={{ border:`1px solid ${T.color.borde}`, borderRadius:T.radio.control, overflow:'hidden' }}>
+          {abierto.lineas.map((l, i) => (
+           <div key={l.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderTop: i ? `1px solid ${T.color.divisor}` : 'none' }}>
+            <div style={{ flex:1, minWidth:0 }}>
+             <div style={{ fontSize:12.5, fontWeight:600, fontFamily:T.fuente.mono }}>{l.referencia || '—'}</div>
+             <div style={{ fontSize:12, color:T.color.tinta3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.descripcion || ''}</div>
+            </div>
+            {editable ? (
+             <input type="number" min="0" step="1" inputMode="numeric" aria-label={`Cantidad de ${l.referencia || 'la referencia'}`}
+              value={cantidades[l.id] ?? ''} onChange={e => setCantidades(c => ({ ...c, [l.id]: e.target.value }))}
+              style={{ width:80, padding:'7px 8px', border:`1px solid ${T.color.borde2}`, borderRadius:8, fontSize:14, fontFamily:'inherit', textAlign:'right' }}/>
+            ) : (
+             <span style={{ fontSize:13, fontWeight:700, minWidth:40, textAlign:'right' }}>{l.cantidad_pedida ?? 0}</span>
+            )}
+           </div>
+          ))}
+         </div>
+        </div>
+       );
+      })()}
       <div style={{ fontSize:12, color:T.color.tinta3, lineHeight:1.45 }}>
        Al reenviar sigue el mismo camino que un pedido recién subido en el plano: {abierto.plazo > 0 ? 'como tiene plazo, queda aprobado y toma el siguiente corte con cupo.' : 'como es de contado, queda pendiente de revisión de cartera.'}
       </div>

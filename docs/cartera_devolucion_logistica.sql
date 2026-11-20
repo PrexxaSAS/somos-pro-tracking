@@ -4,7 +4,8 @@
 -- EL FLUJO:
 -- 1. Logistica (operador o admin) devuelve un pedido de cartera que aun no
 --    salio (en Pedidos esta Sin asignar y sin conductor; puede estar impreso).
---    Escribe el motivo y marca los campos que la auxiliar podra corregir.
+--    Escribe el motivo y marca los campos que la auxiliar podra corregir
+--    (datos del plano y, si se marca, las cantidades de las referencias).
 --    El pedido sale de Pedidos, libera su cupo en el corte y en cartera queda
 --    en estado 'devuelto'. El correo llega al correo registrado del asesor,
 --    que es el de su auxiliar.
@@ -14,9 +15,6 @@
 -- 3. El reenvio repite el flujo del plano: con plazo queda aprobado y toma el
 --    siguiente corte con cupo (la base crea de nuevo el pedido en Pedidos);
 --    de contado queda pendiente para que cartera lo revise.
---
--- Todo pasa por funciones de la base (security definer): la auxiliar no tiene
--- permisos sobre cartera ni cortes, y asi cada paso es completo o no ocurre.
 --
 -- Correr en los dos proyectos ANTES de publicar la version que lo usa.
 -- Es seguro correrlo mas de una vez.
@@ -161,7 +159,7 @@ declare
   v_pc     public.pedidos_cartera%rowtype;
   v_campos text[];
 begin
-  if public.current_user_role() not in ('admin', 'operador') then
+  if coalesce(public.current_user_role() not in ('admin', 'operador'), true) then
     raise exception 'Solo logistica puede devolver pedidos al asesor';
   end if;
   if coalesce(btrim(p_motivo), '') = '' then
@@ -169,7 +167,7 @@ begin
   end if;
   select array_agg(distinct c) into v_campos
     from unnest(coalesce(p_campos, '{}')) c
-   where c in ('cliente', 'nit', 'direccion', 'sector_dane', 'codigo_mensaje', 'observacion');
+   where c in ('cliente', 'nit', 'direccion', 'sector_dane', 'codigo_mensaje', 'observacion', 'cantidades');
   if coalesce(array_length(v_campos, 1), 0) = 0 then
     raise exception 'Marca al menos un campo para corregir';
   end if;
@@ -241,7 +239,9 @@ as $$
 $$;
 
 -- 6. La auxiliar corrige y reenvia ---------------------------------------------------
--- p_cambios: {"direccion": "...", ...}. Solo se aplican los campos marcados.
+-- p_cambios: {"direccion": "...", ..., "lineas": [{"id": "...", "cantidad_pedida": 5}]}.
+-- Solo se aplican los campos marcados. Las cantidades cambian el valor de cada
+-- linea en proporcion (se conserva el precio que trajo el plano) y el total.
 -- Devuelve {"estado": "aprobado"|"pendiente", "sin_corte": bool, "fecha_corte": ...}.
 create or replace function public.reenviar_pedido_devuelto(p_id uuid, p_cambios jsonb)
 returns jsonb
@@ -257,6 +257,8 @@ declare
   v_campo   text;
   v_corte_id    uuid;
   v_fecha_corte timestamptz;
+  v_linea       jsonb;
+  v_cant        integer;
   v_estado  text;
 begin
   select * into v_pc from public.pedidos_cartera where id = p_id for update;
@@ -269,7 +271,7 @@ begin
       select 1 from public.asesores a
        where a.auxiliar_id = v_usuario
          and public.codigo_asesor_normal(a.codigo) = public.codigo_asesor_normal(v_pc.vendedor)));
-  if not v_ok then
+  if not coalesce(v_ok, false) then
     raise exception 'Este pedido no es de un asesor a tu cargo';
   end if;
 
@@ -287,8 +289,30 @@ begin
     end case;
   end loop;
 
+  if 'cantidades' = any(coalesce(v_pc.campos_corregir, '{}')) and jsonb_typeof(p_cambios->'lineas') = 'array' then
+    for v_linea in select * from jsonb_array_elements(p_cambios->'lineas') loop
+      begin
+        v_cant := (v_linea->>'cantidad_pedida')::integer;
+      exception when others then
+        raise exception 'Cantidad no valida: %', v_linea->>'cantidad_pedida';
+      end;
+      if v_cant is null or v_cant < 0 then
+        raise exception 'Las cantidades deben ser 0 o mas';
+      end if;
+      update public.pedidos_cartera_detalle
+         set valor_total = case when coalesce(cantidad_pedida, 0) > 0
+                                then round(coalesce(valor_total, 0) * v_cant / cantidad_pedida, 2)
+                                else round(coalesce(precio, 0) * v_cant, 2) end,
+             cantidad_pedida = v_cant
+       where id = (v_linea->>'id')::uuid and pedido_id = v_pc.id;
+    end loop;
+    select coalesce(sum(valor_total), 0) into v_pc.valor_total
+      from public.pedidos_cartera_detalle where pedido_id = v_pc.id;
+  end if;
+
   update public.pedidos_cartera
-     set cliente = v_pc.cliente, nit = v_pc.nit, direccion = v_pc.direccion,
+     set valor_total = v_pc.valor_total,
+         cliente = v_pc.cliente, nit = v_pc.nit, direccion = v_pc.direccion,
          sector_dane = v_pc.sector_dane, codigo_mensaje = v_pc.codigo_mensaje, observacion = v_pc.observacion,
          campos_corregir = null, motivo_rechazo = null
    where id = v_pc.id;
@@ -320,6 +344,9 @@ end;
 $$;
 
 revoke all on function public.asignar_corte_cartera(text) from public, anon, authenticated;
+revoke all on function public.devolver_pedido_logistica(text, text, text[]) from public, anon;
+revoke all on function public.mis_pedidos_devueltos() from public, anon;
+revoke all on function public.reenviar_pedido_devuelto(uuid, jsonb) from public, anon;
 grant execute on function public.devolver_pedido_logistica(text, text, text[]) to authenticated;
 grant execute on function public.mis_pedidos_devueltos() to authenticated;
 grant execute on function public.reenviar_pedido_devuelto(uuid, jsonb) to authenticated;

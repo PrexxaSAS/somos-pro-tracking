@@ -1630,6 +1630,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
  // salen con conductor (Solo facturar, Cliente recoge) y para los que aun no
  // se han despachado. Los que van en transito los cierra su conductor.
  const [entregaMovil, setEntregaMovil] = useState(null);
+ // Pedido que logistica devuelve al asesor desde el celular.
+ const [devolverMovil, setDevolverMovil] = useState(null);
  const esMovil = useEsMovil();
  // Pedidos marcados con la casilla. Sirven para imprimir una planilla parcial:
  // sin seleccion, la planilla sale con todo lo que este filtrado.
@@ -2232,9 +2234,16 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       // operador. En los demas el soporte va dentro de la edicion, junto al
       // resto del pedido, y en Solo facturar no hay entrega que soportar.
       puedeEntregar={ped.estado === "cliente_recoge"}
+      onDevolver={["admin", "operador"].includes(user?.rol) && ped.estado === "sin_asignar" && !ped.conductor_id
+       ? () => setDevolverMovil(ped) : undefined}
      />
     );
    })()}
+   {devolverMovil && (
+    <ModalDevolverPedido numero={devolverMovil.id} cliente={devolverMovil.cliente} showToast={showToast}
+     onClose={() => setDevolverMovil(null)}
+     onHecho={() => { setDevolverMovil(null); setDetMovil(null); if (recargar) recargar(); }} />
+   )}
 
    {editMovil && (() => {
     const ped = pedidos.find(x => x.id === editMovil.id) || editMovil;
