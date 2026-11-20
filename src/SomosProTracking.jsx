@@ -5328,7 +5328,16 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
   const { data: creada, error: recErr } = await supabase.from('recogidas').insert(nueva).select("id,guia").single();
   if (recErr) { showToast(mensajeError(recErr, "la recogida"),"error"); return; }
   setModNueva(false); setForm(vacio);
-  showToast(` Recogida creada Guia: ${creada?.guia || ""}`,"success");
+  // Aviso por correo a los operadores (supabase/functions/enviar-correo-recogida).
+  // Si no sale, la recogida igual queda creada: se dice en el mismo aviso.
+  let avisoCorreo = "";
+  try {
+   const { data: env, error: envErr } = await supabase.functions.invoke('enviar-correo-recogida', { body: { recogida_id: creada?.id } });
+   if (envErr) avisoCorreo = " · no se pudo avisar por correo";
+   else if (env?.razon === "sin_destinatarios") avisoCorreo = " · ningun operador tiene correo para el aviso";
+   else if (env && !env.enviado && env.razon === "error_smtp") avisoCorreo = " · no se pudo avisar por correo";
+  } catch { avisoCorreo = " · no se pudo avisar por correo"; }
+  showToast(` Recogida creada Guia: ${creada?.guia || ""}${avisoCorreo}`, avisoCorreo ? "info" : "success");
   if (recargar) await recargar();
  };
 
@@ -6559,8 +6568,10 @@ export default function SomosProTracking() {
   if (!user) return;
   let vista = "";
   try { vista = new URLSearchParams(window.location.search).get("vista") || ""; } catch { vista = ""; }
-  if (vista !== "devueltos") return;
-  if (["admin", "operador", "cliente"].includes(user.rol)) setTab("cartera_devueltos");
+  if (vista !== "devueltos" && vista !== "recogidas") return;
+  // ?vista=recogidas viene del correo de recogida nueva.
+  if (vista === "recogidas") { if (["admin", "operador", "cliente"].includes(user.rol)) setTab("recogidas"); }
+  else if (["admin", "operador", "cliente"].includes(user.rol)) setTab("cartera_devueltos");
   try {
    window.history.replaceState({}, "", window.location.pathname);
   } catch { /* sin permiso para cambiar la direccion */ }

@@ -53,7 +53,8 @@ const ROLES_PRUEBA = ["admin","operador","cartera","transportista","conductor","
 
 const casos = [];
 casos.push(["Dashboard", React.createElement(Dashboard, {
- pedidos, conductores:[], devoluciones:[], recogidas:[], pqrs, promesas,
+ pedidos, conductores:[], devoluciones:[], pqrs, promesas,
+ recogidas:[{ id:"R1", guia:"RG1", estado:"sin_asignar", fecha_creacion:"2026-11-20" }, { id:"R2", guia:"RG2", estado:"entregado", novedad:true, fecha_creacion:"2026-11-19" }],
  ciudades:[{ code:"05001", name:"Medellin" }], setActiveTab(){}, onBuscarPedido(){}, onVerEstado(){},
 })]);
 casos.push(["PedidosMovil", React.createElement(PedidosMovil, {

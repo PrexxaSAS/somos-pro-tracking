@@ -38,11 +38,13 @@ const DEL_FOCO = {
   pedidos: (x, f) => (x.cliente || "") === f.valor,
   pqrs: (x, f) => (x.cliente || "") === f.valor,
   devoluciones: null,
+  recogidas: null,
  },
  conductor: {
   pedidos: (x, f) => String(x.conductor_id || "") === f.valor,
   pqrs: (x, f) => String(x.conductor_id || "") === f.valor,
   devoluciones: (x, f) => String(x.conductor_id || "") === f.valor,
+  recogidas: (x, f) => String(x.conductor_id || "") === f.valor,
  },
  transportista: {
   pedidos: (x, f) => String(x.nit_proveedor || "") === f.valor
@@ -50,6 +52,7 @@ const DEL_FOCO = {
   pqrs: (x, f) => String(x.nit || "") === f.valor,
   devoluciones: (x, f) => String(x.nit_proveedor || "") === f.valor
    || (x.empresa || "") === f.etiqueta,
+  recogidas: (x, f) => String(x.nit_proveedor || "") === f.valor,
  },
 };
 
@@ -584,6 +587,26 @@ export function Dashboard({
  const pqrsFoco = porFoco(pqrs, foco, "pqrs") || [];
  const devolucionesFoco = porFoco(devoluciones, foco, "devoluciones");
 
+ // Recogidas del rango (por fecha de creacion) y del sujeto enfocado. Sin
+ // asignar cuenta todas las pendientes, sin importar el rango: son trabajo
+ // por hacer.
+ const recogidasFoco = porFoco(recogidas, foco, "recogidas");
+ const rec = useMemo(() => {
+  if (!recogidasFoco) return null;
+  const dias = (RANGOS.find(r => r.id === rango) || RANGOS[3]).dias;
+  const desde = dias ? restarDias(dias) : null;
+  const enRango = desde
+   ? recogidasFoco.filter(r => (r.fecha_creacion || r.created_at || "").slice(0, 10) >= desde)
+   : recogidasFoco;
+  return {
+   total: enRango.length,
+   sinAsignar: recogidasFoco.filter(r => r.estado === "sin_asignar"),
+   enTransito: enRango.filter(r => r.estado === "en_transito").length,
+   entregadas: enRango.filter(r => r.estado === "entregado").length,
+   novedad: enRango.filter(r => r.estado === "novedad" || r.novedad).length,
+  };
+ }, [recogidasFoco, rango]);
+
  const pqrsAbiertas = pqrsFoco.filter(p => p.estado === "abierta").length;
  const pqrsGestion = pqrsFoco.filter(p => p.estado === "en_gestion").length;
  const pqrsCerradas = pqrsFoco.filter(p => p.estado === "cerrada").length;
@@ -603,6 +626,10 @@ export function Dashboard({
   },
   { id: "pqrs", texto: "PQRS abiertas", cantidad: pqrsAbiertas, color: T.color.mal, tab: "pqrs" },
   { id: "pqrs_msj", texto: "PQRS con mensajes nuevos", cantidad: pqrsConMensajes, color: T.color.marca, tab: "pqrs" },
+  {
+   id: "recog", texto: "Recogidas sin asignar", cantidad: rec ? rec.sinAsignar.length : 0,
+   color: T.color.ojo, tab: "recogidas",
+  },
  ];
 
  const kpis = [
@@ -615,6 +642,12 @@ export function Dashboard({
    label: "Devoluciones",
    valor: devolucionesFoco ? devolucionesFoco.length : null,
    nota: "Las devoluciones no registran el cliente",
+   color: T.color.tinta3,
+  },
+  {
+   label: "Recogidas",
+   valor: rec ? rec.total : null,
+   nota: "Las recogidas no registran el cliente",
    color: T.color.tinta3,
   },
  ];
@@ -782,6 +815,7 @@ export function Dashboard({
       </div>
      </Tarjeta>
 
+     <div style={{ display: "flex", flexDirection: "column", gap: esMovil ? 12 : 18 }}>
      <Tarjeta>
       <TituloTarjeta accion={<Enlace onClick={() => irA("pqrs")}>Abrir</Enlace>}>PQRS</TituloTarjeta>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -802,6 +836,33 @@ export function Dashboard({
        ))}
       </div>
      </Tarjeta>
+
+     <Tarjeta>
+      <TituloTarjeta accion={<Enlace onClick={() => irA("recogidas")}>Abrir</Enlace>}>Recogidas</TituloTarjeta>
+      {!rec ? (
+       <p style={{ margin: 0, fontSize: 13, color: T.color.tinta3 }}>Las recogidas no registran el cliente.</p>
+      ) : (
+       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[
+         { label: "Sin asignar", valor: rec.sinAsignar.length, color: T.color.ojo, fondo: T.color.ojoSuave },
+         { label: "En transito", valor: rec.enTransito, color: T.color.marca, fondo: T.color.marcaSuave },
+         { label: "Entregadas", valor: rec.entregadas, color: T.color.bien, fondo: T.color.bienSuave },
+         { label: "Con novedad", valor: rec.novedad, color: T.color.mal, fondo: T.color.malSuave },
+        ].map(f => (
+         <button key={f.label} onClick={() => irA("recogidas")} style={{
+          display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+          padding: "11px 14px", borderRadius: T.radio.control, border: "none", cursor: "pointer", fontFamily: "inherit",
+          background: f.valor > 0 ? f.fondo : T.color.superficie2,
+         }}>
+          <span style={{ width: 8, height: 8, borderRadius: 4, background: f.color, flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: 13, color: T.color.tinta2 }}>{f.label}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: T.color.tinta }}>{f.valor}</span>
+         </button>
+        ))}
+       </div>
+      )}
+     </Tarjeta>
+     </div>
     </div>
 
     <Tarjeta>

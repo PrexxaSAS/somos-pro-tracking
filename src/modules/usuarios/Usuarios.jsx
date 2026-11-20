@@ -30,7 +30,13 @@ const inicialesUsuario = (nombre) => (nombre || "?")
  .trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
 
 export function Usuarios({ usuarios, transportistas = [], showToast, recargar }) {
- const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
+ const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:"",email:""};
+
+// El correo va aparte de create-system-user (docs/recogidas_correo_operativo.sql).
+// Lo usan los operadores: les llega el aviso de cada recogida nueva.
+const correoValido = (c) => !c || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c);
+const guardarCorreo = (login, email) =>
+ supabase.rpc('guardar_correo_usuario', { p_user: login, p_email: email.trim() });
  const esMovil = useEsMovil();
  const [modal,   setModal]   = useState(false);
  const [modEditar, setModEditar] = useState(null);
@@ -54,7 +60,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
 
  const abrirNuevo = () => { setForm(vacio); setModal(true); };
  const abrirEditar = (u) => {
-  setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",cedula:u.cedula||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||""});
+  setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",cedula:u.cedula||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||"",email:u.email||""});
   setModEditar(u);
  };
 
@@ -69,6 +75,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
    showToast("NIT es obligatorio para transportista","error");
    return;
   }
+  if (!correoValido(form.email.trim())) { showToast("El correo no es valido","error"); return; }
   setGuardando(true);
   const { data, error } = await supabase.functions.invoke('create-system-user', {
    body: {
@@ -87,6 +94,10 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   });
   if (error) { showToast(await mensajeErrorFuncion(error, "el acceso"),"error"); setGuardando(false); return; }
   if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
+  if (form.email.trim()) {
+   const { error: errCorreo } = await guardarCorreo(form.user.trim(), form.email);
+   if (errCorreo) showToast("Usuario creado, pero no se guardo el correo: "+errCorreo.message,"error");
+  }
   setModal(false); setForm(vacio);
   showToast(" Usuario creado","success");
   if(recargar) await recargar(); setGuardando(false);
@@ -103,6 +114,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
    showToast("NIT es obligatorio para transportista","error");
    return;
   }
+  if (!correoValido(form.email.trim())) { showToast("El correo no es valido","error"); return; }
   setGuardando(true);
   const { data, error } = await supabase.functions.invoke('create-system-user', {
    body: {
@@ -122,6 +134,10 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   });
   if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); setGuardando(false); return; }
   if (data?.error) { showToast("Error actualizando usuario: "+data.error,"error"); setGuardando(false); return; }
+  if (form.email.trim() !== (modEditar.email || "")) {
+   const { error: errCorreo } = await guardarCorreo(form.user.trim(), form.email);
+   if (errCorreo) showToast("Usuario actualizado, pero no se guardo el correo: "+errCorreo.message,"error");
+  }
   setModEditar(null);
   showToast(form.pass.trim()?" Usuario y contrasea actualizados":" Usuario actualizado","success");
   if(recargar) await recargar(); setGuardando(false);
@@ -186,6 +202,14 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
      <Texto label="NIT" obligatorio mono valor={form.nit} onChange={f("nit")} placeholder="900123456-1" />
      <Texto label="Empresa" valor={form.empresa} onChange={f("empresa")} placeholder="Transportes XYZ" />
     </Fila>
+   </>
+  );
+
+  if (form.rol === "operador") return (
+   <>
+    <Seccion titulo="Avisos por correo" />
+    <Texto label="Correo" tipo="email" opcional valor={form.email} onChange={f("email")} placeholder="nombre@prexxa.com.co"
+     ayuda="Le llega un aviso con cada solicitud de recogida nueva" />
    </>
   );
 
@@ -387,6 +411,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
             <div style={{ minWidth: 0 }}>
              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.color.tinta }}>{u.nombre}</div>
              <div style={mono}>@{u.user}</div>
+             {u.email && <div style={{ fontSize: 12, color: T.color.tinta3 }}>{u.email}</div>}
             </div>
            </div>
           </td>
