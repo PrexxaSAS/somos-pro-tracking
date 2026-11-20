@@ -125,22 +125,38 @@ Deno.serve(async (req) => {
     : "cartera rechazó un pedido tuyo:";
   // El boton abre QTracking directo en Pedidos devueltos (?vista=devueltos).
   const enlace = `${appUrl}/?vista=devueltos`;
+  // Todo en tablas y con el relleno en las celdas: Outlook ignora el padding de
+  // <a> y de <div>, y asi el boton y la tarjeta se ven igual en todos lados.
+  const fuente = "font-family:Arial,Helvetica,sans-serif;";
   const boton = devuelto
-    ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 0"><tr><td style="border-radius:10px;background:#6d42d8">
-        <a href="${esc(enlace)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:10px">Abrir QTracking</a>
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding-top:24px">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+          <td align="center" bgcolor="#6d42d8" style="background:#6d42d8;border-radius:10px;padding:13px 26px;${fuente}">
+            <a href="${esc(enlace)}" target="_blank" style="${fuente}font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;display:inline-block">Abrir QTracking</a>
+          </td>
+        </tr></table>
       </td></tr></table>`
     : "";
-  const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:24px;background:#f6f5fa;font-family:Arial,sans-serif;color:#17141f">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e7e5ee;border-radius:12px;padding:24px">
-    <div style="font-size:13px;color:#77738a">QTracking · ${devuelto ? "Logística" : "Cartera"}</div>
-    <h1 style="font-size:20px;margin:6px 0 16px">${titulo}</h1>
-    <p style="margin:0 0 16px;font-size:14px">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, ${intro}</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px">
-      ${filas.map(([k, v]) => `<tr><td style="padding:8px 0;color:#77738a;width:160px;vertical-align:top">${k}</td><td style="padding:8px 0;font-weight:bold">${esc(v)}</td></tr>`).join("")}
-    </table>
-    ${boton}
-    <p style="margin:20px 0 0;font-size:12px;color:#77738a">Este es un aviso automático; no respondas a este correo.</p>
-  </div></body></html>`;
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f6f5fa">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f6f5fa" style="background:#f6f5fa"><tr><td align="center" style="padding:24px 12px">
+  <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="width:560px;max-width:100%;background:#ffffff;border:1px solid #e7e5ee;border-radius:12px">
+    <tr><td style="padding:26px 30px;${fuente}color:#17141f">
+      <p style="margin:0;font-size:13px;color:#77738a;${fuente}">QTracking · ${devuelto ? "Logística" : "Cartera"}</p>
+      <h1 style="margin:6px 0 14px;font-size:22px;line-height:1.3;color:#17141f;${fuente}">${titulo}</h1>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#17141f;${fuente}">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, ${intro}</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-top:1px solid #efedf4">
+        ${filas.map(([k, v]) => `<tr>
+          <td valign="top" width="130" style="padding:10px 12px 10px 0;border-bottom:1px solid #efedf4;font-size:13px;color:#77738a;${fuente}">${k}</td>
+          <td valign="top" style="padding:10px 0;border-bottom:1px solid #efedf4;font-size:14px;font-weight:bold;color:#17141f;${fuente}">${esc(v)}</td>
+        </tr>`).join("")}
+      </table>
+      ${boton}
+      <p style="margin:24px 0 0;font-size:12px;color:#77738a;${fuente}">Este es un aviso automático; no respondas a este correo.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
   const texto = `${devuelto ? "Pedido devuelto por logística" : "Pedido rechazado por cartera"}\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}${devuelto ? `\n\nCorrígelo en QTracking: ${enlace}` : ""}\n\nEste es un aviso automático.`;
 
   try {
