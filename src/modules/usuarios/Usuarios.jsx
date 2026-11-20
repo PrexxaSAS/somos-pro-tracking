@@ -14,6 +14,7 @@ import {
 } from '../../components/ui/listas';
 import { useEsMovil } from '../../design/responsive';
 import { UsuariosMovil } from '../red/RedMovil';
+import { limpiarUsuario } from '../../utils/usuarios';
 
 
 // Color por rol, para el punto de la pastilla y la inicial del avatar.
@@ -286,7 +287,7 @@ const guardarCorreo = (login, email) =>
      {camposRol()}
      <Seccion titulo="Acceso al sistema" />
      <Fila>
-      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} placeholder="juan.perez" />
+      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={v => f("user")(limpiarUsuario(v))} placeholder="juan.perez" />
       <Clave label="Contrasena" obligatorio valor={form.pass} onChange={f("pass")} ayuda="Minimo 8 caracteres" />
      </Fila>
     </ModalForm>
@@ -307,7 +308,7 @@ const guardarCorreo = (login, email) =>
      {camposRol()}
      <Seccion titulo="Acceso al sistema" />
      <Fila>
-      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={f("user")} />
+      <Texto label="Usuario (login)" obligatorio mono valor={form.user} onChange={v => f("user")(limpiarUsuario(v))} />
       <Clave label="Nueva contrasena" valor={form.pass} onChange={f("pass")} ayuda="Dejala vacia para no cambiarla" />
      </Fila>
     </ModalForm>
