@@ -43,11 +43,11 @@ import {
  ModalForm, ModalGestion, EnlacePie, Resumen, FranjaAviso, CasillaNovedad, ZonaFotos,
  Seccion, FranjaInfo, Fila, Texto, Clave, Selector, AreaTexto, Adjunto, SelectorPedido,
 } from './components/ui/formularios';
-import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Download, FileText, HelpCircle, Lock, MapPin, Pencil, Plus, RefreshCw, Search, Trash2, Truck, Undo2, Upload, UserPlus } from 'lucide-react';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { FacturasProveedor } from './modules/facturas/FacturasProveedor';
 import { Conductores } from './modules/conductores/Conductores';
-import { ModuloCartera } from './modules/cartera/ModuloCartera';
+import { ModuloCartera, ModalDevolverPedido } from './modules/cartera/ModuloCartera';
 import { Usuarios } from './modules/usuarios/Usuarios';
 import logoSrc from '../Logo.png';
 import { hoyLocal, hoyMas, diaLocal, diaEnLimites, CAMPOS_FECHA_PEDIDO, diaDePedido } from './utils/fechas';
@@ -286,8 +286,11 @@ const selectFiltro = {
  cursor: "pointer", outline: "none", maxWidth: 210,
 };
 
-export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false }) {
+export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false, canDevolver = false }) {
  const [nuevoCond, setNuevoCond] = useState("");
+ // Logistica devuelve al asesor un pedido de cartera que aun no salio.
+ const [verDevolver, setVerDevolver] = useState(false);
+ const devolvible = canDevolver && pedido.estado === "sin_asignar" && !pedido.conductor_id;
  const {
   puedeReasignar,
   reasignarConductor,
@@ -369,6 +372,9 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
       onClick={()=>verPDFSoportes({ ...pedido, soportes_data:soportesData }, showToast)}>
       Soportes
      </EnlacePie>
+    )}
+    {devolvible && (
+     <EnlacePie icono={<Undo2 size={15} />} onClick={()=>setVerDevolver(true)}>Devolver al asesor</EnlacePie>
     )}
    </>}
   >
@@ -555,6 +561,11 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
    )}
 
    {verGuia && <GuiaImprimible pedido={pedido} conductores={conductores} ciudades={ciudades} onClose={()=>setVerGuia(false)} />}
+   {verDevolver && (
+    <ModalDevolverPedido numero={pedido.id} cliente={pedido.cliente} showToast={showToast}
+     onClose={()=>setVerDevolver(false)}
+     onHecho={()=>{ setVerDevolver(false); onClose(); if (window._recargarPedidos) window._recargarPedidos(); }} />
+   )}
    {verCamara && <CargadorFotos pedido={pedido} onGuardar={adjuntarFotos} onClose={()=>setVerCamara(false)} showToast={showToast} />}
   </ModalGestion>
  );
@@ -2350,7 +2361,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </ModalForm>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} canDevolver={["admin", "operador"].includes(user?.rol)} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
@@ -6868,6 +6879,7 @@ export default function SomosProTracking() {
    case "cartera_pedidos":
    case "cartera_logistica":
    case "cartera_consultas":
+   case "cartera_devueltos":
     return <ModuloCartera tab={tab} user={user} showToast={showToast} setTab={setTab} onPedidosCambiaron={recargarPedidos}/>;
    default:        return <Dashboard pedidos={pedidos} conductores={conductores}/>;
   }

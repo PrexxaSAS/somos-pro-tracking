@@ -1,4 +1,5 @@
-// Envia por SMTP el aviso de pedido rechazado al asesor del pedido.
+// Envia por SMTP el aviso al asesor del pedido (a su correo registrado, que es
+// el de su auxiliar): pedido rechazado por cartera o devuelto por logistica.
 //
 // Antes salia desde el navegador con EmailJS, con las claves en el codigo y
 // sin saber si de verdad se enviaba. Ahora sale de aqui, con el SMTP de la
@@ -80,12 +81,13 @@ Deno.serve(async (req) => {
 
   const { data: pedido, error: pedidoError } = await adminClient
     .from("pedidos_cartera")
-    .select("numero_pedido, cliente, nit, vendedor, motivo_rechazo, estado_cartera")
+    .select("numero_pedido, cliente, nit, vendedor, motivo_rechazo, estado_cartera, campos_corregir")
     .eq("id", pedidoId)
     .maybeSingle();
   if (pedidoError || !pedido) return json({ error: "Pedido no encontrado." }, 404);
-  if (pedido.estado_cartera !== "rechazado") {
-    return json({ error: "El pedido no esta rechazado: no se envia el aviso." }, 409);
+  const devuelto = pedido.estado_cartera === "devuelto";
+  if (pedido.estado_cartera !== "rechazado" && !devuelto) {
+    return json({ error: "El pedido no esta rechazado ni devuelto: no se envia el aviso." }, 409);
   }
 
   // El asesor sale del codigo de vendedor del pedido.
@@ -99,24 +101,36 @@ Deno.serve(async (req) => {
   const para = clean(asesor?.email);
   if (!para) return json({ enviado: false, razon: asesor ? "asesor_sin_correo" : "asesor_no_registrado" });
 
-  const asunto = `Pedido ${clean(pedido.numero_pedido)} rechazado por cartera`;
+  const NOMBRE_CAMPO: Record<string, string> = {
+    cliente: "Cliente", nit: "NIT", direccion: "Direccion de entrega", sector_dane: "Ciudad destino (DANE)",
+    codigo_mensaje: "Codigo de mensaje", observacion: "Observacion",
+  };
+  const campos = (pedido.campos_corregir || []).map((c: string) => NOMBRE_CAMPO[c] || c).join(", ");
+  const asunto = devuelto
+    ? `Pedido ${clean(pedido.numero_pedido)} devuelto por logistica: falta informacion`
+    : `Pedido ${clean(pedido.numero_pedido)} rechazado por cartera`;
   const filas = [
     ["Pedido", pedido.numero_pedido],
     ["Cliente", pedido.cliente],
     ["NIT", pedido.nit],
-    ["Motivo del rechazo", pedido.motivo_rechazo || "(sin motivo)"],
+    [devuelto ? "Motivo" : "Motivo del rechazo", pedido.motivo_rechazo || "(sin motivo)"],
+    ...(devuelto ? [["Corregir", campos || "(sin campos)"]] : []),
   ];
+  const titulo = devuelto ? "Pedido devuelto por logistica" : "Pedido rechazado";
+  const intro = devuelto
+    ? "logistica devolvio un pedido tuyo porque le falta informacion. Corrigelo en QTracking, en Pedidos devueltos, y reenvialo:"
+    : "cartera rechazó un pedido tuyo:";
   const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:24px;background:#f6f5fa;font-family:Arial,sans-serif;color:#17141f">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e7e5ee;border-radius:12px;padding:24px">
-    <div style="font-size:13px;color:#77738a">QTracking · Cartera</div>
-    <h1 style="font-size:20px;margin:6px 0 16px">Pedido rechazado</h1>
-    <p style="margin:0 0 16px;font-size:14px">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, cartera rechazó un pedido tuyo:</p>
+    <div style="font-size:13px;color:#77738a">QTracking · ${devuelto ? "Logistica" : "Cartera"}</div>
+    <h1 style="font-size:20px;margin:6px 0 16px">${titulo}</h1>
+    <p style="margin:0 0 16px;font-size:14px">Hola${asesor?.nombre ? ` ${esc(asesor.nombre)}` : ""}, ${intro}</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px">
       ${filas.map(([k, v]) => `<tr><td style="padding:8px 0;color:#77738a;width:160px;vertical-align:top">${k}</td><td style="padding:8px 0;font-weight:bold">${esc(v)}</td></tr>`).join("")}
     </table>
     <p style="margin:20px 0 0;font-size:12px;color:#77738a">Este es un aviso automático; no respondas a este correo.</p>
   </div></body></html>`;
-  const texto = `Pedido rechazado por cartera\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}\n\nEste es un aviso automatico.`;
+  const texto = `${devuelto ? "Pedido devuelto por logistica" : "Pedido rechazado por cartera"}\n\n${filas.map(([k, v]) => `${k}: ${clean(v)}`).join("\n")}\n\nEste es un aviso automatico.`;
 
   try {
     const transporte = nodemailer.createTransport({
