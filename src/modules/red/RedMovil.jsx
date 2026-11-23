@@ -222,7 +222,7 @@ export function TransportistasMovil({ empresas, pedidos = [], onNueva, onEditarE
           <span style={{ fontSize: 14, fontWeight: 700, ...corta }}>{e.nombre}</span>
           <span style={{ fontSize: 12, color: T.color.tinta3, fontFamily: T.fuente.mono }}>{`NIT ${e.nit}`}</span>
          </div>
-         <button onClick={() => onEditarEmpresa(e)} title="Editar empresa" style={botonIcono}><Pencil size={14} /></button>
+         {onEditarEmpresa && <button onClick={() => onEditarEmpresa(e)} title="Editar empresa" style={botonIcono}><Pencil size={14} /></button>}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 12.5, color: T.color.tinta2 }}>
          <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}><User size={14} style={{ color: T.color.placeholder, flexShrink: 0 }} /><span style={corta}>{e.contacto || "Sin contacto"}</span></span>
@@ -243,7 +243,7 @@ export function TransportistasMovil({ empresas, pedidos = [], onNueva, onEditarE
           {e.conductores.map(c => {
            const t = enTransito(c);
            return (
-            <button key={c.id} onClick={() => onEditarConductor(c)} style={{
+            <button key={c.id} onClick={() => onEditarConductor?.(c)} disabled={!onEditarConductor} style={{
              display: "flex", alignItems: "center", gap: 10, padding: "8px 6px", border: "none", background: "transparent",
              fontFamily: "inherit", textAlign: "left", cursor: "pointer", color: T.color.tinta, borderRadius: 8,
             }}>

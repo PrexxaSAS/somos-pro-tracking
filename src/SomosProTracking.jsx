@@ -289,7 +289,7 @@ const selectFiltro = {
  cursor: "pointer", outline: "none", maxWidth: 210,
 };
 
-export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false, canDevolver = false }) {
+export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false, canDevolver = false, canEditarEnTransito = false }) {
  const [nuevoCond, setNuevoCond] = useState("");
  // Logistica devuelve al asesor un pedido de cartera que aun no salio.
  const [verDevolver, setVerDevolver] = useState(false);
@@ -353,7 +353,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
   caPrev,
  } = usePedidoEditable({
   pedido, conductores, ciudades, promesas, setPedidos, showToast, onClose,
-  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar,
+  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar, canEditarEnTransito,
  });
 
  return (
@@ -421,7 +421,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
    {pedidoCerrado && (
     <FranjaInfo>Pedido cerrado: no se permiten modificaciones despues de la entrega.</FranjaInfo>
    )}
-   {!pedidoCerrado && pedidoEnTransito && !canDeliver && (
+   {!pedidoCerrado && pedidoEnTransito && !canDeliver && !canEditarEnTransito && (
     <FranjaInfo>En transito: solo el conductor asignado puede registrar la entrega.</FranjaInfo>
    )}
    {puedeReasignar && (
@@ -2263,6 +2263,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       canBasicEdit={user?.rol === "operador"}
       canAssign={user?.rol === "operador"}
       canReasignar={user?.rol === "admin"}
+      canEditarEnTransito={["admin", "operador"].includes(user?.rol)}
      />
     );
    })()}
@@ -2364,7 +2365,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </ModalForm>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} canDevolver={["admin", "operador"].includes(user?.rol)} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} canDevolver={["admin", "operador"].includes(user?.rol)} canEditarEnTransito={["admin", "operador"].includes(user?.rol)} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
@@ -2604,7 +2605,7 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  );
 }
 
-export function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno, vista = "empresa", conductorInicial = "", onIr }) {
+export function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno, vista = "empresa", conductorInicial = "", onIr, puedeEditar = true }) {
  // Filtros de las pantallas del transportista. Viven arriba y no dentro de su
  // rama para que los hooks se llamen siempre en el mismo orden.
  const [busqT, setBusqT] = useState("");
@@ -2653,11 +2654,11 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
   if (!formE.user_login.trim() || !formE.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios", "error"); return; }
   setGuardando(true);
   try {
-   const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'system_user', nombre:formE.nombre.trim(), rol:'transportista', user_login:formE.user_login.trim(), pass_login:formE.pass_login.trim(), nit:formE.nit.trim(), empresa:formE.nombre.trim() } });
+   // Contacto y telefono los guarda la funcion: el operador no puede escribir
+   // en transportistas directamente.
+   const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'system_user', nombre:formE.nombre.trim(), rol:'transportista', user_login:formE.user_login.trim(), pass_login:formE.pass_login.trim(), nit:formE.nit.trim(), empresa:formE.nombre.trim(), contacto:formE.contacto.trim(), tel:formE.tel.trim() } });
    if (error) { showToast(await mensajeErrorFuncion(error, "la empresa transportista"), "error"); setGuardando(false); return; }
    if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
-   const { error: tErr } = await supabase.from('transportistas').update({ contacto:formE.contacto.trim(), tel:formE.tel.trim() }).eq('nit', formE.nit.trim());
-   if (tErr) { showToast("Empresa creada, pero fallo contacto: " + tErr.message, "warning"); setGuardando(false); return; }
    setModEmpresa(false); setFormE({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
    showToast("Empresa y usuario creados", "success");
    if (recargar) await recargar(); else if (window._recargar) await window._recargar();
@@ -3376,8 +3377,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  if (esMovil) return (
   <Pagina>
    <TransportistasMovil empresas={empresas} pedidos={pedidos}
-    onNueva={() => setModEmpresa(true)} onEditarEmpresa={abrirEditarEmpresa} onInscribir={abrirInscribir}
-    onEditarConductor={(c) => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }} />
+    onNueva={() => setModEmpresa(true)} onEditarEmpresa={puedeEditar ? abrirEditarEmpresa : null} onInscribir={abrirInscribir}
+    onEditarConductor={puedeEditar ? (c) => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); } : null} />
    {modales}
   </Pagina>
  );
@@ -3470,7 +3471,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
               <UserPlus size={14} /> Conductor
              </button>
              <MenuFila opciones={[
-              { texto: "Editar empresa", accion: () => abrirEditarEmpresa(e) },
+              ...(puedeEditar ? [{ texto: "Editar empresa", accion: () => abrirEditarEmpresa(e) }] : []),
               { texto: abierta ? "Contraer conductores" : "Ver conductores", accion: () => alternarFila(e.nit) },
              ]}/>
             </div>
@@ -3514,10 +3515,12 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
                    <td style={td}>{c.celular || "-"}</td>
                    <td style={{ ...td, textAlign:"right", fontWeight:700, color: transito ? T.color.marca : T.color.tinta3 }}>{transito}</td>
                    <td style={{ ...td, textAlign:"right" }}>
+                    {puedeEditar && (
                     <button style={{ ...botonBarra, padding:"5px 11px", fontSize:12.5 }}
                      onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>
                      Editar
                     </button>
+                    )}
                    </td>
                   </tr>
                  );
@@ -6936,7 +6939,8 @@ export default function SomosProTracking() {
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores} puedeEditar={user.rol==="admin"}
     onVerPedidos={(c)=>{ setEstadoPedidos(""); setBusquedaPedidos(c.placa || c.nombre || ""); setTab("pedidos"); }}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar}/>;
+   // El operador crea empresas e inscribe conductores; editar queda para el admin.
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar} puedeEditar={user.rol === "admin"}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
     ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} recargar={recargarFacturas}/>

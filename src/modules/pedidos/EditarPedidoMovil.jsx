@@ -275,10 +275,11 @@ export function EditarPedidoMovil({
  pedido, pedidos = [], conductores, ciudades, paqueterias = [], transportistas = [],
  promesas = [], setPedidos, showToast, onClose, onGuia, onMapa,
  canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false,
+ canEditarEnTransito = false,
 }) {
  const e = usePedidoEditable({
   pedido, conductores, ciudades, promesas, setPedidos, showToast, onClose,
-  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar,
+  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar, canEditarEnTransito,
  });
  const [hoja, setHoja] = useState(false);
  // "elegir" = hoja para asignar; "reasignar" = cambiar el conductor en transito.

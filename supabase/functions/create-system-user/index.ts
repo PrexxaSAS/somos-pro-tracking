@@ -341,13 +341,23 @@ Deno.serve(async (req) => {
   if (callerIsTransportista && (rol !== "conductor" || nitProveedor !== caller.nit)) {
     return json({ error: "Solo puedes crear conductores asociados a tu empresa." }, 403);
   }
-  // El operador puede inscribir conductores, pero nada mas: sin este guardia
-  // podria enviar type "conductor" con rol "admin" y crearse un administrador.
-  if (callerIsOperador && (rol !== "conductor" || payload.type !== "conductor")) {
-    return json({ error: "El operador solo puede crear conductores." }, 403);
+  // El operador puede inscribir conductores y crear empresas transportistas,
+  // pero nada mas: sin este guardia podria enviar rol "admin" y crearse un
+  // administrador.
+  const operadorCreaConductor = rol === "conductor" && payload.type === "conductor";
+  const operadorCreaEmpresa = rol === "transportista" && payload.type === "system_user";
+  if (callerIsOperador && !operadorCreaConductor && !operadorCreaEmpresa) {
+    return json({ error: "El operador solo puede crear conductores y empresas transportistas." }, 403);
   }
-  if (!callerIsAdmin && payload.type === "system_user") {
+  if (!callerIsAdmin && payload.type === "system_user" && !(callerIsOperador && operadorCreaEmpresa)) {
     return json({ error: "Solo admin puede crear usuarios de sistema." }, 403);
+  }
+  // El operador crea empresas nuevas: no puede tomarse una que ya existe (el
+  // upsert de abajo le cambiaria el usuario).
+  if (callerIsOperador && operadorCreaEmpresa) {
+    const { data: existente } = await adminClient
+      .from("transportistas").select("id").eq("nit", clean(payload.nit || nitProveedor)).maybeSingle();
+    if (existente) return json({ error: "Ya existe una empresa transportista con ese NIT." }, 409);
   }
 
   const email = `${username}@somospro.local`;
@@ -416,6 +426,10 @@ Deno.serve(async (req) => {
           nombre: empresa || nombre,
           nit: nitTransportista,
           usuario_id: usuario.id,
+          // Contacto y telefono van aqui: el operador no puede escribir en
+          // transportistas por su cuenta (RLS solo deja al admin).
+          ...(clean(payload.contacto) ? { contacto: clean(payload.contacto) } : {}),
+          ...(clean(payload.tel) ? { tel: clean(payload.tel) } : {}),
         }, { onConflict: "nit" });
 
       if (transportistaError) throw transportistaError;
