@@ -390,11 +390,19 @@ export function MenuFila({ opciones }) {
  );
 }
 
+// Cuantas filas por pagina se pueden elegir en los listados: desde 100.
+export const TAMANOS_PAGINA = [100, 200, 500];
+
 // Paginador con numeros y saltos. Con miles de filas, poder ir a una pagina
-// concreta importa mas que avanzar de una en una.
-export function Paginador({ total, page, setPage, pageSize }) {
+// concreta importa mas que avanzar de una en una. Con setPageSize muestra
+// ademas el selector de filas por pagina (TAMANOS_PAGINA); al cambiarlo se
+// vuelve a la primera pagina.
+export function Paginador({ total, page, setPage, pageSize, setPageSize }) {
  const paginas = Math.max(1, Math.ceil(total / pageSize));
- if (paginas <= 1) return null;
+ // El selector sigue visible si hay mas filas que el tamanio mas chico, para
+ // poder volver a 100 despues de elegir 500.
+ const conSelector = !!setPageSize && total > TAMANOS_PAGINA[0];
+ if (paginas <= 1 && !conSelector) return null;
 
  const numeros = [];
  const agregar = (n) => { if (!numeros.includes(n)) numeros.push(n); };
@@ -423,12 +431,78 @@ export function Paginador({ total, page, setPage, pageSize }) {
  });
 
  return (
-  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-   {boton("«", () => setPage(1), false, page === 1, "pri")}
-   {boton("<", () => setPage(Math.max(1, page - 1)), false, page === 1, "ant")}
-   {piezas}
-   {boton(">", () => setPage(Math.min(paginas, page + 1)), false, page === paginas, "sig")}
-   {boton("»", () => setPage(paginas), false, page === paginas, "ult")}
+  <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "flex-end" }}>
+   {conSelector && (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.color.tinta3 }}>
+     Mostrar
+     <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} style={{
+      height: 30, padding: "0 8px", border: `1px solid ${T.color.borde2}`, borderRadius: T.radio.chico,
+      background: T.color.superficie, color: T.color.tinta2, fontFamily: "inherit", fontSize: 13, cursor: "pointer",
+     }}>
+      {TAMANOS_PAGINA.map(n => <option key={n} value={n}>{n}</option>)}
+     </select>
+    </label>
+   )}
+   {paginas > 1 && (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+     {boton("«", () => setPage(1), false, page === 1, "pri")}
+     {boton("<", () => setPage(Math.max(1, page - 1)), false, page === 1, "ant")}
+     {piezas}
+     {boton(">", () => setPage(Math.min(paginas, page + 1)), false, page === paginas, "sig")}
+     {boton("»", () => setPage(paginas), false, page === paginas, "ult")}
+    </div>
+   )}
+  </div>
+ );
+}
+
+// Pagina actual y filas por pagina de un listado. Si los filtros dejan menos
+// paginas que la actual, se vuelve a la ultima que existe.
+export function usePaginacion(total, inicial = TAMANOS_PAGINA[0]) {
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(inicial);
+ const paginas = Math.max(1, Math.ceil(total / pageSize));
+ useEffect(() => { if (page > paginas) setPage(paginas); }, [page, paginas]);
+ const desde = total === 0 ? 0 : (page - 1) * pageSize + 1;
+ const hasta = Math.min(total, page * pageSize);
+ const cortar = (lista) => lista.slice((page - 1) * pageSize, page * pageSize);
+ return { page, setPage, pageSize, setPageSize, desde, hasta, cortar };
+}
+
+// Contenedor de una tabla ancha. La barra de desplazamiento horizontal nativa
+// queda al final de la tabla, debajo de todas las filas, y no se ve: si la
+// tabla no cabe se pone otra barra arriba, sincronizada con la de abajo.
+// Las dos usan la clase barra-x (index.css), mas gruesa que el resto.
+export function TablaDesplazable({ children }) {
+ const abajo = useRef(null);
+ const arriba = useRef(null);
+ const [ancho, setAncho] = useState(0);
+ const [desborda, setDesborda] = useState(false);
+ useEffect(() => {
+  const el = abajo.current;
+  if (!el) return undefined;
+  const medir = () => { setAncho(el.scrollWidth); setDesborda(el.scrollWidth > el.clientWidth + 1); };
+  medir();
+  if (typeof ResizeObserver === "undefined") return undefined;
+  const ro = new ResizeObserver(medir);
+  ro.observe(el);
+  if (el.firstElementChild) ro.observe(el.firstElementChild);
+  return () => ro.disconnect();
+ }, []);
+ const seguir = (de, a) => () => {
+  if (de.current && a.current && a.current.scrollLeft !== de.current.scrollLeft) a.current.scrollLeft = de.current.scrollLeft;
+ };
+ return (
+  <div>
+   {desborda && (
+    <div ref={arriba} onScroll={seguir(arriba, abajo)} className="barra-x" aria-hidden="true"
+     style={{ overflowX: "auto", overflowY: "hidden", borderBottom: `1px solid ${T.color.divisor}` }}>
+     <div style={{ width: ancho, height: 1 }} />
+    </div>
+   )}
+   <div ref={abajo} onScroll={seguir(abajo, arriba)} className="barra-x" style={{ overflowX: "auto" }}>
+    {children}
+   </div>
   </div>
  );
 }

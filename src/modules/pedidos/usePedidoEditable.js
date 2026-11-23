@@ -14,6 +14,9 @@ import { limiteDePromesa } from '../../utils/promesa';
 export function usePedidoEditable({
  pedido, conductores, ciudades, promesas = [], setPedidos, showToast, onClose,
  canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false,
+ // Admin y operador editan el pedido tambien en transito, con los mismos campos
+ // que antes de asignarlo (docs/pedidos_editar_en_transito.sql). Entregado sigue cerrado.
+ canEditarEnTransito = false,
 }) {
  const [condId,   setCondId]   = useState(pedido.conductor_id||"") ;
  const [direccion, setDireccion] = useState(pedido.direccion||"");
@@ -54,13 +57,13 @@ export function usePedidoEditable({
  const tieneSoportes = (soportesData.length > 0) || ((pedido.soportes||[]).length > 0) || (fotosPendientes.length > 0);
  const pedidoCerrado = ["entregado","novedad"].includes(pedido.estado);
  const pedidoEnTransito = pedido.estado === "en_transito";
- const pedidoBloqueadoEdicion = pedidoCerrado || pedidoEnTransito;
+ const pedidoBloqueadoEdicion = pedidoCerrado || (pedidoEnTransito && !canEditarEnTransito);
  const puedeMarcarNovedadEntrega = !pedidoCerrado && (!pedidoEnTransito || canDeliver);
  // El admin puede cambiar el conductor de un pedido en transito: a veces el
  // conductor no alcanza a entregar, devuelve el pedido y sale con otro. Solo
  // eso: el resto del pedido sigue bloqueado mientras esta en transito, y la
  // base lo hace cumplir (docs/pedidos_reasignar_conductor.sql).
- const puedeReasignar = canReasignar && pedidoEnTransito && pedido.tipo !== "paqueteria";
+ const puedeReasignar = canReasignar && pedidoEnTransito && pedido.tipo !== "paqueteria" && !canEditarEnTransito;
  // Cliente Recoge y Solo Facturar no se despachan: no hay conductor ni transportadora
  // que asignar. El formulario oculta esos campos y el guardado los deja en null, para
  // que ningun conductor figure moviendo un pedido que nunca salio con el.

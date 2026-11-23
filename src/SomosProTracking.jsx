@@ -30,7 +30,7 @@ import { PaginationControls } from './components/ui/PaginationControls';
 import { T, tarjeta, tonoFiltroPedido } from './design/tokens';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, Buscador, SelectFiltro, Segmentado, MenuFila,
- Paginador, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
+ Paginador, usePaginacion, TablaDesplazable, PieTabla, ChipEstado, FiltroFechas, FiltroPorFecha, th, td, tdCifra, mono, chipMono,
  botonBarra, botonFila, botonPrincipal, iconoAccion,
 } from './components/ui/listas';
 import {
@@ -60,6 +60,7 @@ import { PromesasMovil, CiudadesMovil, ResumenMovil } from './modules/configurac
 import { BotonEliminar } from './components/ui/listas';
 import { TransportistasMovil, PaqueteriasMovil } from './modules/red/RedMovil';
 import { limpiarUsuario } from './utils/usuarios';
+import { SELECT_GUIAS_FACTURA, normalizarGuiaFactura } from './utils/envioFactura';
 
 const iSt = {
  border:`1.5px solid ${P[200]}`,borderRadius:10,padding:"10px 14px",
@@ -164,11 +165,11 @@ async function obtenerFacturasConGuias() {
   .from('facturas_proveedor').select('*').order('created_at', { ascending: false }).order('id'));
  const guias = await traerTodas(() => supabase
   .from('factura_guias')
-  .select('*, pedidos(id,guia_interna,cliente,cajas,factura,ciudad_codigo,ciudad_nombre,fecha_creacion,fecha_despacho,'
-   + 'fecha_real,fecha_pedido,guia_paqueteria,ciudad_origen_codigo,ciudad_origen_nombre,notas)')
+  .select(SELECT_GUIAS_FACTURA)
   .order('id'));
  const porFactura = {};
- (guias || []).forEach(g => {
+ // Pedido, devolucion o recogida: g.pedidos queda con el envio (utils/envioFactura).
+ (guias || []).map(normalizarGuiaFactura).forEach(g => {
   if (!porFactura[g.factura_id]) porFactura[g.factura_id] = [];
   porFactura[g.factura_id].push(g);
  });
@@ -288,7 +289,7 @@ const selectFiltro = {
  cursor: "pointer", outline: "none", maxWidth: 210,
 };
 
-export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false, canDevolver = false }) {
+export function ModalDetalle({ pedido, conductores, ciudades, transportistas, paqueterias = [], promesas = [], onClose, setPedidos, showToast, canEdit, canBasicEdit = false, canAssign = false, canDeliver = false, canReasignar = false, canDevolver = false, canEditarEnTransito = false }) {
  const [nuevoCond, setNuevoCond] = useState("");
  // Logistica devuelve al asesor un pedido de cartera que aun no salio.
  const [verDevolver, setVerDevolver] = useState(false);
@@ -352,7 +353,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
   caPrev,
  } = usePedidoEditable({
   pedido, conductores, ciudades, promesas, setPedidos, showToast, onClose,
-  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar,
+  canEdit, canBasicEdit, canAssign, canDeliver, canReasignar, canEditarEnTransito,
  });
 
  return (
@@ -420,7 +421,7 @@ export function ModalDetalle({ pedido, conductores, ciudades, transportistas, pa
    {pedidoCerrado && (
     <FranjaInfo>Pedido cerrado: no se permiten modificaciones despues de la entrega.</FranjaInfo>
    )}
-   {!pedidoCerrado && pedidoEnTransito && !canDeliver && (
+   {!pedidoCerrado && pedidoEnTransito && !canDeliver && !canEditarEnTransito && (
     <FranjaInfo>En transito: solo el conductor asignado puede registrar la entrega.</FranjaInfo>
    )}
    {puedeReasignar && (
@@ -2089,8 +2090,8 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       )}
      </div>
 
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+     <TablaDesplazable>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1280 }}>
        <thead>
         <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
          <th style={{ ...th2, width:42 }}>
@@ -2196,22 +2197,13 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
         })}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
 
      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderTop:`1px solid ${T.color.borde}` }}>
       <span style={{ fontSize:12.5, color:T.color.tinta3 }}>
        Mostrando {pageStart}-{pageEnd} de {filtrados.length} pedidos · {totalCajas} cajas
       </span>
-      <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
-       {/* Cuantos por pagina: desde 100. */}
-       <label style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12.5, color:T.color.tinta3 }}>
-        Mostrar
-        <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} style={{ ...selectFiltro, padding:"5px 8px" }}>
-         {[100, 200, 500].map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
-       </label>
-       <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} />
-      </div>
+      <Paginador total={filtrados.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
      </div>
     </section>
    </div>
@@ -2271,6 +2263,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
       canBasicEdit={user?.rol === "operador"}
       canAssign={user?.rol === "operador"}
       canReasignar={user?.rol === "admin"}
+      canEditarEnTransito={["admin", "operador"].includes(user?.rol)}
      />
     );
    })()}
@@ -2372,7 +2365,7 @@ function Pedidos({ pedidos, setPedidos, conductores, ciudades, showToast, paquet
     </ModalForm>
    )}
 
-   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} canDevolver={["admin", "operador"].includes(user?.rol)} />}
+   {modDet && <ModalDetalle pedido={modDet} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} promesas={promesas} onClose={() => setModDet(null)} setPedidos={setPedidos} showToast={showToast} canEdit={user?.rol !== "operador"} canBasicEdit={user?.rol === "operador"} canAssign={user?.rol === "operador"} canReasignar={user?.rol === "admin"} canDevolver={["admin", "operador"].includes(user?.rol)} canEditarEnTransito={["admin", "operador"].includes(user?.rol)} />}
    {modGuia && <GuiaImprimible pedido={modGuia} conductores={conductores} ciudades={ciudades} onClose={() => setModGuia(null)} />}
    {modCSV && <ModalCSVPedidos onClose={() => setModCSV(false)} ciudades={ciudades} onImportar={handleImportarCSV} />}
    {reporteImportacion && (
@@ -2612,7 +2605,7 @@ function RastreoGPS({ pedidos, conductores, ciudades }) {
  );
 }
 
-export function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno, vista = "empresa", conductorInicial = "", onIr }) {
+export function Transportistas({ transportistas, conductores, pedidos = [], showToast, user, recargar, setActiveTabExterno, vista = "empresa", conductorInicial = "", onIr, puedeEditar = true }) {
  // Filtros de las pantallas del transportista. Viven arriba y no dentro de su
  // rama para que los hooks se llamen siempre en el mismo orden.
  const [busqT, setBusqT] = useState("");
@@ -2622,6 +2615,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  const [rangoT, setRangoT] = useState("todo");
  const [pestanaT, setPestanaT] = useState("todos");
  const [pageT, setPageT] = useState(1);
+ const [porPaginaT, setPorPaginaT] = useState(100);
  const [verPed, setVerPed] = useState(null);
  const [busqC, setBusqC] = useState("");
  const [filtroCond, setFiltroCond] = useState("todos");
@@ -2660,11 +2654,11 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
   if (!formE.user_login.trim() || !formE.pass_login.trim()) { showToast("Usuario y contrasena son obligatorios", "error"); return; }
   setGuardando(true);
   try {
-   const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'system_user', nombre:formE.nombre.trim(), rol:'transportista', user_login:formE.user_login.trim(), pass_login:formE.pass_login.trim(), nit:formE.nit.trim(), empresa:formE.nombre.trim() } });
+   // Contacto y telefono los guarda la funcion: el operador no puede escribir
+   // en transportistas directamente.
+   const { data, error } = await supabase.functions.invoke('create-system-user', { body: { type:'system_user', nombre:formE.nombre.trim(), rol:'transportista', user_login:formE.user_login.trim(), pass_login:formE.pass_login.trim(), nit:formE.nit.trim(), empresa:formE.nombre.trim(), contacto:formE.contacto.trim(), tel:formE.tel.trim() } });
    if (error) { showToast(await mensajeErrorFuncion(error, "la empresa transportista"), "error"); setGuardando(false); return; }
    if (data?.error) { showToast("Error creando acceso: " + data.error, "error"); setGuardando(false); return; }
-   const { error: tErr } = await supabase.from('transportistas').update({ contacto:formE.contacto.trim(), tel:formE.tel.trim() }).eq('nit', formE.nit.trim());
-   if (tErr) { showToast("Empresa creada, pero fallo contacto: " + tErr.message, "warning"); setGuardando(false); return; }
    setModEmpresa(false); setFormE({ nombre:"", nit:"", contacto:"", tel:"", user_login:"", pass_login:"" });
    showToast("Empresa y usuario creados", "success");
    if (recargar) await recargar(); else if (window._recargar) await window._recargar();
@@ -2775,6 +2769,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
    return okVista && okBusq;
   });
  }, [empresas, busqEmp, vistaEmp]);
+ const pagEmp = usePaginacion(empresasFiltradas.length);
+ useEffect(() => { pagEmp.setPage(1); }, [busqEmp, vistaEmp]);
 
  const alternarFila = (nit) => setAbiertas(prev => {
   const s = new Set(prev);
@@ -2988,7 +2984,6 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
     const cond = conductores.find(c => String(c.id) === String(p.conductor_id));
     return [p.id, p.guia_interna, p.cliente, p.ciudad_nombre, p.direccion, cond?.nombre].some(v => String(v || "").toLowerCase().includes(q));
    });
-  const porPaginaT = 10;
   const itemsT = filtradosT.slice((pageT - 1) * porPaginaT, pageT * porPaginaT);
   const desdeN = filtradosT.length === 0 ? 0 : (pageT - 1) * porPaginaT + 1;
   const hastaN = Math.min(filtradosT.length, pageT * porPaginaT);
@@ -3051,7 +3046,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
   const pie = (
    <PieTabla
     izquierda={`Mostrando ${desdeN}–${hastaN} de ${filtradosT.length} pedidos${vista === "pedidos" ? ` · ${cajasT} cajas` : ""}`}
-    derecha={filtradosT.length > porPaginaT ? <Paginador total={filtradosT.length} page={pageT} setPage={setPageT} pageSize={porPaginaT}/> : null}
+    derecha={<Paginador total={filtradosT.length} page={pageT} setPage={setPageT} pageSize={porPaginaT} setPageSize={setPorPaginaT}/>}
    />
   );
 
@@ -3115,8 +3110,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
       <BarraFiltros derecha={`${lista.length} en esta pagina`}>
        <Buscador valor={busqC} onChange={setBusqC} placeholder="Buscar por nombre, cedula o placa" ancho={400}/>
       </BarraFiltros>
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <TablaDesplazable>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead><tr>
          <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
          <th style={{ ...th, textAlign:"right" }}>Activos</th><th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3148,7 +3143,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
       <PieTabla izquierda={`Mostrando ${lista.length} de ${base.length} conductores`}/>
      </section>
      {modales}
@@ -3231,8 +3226,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        </SelectFiltro>
        {selectorConductor}
       </BarraFiltros>
-      <div style={{ overflowX:"auto" }}>
-       <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <TablaDesplazable>
+       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
         <thead><tr>
          <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={{ ...th, textAlign:"right" }}>Cajas</th>
          <th style={th}>Conductor</th><th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3242,7 +3237,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
          {itemsT.map(p => filaPedido(p, true))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
       {pie}
      </section>
      {detalle}
@@ -3321,8 +3316,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        <button onClick={() => onIr && onIr("mis_conductores_transp")} style={{ border:"none", background:"transparent", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, color:T.color.marca }}>Ver todos</button>
       )}
      </div>
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+     <TablaDesplazable>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
        <thead><tr>
         <th style={th}>Conductor</th><th style={th}>Placa</th><th style={th}>Cedula</th><th style={th}>Telefono</th>
         <th style={th}>Estado</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3343,7 +3338,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
         ))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     </section>
 
     <section style={{ ...tarjeta, overflow:"hidden" }}>
@@ -3357,8 +3352,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        {selectorConductor}
       </div>
      </div>
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+     <TablaDesplazable>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
        <thead><tr>
         <th style={th}>N° pedido</th><th style={th}>Cliente</th><th style={th}>Destino</th><th style={th}>Conductor</th>
         <th style={th}>Estado</th><th style={th}>Soporte</th><th style={{ ...th, textAlign:"right" }}>Acciones</th>
@@ -3368,7 +3363,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
         {itemsT.map(p => filaPedido(p, false))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
      {pie}
     </section>
     {detalle}
@@ -3382,8 +3377,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
  if (esMovil) return (
   <Pagina>
    <TransportistasMovil empresas={empresas} pedidos={pedidos}
-    onNueva={() => setModEmpresa(true)} onEditarEmpresa={abrirEditarEmpresa} onInscribir={abrirInscribir}
-    onEditarConductor={(c) => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }} />
+    onNueva={() => setModEmpresa(true)} onEditarEmpresa={puedeEditar ? abrirEditarEmpresa : null} onInscribir={abrirInscribir}
+    onEditarConductor={puedeEditar ? (c) => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); } : null} />
    {modales}
   </Pagina>
  );
@@ -3421,8 +3416,8 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
       opciones={[["todas","Todas"], ["con","Con conductores"], ["sin","Sin conductores"]]} />
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse" }}>
+    <TablaDesplazable>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
       <thead>
        <tr style={{ borderBottom:`1px solid ${T.color.borde}` }}>
         <th style={{ ...th, width:44 }} />
@@ -3440,7 +3435,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
          {empresas.length === 0 ? "Sin empresas registradas." : "Ninguna empresa coincide con el filtro."}
         </td></tr>
        )}
-       {empresasFiltradas.map(e => {
+       {pagEmp.cortar(empresasFiltradas).map(e => {
         const abierta = abiertas.has(e.nit);
         return (
          <React.Fragment key={e.nit || e.id}>
@@ -3476,7 +3471,7 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
               <UserPlus size={14} /> Conductor
              </button>
              <MenuFila opciones={[
-              { texto: "Editar empresa", accion: () => abrirEditarEmpresa(e) },
+              ...(puedeEditar ? [{ texto: "Editar empresa", accion: () => abrirEditarEmpresa(e) }] : []),
               { texto: abierta ? "Contraer conductores" : "Ver conductores", accion: () => alternarFila(e.nit) },
              ]}/>
             </div>
@@ -3520,10 +3515,12 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
                    <td style={td}>{c.celular || "-"}</td>
                    <td style={{ ...td, textAlign:"right", fontWeight:700, color: transito ? T.color.marca : T.color.tinta3 }}>{transito}</td>
                    <td style={{ ...td, textAlign:"right" }}>
+                    {puedeEditar && (
                     <button style={{ ...botonBarra, padding:"5px 11px", fontSize:12.5 }}
                      onClick={() => { setFormEdit({ nombre:c.nombre, cedula:c.cedula || "", placa:c.placa || "", celular:c.celular || "", nit_proveedor:c.nit_proveedor || "", empresa:c.empresa || "" }); setModEdit(c); }}>
                      Editar
                     </button>
+                    )}
                    </td>
                   </tr>
                  );
@@ -3539,15 +3536,20 @@ export function Transportistas({ transportistas, conductores, pedidos = [], show
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
-     izquierda={`${empresasFiltradas.length} ${empresasFiltradas.length === 1 ? "empresa" : "empresas"}`}
+     izquierda={empresasFiltradas.length > pagEmp.pageSize
+      ? `Mostrando ${pagEmp.desde}-${pagEmp.hasta} de ${empresasFiltradas.length} empresas`
+      : `${empresasFiltradas.length} ${empresasFiltradas.length === 1 ? "empresa" : "empresas"}`}
      derecha={
+      <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", justifyContent:"flex-end" }}>
+      <Paginador total={empresasFiltradas.length} page={pagEmp.page} setPage={pagEmp.setPage} pageSize={pagEmp.pageSize} setPageSize={pagEmp.setPageSize}/>
       <button onClick={() => setActiveTabExterno && setActiveTabExterno("conductores")} style={{
        border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit",
        color:T.color.marca, fontSize:13, fontWeight:600, padding:0,
       }}>Ver todos los conductores &rarr;</button>
+      </div>
      }
     />
    </section>
@@ -3736,8 +3738,8 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
          {fechaHist ? "Este conductor no despacho pedidos ese dia." : "Nada asignado en este momento."}
         </div>
        ) : (
-        <div style={{ overflowX:"auto" }}>
-         <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <TablaDesplazable>
+         <table style={{ width:"100%", borderCollapse:"collapse", minWidth:560 }}>
           <thead>
            <tr>
             <th style={th}>{bloque.tipo === "pedido" ? "Pedido" : "Guia"}</th>
@@ -3762,7 +3764,7 @@ export function ResumenTransportador({ pedidos, conductores, devoluciones = [], 
            ))}
           </tbody>
          </table>
-        </div>
+        </TablaDesplazable>
        )}
       </section>
      ))}
@@ -3787,6 +3789,8 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
  };
 
  const filt=ciudades.filter(c=>!busq||c.name.toLowerCase().includes(busq.toLowerCase())||c.code.includes(busq));
+ const pagC = usePaginacion(filt.length);
+ useEffect(() => { pagC.setPage(1); }, [busq]);
  const border = "#e5e7eb";
  const cardStyle = { background:"#fff", border:`1px solid ${border}`, borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,.03)" };
  const buttonBase = { border:`1px solid ${border}`, background:"#fff", color:"#111827", borderRadius:12, padding:"10px 16px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" };
@@ -3860,7 +3864,7 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
       {(ciudades||[]).length === 0 ? "Sin ciudades registradas." : "Ninguna ciudad coincide con la busqueda."}
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse" }}>
        <thead>
         <tr>
@@ -3870,7 +3874,7 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
         </tr>
        </thead>
        <tbody>
-        {filt.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es",{sensitivity:"base"})).map(c => (
+        {pagC.cortar(filt.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","es",{sensitivity:"base"}))).map(c => (
          <tr key={c.code}>
           <td style={{ ...td, fontWeight:600, color:T.color.tinta }}>{c.name}</td>
           <td style={td}><span style={chipMono}>{c.code}</span></td>
@@ -3879,7 +3883,11 @@ export function Ciudades({ ciudades, pedidos = [], showToast, recargar }) {
         ))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
+    )}
+    {filt.length > 0 && (
+     <PieTabla izquierda={`Mostrando ${pagC.desde}-${pagC.hasta} de ${filt.length} ciudades`}
+      derecha={<Paginador total={filt.length} page={pagC.page} setPage={pagC.setPage} pageSize={pagC.pageSize} setPageSize={pagC.setPageSize}/>}/>
     )}
    </section>
 
@@ -4249,7 +4257,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
      {activos.length===0 ? (
       <div style={{ padding:42, textAlign:"center", color:"#9ca3af" }}>No tienes pedidos activos por el momento.</div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
         <thead>
          <tr>
@@ -4287,7 +4295,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
     </section>
 
@@ -4303,7 +4311,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
      {completados.length===0 ? (
       <div style={{ padding:30, textAlign:"center", color:"#9ca3af" }}>Aun no tienes pedidos entregados.</div>
      ) : (
-      <div style={{ overflowX:"auto" }}>
+      <TablaDesplazable>
        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
         <thead>
          <tr>
@@ -4339,7 +4347,7 @@ function MisPedidosConductor({ pedidos, user, conductores, ciudades, promesas = 
          ))}
         </tbody>
        </table>
-      </div>
+      </TablaDesplazable>
      )}
     </section>
    </main>
@@ -4432,7 +4440,7 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
  const [guard,  setGuard]  = useState(false);
  const [busq,   setBusq]   = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
 
  // Map for quick lookup
  const promMap = Object.fromEntries((promesas||[]).map(p => [p.ciudad_codigo, p.dias_plazo]));
@@ -4543,8 +4551,8 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
       Aun no hay promesas configuradas. Sin promesa, el riesgo de un pedido se calcula con su fecha estimada.
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+     <TablaDesplazable>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:640 }}>
        <thead>
         <tr>
          <th style={th}>Ciudad</th>
@@ -4591,12 +4599,12 @@ export function GestionPromesas({ promesas, ciudades, showToast, recargar }) {
         ))}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     )}
 
     <PieTabla
      izquierda={`${conPromesa.length} ${conPromesa.length === 1 ? "ciudad" : "ciudades"} con promesa`}
-     derecha={<Paginador total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={conPromesa.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -4707,7 +4715,7 @@ export function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recar
       Sin empresas registradas. Agrega la primera arriba.
      </div>
     ) : (
-     <div style={{ overflowX:"auto" }}>
+     <TablaDesplazable>
       <table style={{ width:"100%", borderCollapse:"collapse" }}>
        <thead>
         <tr>
@@ -4747,7 +4755,7 @@ export function GestionPaqueterias({ paqueterias, pedidos = [], showToast, recar
         })}
        </tbody>
       </table>
-     </div>
+     </TablaDesplazable>
     )}
    </section>
   </Pagina>
@@ -4762,7 +4770,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const fileRef = useRef(null);
 
  const vacio = {
@@ -4961,7 +4969,7 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, factura, pedido o ciudad" ancho={300}/>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
       <thead>
        <tr>
@@ -5008,11 +5016,11 @@ export function ModuloDevoluciones({ devoluciones, conductores, ciudades, transp
        ))}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length===1 ? "devolucion" : "devoluciones"}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -5217,13 +5225,14 @@ function ModalDetalleDV({ dev, conductores, ciudades, transportistas = [], paque
 
 // ModuloRecogidas 
 
-export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar }) {
+export function ModuloRecogidas({ recogidas, conductores, ciudades, transportistas, paqueterias = [], showToast, user, recargar, filtroInicial = "" }) {
+ const [filtroEst, setFiltroEst] = useState(filtroInicial || "todos");
  const [modNueva, setModNueva] = useState(false);
  const [modEditar,setModEditar]= useState(null);
  const [modDet,  setModDet]  = useState(null);
  const [busq,   setBusq]   = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const fileRef = useRef(null);
 
  const vacio = {
@@ -5325,7 +5334,16 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
   const { data: creada, error: recErr } = await supabase.from('recogidas').insert(nueva).select("id,guia").single();
   if (recErr) { showToast(mensajeError(recErr, "la recogida"),"error"); return; }
   setModNueva(false); setForm(vacio);
-  showToast(` Recogida creada Guia: ${creada?.guia || ""}`,"success");
+  // Aviso por correo a los operadores (supabase/functions/enviar-correo-recogida).
+  // Si no sale, la recogida igual queda creada: se dice en el mismo aviso.
+  let avisoCorreo = "";
+  try {
+   const { data: env, error: envErr } = await supabase.functions.invoke('enviar-correo-recogida', { body: { recogida_id: creada?.id } });
+   if (envErr) avisoCorreo = " · no se pudo avisar por correo";
+   else if (env?.razon === "sin_destinatarios") avisoCorreo = " · ningun operador tiene correo para el aviso";
+   else if (env && !env.enviado && env.razon === "error_smtp") avisoCorreo = " · no se pudo avisar por correo";
+  } catch { avisoCorreo = " · no se pudo avisar por correo"; }
+  showToast(` Recogida creada Guia: ${creada?.guia || ""}${avisoCorreo}`, avisoCorreo ? "info" : "success");
   if (recargar) await recargar();
  };
 
@@ -5363,8 +5381,12 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
   if (recargar) await recargar();
  };
 
+ // "novedad" tambien cuenta las entregadas con novedad, como el Dashboard.
+ const okEstado = (r) => filtroEst === "todos"
+  || (filtroEst === "novedad" ? (r.estado === "novedad" || r.novedad) : r.estado === filtroEst);
  const filtradas = recogidas.filter(r=>{
   if (esCliente && ![user.nombre, user.user].includes(r.solicitado_por)) return false;
+  if (!okEstado(r)) return false;
   const q=busq.toLowerCase();
   return !busq||r.guia.toLowerCase().includes(q)||(r.ciudad_recogida_nombre||"").toLowerCase().includes(q);
  });
@@ -5375,7 +5397,7 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
  const totalAbiertas = filtradas.filter(r => r.estado !== "entregado" && r.estado !== "novedad").length;
  const totalCerradas = filtradas.length - totalAbiertas;
  const pageItems = filtradas.slice((page - 1) * pageSize, page * pageSize);
- useEffect(() => { setPage(1); }, [busq, pageSize]);
+ useEffect(() => { setPage(1); }, [busq, pageSize, filtroEst]);
 
  // Disenios 22b, 24b y 25b, con los mismos crear, asignar y marcarEntregado.
  if (esMovil) return (
@@ -5383,7 +5405,8 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
    <EnviosMovil tipo="recogida" conductores={conductores} vistaCliente={esCliente}
     items={recogidas.filter(r => !esCliente || [user.nombre, user.user].includes(r.solicitado_por))}
     sobre={esCliente ? (user.nombre || user.user) : "Somos PRO · Tracking"}
-    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente} />
+    onAbrir={setModDet} onNuevo={() => setModNueva(true)} onEditar={abrirEditarCliente}
+    pestanaInicial={["entregado", "novedad"].includes(filtroInicial) ? "cerradas" : "abiertas"} />
    {(modNueva||modEditar)&&(
     <FormRecogidaMovil form={form} setForm={setForm} ciudades={ciudades}
      editando={Boolean(modEditar)} conTransporte={!esCliente && !modEditar} conductores={conductores} paqueterias={paqueterias}
@@ -5416,9 +5439,16 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
    <section style={{ ...tarjeta, overflow:"hidden" }}>
     <BarraFiltros derecha={`${filtradas.length} de ${recogidas.length}`}>
      <Buscador valor={busq} onChange={setBusq} placeholder="Buscar guia, ciudad o direccion" ancho={280}/>
+     <SelectFiltro valor={filtroEst} onChange={setFiltroEst} ancho={190}>
+      <option value="todos">Todos los estados</option>
+      <option value="sin_asignar">Sin asignar</option>
+      <option value="en_transito">En transito</option>
+      <option value="entregado">Entregadas</option>
+      <option value="novedad">Con novedad</option>
+     </SelectFiltro>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
       <thead>
        <tr>
@@ -5469,11 +5499,11 @@ export function ModuloRecogidas({ recogidas, conductores, ciudades, transportist
        ))}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length===1 ? "recogida" : "recogidas"}`}
-     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtradas.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -5666,7 +5696,7 @@ function ModalDetalleRC({ rec, conductores, ciudades, transportistas = [], paque
 
 // ModuloPQRS 
 
-export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva, noLeidas = {}, onLeida }) {
+export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInicial = false, onConsumirNueva, noLeidas = {}, onLeida, filtroInicial = "" }) {
  const esMovil = useEsMovil();
  const MOTIVOS = [
   "Entrega tarda fuera de tiempo estimado",
@@ -5704,10 +5734,10 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
   if (nuevaInicial) { setModNueva(true); if (onConsumirNueva) onConsumirNueva(); }
  }, [nuevaInicial]);
  const [busq,    setBusq]    = useState("");
- const [filtroEst, setFiltroEst] = useState("todos");
+ const [filtroEst, setFiltroEst] = useState(filtroInicial || "todos");
  const [gestion,  setGestion]  = useState("");
  const [page, setPage] = useState(1);
- const [pageSize, setPageSize] = useState(10);
+ const [pageSize, setPageSize] = useState(100);
  const vacio = { factura:"", pedido_ref:"", motivo:"", descripcion:"" };
  const [form, setForm] = useState(vacio);
  const f = k => v => setForm(p=>({...p,[k]:v}));
@@ -5844,6 +5874,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
  if (esMovil) return (
   <Pagina>
    <PqrsMovil vistaCliente={esCliente}
+    pestanaInicial={filtroInicial === "cerrada" ? "cerradas" : filtroInicial === "en_gestion" && !esCliente ? "en_gestion" : "abiertas"}
     items={pqrs.filter(p => !esCliente || [user.nombre, user.user].includes(p.solicitado_por))}
     sobre={esCliente ? (user.nombre || user.user) : "Peticiones, quejas, reclamos y sugerencias"}
     onAbrir={x => { setGestion(""); setModGestion(x); }}
@@ -5897,7 +5928,7 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
      </SelectFiltro>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
+    <TablaDesplazable>
      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:940 }}>
       <thead>
        <tr>
@@ -5986,11 +6017,11 @@ export function ModuloPQRS({ pqrs, pedidos, showToast, user, recargar, nuevaInic
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filt.length} ${filt.length===1 ? "caso" : "casos"}`}
-     derecha={<Paginador total={filt.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filt.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -6286,7 +6317,7 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
  const [modMapa, setModMapa] = useState(null);
  const [modGuia, setModGuia] = useState(null);
  const [page, setPage] = useState(1);
- const pageSize = 8;
+ const [pageSize, setPageSize] = useState(100);
 
  const desde = (() => { const r = RANGOS_PEDIDOS.find(x => x.id === rango); return r && r.dias ? hoyMas(-r.dias) : null; })();
  const enRango = pedidos.filter(p => !desde || (p.fecha_creacion || p.created_at || "").slice(0, 10) >= desde);
@@ -6407,8 +6438,8 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
      </SelectFiltro>
     </BarraFiltros>
 
-    <div style={{ overflowX:"auto" }}>
-     <table style={{ width:"100%", borderCollapse:"collapse" }}>
+    <TablaDesplazable>
+     <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
       <thead>
        <tr>
         <th style={th}>N° pedido</th>
@@ -6480,11 +6511,11 @@ export function Consultas({ pedidos, conductores, ciudades, devoluciones=[], rec
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`Mostrando ${pageStart}–${pageEnd} de ${filtP.length} pedidos · ${totalCajas} cajas`}
-     derecha={<Paginador total={filtP.length} page={page} setPage={setPage} pageSize={pageSize}/>}
+     derecha={<Paginador total={filtP.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize}/>}
     />
    </section>
 
@@ -6531,7 +6562,10 @@ export default function SomosProTracking() {
  // esto, cada regreso a Pedidos volvia a aplicar la ultima busqueda, y cualquier
  // enlace terminaba mostrando siempre el mismo pedido.
  const [estadoPedidos, setEstadoPedidos] = useState("");
- const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setTab(destino); };
+ const navegar = (destino) => { setBusquedaPedidos(""); setEstadoPedidos(""); setFiltroModulo(null); setTab(destino); };
+ // Estado con el que abrir PQRS o Recogidas al venir de una fila del Dashboard.
+ const [filtroModulo, setFiltroModulo] = useState(null);
+ const filtroDe = (destino) => (filtroModulo?.tab === destino ? filtroModulo.filtro : "");
  // "Nueva PQRS" desde Estado de pedidos: se va a PQRS con el formulario abierto.
  const [pqrsNueva, setPqrsNueva] = useState(false);
  // "Ver" en un conductor del transportista abre Pedidos filtrado por el.
@@ -6556,8 +6590,10 @@ export default function SomosProTracking() {
   if (!user) return;
   let vista = "";
   try { vista = new URLSearchParams(window.location.search).get("vista") || ""; } catch { vista = ""; }
-  if (vista !== "devueltos") return;
-  if (["admin", "operador", "cliente"].includes(user.rol)) setTab("cartera_devueltos");
+  if (vista !== "devueltos" && vista !== "recogidas") return;
+  // ?vista=recogidas viene del correo de recogida nueva.
+  if (vista === "recogidas") { if (["admin", "operador", "cliente"].includes(user.rol)) setTab("recogidas"); }
+  else if (["admin", "operador", "cliente"].includes(user.rol)) setTab("cartera_devueltos");
   try {
    window.history.replaceState({}, "", window.location.pathname);
   } catch { /* sin permiso para cambiar la direccion */ }
@@ -6896,16 +6932,18 @@ export default function SomosProTracking() {
   const re = cargarTodo;
   switch (tab) {
    case "dashboard":   return <Dashboard pedidos={pedidos} conductores={conductores} transportistas={transportistas} devoluciones={devoluciones} recogidas={recogidas} pqrs={pqrs} pqrsConMensajes={Object.keys(pqrsNoLeidas).length} promesas={promesas} ciudades={ciudades} setActiveTab={navegar}
+    onVerModulo={(destino, filtro) => { navegar(destino); setFiltroModulo({ tab: destino, filtro }); }}
     onBuscarPedido={(q)=>{ setBusquedaPedidos(q); setEstadoPedidos(""); setTab("pedidos"); }}
     onVerEstado={(e)=>{ setBusquedaPedidos(""); setEstadoPedidos(e); setTab("pedidos"); }}/>;
    case "pedidos":    return <Pedidos pedidos={pedidos} setPedidos={setPedidos} conductores={conductores} ciudades={ciudades} showToast={showToast} paqueterias={paqueterias} transportistas={transportistas} promesas={promesas} busquedaInicial={busquedaPedidos} estadoInicial={estadoPedidos} recargar={recargarPedidos} user={user}/>;
    case "rastreo":    return <RastreoGPS pedidos={pedidos} conductores={conductores} ciudades={ciudades}/>;
    case "conductores":  return <Conductores conductores={conductores} pedidos={pedidos} showToast={showToast} transportistas={transportistas} recargar={recargarConductores} puedeEditar={user.rol==="admin"}
     onVerPedidos={(c)=>{ setEstadoPedidos(""); setBusquedaPedidos(c.placa || c.nombre || ""); setTab("pedidos"); }}/>;
-   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar}/>;
+   // El operador crea empresas e inscribe conductores; editar queda para el admin.
+   case "transportistas": return <Transportistas transportistas={transportistas} conductores={conductores} pedidos={pedidos} showToast={showToast} user={{rol:"admin",nombre:"Admin"}} recargar={recargarTransportistas} setActiveTabExterno={navegar} puedeEditar={user.rol === "admin"}/>;
    case "resumen":    return <ResumenTransportador pedidos={pedidos} conductores={conductores} devoluciones={devoluciones} recogidas={recogidas}/>;
    case "facturas":    return user.rol==="admin"||user.rol==="operador"
-    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} showToast={showToast} recargar={recargarFacturas}/>
+    ? <FacturasProveedor facturas={facturas} transportistas={transportistas} pedidos={pedidos} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} recargar={recargarFacturas}/>
     : <Consultas pedidos={pedidos} conductores={conductores} ciudades={ciudades} devoluciones={devoluciones} recogidas={recogidas} showToast={showToast} user={user}/>;
    case "promesas":    return <GestionPromesas promesas={promesas} ciudades={ciudades} showToast={showToast} recargar={recargarPromesas}/>;
    case "ciudades":    return <Ciudades ciudades={ciudades} pedidos={pedidos} showToast={showToast} recargar={recargarCiudades}/>;
@@ -6926,9 +6964,9 @@ export default function SomosProTracking() {
     onNuevaPQRS={() => { navegar("pqrs"); setPqrsNueva(true); }}/>;
    case "pqrs":      return <ModuloPQRS pqrs={pqrs} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarPqrs}
     nuevaInicial={pqrsNueva} onConsumirNueva={() => setPqrsNueva(false)}
-    noLeidas={pqrsNoLeidas} onLeida={marcarPqrsLeida}/>;
+    noLeidas={pqrsNoLeidas} onLeida={marcarPqrsLeida} filtroInicial={filtroDe("pqrs")}/>;
    case "devoluciones":  return <ModuloDevoluciones devoluciones={devoluciones} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} pedidos={pedidos} showToast={showToast} user={user} recargar={recargarDevoluciones}/>;
-   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas}/>;
+   case "recogidas":   return <ModuloRecogidas recogidas={recogidas} conductores={conductores} ciudades={ciudades} transportistas={transportistas} paqueterias={paqueterias} showToast={showToast} user={user} recargar={recargarRecogidas} filtroInicial={filtroDe("recogidas")}/>;
    // Modulo de cartera: todas sus vistas entran por el mismo despachador.
    case "cartera_sedes":
    case "cartera_asesores":
@@ -6949,7 +6987,7 @@ export default function SomosProTracking() {
      contadores={{ pqrs: Object.keys(pqrsNoLeidas).length }} />
    )}
    <main style={{
-    flex: 1, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
+    flex: 1, minWidth: 0, overflowY: "auto", maxWidth: "100%", boxSizing: "border-box", background: "#fafafa",
     padding: esMovil ? "16px 16px " + (ALTO_BARRA + 16) + "px" : "28px 24px",
    }}>
     {renderContent()}

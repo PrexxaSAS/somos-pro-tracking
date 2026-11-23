@@ -76,6 +76,8 @@ export const MENUS = {
     ]],
     ["Red de transporte", [
       ["conductores", "Conductores", Users],
+      // Crea empresas e inscribe conductores; editarlas sigue siendo del admin.
+      ["transportistas", "Transportistas", Truck],
       ["resumen", "Resumen transportador", ClipboardList],
     ]],
     ...(CARTERA_ACTIVA ? [["Cartera", [

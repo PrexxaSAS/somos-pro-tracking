@@ -1,10 +1,12 @@
 ﻿export function exportarCSVFacturaProveedor(fac, lineas, trans, formatCOP) {
   const headers = [
-    "Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho",
+    "Tipo","Fecha Factura","Guia Interna","Transportista","Fecha Pedido","Fecha Despacho",
     "Codigo DANE","Ciudad Destino","N Factura Proveedor",
-    "Cajas","Valor Guia COP","Factura Interna","Pedido Interno"
+    "Cajas / Unidades","Valor Guia COP","Factura Interna","Pedido Interno"
   ];
+  const tipos = { pedido: "Pedido", devolucion: "Devolucion", recogida: "Recogida" };
   const rows = lineas.map(l => [
+    tipos[l.pedidos?.envio] || "Pedido",
     fac.fecha_factura,
     l.pedidos?.guia_interna || "",
     trans?.nombre || "",
@@ -16,7 +18,7 @@
     l.cajas,
     l.valorGuia,
     l.pedidos?.factura || "",
-    l.pedidos?.id || "",
+    l.pedidos?.pedido_px ?? l.pedidos?.id ?? "",
   ]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

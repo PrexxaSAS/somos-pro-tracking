@@ -9,7 +9,7 @@ import { descargarCSV } from '../../utils/files';
 import { mensajeErrorFuncion } from '../../utils/errors';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Casilla, MenuFila, Paginador, PieTabla, useSeleccion,
+ Segmentado, Casilla, MenuFila, Paginador, TablaDesplazable, PieTabla, useSeleccion,
  th, td, mono, botonBarra, botonPrincipal,
 } from '../../components/ui/listas';
 import { hoyLocal } from '../../utils/fechas';
@@ -17,7 +17,6 @@ import { useEsMovil } from '../../design/responsive';
 import { ConductoresMovil } from '../red/RedMovil';
 import { limpiarUsuario } from '../../utils/usuarios';
 
-const POR_PAGINA = 50;
 
 const iniciales = (nombre) => (nombre || "?")
  .trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
@@ -43,6 +42,7 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
  const [empresa, setEmpresa] = useState("");
  const [vista, setVista] = useState("todos");
  const [pagina, setPagina] = useState(1);
+ const [porPagina, setPorPagina] = useState(100);
 
  const vacio = { nombre: "", cedula: "", placa: "", celular: "", nit_proveedor: "", empresa: "", user_login: "", pass_login: "" };
  const [form, setForm] = useState(vacio);
@@ -85,8 +85,8 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
 
  useEffect(() => { setPagina(1); }, [busq, empresa, vista]);
 
- const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
- const visibles = filtradas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+ const paginas = Math.max(1, Math.ceil(filtradas.length / porPagina));
+ const visibles = filtradas.slice((pagina - 1) * porPagina, pagina * porPagina);
  const sel = useSeleccion(visibles.map(c => c.id));
  const marcados = filas.filter(c => sel.seleccion.has(c.id));
 
@@ -300,8 +300,8 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
      </BarraFiltros>
     )}
 
-    <div style={{ overflowX: "auto" }}>
-     <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <TablaDesplazable>
+     <table style={{ width: "100%", borderCollapse: "collapse", minWidth:960 }}>
       <thead>
        <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
         <th style={{ ...th, width: 42 }}>
@@ -369,11 +369,11 @@ export function Conductores({ conductores, pedidos, showToast, transportistas = 
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtradas.length} ${filtradas.length === 1 ? "conductor" : "conductores"}`}
-     derecha={<Paginador total={filtradas.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA} />}
+     derecha={<Paginador total={filtradas.length} page={pagina} setPage={setPagina} pageSize={porPagina} setPageSize={setPorPagina} />}
     />
    </section>
 

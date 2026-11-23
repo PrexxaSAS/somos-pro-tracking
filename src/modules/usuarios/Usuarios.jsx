@@ -9,14 +9,13 @@ import { supabase } from '../../supabase';
 import { mensajeErrorFuncion } from '../../utils/errors';
 import {
  Pagina, Encabezado, Indicadores, BarraFiltros, BarraSeleccion, Buscador, SelectFiltro,
- Segmentado, Casilla, Paginador, PieTabla, useSeleccion,
+ Segmentado, Casilla, Paginador, TablaDesplazable, PieTabla, useSeleccion,
  th, td, mono, botonBarra, botonPrincipal, iconoAccion,
 } from '../../components/ui/listas';
 import { useEsMovil } from '../../design/responsive';
 import { UsuariosMovil } from '../red/RedMovil';
 import { limpiarUsuario } from '../../utils/usuarios';
 
-const POR_PAGINA = 50;
 
 // Color por rol, para el punto de la pastilla y la inicial del avatar.
 const COLOR_ROL = {
@@ -32,7 +31,13 @@ const inicialesUsuario = (nombre) => (nombre || "?")
  .trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
 
 export function Usuarios({ usuarios, transportistas = [], showToast, recargar }) {
- const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:""};
+ const vacio = {nombre:"",user:"",pass:"",rol:"operador",nit:"",empresa:"",cedula:"",placa:"",nit_proveedor:"",celular:"",email:""};
+
+// El correo va aparte de create-system-user (docs/recogidas_correo_operativo.sql).
+// Lo usan los operadores: les llega el aviso de cada recogida nueva.
+const correoValido = (c) => !c || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c);
+const guardarCorreo = (login, email) =>
+ supabase.rpc('guardar_correo_usuario', { p_user: login, p_email: email.trim() });
  const esMovil = useEsMovil();
  const [modal,   setModal]   = useState(false);
  const [modEditar, setModEditar] = useState(null);
@@ -46,6 +51,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  // Supabase Auth (auth_user_id). Sin ella no puede entrar al sistema.
  const [acceso, setAcceso] = useState("todos");
  const [pagina, setPagina] = useState(1);
+ const [porPagina, setPorPagina] = useState(100);
  const f = k => v => setForm(p=>({...p,[k]:v}));
  const roleColors = {admin:P[600],operador:P[400],transportista:"#0891b2",conductor:"#059669",cliente:"#d97706"};
  const border = "#e5e7eb";
@@ -55,7 +61,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
 
  const abrirNuevo = () => { setForm(vacio); setModal(true); };
  const abrirEditar = (u) => {
-  setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",cedula:u.cedula||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||""});
+  setForm({nombre:u.nombre,user:u.user,pass:"",rol:u.rol,nit:u.nit||"",empresa:u.empresa||"",cedula:u.cedula||"",placa:u.placa||"",nit_proveedor:u.nit_proveedor||"",celular:u.celular||"",email:u.email||""});
   setModEditar(u);
  };
 
@@ -70,6 +76,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
    showToast("NIT es obligatorio para transportista","error");
    return;
   }
+  if (!correoValido(form.email.trim())) { showToast("El correo no es valido","error"); return; }
   setGuardando(true);
   const { data, error } = await supabase.functions.invoke('create-system-user', {
    body: {
@@ -88,6 +95,10 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   });
   if (error) { showToast(await mensajeErrorFuncion(error, "el acceso"),"error"); setGuardando(false); return; }
   if (data?.error) { showToast("Error creando acceso: "+data.error,"error"); setGuardando(false); return; }
+  if (form.email.trim()) {
+   const { error: errCorreo } = await guardarCorreo(form.user.trim(), form.email);
+   if (errCorreo) showToast("Usuario creado, pero no se guardo el correo: "+errCorreo.message,"error");
+  }
   setModal(false); setForm(vacio);
   showToast(" Usuario creado","success");
   if(recargar) await recargar(); setGuardando(false);
@@ -104,6 +115,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
    showToast("NIT es obligatorio para transportista","error");
    return;
   }
+  if (!correoValido(form.email.trim())) { showToast("El correo no es valido","error"); return; }
   setGuardando(true);
   const { data, error } = await supabase.functions.invoke('create-system-user', {
    body: {
@@ -123,6 +135,10 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
   });
   if (error) { showToast(await mensajeErrorFuncion(error, "el usuario"),"error"); setGuardando(false); return; }
   if (data?.error) { showToast("Error actualizando usuario: "+data.error,"error"); setGuardando(false); return; }
+  if (form.email.trim() !== (modEditar.email || "")) {
+   const { error: errCorreo } = await guardarCorreo(form.user.trim(), form.email);
+   if (errCorreo) showToast("Usuario actualizado, pero no se guardo el correo: "+errCorreo.message,"error");
+  }
   setModEditar(null);
   showToast(form.pass.trim()?" Usuario y contrasea actualizados":" Usuario actualizado","success");
   if(recargar) await recargar(); setGuardando(false);
@@ -190,6 +206,14 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
    </>
   );
 
+  if (form.rol === "operador") return (
+   <>
+    <Seccion titulo="Avisos por correo" />
+    <Texto label="Correo" tipo="email" opcional valor={form.email} onChange={f("email")} placeholder="nombre@prexxa.com.co"
+     ayuda="Le llega un aviso con cada solicitud de recogida nueva" />
+   </>
+  );
+
   if (form.rol === "conductor") return (
    <>
     <Seccion titulo="Datos del conductor" />
@@ -244,7 +268,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
  const tarjetasRol = [["todos", "Todos"], ...Object.entries(ROLES)];
 
  useEffect(() => { setPagina(1); }, [busq, rolFiltro, acceso]);
- const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+ const visibles = filtrados.slice((pagina - 1) * porPagina, pagina * porPagina);
  const sel = useSeleccion(visibles.map(u => u.id));
 
  const modales = (<>
@@ -348,8 +372,8 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
      </BarraFiltros>
     )}
 
-    <div style={{ overflowX: "auto" }}>
-     <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <TablaDesplazable>
+     <table style={{ width: "100%", borderCollapse: "collapse", minWidth:860 }}>
       <thead>
        <tr style={{ borderBottom: `1px solid ${T.color.borde}` }}>
         <th style={{ ...th, width: 42 }}>
@@ -388,6 +412,7 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
             <div style={{ minWidth: 0 }}>
              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.color.tinta }}>{u.nombre}</div>
              <div style={mono}>@{u.user}</div>
+             {u.email && <div style={{ fontSize: 12, color: T.color.tinta3 }}>{u.email}</div>}
             </div>
            </div>
           </td>
@@ -439,11 +464,11 @@ export function Usuarios({ usuarios, transportistas = [], showToast, recargar })
        })}
       </tbody>
      </table>
-    </div>
+    </TablaDesplazable>
 
     <PieTabla
      izquierda={`${filtrados.length} ${filtrados.length === 1 ? "usuario" : "usuarios"}`}
-     derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={POR_PAGINA} />}
+     derecha={<Paginador total={filtrados.length} page={pagina} setPage={setPagina} pageSize={porPagina} setPageSize={setPorPagina} />}
     />
    </section>
 
