@@ -95,10 +95,6 @@ begin
       return new;
     end if;
 
-    -- El admin puede cambiar el conductor de un pedido en transito (el conductor
-    -- devolvio el pedido sin entregarlo y sale con otro, o vuelve a bodega).
-    -- Solo el transporte y el estado (en_transito o sin_asignar); todo lo demas
-    -- del pedido debe quedar igual.
     -- Admin y operador editan el pedido en transito como antes de asignarlo:
     -- datos, conductor, transporte y estado. Lo entregado sigue cerrado (arriba).
     if role_actual in ('admin', 'operador') then
