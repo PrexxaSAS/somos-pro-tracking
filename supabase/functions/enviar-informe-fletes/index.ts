@@ -10,10 +10,15 @@
 // Quien puede llamarla:
 //   - pg_cron, con el encabezado x-informe-secret igual al secreto
 //     INFORME_FLETES_SECRET de la funcion;
-//   - un admin con sesion (para probarla), que puede mandar { desde, hasta }.
+//   - un admin con sesion (para probarla), que puede mandar { desde, hasta };
+//   - el servidor de la oficina, con x-informe-descarga igual a
+//     INFORME_FLETES_DESCARGA_SECRET: recibe el CSV (puede mandar
+//     { desde, hasta }) y NO se envia correo. Lo guarda en la carpeta de red
+//     scripts/servidor/guardar-informe-fletes.ps1.
 //
-// Secretos: los SMTP_* de enviar-correo-rechazo, INFORME_FLETES_SECRET y,
-// opcional, INFORME_FLETES_PARA (correos separados por coma).
+// Secretos: los SMTP_* de enviar-correo-rechazo, INFORME_FLETES_SECRET,
+// INFORME_FLETES_DESCARGA_SECRET y, opcional, INFORME_FLETES_PARA (correos
+// separados por coma).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
 
@@ -126,10 +131,14 @@ Deno.serve(async (req) => {
   }
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-  // ¿Quien llama? pg_cron con el secreto, o un admin con sesion.
+  // ¿Quien llama? pg_cron con el secreto, el servidor de la oficina con el
+  // secreto de descarga (solo recibe el CSV, no manda correo), o un admin.
   const secreto = clean(Deno.env.get("INFORME_FLETES_SECRET"));
   const desdeCron = secreto.length >= 16 && clean(req.headers.get("x-informe-secret")) === secreto;
-  if (!desdeCron) {
+  const secretoDescarga = clean(Deno.env.get("INFORME_FLETES_DESCARGA_SECRET"));
+  const descarga = !desdeCron && secretoDescarga.length >= 16
+    && clean(req.headers.get("x-informe-descarga")) === secretoDescarga;
+  if (!desdeCron && !descarga) {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Sesion requerida." }, 401);
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
@@ -146,6 +155,7 @@ Deno.serve(async (req) => {
   if (!desdeCron && esFecha(payload?.desde) && esFecha(payload?.hasta)) {
     desde = clean(payload.desde);
     hasta = clean(payload.hasta);
+    if (desde > hasta) return json({ error: "La fecha desde va despues de hasta." }, 400);
   }
   const para = (Deno.env.get("INFORME_FLETES_PARA") || PARA_POR_DEFECTO)
     .split(",").map((c) => clean(c).toLowerCase()).filter(Boolean);
@@ -216,6 +226,19 @@ Deno.serve(async (req) => {
   const unaLinea = (v: unknown) => String(v ?? "").split(/\r\n|\r|\n/).map((s) => s.trim()).filter(Boolean).join(" · ");
   const esc = (v: unknown) => `"${unaLinea(v).replace(/"/g, '""')}"`;
   const csv = "﻿" + [COLUMNAS, ...filas].map((r) => r.map(esc).join(",")).join("\n");
+  const nombreArchivo = `Informe_fletes_${desde}_a_${hasta}.csv`;
+
+  // El servidor de la oficina guarda el archivo en la carpeta de red
+  // (scripts/servidor/guardar-informe-fletes.ps1).
+  if (descarga) {
+    return new Response(csv, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${nombreArchivo}"`,
+      },
+    });
+  }
 
   const cop = (n: number) => "$ " + n.toLocaleString("es-CO");
   const nFacturas = (facturas || []).length;
@@ -253,7 +276,7 @@ Deno.serve(async (req) => {
       text: `Informe de fletes semanal\n\nFacturas de proveedor ${periodo}.\n${resumen}\n\nEl informe va adjunto en CSV.`,
       html,
       attachments: [{
-        filename: `Informe_fletes_${desde}_a_${hasta}.csv`,
+        filename: nombreArchivo,
         content: csv,
         contentType: "text/csv; charset=utf-8",
       }],
