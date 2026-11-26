@@ -31,7 +31,7 @@
 # mapeadas no existen para una tarea programada. La ruta de red de S: sale con
 # (Get-PSDrive S).DisplayRoot. Este archivo va en UTF-8 con BOM para que
 # PowerShell 5.1 lea bien las tildes de la ruta.
-$Carpeta = "\\SERVIDOR\RECURSO\Z. Logística\_QPrex Logistica\Tracking Pedidos"
+$Carpeta = "\\servidorw2k\Servicios_Compartidos\Z. Logística\_QPrex Logistica\Tracking Pedidos"
 $SemanasAtras = 4
 $Url = "https://cfvvnvmezmrxehpaqayw.supabase.co/functions/v1/enviar-informe-fletes"
 
