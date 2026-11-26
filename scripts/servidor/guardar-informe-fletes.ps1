@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+﻿# ---------------------------------------------------------------------------
 # Guarda el informe de fletes semanal (CSV) en una carpeta de red.
 #
 # Corre en un servidor o PC de la oficina con Windows que vea la carpeta. Pide
@@ -26,8 +26,12 @@
 #      y revisar la carpeta y informe-fletes.log.
 # ---------------------------------------------------------------------------
 
-# Carpeta de red donde quedan los informes.
-$Carpeta = "\\SERVIDOR\Compartida\Informes de fletes"
+# Carpeta de red donde quedan los informes. Va con la ruta de red
+# (\\servidor\recurso\...), no con la letra de unidad: S: y las demas unidades
+# mapeadas no existen para una tarea programada. La ruta de red de S: sale con
+# (Get-PSDrive S).DisplayRoot. Este archivo va en UTF-8 con BOM para que
+# PowerShell 5.1 lea bien las tildes de la ruta.
+$Carpeta = "\\SERVIDOR\RECURSO\Z. Logística\_QPrex Logistica\Tracking Pedidos"
 $SemanasAtras = 4
 $Url = "https://cfvvnvmezmrxehpaqayw.supabase.co/functions/v1/enviar-informe-fletes"
 
