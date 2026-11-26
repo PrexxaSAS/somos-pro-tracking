@@ -214,6 +214,16 @@ const guardarCorreo = (login, email) =>
    </>
   );
 
+  // La auxiliar de asesores (cliente interno) recibe el resumen diario de los
+  // pedidos de sus asesores (supabase/functions/resumen-pedidos-asesores).
+  if (form.rol === "cliente") return (
+   <>
+    <Seccion titulo="Avisos por correo" />
+    <Texto label="Correo" tipo="email" opcional valor={form.email} onChange={f("email")} placeholder="nombre@prexxa.com.co"
+     ayuda="Si es auxiliar de asesores, le llega cada tarde el resumen de los pedidos de sus asesores" />
+   </>
+  );
+
   if (form.rol === "conductor") return (
    <>
     <Seccion titulo="Datos del conductor" />
