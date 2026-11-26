@@ -138,6 +138,14 @@ Deno.serve(async (req) => {
   const secretoDescarga = clean(Deno.env.get("INFORME_FLETES_DESCARGA_SECRET"));
   const descarga = !desdeCron && secretoDescarga.length >= 16
     && clean(req.headers.get("x-informe-descarga")) === secretoDescarga;
+  // Al servidor se le dice cual es el problema con la clave, para que quede en su log.
+  if (!desdeCron && !descarga && req.headers.get("x-informe-descarga") !== null) {
+    return json({
+      error: secretoDescarga.length < 16
+        ? "La funcion no tiene el secreto INFORME_FLETES_DESCARGA_SECRET (o tiene menos de 16 caracteres)."
+        : "La clave de informe-fletes.secreto no es igual a INFORME_FLETES_DESCARGA_SECRET.",
+    }, 401);
+  }
   if (!desdeCron && !descarga) {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Sesion requerida." }, 401);

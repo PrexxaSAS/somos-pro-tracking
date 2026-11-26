@@ -69,6 +69,14 @@ try {
     Escribir-Log "Guardado $nombre"
   }
 } catch {
-  Escribir-Log "ERROR: $($_.Exception.Message)"
+  # Si respondio la funcion, su mensaje dice la causa (clave, secreto faltante...).
+  $detalle = ""
+  try {
+    if ($_.Exception.Response) {
+      $lector = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+      $detalle = " | Respuesta: " + $lector.ReadToEnd()
+    }
+  } catch { }
+  Escribir-Log "ERROR: $($_.Exception.Message)$detalle"
   exit 1
 }
